@@ -1333,37 +1333,37 @@
             font-family: Arial Narrow !important;
         }
 
-        /* Page 4's three highlighted column groups use their own page4_*
-           tokens (Excel-style fill + matching dark text), so retinting them
-           never touches the shared highlight_* tokens pages 5-6 also use.
+        /* Page 4's three highlighted column groups use the perf_* tokens
+           (Excel-style fill + matching dark text; pages 5-6 share the APP
+           and Actual ones), not the shared highlight_* tokens other pages use.
            Annual Capacity column: peach. */
         .page4-table td.col-cap,
         .page4-table thead th.col-cap {
-            background-color: {{ colors.page4_cap_bg }} !important;
-            color: {{ colors.page4_cap_text }} !important;
+            background-color: {{ colors.perf_cap_bg }} !important;
+            color: {{ colors.perf_cap_text }} !important;
         }
 
         /* Annual APP column — left wall stays a plain dark divider (same
            weight/colour as the monthly-vs-cumulative wall below, col-ytd-app),
            marking entry into the highlighted block like any other section
-           break; right wall is page4_app_border, the dark pair to this
-           column's own light-gold page4_app_bg fill, so it reads as a
+           break; right wall is perf_app_border, the dark pair to this
+           column's own light-gold perf_app_bg fill, so it reads as a
            deepened edge of the highlight itself rather than a second plain
            divider. */
         .page4-table td.col-ann,
         .page4-table thead th.col-ann {
-            background-color: {{ colors.page4_app_bg }} !important;
-            color: {{ colors.page4_app_text }} !important;
+            background-color: {{ colors.perf_app_bg }} !important;
+            color: {{ colors.perf_app_text }} !important;
             border-left:  1px solid {{ colors.border_black }};
-            border-right: 1px solid {{ colors.page4_app_border }};
+            border-right: 1px solid {{ colors.perf_app_border }};
         }
 
         /* Actual columns (month + cumulative): green - identical treatment,
            one shared class instead of two near-duplicate rules/classes. */
         .page4-table td.col-act-highlight,
         .page4-table thead th.col-act-highlight {
-            background-color: {{ colors.page4_act_bg }} !important;
-            color: {{ colors.page4_act_text }} !important;
+            background-color: {{ colors.perf_act_bg }} !important;
+            color: {{ colors.perf_act_text }} !important;
         }
 
         /* Cumulative section left wall — full table height (both header
@@ -1501,9 +1501,9 @@
            Plan"). Left wall is a plain dark divider, same colour/weight as
            the monthly-vs-cumulative wall below (col-ytd-plan) - marks entry
            into the highlighted block like any other section break. Right
-           wall is highlight_actual_border, the pre-defined dark pair to
-           this column's own highlight_actual_bg fill (same colour used for
-           page4's matching APP wall), so it reads as a deepened edge of the
+           wall is perf_app_border, the dark pair to this column's own
+           light-gold perf_app_bg fill (same tokens as page4's matching APP
+           column), so it reads as a deepened edge of the
            highlight itself rather than a second plain divider. 1px, not
            the previous 2px/1.3px - matches the table's own outer-border
            weight (box-shadow above) and page4's APP wall; still redrawn on
@@ -1513,9 +1513,10 @@
            rounding mismatch. */
         .page5-6-table td.col-ann,
         .page5-6-table thead th.col-ann {
-            background-color: {{ colors.highlight_actual_bg }} !important;
+            background-color: {{ colors.perf_app_bg }} !important;
+            color: {{ colors.perf_app_text }} !important;
             border-left:  1px solid {{ colors.border_black }};
-            border-right: 1px solid {{ colors.highlight_actual_border }};
+            border-right: 1px solid {{ colors.perf_app_border }};
         }
 
         /* border-collapse tie-break bug (vertical case) — same fix, same
@@ -1541,9 +1542,19 @@
             border-right: 2px solid {{ colors.border_dark }};
         }
 
-        /* Actual columns (month + cumulative) — one shared class, same as page4 */
+        /* Cumulative growth ("%Gr. Apr-<mon>'<yy>", the last column) — same
+           light bg as the monthly %Gr column above; no right wall, it's the
+           table's outer edge. */
+        .page5-6-table td.col-ygr,
+        .page5-6-table thead th.col-ygr { background-color: {{ colors.highlight_pct_row_bg }} !important; }
+
+        /* Actual columns (month + cumulative) — one shared class, same
+           green perf_act_* tokens as page4 */
         .page5-6-table td.col-act-highlight,
-        .page5-6-table thead th.col-act-highlight { background-color: {{ colors.highlight_cumulative_bg }} !important; }
+        .page5-6-table thead th.col-act-highlight {
+            background-color: {{ colors.perf_act_bg }} !important;
+            color: {{ colors.perf_act_text }} !important;
+        }
 
         /* Cumulative section left wall */
         .page5-6-table td.col-ytd-plan,

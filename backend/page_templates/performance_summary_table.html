@@ -30,7 +30,7 @@
                         <th rowspan="2" class="col-mgr-wall" style="padding:3px 3px;">%Gr.<br/>{{ short_m }}'{{ prev_y }}</th>
                         <th colspan="3" style="padding:3px 3px;">Apr-{{ short_m }}'{{ short_y }}</th>
                         <th rowspan="2" style="padding:3px 3px;">Apr-{{ short_m }}'{{ prev_y }}<br/>Act</th>
-                        <th rowspan="2" style="padding:3px 3px;">%Gr.<br/>Apr-{{ short_m }}'{{ prev_y }}</th>
+                        <th rowspan="2" class="col-ygr" style="padding:3px 3px;">%Gr.<br/>Apr-{{ short_m }}'{{ prev_y }}</th>
                     </tr>
                     <tr>
                         <th style="padding:3px 3px;">Plan</th>
@@ -41,7 +41,7 @@
                         <th style="padding:3px 3px;">%Ful</th>
                     </tr>
                 </thead>
-                {% set col_cls = ['col-ann','','col-act-highlight','','','col-mgr-wall','col-ytd-plan','col-act-highlight','','',''] %}
+                {% set col_cls = ['col-ann','','col-act-highlight','','','col-mgr-wall','col-ytd-plan','col-act-highlight','','','col-ygr'] %}
                 <tbody>
                     {% set ns = namespace(cur_plant='', plant_rows={}) %}
                     {% for row in page.rows %}
