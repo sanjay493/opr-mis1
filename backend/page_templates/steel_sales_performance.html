@@ -2,8 +2,9 @@
    Constant page title, then each period's bullets in full page width (not
    side-by-side columns) — per direct instruction, 2026-09-18. All text
    left-aligned. The FIRST bullet in each section is still an emphasis
-   banner (dark background, white bold text); the rest alternate
-   white/light-gray rows. Bullet text may contain embedded newlines
+   banner (dark background, white bold text); the rest are plain rows - no
+   row striping and no rule line under each bullet, per direct instruction
+   (2026-10-04). Bullet text may contain embedded newlines
    (multi-line bullets, e.g. a comma-list of products) — rendered as extra
    left-aligned lines within the same row, not separate rows.
 
@@ -19,10 +20,9 @@
     .sls-section { margin-bottom: 4px; }
     .sls-heading { text-align: left; font-weight: 700; font-size: 11pt; text-decoration: underline; color: rgb(0,0,255); margin-bottom: 3px; }
     .sls-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-    .sls-row td { padding: 4px 8px; text-align: left; font-weight: 700; font-size: 9.5pt; line-height: 1.2; border-bottom: 0.5pt solid {{ colors.border|default('#cbd5e1') }}; word-wrap: break-word; }
+    .sls-row td { padding: 4px 8px; text-align: left; font-weight: 700; font-size: 9.5pt; line-height: 1.2; word-wrap: break-word; }
     .sls-row.sls-emphasis td { background: {{ colors.text_accent_navy|default('#060177') }}; color: {{ colors.text_white|default('#ffffff') }}; }
-    .sls-row.sls-odd td { background: {{ colors.text_white|default('#ffffff') }}; color: {{ colors.text_heading_dark|default('#1e293b') }}; }
-    .sls-row.sls-even td { background: {{ colors.misc_highlights_box_bg|default('#f8fafc') }}; color: {{ colors.text_heading_dark|default('#1e293b') }}; }
+    .sls-row.sls-odd td, .sls-row.sls-even td { color: {{ colors.text_heading_dark|default('#1e293b') }}; }
     .sls-row .sls-line + .sls-line { margin-top: 1px; }
     .sls-empty { text-align: left; font-style: italic; font-size: 9pt; color: {{ colors.text_secondary|default('#5f6368') }}; padding: 6px; }
 </style>
