@@ -1615,8 +1615,20 @@
         /* Report-month Actual (m-act-td) / till-month Actual (cum-td) stay
            highlighted only on plain data rows — total/subtotal/pct rows already
            carry their own full-row color below and shouldn't fight with this one. */
+        /* Column colours: same perf_* scheme as pages 4-6 and Concast - gold
+           annual Plan, green Actual, light-slate %Gr. Fills apply to plain
+           data rows only (subtotal / % / total rows keep their own row band,
+           as the Actual column always did); the Plan column's gold right
+           edge runs through every row. */
         .catwise-table tr.cw-data td.m-act-td,
-        .catwise-table tr.cw-data td.cum-td { background-color: {{ colors.highlight_cumulative_bg }}; }
+        .catwise-table tr.cw-data td.cum-td,
+        .catwise-table th.act-th { background-color: {{ colors.perf_act_bg }}; color: {{ colors.perf_act_text }}; }
+        .catwise-table tr.cw-data td.plan-td,
+        .catwise-table th.plan-th { background-color: {{ colors.perf_app_bg }}; color: {{ colors.perf_app_text }}; }
+        .catwise-table td.plan-td,
+        .catwise-table th.plan-th { border-right: 1px solid {{ colors.perf_app_border }}; }
+        .catwise-table tr.cw-data td.gr-td,
+        .catwise-table th.gr-th { background-color: {{ colors.perf_gr_bg }}; }
         .catwise-table tr.cw-section-hdr td { background-color: {{ colors.table_header_bg_section }}; font-weight: 700; font-size: 10pt; }
         .catwise-table tr.cw-section-data td { background-color: {{ colors.highlight_section_data_bg }}; font-weight: 600; }
         .catwise-table tr.cw-subtotal td { background-color: {{ colors.highlight_target_band_bg }}; font-weight: 700; }
@@ -1645,8 +1657,17 @@
         .segwise-table td.num-td { text-align: right; }
         .segwise-table td.sw-group-cell { background-color: {{ colors.misc_white }}; color: {{ colors.text_black }}; font-weight: 700; text-align: center; vertical-align: middle; border: 1px solid {{ colors.border_dark }}; writing-mode: vertical-rl; transform: rotate(180deg); }
         .segwise-table td.sw-plant-cell { background-color: {{ colors.misc_white }}; color: {{ colors.text_black }}; font-weight: 700; text-align: center; vertical-align: middle; }
+        /* Column colours: same perf_* scheme and data-rows-only rule as the
+           Cat-wise table above. */
         .segwise-table tr.sw-data td.m-act-td,
-        .segwise-table tr.sw-data td.cum-td { background-color: {{ colors.highlight_cumulative_bg }}; }
+        .segwise-table tr.sw-data td.cum-td,
+        .segwise-table th.act-th { background-color: {{ colors.perf_act_bg }}; color: {{ colors.perf_act_text }}; }
+        .segwise-table tr.sw-data td.plan-td,
+        .segwise-table th.plan-th { background-color: {{ colors.perf_app_bg }}; color: {{ colors.perf_app_text }}; }
+        .segwise-table td.plan-td,
+        .segwise-table th.plan-th { border-right: 1px solid {{ colors.perf_app_border }}; }
+        .segwise-table tr.sw-data td.gr-td,
+        .segwise-table th.gr-th { background-color: {{ colors.perf_gr_bg }}; }
         .segwise-table tr.sw-seg-total td { background-color: {{ colors.highlight_target_band_bg }}; font-weight: 700; }
         .segwise-table tr.sw-seg-pct td { background-color: {{ colors.highlight_pct_row_bg }}; font-weight: 700; font-style: italic; }
         .segwise-table tr.sw-grand-total td { background-color: {{ colors.highlight_achieved_band_bg }}; font-weight: 700; }
