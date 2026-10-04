@@ -87,7 +87,7 @@ export default function TechnoRecordsPage() {
     <ReportPage
       maxWidth={1600}
       title={<>Best Techno Matrix</>}
-      description={<>Best and 2nd-best ever figure for every calendar month — the Major 12 techno-economic parameters (as on the Major TEPs page) and the BF-wise Iron Making parameters. “Best” is the <strong>lowest</strong> figure for consumption rates (coke, nut coke, fuel, coal to HM, hot metal, TMI, slag, energy) and the <strong>highest</strong> for CDI, burden sinter / pellet, productivity, scrap, hot blast temperature and O₂ enrichment. The single all-time best month of a row is marked <strong>★</strong>. SAIL figures count from Apr&apos;21, when all five plants&apos; techno data begins.</>}
+      description={<>Best and 2nd-best ever figure for every calendar month — the Major 12 techno-economic parameters (as on the Major TEPs page) and the BF-wise Iron Making parameters. “Best” is the <strong>lowest</strong> figure for consumption rates (coke, fuel, coal to HM, hot metal, TMI, slag, energy) and the <strong>highest</strong> for CDI, nut coke, burden sinter / pellet, productivity, scrap, hot blast temperature and O₂ enrichment. The single all-time best month of a row is marked <strong>★</strong>. SAIL figures count from Apr&apos;21, when all five plants&apos; techno data begins.</>}
     >
 
 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>

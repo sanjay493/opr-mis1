@@ -30,7 +30,7 @@ PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP"]
 MAJOR_PARAMS = [
     ("Coal to Hot Metal Ratio", "t/thm", "low"),
     ("Coke Rate", "kg/thm", "low"),
-    ("Nut Coke Rate", "kg/thm", "low"),
+    ("Nut Coke Rate", "kg/thm", "high"),
     ("CDI Rate", "kg/thm", "high"),
     ("Fuel Rate", "kg/thm", "low"),
     ("Sinter in Burden", "%", "high"),

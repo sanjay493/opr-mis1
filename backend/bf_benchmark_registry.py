@@ -61,8 +61,9 @@ SAIL_BF_UNITS_BY_PLANT = {
 # is written for them.
 #
 # `better`: which direction counts as the best value in a row, for the
-# comparison table's per-row highlight — "low" for coke_rate/nut_coke_rate/
-# fuel_rate/slag_rate (per direct instruction), "high" for every other
+# comparison table's per-row highlight — "low" for coke_rate/fuel_rate/
+# slag_rate (per direct instruction; nut_coke_rate is "high" since nut coke
+# substitutes costlier BF coke), "high" for every other
 # performance param, None for params that aren't a performance ranking
 # (working_volume_m3 is a fixed engineering spec, not something to rank).
 #
@@ -85,7 +86,7 @@ BF_BENCHMARK_PARAMS = [
     {"key": "avg_daily_rate", "label": "Avg. Daily Prod", "unit": "TPD", "static": False, "better": "high"},
     {"key": "bf_productivity", "label": "BF Productivity", "unit": UNIT.T_M3_DAY, "static": False, "better": "high"},
     {"key": "coke_rate", "label": "Coke Rate", "unit": UNIT.KG_THM, "static": False, "better": "low"},
-    {"key": "nut_coke_rate", "label": "Nut Coke Rate", "unit": UNIT.KG_THM, "static": False, "better": "low"},
+    {"key": "nut_coke_rate", "label": "Nut Coke Rate", "unit": UNIT.KG_THM, "static": False, "better": "high"},
     {"key": "cdi", "label": "CDI Rate", "unit": UNIT.KG_THM, "static": False, "better": "high"},
     {"key": "fuel_rate", "label": "Fuel Rate", "unit": UNIT.KG_THM, "static": False, "better": "low", "computed": True},
     {"key": "carbon_rate", "label": "Carbon Rate", "unit": UNIT.KG_THM, "static": False, "better": "high"},

@@ -30,11 +30,12 @@ _MON_ABBR = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
 
 # "Better Direction" + Assessment color for the Techno-Economic Snapshot
 # table, matching Report_format/Key highlights and variance.png's own
-# legend: Coke/Fuel/Nut Coke Rate, Specific Energy Consumption, Sp. CO2
-# Emission and TMI are all "lower is better"; BF Productivity, CDI Rate,
-# Sinter/Pellet in Burden are "higher is better".
+# legend: Coke/Fuel Rate, Specific Energy Consumption, Sp. CO2 Emission and
+# TMI are all "lower is better"; BF Productivity, CDI Rate, Nut Coke Rate
+# (nut coke substitutes costlier BF coke) and Sinter/Pellet in Burden are
+# "higher is better".
 _LOWER_IS_BETTER = {
-    "Coke Rate", "Fuel Rate", "Nut Coke Rate",
+    "Coke Rate", "Fuel Rate",
     "Specific Energy Consumption", "Sp. CO2 Emission", "TMI",
 }
 
