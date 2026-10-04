@@ -93,7 +93,9 @@ each `.page` block is measured at the real printable width. Too wide gets
 scaled to fit that page only; up to 10% too tall gets scaled to fit one
 sheet (unless the page has `data-vfit="off"`). Everything else prints at
 100%. As of the baseline (2026-08 render) these pages are fitted: 2.2
-(96%), 24 (92%), 38 (96%); landscape 2.41, 2.42, 1025 (95–97%).
+(96%), 5 (98%), 24 (92%), 38 (97%); landscape 2.41, 2.42, 1025 (95–97%).
+A fitted page's border widths are floored to whole px after the zoom (see
+section 4).
 
 **Vertical fill** (Index page 2, techno pages 27–30/29.5, Power Data 35.7): a table marked `data-vgrow`
 (with `data-vgrow-mm` / `data-vgrow-wmm`, its real usable height/width on
@@ -181,6 +183,8 @@ break mark and a "not from 0" note. Keep both if you touch them.
 | Full report took 20+ minutes | Old trend loop printed the whole report ~20 times; pypdf text extraction | Trend planning on the trend section only; pdfium text extraction |
 | Export hangs forever, server stops answering | pdfium crashed the server process (not thread-safe) | pdfium runs in a child process with pypdf fallback |
 | Backend won't start: "blocked by Device Guard" | Unsigned `uvicorn.exe` / `pip.exe` launchers | Start scripts use `python.exe -m ...` |
+| A 2px border prints 1px on one page only (pages 5 vs 6) | That page is fit-zoomed (e.g. 97%) and Chromium floors zoomed border widths | Use 1px, or declare 2.4px (prints 2px at any zoom >= ~84%) |
+| Index page: empty band below the list, or row 33 spilling to a 2nd page | Fill measured against `_FRONT_MARGIN`, but `main.html`'s default `@page` margin (12/15/12/15mm) is what prints | `_PRINTABLE_FRONT_MM` = 180 x 273mm (measured), Index table is `data-vgrow` |
 
 ---
 
@@ -195,10 +199,11 @@ break mark and a "not from 0" note. Keep both if you touch them.
    venv\Scripts\python.exe layout_guard.py --accept --render 2026-08
    ```
    (refuses if the render has layout problems)
-5. Commit, then tag it:
+5. Commit (including `backend/layout_baseline.json`), then tag it. For a
+   second change on the same day, add a letter: `-2026-10-04b`, `-c`, ...
    ```bat
    git tag pdf-layout-baseline-YYYY-MM-DD
-   git push origin main --tags
+   git push origin main pdf-layout-baseline-YYYY-MM-DD
    ```
 6. Update the tag name at the top of this document and in section 1.
 

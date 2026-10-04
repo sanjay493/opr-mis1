@@ -36,6 +36,17 @@ Monthly MIS report for SAIL: a FastAPI backend that ingests plant Excel/PDF file
 The report layout is tuned to the millimetre. Before touching CSS, templates, `pdf.py`, `layout_config.json` or page modules, read `backend/docs/PDF_LAYOUT_GUARDRAILS.md`.
 - `backend/layout_guard.py` runs as a Claude Code PostToolUse hook and as a git pre-commit hook (`.githooks/`); heed its warnings.
 - Verify a real render: `python layout_guard.py --render YYYY-MM` (from `backend/`). After an intended layout change: `--accept`.
+- Finishing a layout change: `--accept --render 2026-08`, commit (include `layout_baseline.json`), tag the next `pdf-layout-baseline-YYYY-MM-DD[b,c,…]`, and replace the old tag name in `PDF_LAYOUT_GUARDRAILS.md` (3 places). Push `main` plus the tag only when the user asks.
+- Pages that come out a bit too tall get scaled to fit (the render log's `fit-to-page: 5 @ 97%`). Chromium rounds scaled border widths down, so a 2px border prints as 1px there. Use 1px, or declare 2.4px to get 2px.
+- The Index page (2) prints with `main.html`'s default `@page` margin (12/15/12/15mm), not `_FRONT_MARGIN`. Its table is `data-vgrow`, so its rows stretch to fill the sheet.
+- Check colours and borders against the PDF itself rather than by eye: render the page with pypdfium2 to look at it, and read the table lines with pdfplumber (`page.rects`: each one's width and `non_stroking_color`).
+
+## Colours
+
+- Every PDF colour is a named key in `backend/colors_config.json`, used as `{{ colors.<key> }}`. Never hard-code a hex value in a template. Edits apply on the next render.
+- `colors_loader.py` `_DEFAULTS` mirrors every JSON key (same values) as a fallback. Add a new key to both files.
+- `perf_*` keys are the table colours shared by pages 4, 5-6 and Concast. Plan column: gold `perf_app_*`. Actual columns: green `perf_act_*`. %Gr columns: `perf_gr_bg`. Page 4's Ann. Cap. column: `perf_cap_*`. Don't retint the shared `highlight_*` keys for one page; other pages use them too.
+- The frontend preview templates (`frontend/src/components/*Template.js`) keep their own copies of these hex values, so a colour change does not reach the browser preview automatically.
 
 ## Verifying changes
 
