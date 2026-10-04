@@ -5,8 +5,8 @@ changes have broken it before, in ways that only show up in a **full**
 export. This document lists what controls the layout, what goes wrong, how
 it's detected, and how to put it back.
 
-**Known-good layout:** git tag `pdf-layout-baseline-2026-09-26b`
-(full report for Aug 2026: 103 pages incl. Annexure-III, sequential
+**Known-good layout:** git tag `pdf-layout-baseline-2026-10-04`
+(full report for Aug 2026: 105 pages incl. Annexure-4, sequential
 footers, trend section 12 pages, no layout warnings).
 
 ---
@@ -23,10 +23,10 @@ rem 1. What changed since the known-good layout?
 venv\Scripts\python.exe layout_guard.py
 
 rem 2. Restore one file to the known-good version (repeat per file listed)
-git checkout pdf-layout-baseline-2026-09-26b -- backend/page_templates/main.html
+git checkout pdf-layout-baseline-2026-10-04 -- backend/page_templates/main.html
 
 rem 3. ...or restore EVERY layout file at once
-git checkout pdf-layout-baseline-2026-09-26b -- backend/pdf.py backend/layout_config.json backend/chart_utils.py backend/page_at_a_glance.py backend/page_special_steel_donut.py backend/page_coal_consumption.py backend/page_templates
+git checkout pdf-layout-baseline-2026-10-04 -- backend/pdf.py backend/layout_config.json backend/chart_utils.py backend/page_at_a_glance.py backend/page_special_steel_donut.py backend/page_coal_consumption.py backend/page_templates
 
 rem 4. Verify with a real render (about 1-2 minutes)
 venv\Scripts\python.exe layout_guard.py --render 2026-08
@@ -75,7 +75,8 @@ names in brackets match what the warnings print.
 | Setting | Value | Why it matters |
 |---|---|---|
 | `_MAIN_MARGIN` | 10 / 15 / 9 / 15 mm (top/right/bottom/left) | Printable area for report pages; every probe print must use the same value |
-| `_FRONT_MARGIN` | 8 / 13 / 8 / 13 mm | Index page |
+| `_FRONT_MARGIN` | 4 / 13 / 8 / 13 mm | Index page, passed to `page.pdf()` but **overridden** by main.html's default `@page` margin (12 / 15 / 12 / 15 mm), which is what actually prints |
+| `_PRINTABLE_FRONT_MM` | 180 x 273 mm | Index page's real printable area (measured from the printed PDF); its vertical fill targets this |
 | Landscape print margin | 12 / 10 / 10 / 10 mm | `_render_landscape_page_pdf` |
 | `_PRINTABLE_PORTRAIT_MM` / `_LANDSCAPE_MM` | 180 x 278 mm / 277 x 188 mm | Must equal page size minus the margins above |
 | `prefer_css_page_size=True` | on | Off lets one overflowing page shrink the whole document |
@@ -94,7 +95,7 @@ sheet (unless the page has `data-vfit="off"`). Everything else prints at
 100%. As of the baseline (2026-08 render) these pages are fitted: 2.2
 (96%), 24 (92%), 38 (96%); landscape 2.41, 2.42, 1025 (95–97%).
 
-**Vertical fill** (techno pages 27–30/29.5, Power Data 35.7): a table marked `data-vgrow`
+**Vertical fill** (Index page 2, techno pages 27–30/29.5, Power Data 35.7): a table marked `data-vgrow`
 (with `data-vgrow-mm` / `data-vgrow-wmm`, its real usable height/width on
 paper) gets its body-cell padding bisected up until the page fills its
 sheet, laid out at that real width while measuring. `data-vgrow-step`

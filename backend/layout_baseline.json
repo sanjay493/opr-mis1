@@ -38,7 +38,7 @@
   "page_templates/cover_triptych.html": "3fb00e8c1c71d2972da486326d822f1fdcf8da228307685fadf69efcaf0b4e2b",
   "page_templates/css/production_trend.css": "6fa93ada0666469054bce07864f8b160fe18a15bc75cddbd3ea9db07699afb88",
   "page_templates/epi.html": "161f78928bcabead508ff3866c9be3197d9af07dd388a6f035e8a4b4fee07719",
-  "page_templates/index.html": "0af194fbccabd46d50b0044a05763c86eefae40be77b2a323b17647d1ef637c8",
+  "page_templates/index.html": "b88c5c1c380162624e1b77dd0b2f1897cb1eb037707293a2beb4b0a896633993",
   "page_templates/ipt_status.html": "12354b9c3ffeaf94773edbe082886606f84149ac967feb3bc2c99ab21a233810",
   "page_templates/key_highlights.html": "1b6c33c6e34ee58b35a9388f07f9e3aed6d740064459ee4cbb562bdc4d79dc95",
   "page_templates/key_parameters.html": "c90940e09316ef8757d5b07afea5a7b40136df5f2fd21681cbd2d109ccfd3b34",
@@ -71,7 +71,7 @@
   "page_templates/summary.html": "a8923670bc21cb6c01d9e2759bb1efcc6c73c62010763addcefa898e12c30115",
   "page_templates/techno_params.html": "4bd1d5e9d3130ed582bd5b1fa002beb0f7a3aa78c0b06f13a831a73627adf59f",
   "page_templates/trend_section.html": "d2bc90a92888823a7eeb43dc36b6549928fca0a0d49eaeb5a041b28798450bad",
-  "pdf.py": "0dbf4820a7e93da75a97b17c4b2e331a84c2a48d524592f3a425b364ea61ff49"
+  "pdf.py": "07c3309d2b4459c5ffebea33edbce51233571741681bb71c0e139aa850da58e6"
  },
  "reference_render": {
   "month": "2026-08",

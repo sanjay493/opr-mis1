@@ -221,6 +221,13 @@ _MAIN_MARGIN = {"top": "10mm", "right": "15mm", "bottom": "9mm", "left": "15mm"}
 # font-size/padding were tightened further, 2026-09-25, when Annexure-4
 # pushed the list from 32 to 33 rows).
 _FRONT_MARGIN = {"top": "4mm", "right": "13mm", "bottom": "8mm", "left": "13mm"}
+# The Index's real printable area. main.html's default @page margin
+# (12/15/12/15mm) overrides _FRONT_MARGIN in this print - measured from the
+# printed PDF, the Index's content box is 180mm wide from 15mm in, not
+# _FRONT_MARGIN's 184mm. The Index table is data-vgrow, so
+# _fit_pages_for_print grows its row padding until the list fills this
+# sheet instead of leaving a band of empty space below it.
+_PRINTABLE_FRONT_MM = (210 - 15 - 15, 297 - 12 - 12)
 
 # Printable area (width, height in mm) inside _MAIN_MARGIN for portrait A4,
 # and inside _render_landscape_page_pdf's margin for landscape A4.
@@ -887,8 +894,7 @@ def _render_pdf(browser, front_html: str, main_html: str, font_family: str = _DE
     if front_html:
         with _time_phase(f"{phase_prefix}: front/index page"):
             page = browser.new_page()
-            page.set_content(front_html, wait_until="domcontentloaded")
-            page.evaluate("document.fonts.ready")
+            _load_for_print(page, front_html, _PRINTABLE_FRONT_MM)
             front_bytes = page.pdf(
                 format="A4",
                 print_background=True,
@@ -1456,8 +1462,7 @@ def _correct_dynamic_index_pagination(pdf_bytes: bytes, browser, front_pages: li
     new_index_html = template.render(pages=[index_page], **render_kwargs)
     op = browser.new_page()
     try:
-        op.set_content(new_index_html, wait_until="domcontentloaded")
-        op.evaluate("document.fonts.ready")
+        _load_for_print(op, new_index_html, _PRINTABLE_FRONT_MM)
         new_index_bytes = op.pdf(
             format="A4", print_background=True, display_header_footer=False, margin=_FRONT_MARGIN,
         )
