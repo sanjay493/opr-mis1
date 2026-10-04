@@ -359,6 +359,19 @@ CREATE TABLE IF NOT EXISTS page_visits (
     KEY idx_visits_ip (ip_address)
 ) ENGINE=InnoDB;
 
+-- Sign-ins and new anonymous visitors, polled by the admin navbar bell
+-- (frontend/src/components/AdminNotifications.js). kind: 'sign_in' | 'anon_visit'.
+CREATE TABLE IF NOT EXISTS admin_notifications (
+    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    created_at VARCHAR(40) NOT NULL,
+    kind       VARCHAR(20) NOT NULL,
+    user_email VARCHAR(190),
+    user_name  VARCHAR(190),
+    ip_address VARCHAR(64),
+    path       VARCHAR(255),
+    KEY idx_admin_notif_kind_ip (kind, ip_address, created_at)
+) ENGINE=InnoDB;
+
 CREATE TABLE IF NOT EXISTS todo_jobs (
     id           BIGINT AUTO_INCREMENT PRIMARY KEY,
     subject      VARCHAR(255) NOT NULL,

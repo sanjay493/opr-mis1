@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth, API_BASE_URL } from '@/providers/AuthProvider';
 import { useEmbedded } from '@/components/EmbeddedContext';
+import AdminNotifications from '@/components/AdminNotifications';
 
 export default function GlobalNavbar() {
   const [openDropdown, setOpenDropdown] = useState(null);
@@ -424,9 +425,11 @@ export default function GlobalNavbar() {
             );})}
           </div>
 
+          {user?.role === 'admin' && <AdminNotifications />}
+
           {/* Account menu */}
           <div
-            style={{ position: 'relative', marginLeft: 'auto' }}
+            style={{ position: 'relative', marginLeft: user?.role === 'admin' ? '4px' : 'auto' }}
             onMouseEnter={() => setOpenDropdown('account')}
             onMouseLeave={() => setOpenDropdown(null)}
           >

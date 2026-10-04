@@ -582,6 +582,21 @@ def init_db():
         )
     """)
 
+    # 16c. Admin notifications — sign-ins and new anonymous visitors, polled
+    # by the navbar bell (frontend/src/components/AdminNotifications.js).
+    # kind is 'sign_in' or 'anon_visit'. See add_admin_notification.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS admin_notifications (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at TEXT NOT NULL,
+            kind       TEXT NOT NULL,
+            user_email TEXT,
+            user_name  TEXT,
+            ip_address TEXT,
+            path       TEXT
+        )
+    """)
+
     # 17. Page 3 narrative — Production Narrative + Highlights text, kept
     # separate from page_configs so a save here never touches (or requires
     # touching) the other 34 pages' rows for the month.
@@ -2236,6 +2251,70 @@ def log_page_visit(ip_address: str, user: Optional[dict], path: str) -> None:
     ))
     conn.commit()
     conn.close()
+
+
+ANON_VISIT_NOTIFY_WINDOW_MINUTES = 30
+
+
+def add_admin_notification(kind: str, ip_address: str = "", user: Optional[dict] = None,
+                           path: Optional[str] = None) -> None:
+    """Records one event for the admin notification bell. kind is 'sign_in'
+    or 'anon_visit'. An 'anon_visit' is skipped when the same IP already
+    raised one in the last ANON_VISIT_NOTIFY_WINDOW_MINUTES, so a visitor
+    clicking around doesn't produce one alert per page.
+
+    Best-effort: a failure here is logged and swallowed — it must never
+    break the sign-in or visit request that triggered it."""
+    try:
+        _add_admin_notification(kind, ip_address, user, path)
+    except Exception as e:
+        print(f"[admin_notifications] could not record {kind}: {e}")
+
+
+def _add_admin_notification(kind, ip_address, user, path) -> None:
+    from datetime import timedelta
+    init_db()
+    now = datetime.now(timezone.utc)
+    conn = connect()
+    try:
+        if kind == "anon_visit":
+            since = (now - timedelta(minutes=ANON_VISIT_NOTIFY_WINDOW_MINUTES)).isoformat()
+            row = conn.execute(
+                "SELECT 1 FROM admin_notifications WHERE kind = 'anon_visit' AND ip_address = ? AND created_at >= ? LIMIT 1",
+                (ip_address or None, since),
+            ).fetchone()
+            if row:
+                return
+        conn.execute("""
+            INSERT INTO admin_notifications (created_at, kind, user_email, user_name, ip_address, path)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (
+            now.isoformat(),
+            kind,
+            user.get("email") if user else None,
+            user.get("name") if user else None,
+            ip_address or None,
+            path,
+        ))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def list_admin_notifications(limit: int = 30) -> List[Dict[str, Any]]:
+    """Newest-first admin notification events (see add_admin_notification)."""
+    init_db()
+    conn = connect()
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            "SELECT id, created_at, kind, user_email, user_name, ip_address, path "
+            "FROM admin_notifications ORDER BY id DESC LIMIT ?",
+            (int(limit),),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
 
 
 def log_extraction(plant: str, report_month: str, file_name: str, sheet_name: str,

@@ -28,7 +28,9 @@ def log_visit(
     request: Request,
     user: Optional[dict] = Depends(auth.get_current_user_optional),
 ):
-    fwd = request.headers.get("x-forwarded-for", "")
-    ip = fwd.split(",")[0].strip() if fwd else (request.client.host if request.client else "")
-    db.log_page_visit(ip, user, body.path[:255])
+    ip = auth.client_ip(request)
+    path = body.path[:255]
+    db.log_page_visit(ip, user, path)
+    if user is None:
+        db.add_admin_notification("anon_visit", ip, path=path)
     return {"status": "ok"}

@@ -13,7 +13,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, UploadFile, File, Form
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, UploadFile, File, Form
 from pydantic import BaseModel, EmailStr
 
 import auth
@@ -126,14 +126,16 @@ def _send_login_code(email: str) -> None:
         )
 
 
-def _start_session(user: dict, response: Response) -> dict:
+def _start_session(user: dict, request: Request, response: Response) -> dict:
     token = auth.create_session_token(user["id"], user["email"], user.get("role"))
     response.set_cookie(auth.COOKIE_NAME, token, **_COOKIE_KW)
+    if user.get("role") != "admin":
+        db.add_admin_notification("sign_in", auth.client_ip(request), user=user)
     return {"status": "ok", "user": _public_user(user)}
 
 
 @router.post("/login")
-def login(body: LoginRequest, response: Response):
+def login(body: LoginRequest, request: Request, response: Response):
     """Step 1: password. With two-step login on, no session is issued here —
     a code is emailed and a short-lived challenge is returned for step 2."""
     user = auth.get_user_by_email(body.email.lower())
@@ -142,7 +144,7 @@ def login(body: LoginRequest, response: Response):
     if auth._is_barred(user["email"]):
         raise HTTPException(status_code=403, detail="Your account has been barred by an administrator.")
     if not auth.LOGIN_2FA_ENABLED:
-        return _start_session(user, response)
+        return _start_session(user, request, response)
 
     # Reuse a code sent moments ago (e.g. double-submit) instead of spamming mail.
     if auth.otp_resend_wait_seconds(user["email"], "login") == 0:
@@ -178,7 +180,7 @@ def _user_from_challenge(challenge: str) -> dict:
 
 
 @router.post("/login/verify")
-def login_verify(body: LoginVerify, response: Response):
+def login_verify(body: LoginVerify, request: Request, response: Response):
     """Step 2: the emailed code. Issues the session cookie on success."""
     user = _user_from_challenge(body.challenge)
     if not auth.verify_otp(user["email"], "login", body.code):
@@ -186,7 +188,7 @@ def login_verify(body: LoginVerify, response: Response):
             status_code=400,
             detail=f"That code is wrong or has expired. After {auth.OTP_MAX_ATTEMPTS} wrong tries a code stops working — request a new one.",
         )
-    return _start_session(user, response)
+    return _start_session(user, request, response)
 
 
 @router.post("/login/resend")

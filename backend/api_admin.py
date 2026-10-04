@@ -229,6 +229,16 @@ def get_activity_log(limit: int = 200, offset: int = 0, user_email: Optional[str
     return {"entries": rows}
 
 
+# ── notifications ────────────────────────────────────────────────────────────
+
+@router.get("/notifications")
+def get_admin_notifications(limit: int = 30):
+    """Newest sign-ins and new anonymous visitors for the navbar bell
+    (frontend/src/components/AdminNotifications.js). Unread state lives in
+    the admin's browser as the last-seen id."""
+    return {"notifications": db.list_admin_notifications(max(1, min(limit, 100)))}
+
+
 # ── site visits ──────────────────────────────────────────────────────────────
 
 @router.get("/site-visits")

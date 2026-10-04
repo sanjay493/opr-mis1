@@ -193,6 +193,13 @@ def get_current_user(mis_session: Optional[str] = Cookie(default=None)) -> dict:
     return user
 
 
+def client_ip(request) -> str:
+    """Real client IP: frontend/server.js forwards it as x-forwarded-for
+    (the Next rewrite proxy itself doesn't)."""
+    fwd = request.headers.get("x-forwarded-for", "")
+    return fwd.split(",")[0].strip() if fwd else (request.client.host if request.client else "")
+
+
 def get_current_user_optional(mis_session: Optional[str] = Cookie(default=None)) -> Optional[dict]:
     if not mis_session:
         return None
