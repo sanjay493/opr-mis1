@@ -24,8 +24,11 @@ function CommentaryMarketUploadInner() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
+  // Reviewed newest-month macro values, as typed (strings): starts from the
+  // OCR result and is what Save sends.
+  const [macroEdit, setMacroEdit] = useState({});
 
-  const reset = () => { setPreview(null); setResult(null); setError(null); };
+  const reset = () => { setPreview(null); setResult(null); setError(null); setMacroEdit({}); };
 
   const handlePreview = async () => {
     if (!file) return;
@@ -40,6 +43,8 @@ function CommentaryMarketUploadInner() {
       try { json = JSON.parse(text); } catch { throw new Error(text.slice(0, 300)); }
       if (!res.ok) throw new Error(json.detail || 'Preview failed');
       setPreview(json);
+      const ocr = json.macro?.values || {};
+      setMacroEdit(Object.fromEntries((json.macro_metrics || []).map((m) => [m.code, ocr[m.code] ?? ''])));
     } catch (err) {
       setError(err.message || 'Preview failed');
     } finally {
@@ -59,12 +64,24 @@ function CommentaryMarketUploadInner() {
     return n;
   }, [prices, preview]);
 
+  const macro = preview?.macro;
+  const macroValues = useMemo(() => {
+    const out = {};
+    for (const [code, v] of Object.entries(macroEdit)) {
+      const n = v === '' || v == null ? null : Number(v);
+      out[code] = Number.isFinite(n) ? n : null;
+    }
+    return out;
+  }, [macroEdit]);
+  const macroCount = Object.values(macroValues).filter((v) => v != null).length;
+
   const handleSave = async () => {
     const c = preview.commentary;
     const replacing = preview.stored.month_items.length + preview.stored.ytd_items.length > 0;
     if (!window.confirm(
       `Save ${monLabel(preview.report_month)}: ${c.month_items.length} month + ${c.ytd_items.length} YTD bullets`
-      + `${replacing ? ' (replacing the bullets already saved)' : ''} and ${changedCount} new/changed price value(s)?`
+      + `${replacing ? ' (replacing the bullets already saved)' : ''}, ${changedCount} new/changed price value(s)`
+      + `${macro?.month ? ` and ${macroCount} macro indicator value(s) for ${monLabel(macro.month)}` : ''}?`
     )) return;
     setSaving(true);
     setError(null);
@@ -78,6 +95,8 @@ function CommentaryMarketUploadInner() {
           month_items: c.month_items,
           ytd_items: c.ytd_items,
           prices: prices.series,
+          macro_month: macro?.month || null,
+          macro: macro?.month ? macroValues : {},
         }),
       });
       const json = await res.json();
@@ -109,9 +128,10 @@ function CommentaryMarketUploadInner() {
           Upload the monthly CMO / BigMint deck (PDF). Its &quot;Key Performance Parameters&quot; slides become the
           month and YTD bullets of Steel Sales Performance (page 3.05), and its &quot;Movement of Key
           Prices-International&quot; chart fills every month it shows on page 2.41 — a later deck replaces last
-          month&apos;s spot price with its full-month figure. The India Macro Economic Indicators table in the deck
-          is an image: enter its new month in{' '}
-          <Link href="/data-entry/commentary?tab=market-intel" style={{ color: '#1a73e8' }}>Market Intelligence</Link>.
+          month&apos;s spot price with its full-month figure. The deck&apos;s India Macro Economic Indicators table is
+          an image: its newest month is read by OCR into an editable grid below — check it before saving (older
+          months can be corrected in{' '}
+          <Link href="/data-entry/commentary?tab=market-intel" style={{ color: '#1a73e8' }}>Market Intelligence</Link>).
           Nothing is written until you click Save.
         </p>
 
@@ -136,7 +156,8 @@ function CommentaryMarketUploadInner() {
         {error && <Banner kind="error">{error}</Banner>}
         {result && (
           <Banner kind="ok">
-            Saved {monLabel(result.report_month)}: {result.bullets} bullet(s) and {result.prices} price value(s).
+            Saved {monLabel(result.report_month)}: {result.bullets} bullet(s), {result.prices} price value(s)
+            {result.macro ? ` and ${result.macro} macro indicator value(s)` : ''}.
           </Banner>
         )}
 
@@ -149,7 +170,7 @@ function CommentaryMarketUploadInner() {
               <span style={{ fontSize: '9.5pt', color: '#5f6368' }}>from {preview.file_name}</span>
               {preview.skipped_pages.length > 0 && (
                 <span style={{ fontSize: '9.5pt', color: '#5f6368' }}>
-                  · page {preview.skipped_pages.join(', ')} has no text (image) — not extracted
+                  · page {preview.skipped_pages.join(', ')} is an image — macro table read by OCR, check it below
                 </span>
               )}
             </div>
@@ -211,6 +232,11 @@ function CommentaryMarketUploadInner() {
                 </div>
               </>
             )}
+
+            {macro?.month && (
+              <MacroReview macro={macro} metrics={preview.macro_metrics} stored={preview.stored}
+                edit={macroEdit} setEdit={setMacroEdit} values={macroValues} />
+            )}
           </>
         )}
 
@@ -221,6 +247,68 @@ function CommentaryMarketUploadInner() {
         )}
       </main>
     </div>
+  );
+}
+
+// Newest-month India Macro Economic Indicators column, OCR'd from the deck's
+// table image — every value editable before Save. ⚠ marks a cell OCR could
+// not read, or one that moved more than 50% from the previous month (an OCR
+// slip such as a dropped decimal point looks exactly like that).
+function MacroReview({ macro, metrics, stored, edit, setEdit, values }) {
+  const flag = (code) => {
+    const v = values[code];
+    if (v == null) return 'not read';
+    const prev = stored.macro_prev?.[code] ?? macro.prev_values?.[code];
+    if (prev && Math.abs(v - prev) / Math.abs(prev) > 0.5) return `${Math.round((v / prev - 1) * 100)}% vs ${monLabel(macro.prev_month)}`;
+    return null;
+  };
+  return (
+    <>
+      <h2 style={{ fontSize: '12pt', fontWeight: 700, color: '#202124', margin: '0 0 6px' }}>
+        India Macro Economic Indicators — {monLabel(macro.month)}
+      </h2>
+      <p style={{ fontSize: '9.5pt', color: '#5f6368', margin: '0 0 10px' }}>
+        Read by OCR from the table image (newest month only). Check every value against the PDF and correct it
+        here before saving; older months are not changed.
+      </p>
+      <div style={{ border: '1px solid #dadce0', borderRadius: '8px', overflowX: 'auto', marginBottom: '20px', maxWidth: '760px' }}>
+        <table style={{ borderCollapse: 'collapse', backgroundColor: '#fff', width: '100%' }}>
+          <thead>
+            <tr style={{ backgroundColor: '#f8f9fa', borderBottom: '1px solid #dadce0' }}>
+              <th style={thStyle}>Key Parameter</th>
+              <th style={thStyle}>Unit</th>
+              <th style={{ ...thStyle, textAlign: 'right' }}>{monLabel(macro.prev_month)} (stored)</th>
+              <th style={{ ...thStyle, textAlign: 'right' }}>{monLabel(macro.month)} stored</th>
+              <th style={{ ...thStyle, textAlign: 'right' }}>{monLabel(macro.month)} (OCR — edit)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {metrics.map((m) => {
+              const f = flag(m.code);
+              return (
+                <tr key={m.code} style={{ borderBottom: '1px solid #f1f3f4' }}>
+                  <td style={tdStyle}>{m.label}</td>
+                  <td style={{ ...tdStyle, color: '#5f6368' }}>{m.unit}</td>
+                  <td style={{ ...tdStyle, textAlign: 'right', color: '#5f6368' }}>{stored.macro_prev?.[m.code] ?? '—'}</td>
+                  <td style={{ ...tdStyle, textAlign: 'right', color: '#5f6368' }}>{stored.macro?.[m.code] ?? '—'}</td>
+                  <td style={{ ...tdStyle, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                    {f && <span title={f} style={{ color: '#b06000', marginRight: 6, fontSize: '8.5pt' }}>⚠ {f}</span>}
+                    <input type="number" step="any" value={edit[m.code] ?? ''}
+                      aria-label={`${m.label} ${monLabel(macro.month)}`}
+                      onChange={(e) => setEdit((v) => ({ ...v, [m.code]: e.target.value }))}
+                      style={{
+                        width: 90, textAlign: 'right', fontSize: '9.5pt', padding: '3px 6px',
+                        border: `1px solid ${f ? '#fdd663' : '#dadce0'}`, borderRadius: 4,
+                        backgroundColor: f ? '#fef7e0' : '#fff',
+                      }} />
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
 

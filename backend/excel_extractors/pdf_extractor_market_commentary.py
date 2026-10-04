@@ -11,9 +11,13 @@
       7 USD/T series, see page_market_prices._SERIES — saved via
       db.save_market_price_trend.
   A page with no text layer (the India Macro Economic Indicators table is a
-  pasted image)                                         -> skipped_pages
-      entered by hand in /data-entry/market-intel instead (OCR of the
-      low-resolution image was unreliable).
+  pasted image)                                         -> skipped_pages, macro
+      Only the NEWEST month column is OCR'd (macro.values), plus the one
+      before it (macro.prev_values) so the caller can check the columns were
+      found correctly against what's stored. The image is low-resolution
+      (~1000px wide) with coloured cells, and OCR of the middle columns was
+      unreliable; the newest columns read correctly. Every value is meant to
+      be reviewed before saving (see api_market_commentary_upload.py).
 
 Bullets: one per slide line. A line set closer to the one above than the
 page's usual line gap continues that bullet (joined with "\\n", the same
@@ -35,12 +39,14 @@ than shifting the rest.
 import calendar
 import difflib
 import itertools
+import math
 import re
 from collections import defaultdict
 from statistics import median
 
 import pdfplumber
 
+import page_macro_indicators
 import page_market_prices
 
 _MONTHS = {m.lower(): i for i, m in enumerate(calendar.month_name) if m}
@@ -241,6 +247,126 @@ def _extract_prices(page, warnings: list) -> dict:
     return {"months": sorted(all_months), "series": series}
 
 
+# ── Macro indicators (image) ────────────────────────────────────────────────
+
+def _macro_image(path: str, page_index: int):
+    """The page's largest embedded image at its native resolution (rendering
+    the page instead would only resample it), else the rendered page."""
+    import pypdfium2
+    doc = pypdfium2.PdfDocument(path)
+    try:
+        page = doc[page_index]
+        imgs = [o for o in page.get_objects() if o.type == pypdfium2.raw.FPDF_PAGEOBJ_IMAGE]
+        if imgs:
+            best = max(imgs, key=lambda o: o.get_px_size()[0] * o.get_px_size()[1])
+            return best.get_bitmap(render=False).to_pil().convert("RGB")
+        return page.render(scale=2).to_pil().convert("RGB")
+    finally:
+        doc.close()
+
+
+def _ocr_number(pt, cell):
+    """-> (value or None, whether the OCR text had a decimal point)."""
+    from PIL import Image, ImageOps
+    g = cell.convert("L").resize((cell.width * 8, cell.height * 8), Image.BICUBIC)
+    g = ImageOps.expand(g.point(lambda v: 0 if v < 105 else 255), border=20, fill=255)
+    text = pt.image_to_string(g, config="--psm 7 -c tessedit_char_whitelist=0123456789.").strip()
+    if not re.fullmatch(r"\d+(?:\.\d+)?", text):
+        return None, False
+    return float(text), "." in text
+
+
+def _restore_decimal(v: float, ref: float) -> float:
+    """At this image's resolution the decimal point is the glyph OCR most
+    often drops (2.11 read as 211). A metric moves by percent month to
+    month, never 10-1000x, so a dot-less value that far from the same row's
+    other month gets its point shifted to that month's magnitude."""
+    if not ref or not (10 <= v / ref <= 1000):
+        return v
+    k = min(range(1, 4), key=lambda k: abs(math.log10(v / 10 ** k / ref)))
+    return round(v / 10 ** k, 4)
+
+
+def _extract_macro(path: str, page_index: int, report_month, warnings: list) -> dict:
+    out = {"page": page_index + 1, "month": None, "values": {}, "prev_month": None,
+           "prev_values": {}, "ocr_unavailable": False}
+    if not report_month:
+        warnings.append("Macro table: report month unknown, newest column not read")
+        return out
+    # Same 1-month lag as page_macro_indicators: an <M> deck carries data to <M-1>.
+    out["month"], out["prev_month"] = _shift(report_month, -1), _shift(report_month, -2)
+    try:
+        from excel_extractors.image_extractor_isp_special_steel import _get_tesseract
+        pt = _get_tesseract()
+        pt.get_tesseract_version()
+    except Exception:
+        out["ocr_unavailable"] = True
+        warnings.append("Macro table: Tesseract OCR not available - enter the values by hand")
+        return out
+
+    img = _macro_image(path, page_index)
+    W, H = img.size
+    px = img.load()
+
+    def coloured(c):
+        return max(c) - min(c) > 45
+
+    # Grid edges: the columns where coloured (heat-mapped) cells dominate.
+    colfrac = [sum(coloured(px[x, y]) for y in range(H)) / H for x in range(W)]
+    peak = max(colfrac) or 1
+    cols = [x for x in range(W) if colfrac[x] > peak * 0.5]
+    if not cols:
+        warnings.append("Macro table: coloured grid not found")
+        return out
+    left, right = cols[0], cols[-1]
+    n_months = page_macro_indicators.WINDOW_MONTHS
+    cw = (right - left) / n_months
+
+    # Rows: OCR the row labels (dark text on white, left of the grid) and
+    # match each line to the metric registry.
+    from PIL import Image
+    S = 4
+    lab = img.crop((0, 0, left, H)).resize((left * S, H * S), Image.LANCZOS).convert("L")
+    d = pt.image_to_data(lab, config="--psm 6", output_type=pt.Output.DICT)
+    lines = defaultdict(list)
+    for i, t in enumerate(d["text"]):
+        if t.strip():
+            lines[(d["block_num"][i], d["par_num"][i], d["line_num"][i])].append(i)
+    norm = lambda t: re.sub(r"[^a-z]", "", t.lower())
+    rows = {}
+    for idx in lines.values():
+        text = norm(" ".join(d["text"][i] for i in idx))
+        yc = sum(d["top"][i] + d["height"][i] / 2 for i in idx) / len(idx) / S
+        for code in page_macro_indicators.METRIC_CODES:
+            ref = norm(page_macro_indicators.METRIC_LABEL[code])
+            if difflib.SequenceMatcher(None, text[:len(ref) + 2], ref).ratio() >= 0.8 and code not in rows:
+                rows[code] = yc
+                break
+    missing = [c for c in page_macro_indicators.METRIC_CODES if c not in rows]
+    if missing:
+        warnings.append(f"Macro table: row labels not found for {', '.join(missing)}")
+    ys = sorted(rows.values())
+    pitch = median([b - a for a, b in zip(ys, ys[1:])]) if len(ys) > 1 else 20
+    half = pitch * 0.42
+
+    raw = {}
+    for key, col in (("values", n_months - 1), ("prev_values", n_months - 2)):
+        xa, xb = int(left + col * cw) + 3, int(left + (col + 1) * cw) - 3
+        for code, yc in rows.items():
+            raw[(key, code)] = _ocr_number(pt, img.crop((xa, int(yc - half), xb, int(yc + half))))
+    for code in rows:
+        for key, other in (("values", "prev_values"), ("prev_values", "values")):
+            v, has_dot = raw[(key, code)]
+            ov, o_dot = raw[(other, code)]
+            if v is not None and not has_dot and ov is not None and o_dot:
+                v = _restore_decimal(v, ov)
+            out[key][code] = v
+    unread = [c for c in rows if out["values"].get(c) is None]
+    if unread:
+        warnings.append(f"Macro table: {len(unread)} newest-month value(s) not read - enter by hand")
+    return out
+
+
 # ── Entry point ─────────────────────────────────────────────────────────────
 
 def extract_market_commentary_pdf(path: str) -> dict:
@@ -249,6 +375,7 @@ def extract_market_commentary_pdf(path: str) -> dict:
         "commentary": {"month_items": [], "ytd_items": []},
         "market_prices": {"months": [], "series": {}},
         "skipped_pages": [],
+        "macro": None,
         "warnings": [],
     }
     warnings = result["warnings"]
@@ -273,6 +400,10 @@ def extract_market_commentary_pdf(path: str) -> dict:
             elif _PRICES_TITLE in title.lower():
                 result["market_prices"] = _extract_prices(page, warnings)
                 found.add("prices")
+    # The macro table is the (first) page with no text layer.
+    if result["skipped_pages"]:
+        result["macro"] = _extract_macro(path, result["skipped_pages"][0] - 1,
+                                         result["report_month"], warnings)
     for key, what in (("month_items", "month Key Performance Parameters page"),
                       ("ytd_items", "April-to-month Key Performance Parameters page"),
                       ("prices", "Movement of Key Prices page")):

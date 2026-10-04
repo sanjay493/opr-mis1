@@ -38,7 +38,8 @@ def test_report_month_and_no_warnings():
     r = _extract()
     assert r["report_month"] == "2026-09"
     assert r["warnings"] == []
-    # PDF page 4 (India's Macro Economic Indicators) is an image only.
+    # PDF page 4 (India's Macro Economic Indicators) has no text layer (an
+    # image) — its newest month is OCR'd separately (see the macro tests).
     assert r["skipped_pages"] == [4]
 
 
@@ -86,3 +87,39 @@ def test_price_series(code):
 
 def test_price_months():
     assert _extract()["market_prices"]["months"] == FIN_MONTHS
+
+
+# India Macro Economic Indicators (PDF page 4) — a pasted image; only the
+# newest month column is OCR'd (plus the previous one, as an alignment
+# check). Values exactly as printed in the image.
+MACRO_AUG26 = {
+    "crude_steel_prod": 14.8, "pig_iron_prod": 0.78, "steel_exports": 1.09, "steel_imports": 0.52,
+    "iron_ore_imports": 2.22, "coal_prod": 66.9, "coal_imports": 18.9, "auto_prod": 3.16,
+    "auto_sales": 2.40, "power_consumption": 5.45, "merchandise_exports": 43.8,
+    "ev_registrations": 2.98, "gst_collections": 1.99, "manufacturing_pmi": 52.8,
+}
+MACRO_JUL26 = {
+    "crude_steel_prod": 14.3, "pig_iron_prod": 0.78, "steel_exports": 1.06, "steel_imports": 0.57,
+    "iron_ore_imports": 0.59, "coal_prod": 69.8, "coal_imports": 20.0, "auto_prod": 3.4,
+    "auto_sales": 2.47, "power_consumption": 5.5, "merchandise_exports": 44.2,
+    "ev_registrations": 3.20, "gst_collections": 2.11, "manufacturing_pmi": 53.5,
+}
+
+
+def _macro():
+    m = _extract()["macro"]
+    if m.get("ocr_unavailable"):
+        pytest.skip("Tesseract OCR not installed")
+    return m
+
+
+def test_macro_latest_month_ocr():
+    m = _macro()
+    assert m["month"] == "2026-08"
+    assert m["values"] == MACRO_AUG26
+
+
+def test_macro_previous_month_for_alignment_check():
+    m = _macro()
+    assert m["prev_month"] == "2026-07"
+    assert m["prev_values"] == MACRO_JUL26
