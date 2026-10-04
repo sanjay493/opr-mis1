@@ -30,9 +30,11 @@
     font-size: 9.5pt; padding: 3.5px 1.5px; line-height: 1;
     background: {{ colors.table_header_bg }}; color: {{ colors.text_primary }}; text-align: center; white-space: nowrap; font-weight: 700;
 }
-.page7-13-yearly-table th.qtr-hdr { background: {{ colors.table_header_bg_qtr }}; }
-.page7-13-yearly-table th.hh-hdr { background: {{ colors.table_header_bg_hh }}; }
-.page7-13-yearly-table th.tot-hdr { background: {{ colors.table_header_bg_total }}; }
+/* Q / H / Total headers take the same graded slate as their columns below
+   (see "Column highlighting"), as on pages 4-6. */
+.page7-13-yearly-table th.qtr-hdr { background: {{ colors.trend_qtr_bg }}; }
+.page7-13-yearly-table th.hh-hdr { background: {{ colors.trend_hh_bg }}; }
+.page7-13-yearly-table th.tot-hdr { background: {{ colors.trend_total_bg }}; }
 .page7-13-yearly-table td {
     font-size: 9.5pt; padding: 3.5px 1.5px; line-height: 1;
     text-align: right; border: 0.3pt solid {{ colors.border_light }};
@@ -76,8 +78,9 @@
    abbreviations like VISL's "VI" and would be too small to read
    at 7 letters). */
 .page7-13-yearly-table td.plant-cell.tight { font-size: 5.5pt; line-height: 1.05; }
-.page7-13-yearly-table td.plant-cell.agg-sail  { background: {{ colors.highlight_agg_sail_bg }}; }
-.page7-13-yearly-table td.plant-cell.agg-5p    { background: {{ colors.highlight_agg_5plants_bg }}; }
+/* SAIL / 5 Plants label cells match their own rows' colour family below. */
+.page7-13-yearly-table td.plant-cell.agg-sail  { background: {{ colors.perf_act_bg }}; }
+.page7-13-yearly-table td.plant-cell.agg-5p    { background: {{ colors.trend_5p_label_bg }}; }
 
 {# One fixed color per individual plant (see trend_section.html's
    _plant_color_map), kept the same wherever that plant's group appears
@@ -105,20 +108,24 @@
     font-size: 7.5pt;
 }
 
-/* ---- Row-type highlighting: Actual/SAIL, First Production/5 Plants, Plan ---- */
-.page7-13-yearly-table tr.sail-row   { background: {{ colors.highlight_achieved_band_bg }}; font-weight: 700; }
-.page7-13-yearly-table tr.fp-row     { background: {{ colors.highlight_target_band_bg }}; font-weight: 700; }
-/* Plan row — a distinct background (highlight_shortfall_band_bg, not
-   otherwise used anywhere on pages 7-13) plus rust-brown text, per
-   direct instruction, 2026-09-17. Declared AFTER tr.sail-row/tr.fp-row
-   above (equal selector specificity, so source order decides) so a
-   group's own Plan row keeps this look even when that group IS SAIL
-   or 5 Plants, instead of the SAIL/5-Plants row color winning. */
+/* ---- Row-type highlighting: Actual/SAIL, First Production/5 Plants, Plan ----
+   Same colour family as pages 4-6: SAIL = green Actual (perf_act_*),
+   Plan = gold (perf_app_*), 5 Plants = light peach (trend_5p_*, kept clear
+   of the gold Plan row). */
+.page7-13-yearly-table tr.sail-row   { background: {{ colors.perf_act_bg }}; color: {{ colors.perf_act_text }}; font-weight: 700; }
+.page7-13-yearly-table tr.fp-row     { background: {{ colors.trend_5p_bg }}; color: {{ colors.trend_5p_text }}; font-weight: 700; }
+/* Plan row — declared AFTER tr.sail-row/tr.fp-row above (equal selector
+   specificity, so source order decides) so a group's own Plan row keeps
+   this look even when that group IS SAIL or 5 Plants, instead of the
+   SAIL/5-Plants row color winning. */
 .page7-13-yearly-table tr.plan-row {
-    background: {{ colors.highlight_shortfall_band_bg }};
-    color: {{ colors.text_rust_brown }};
+    background: {{ colors.perf_app_bg }};
+    color: {{ colors.perf_app_text }};
     font-weight: 700;
 }
+/* td.year-cell sets its own rust-brown text; the Plan row's year label
+   takes the row's dark gold instead. */
+.page7-13-yearly-table tr.plan-row td.year-cell { color: {{ colors.perf_app_text }}; }
 /* The rowspan'd plant-label cell (td.plant-cell) is always physically
    inside the Plan row (it's each group's first row) — its own color
    rule (td.plant-cell, equal specificity to tr.plan-row above) would
@@ -134,9 +141,11 @@
 .page7-13-yearly-table tr.plant-first { border-top: 1.5pt solid {{ colors.border_heavy }}; }
 
 /* ---- Column highlighting: quarter / half-year / total bands ---- */
-.page7-13-yearly-table td.qtr-cell   { background: {{ colors.highlight_qtr_col_bg }}; font-weight: 600; }
-.page7-13-yearly-table td.hh-cell    { background: {{ colors.highlight_hh_col_bg }}; font-weight: 600; }
-.page7-13-yearly-table td.total-cell { background: {{ colors.highlight_total_col_bg }}; font-weight: 700; }
+/* Graded slate, darker as the period gets longer (quarter -> half -> year),
+   so the bands never compete with the row colours or the record fills. */
+.page7-13-yearly-table td.qtr-cell   { background: {{ colors.trend_qtr_bg }}; font-weight: 600; }
+.page7-13-yearly-table td.hh-cell    { background: {{ colors.trend_hh_bg }}; font-weight: 600; }
+.page7-13-yearly-table td.total-cell { background: {{ colors.trend_total_bg }}; font-weight: 700; }
 
 /* ---- Record flags: best-ever vs. best-for-this-calendar-period ----
    Two record flags: best-ever (all-time record, month/quarter/
@@ -150,14 +159,28 @@
    "this value" regardless of what's behind it. !important wins
    over qtr-cell/total-cell/plan-row/sail-row/fp-row backgrounds
    since a record can land on any of those. */
+/* One best-ever colour per column group, so the kind of record reads at a
+   glance: month (amber), quarter (sky blue), half-year (lavender), annual
+   Total (navy, white text - the strongest, for the most significant
+   record). Each is distinct from the gold Plan / green SAIL / peach
+   5 Plants rows and the slate column bands it can land on. */
 .page7-13-yearly-table td.best-ever {
-    background: {{ colors.highlight_best_ever_bg }} !important;
-    font-weight: 700; color: {{ colors.text_black }};
+    background: {{ colors.trend_rec_month_bg }} !important;
+    font-weight: 700; color: {{ colors.trend_rec_month_text }};
+}
+.page7-13-yearly-table td.qtr-cell.best-ever {
+    background: {{ colors.trend_rec_qtr_bg }} !important; color: {{ colors.trend_rec_qtr_text }};
+}
+.page7-13-yearly-table td.hh-cell.best-ever {
+    background: {{ colors.trend_rec_hh_bg }} !important; color: {{ colors.trend_rec_hh_text }};
+}
+.page7-13-yearly-table td.total-cell.best-ever {
+    background: {{ colors.trend_rec_total_bg }} !important; color: {{ colors.trend_rec_total_text }};
 }
 .page7-13-yearly-table td.best-month {
     font-weight: 700; color: {{ colors.text_black }};
     text-decoration: underline !important;
-    text-decoration-color: {{ colors.highlight_best_month_border_light }};
+    text-decoration-color: {{ colors.trend_best_month_line }};
     text-decoration-thickness: 1.5pt;
     text-underline-offset: 2px;
 }

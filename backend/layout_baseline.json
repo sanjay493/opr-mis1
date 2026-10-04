@@ -36,7 +36,7 @@
   "page_templates/cover_spotlight.html": "b4c3c8fb133b5e1d1d250abf7844e8942fed9884505793e42b5cb9c5243dad68",
   "page_templates/cover_swiss.html": "d4406a52eb15d2075d653c0e02190f6d8f0c8e8b4f73d4a5e0cc676cda3e6619",
   "page_templates/cover_triptych.html": "3fb00e8c1c71d2972da486326d822f1fdcf8da228307685fadf69efcaf0b4e2b",
-  "page_templates/css/production_trend.css": "6fa93ada0666469054bce07864f8b160fe18a15bc75cddbd3ea9db07699afb88",
+  "page_templates/css/production_trend.css": "db376074da90e73def41dda085c2bcebf956d55a33aaae083b63e556bd5c5c36",
   "page_templates/epi.html": "161f78928bcabead508ff3866c9be3197d9af07dd388a6f035e8a4b4fee07719",
   "page_templates/index.html": "b88c5c1c380162624e1b77dd0b2f1897cb1eb037707293a2beb4b0a896633993",
   "page_templates/ipt_status.html": "12354b9c3ffeaf94773edbe082886606f84149ac967feb3bc2c99ab21a233810",
@@ -70,7 +70,7 @@
   "page_templates/steel_sector_performance.html": "1a2307e155f763e8a0bae01068908410b0b3f4e1476db317a186a74bf56e528c",
   "page_templates/summary.html": "a8923670bc21cb6c01d9e2759bb1efcc6c73c62010763addcefa898e12c30115",
   "page_templates/techno_params.html": "4bd1d5e9d3130ed582bd5b1fa002beb0f7a3aa78c0b06f13a831a73627adf59f",
-  "page_templates/trend_section.html": "d2bc90a92888823a7eeb43dc36b6549928fca0a0d49eaeb5a041b28798450bad",
+  "page_templates/trend_section.html": "34d7b6da2a88e8dfe91498974300b9189169568d347d11f93127f74bb5adfc53",
   "pdf.py": "07c3309d2b4459c5ffebea33edbce51233571741681bb71c0e139aa850da58e6"
  },
  "reference_render": {

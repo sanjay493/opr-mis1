@@ -111,9 +111,13 @@
                report, 2026-09-19). Every other occurrence is unaffected. #}
             {% if not loop.last %}
             <div class="page7-13-legend">
-                <span class="swatch" style="background:{{ colors.highlight_best_ever_bg }};"></span>Best Ever (month / quarter / Half yearly / annual record)
+                Best Ever:
+                <span class="swatch" style="background:{{ colors.trend_rec_month_bg }};"></span>Month&nbsp;
+                <span class="swatch" style="background:{{ colors.trend_rec_qtr_bg }};"></span>Quarter&nbsp;
+                <span class="swatch" style="background:{{ colors.trend_rec_hh_bg }};"></span>Half Year&nbsp;
+                <span class="swatch" style="background:{{ colors.trend_rec_total_bg }};"></span>Annual
                 &nbsp;&nbsp;
-                <span style="text-decoration:underline;text-decoration-color:{{ colors.highlight_best_month_border_light }};text-decoration-thickness:1.5pt;font-weight:700;margin-right:3px;">123</span>Best for that Calendar Month/Quarter/Half Year (e.g. best April, best Q3)
+                <span style="text-decoration:underline;text-decoration-color:{{ colors.trend_best_month_line }};text-decoration-thickness:1.5pt;font-weight:700;margin-right:3px;">123</span>Best for that Calendar Month/Quarter/Half Year (e.g. best April, best Q3)
             </div>
             {% endif %}
         </div>
