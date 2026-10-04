@@ -191,6 +191,16 @@ def _rows_with_commodity_rowspan(sec_rows: list, history: dict, months: list, he
     return out
 
 
+def _upto(history: dict, report_month: str) -> dict:
+    """{master_id: {month: value}} limited to months up to report_month.
+    These pages lay out the whole FY (Apr-Mar) or several FYs, and figures
+    for a later month may already be entered when an earlier month's report
+    is generated - those must print blank (and stay out of the heatmap
+    scale), not leak into the earlier report (2026-10-04: an Aug'26 report
+    showed Sep'26)."""
+    return {mid: {m: v for m, v in h.items() if m <= report_month} for mid, h in history.items()}
+
+
 def generate_rake_detention_detail(report_month: str, plants: list) -> dict:
     """One detail page's worth of data for `plants`: full current-FY row
     (Apr-Mar) per wagon type/commodity, grouped Inward / Outward / Overall,
@@ -200,7 +210,7 @@ def generate_rake_detention_detail(report_month: str, plants: list) -> dict:
 
     master_rows = db.get_rake_detention_master(plants=plants)
     ids = [r["id"] for r in master_rows]
-    history = db.get_rake_detention_trend(ids)  # {master_id: {report_month: value}}
+    history = _upto(db.get_rake_detention_trend(ids), report_month)  # {master_id: {report_month: value}}
 
     by_plant = {}
     for r in master_rows:
@@ -307,7 +317,7 @@ def generate_rake_detention_trend(report_month: str) -> dict:
         if r["section"] == "OVERALL" and r["is_total"]
     }
     ids = list(overall_id_by_plant.values())
-    history = db.get_rake_detention_trend(ids)  # {master_id: {report_month: value}}
+    history = _upto(db.get_rake_detention_trend(ids), report_month)  # {master_id: {report_month: value}}
     annual = db.get_rake_detention_annual(plants, fys)  # {plant: {fy: avg_hours}}
 
     out_plants = []
