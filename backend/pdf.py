@@ -322,6 +322,14 @@ _FIT_PAGES_JS = """([W, H, maxOver]) => {
 }"""
 
 
+# Page.set_content timeout. Playwright's own default (30s) turned a slow but
+# healthy load into a failed report (2026-10-04: the page-3 probe's 1.5MB
+# HTML timed out on the first job after a backend restart, while a fresh
+# Chromium and the dev servers were all starting up). The largest report
+# HTML (~5.5MB) takes ~11s on an idle machine, so 30s left under 3x headroom.
+_SET_CONTENT_TIMEOUT_MS = 120_000
+
+
 def _load_for_print(page, html: str, printable_mm: tuple) -> None:
     """set_content + wait for web fonts, then _fit_pages_for_print. Every
     print of report pages goes through this, so probes and final prints see
@@ -329,7 +337,7 @@ def _load_for_print(page, html: str, printable_mm: tuple) -> None:
     w_mm, h_mm = printable_mm
     page.set_viewport_size({"width": round(w_mm * _PX_PER_MM), "height": round(h_mm * _PX_PER_MM)})
     page.emulate_media(media="print")
-    page.set_content(html, wait_until="domcontentloaded")
+    page.set_content(html, wait_until="domcontentloaded", timeout=_SET_CONTENT_TIMEOUT_MS)
     page.evaluate("document.fonts.ready")
     _fit_pages_for_print(page, printable_mm)
 
@@ -820,7 +828,8 @@ def _stamp_main_overlays(pdf_bytes: bytes, browser, font_family: str, report_mon
             blocks.append(_main_header_footer_overlay_block_html(
                 font_family, report_month, page_num, footer_total, margin_side, w_mm, h_mm, badge_html))
         op = browser.new_page()
-        op.set_content(_wrap_stamp_batch_html(blocks), wait_until="domcontentloaded")
+        op.set_content(_wrap_stamp_batch_html(blocks), wait_until="domcontentloaded",
+                       timeout=_SET_CONTENT_TIMEOUT_MS)
         batch_pdf = op.pdf(
             width=f"{w_mm}mm", height=f"{h_mm}mm",
             margin={"top": "0", "right": "0", "bottom": "0", "left": "0"},
@@ -879,7 +888,7 @@ def _render_pdf(browser, front_html: str, main_html: str, font_family: str = _DE
     if cover_html:
         with _time_phase(f"{phase_prefix}: cover page"):
             page = browser.new_page()
-            page.set_content(cover_html, wait_until="domcontentloaded")
+            page.set_content(cover_html, wait_until="domcontentloaded", timeout=_SET_CONTENT_TIMEOUT_MS)
             page.evaluate("document.fonts.ready")
             cover_bytes = page.pdf(
                 format="A4",
@@ -1525,6 +1534,28 @@ def _get_persistent_browser():
     return browser
 
 
+def _run_closing_tabs_on_error(fn, *args, **kwargs):
+    """Run fn on the PDF thread; if it raises, close every tab it left open
+    in the persistent browser before re-raising. The render steps open a tab
+    with browser.new_page() and close it only after a successful print, so a
+    failure part-way (e.g. a Page.set_content timeout) used to leave that tab
+    - and its half-loaded document - open in a browser that outlives the job.
+    Each new_page() owns its own context, and jobs run one at a time on the
+    single-worker _PDF_EXECUTOR, so any context still open when a job fails
+    is that job's."""
+    try:
+        return fn(*args, **kwargs)
+    except BaseException:
+        browser = _PW_STATE["browser"]
+        if browser is not None:
+            for ctx in list(browser.contexts):
+                try:
+                    ctx.close()
+                except Exception:
+                    pass
+        raise
+
+
 def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwargs: dict,
                         merged_page_layouts: dict, font_family: str, report_month: str) -> bytes:
     """Single Playwright entry point for a whole PDF request: reuses the
@@ -1991,6 +2022,7 @@ async def generate_pdf_bytes(request: PDFRequest, pages_override: list = None, p
 
         pdf_bytes = await loop.run_in_executor(
             _PDF_EXECUTOR, functools.partial(
+                _run_closing_tabs_on_error,
                 _generate_pdf_sync, front_pages, main_pages, _template, _render_kwargs,
                 _merged_page_layouts, fc.family, report_month_display,
             ),
