@@ -18,8 +18,11 @@ Report_format/"Plant wise Comparative for Apr-Jul'26.pdf" (the sample's own
 Recovery of Process Gases COG/BFG/LDG band was dropped — those three keys
 were never wired to a real data source; see
 frontend/src/components/entry/key-parameters-manual/Form.js for the fields
-that still have no file-upload source). CAPEX, Labour Productivity, Avg
-Rake Detention Time, Demurrage, RLTIFR and HM Sent to PCM/Sand Pit/Dry Pit
+that still have no file-upload source). Avg Rake Detention Time reads
+rake_detention_summary's YTD_TY row (the Rake Detention pages' own
+Apr-to-month average), falling back to its manual General-unit key below
+only for a month with no rake detention summary. CAPEX, Labour
+Productivity, Demurrage, RLTIFR and HM Sent to PCM/Sand Pit/Dry Pit
 read a `techno_data` "General"-unit key with no extractor behind it — filled in
 via that dedicated manual-entry page (or the general Techno Manual Entry
 form's PARAM_TEMPLATES.General, frontend/src/app/data-entry/techno-manual/
@@ -511,7 +514,13 @@ _ROWS = [
     # Manual Entry page (or Techno Manual Entry's General area) as month +
     # till-month, or wired to an extractor later. Reads the till_month value.
     ("RLTIFR",                 "--",       "general", "rltifr", 2, {}),
-    ("Avg Rake Detention Time","Hrs",      "general", "avg_rake_detention_time", 1, {}),
+    # Avg Rake Detention: the Rake Detention summary's own "This Year"
+    # Apr-to-report-month average per wagon (rake_detention_summary
+    # YTD_TY - extracted from the Rail Movement Cell's PDF / entered on
+    # /data-entry/rake-detention, the same figure that page prints), so the
+    # two pages can't disagree. Falls back to the manually entered
+    # techno_data General key for a month with no rake detention summary.
+    ("Avg Rake Detention Time","Hrs",      "rake_detention", "avg_rake_detention_time", 1, {}),
     # Label's period placeholder is filled in with the same Apr-<report
     # month> range as the page title (_DEMURRAGE_LABEL below). Split into two
     # data rows sharing one parameter-name cell: the raw Rs Cr figure, then
@@ -535,6 +544,7 @@ def generate_key_parameters(report_month: str) -> dict:
     techno = _fetch_techno(report_month)
     production = _fetch_production(ytd_months)
     cop = _fetch_cop(report_month)
+    rake_ytd = db.get_rake_detention_summary(report_month).get("YTD_TY", {})
 
     import datetime as _dt
     period_label = _dt.datetime.strptime(ytd_months[0], "%Y-%m").strftime("%b")
@@ -626,6 +636,10 @@ def generate_key_parameters(report_month: str) -> dict:
                     # both.
                     raw, _src_month = demurrage_by_plant.get(plant, (None, None))
                     v = _round(raw / 100, dp) if raw is not None else None
+            elif kind == "rake_detention":
+                v = _round(rake_ytd.get(plant), dp)
+                if v is None:
+                    v = _general_val(plant, spec, techno, dp)
             elif kind == "demurrage_per_tcs":
                 # Demurrage expense rate = this plant's Demurrage (Rs Cr,
                 # same latest-available-month fallback via
