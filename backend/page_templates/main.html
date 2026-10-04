@@ -1545,7 +1545,9 @@
         .page5-6-table td.col-mgr-wall,
         .page5-6-table thead th.col-mgr-wall {
             background-color: {{ colors.perf_gr_bg }} !important;
-            border-right: 2px solid {{ colors.border_dark }};
+            /* 2.4px prints as 2px even on a fit-zoomed page - see the
+               plant-group separator note above. */
+            border-right: 2.4px solid {{ colors.border_dark }};
         }
 
         /* Cumulative growth ("%Gr. Apr-<mon>'<yy>", the last column) — same
