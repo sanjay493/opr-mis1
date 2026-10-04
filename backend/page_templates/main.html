@@ -1474,21 +1474,13 @@
         .page5-6-table thead tr:last-child th { border-bottom: 1px solid {{ colors.border_black }} !important; }
         .page5-6-table thead tr:first-child th[rowspan] { border-bottom: 1px solid {{ colors.border_black }} !important; }
 
-        /* plant group separator — navy box top+bottom. 2px (not the old
-           1.3px): a fractional width redrawn on a whole row's worth of tds
-           still rounds to a whole device pixel per td at print resolution,
-           but not always the SAME whole pixel across every column in that
-           row - Chromium was drawing that top/bottom rule at inconsistent
-           thickness cell-to-cell, reading as a doubled hairline in some
-           columns. A clean integer width removes the rounding ambiguity.
-           Declared 2.4px so it still PRINTS as 2px: Chromium floors border
-           widths to whole px after zoom, and _fit_pages_for_print zooms a
-           page that's slightly too tall (page 5 at ~97%) - a plain 2px became
-           1.94px there and was floored to 1px, so page 5's separators came
-           out half page 6's weight. 2.4px floors to 2px at any zoom from 100%
-           down to ~84%, below _MIN_LEGIBLE_ZOOM. */
-        .page5-6-table tr.plant-first td { border-top: 2.4px solid {{ colors.cover_navy_dark }}; }
-        .page5-6-table tr.plant-last td  { border-bottom: 2.4px solid {{ colors.cover_navy_dark }} !important; }
+        /* plant group separator - 1px black, same as page4's item-group
+           separator (.group-first td) and this table's own 1px black outer
+           frame (box-shadow above), so the group lines read as one weight
+           with the frame. 1px is an integer like every other border here,
+           so it stays 1px even when _fit_pages_for_print zooms the page. */
+        .page5-6-table tr.plant-first td { border-top: 1px solid {{ colors.border_black }}; }
+        .page5-6-table tr.plant-last td  { border-bottom: 1px solid {{ colors.border_black }} !important; }
 
         /* Each plant group's own rowspan'd label cell — only right/bottom
            declared: top comes from .plant-first td (this cell only ever
@@ -1499,8 +1491,8 @@
             font-weight: 700;
             text-align: center;
             vertical-align: middle;
-            border-right:  2.4px solid {{ colors.cover_navy_dark }} !important;
-            border-bottom: 2.4px solid {{ colors.cover_navy_dark }} !important;
+            border-right:  1px solid {{ colors.border_black }} !important;
+            border-bottom: 1px solid {{ colors.border_black }} !important;
         }
 
         /* Annual Plan ("APP") column — vertical walls (line after "yy-yy
@@ -1545,8 +1537,10 @@
         .page5-6-table td.col-mgr-wall,
         .page5-6-table thead th.col-mgr-wall {
             background-color: {{ colors.perf_gr_bg }} !important;
-            /* 2.4px prints as 2px even on a fit-zoomed page - see the
-               plant-group separator note above. */
+            /* 2.4px, not 2px: Chromium floors zoomed border widths, and
+               _fit_pages_for_print zooms page 5 to ~97% - a plain 2px
+               became 1.94px and printed as 1px there. 2.4px prints as 2px
+               at any zoom down to ~84%. */
             border-right: 2.4px solid {{ colors.border_dark }};
         }
 
