@@ -15,6 +15,7 @@ _DEFAULTS: Dict[str, str] = {
     "table_header_bg_total":       "transparent",
     "table_header_bg_section":     "transparent",
 
+    "highlight_capacity_bg":       "#fee2e2",
     "highlight_actual_bg":         "#dbeafe",
     "highlight_actual_border":     "#1d4ed8",
     "highlight_cumulative_bg":     "#d1fae5",
@@ -29,6 +30,13 @@ _DEFAULTS: Dict[str, str] = {
     "highlight_hh_col_bg":         "#d1fae5",
     "highlight_total_col_bg":      "#eae1f5",
     "highlight_plant_label_bg":    "#d1d5db",
+
+    "techno_cat_fuel_bg":          "#fde2c8",
+    "techno_cat_energy_bg":        "#fff3c4",
+    "techno_cat_process_bg":       "#cfe8ff",
+    "techno_cat_burden_bg":        "#d9f2d0",
+    "techno_cat_environment_bg":   "#cdf0ea",
+    "techno_cat_blend_bg":         "#e5e0f5",
 
     "techno_tep_header_text":      "#1f2937",
     "techno_tep_target_bg":        "#fff4e5",
@@ -54,6 +62,8 @@ _DEFAULTS: Dict[str, str] = {
     "highlight_alt_section_bg":    "transparent",
     "highlight_bold_row_bg":       "#eef2f6",
     "highlight_default_row_bg":    "transparent",
+    "highlight_best_ever_bg":      "#fde68a",
+    "highlight_best_month_border_light": "#94a3b8",
 
     "border_light":     "#cbd5e1",
     "border_medium":    "#94a3b8",
@@ -64,6 +74,7 @@ _DEFAULTS: Dict[str, str] = {
     "border_group_top": "#374151",
     "border_heavy":     "#64748b",
     "border_green":     "#2d5016",
+    "border_darkred":   "#8B0000",
     "border_slate_sep": "#5a7fa0",
     "border_header":    "#93c5fd",
     "border_cumulative_col": "#96ae83",
@@ -79,6 +90,8 @@ _DEFAULTS: Dict[str, str] = {
     "text_dark_gray":      "#333333",
     "text_variance_green": "#064e3b",
     "text_variance_blue":  "#1e40af",
+    "text_variance_red":   "#9a3412",
+    "text_rust_brown":     "#B7410E",
     "text_plant_cell":     "#1e3a5f",
     "text_heading_dark":   "#1e293b",
 
@@ -86,6 +99,31 @@ _DEFAULTS: Dict[str, str] = {
     "misc_accent_blue":           "#0284c7",
     "misc_highlights_box_bg":     "#f8fafc",
     "misc_highlights_box_border": "#0284c7",
+
+    "cover_navy_dark":       "#000c48",
+    "cover_label":           "#000000",
+    "cover_value":           "#722F99",
+    "cover_royal_blue":      "#0047c8",
+    "cover_badge_navy":      "#002691",
+    "cover_kpi_card_bg":     "#f8fafc",
+    "cover_kpi_card_border": "#e2e8f0",
+    "cover_molten_red":      "#e8380d",
+
+    "khv_banner_bg":            "#0f2a5c",
+    "khv_badge_bg":             "#0047c8",
+    "khv_achieve_header_bg":    "#1e7e34",
+    "khv_achieve_box_bg":       "#f0fdf4",
+    "khv_achieve_box_border":   "#86efac",
+    "khv_shortfall_header_bg":  "#b91c1c",
+    "khv_shortfall_box_bg":     "#fef2f2",
+    "khv_shortfall_box_border": "#fca5a5",
+    "khv_focus_header_bg":      "#0f2a5c",
+    "khv_focus_box_bg":         "#f8fafc",
+    "khv_va_header_bg":         "#0369a1",
+    "khv_va_box_bg":            "#f0f9ff",
+    "khv_assessment_green":     "#16a34a",
+    "khv_assessment_amber":     "#d97706",
+    "khv_assessment_red":       "#dc2626",
 }
 
 
