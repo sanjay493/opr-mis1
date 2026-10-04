@@ -38,6 +38,7 @@ _DEFAULTS: Dict[str, str] = {
     "perf_app_border": "#BF9000",
     "perf_act_bg":     "#C6EFCE",
     "perf_act_text":   "#006100",
+    "perf_gr_bg":      "#e2e8f0",
 
     "techno_cat_fuel_bg":          "#fde2c8",
     "techno_cat_energy_bg":        "#fff3c4",

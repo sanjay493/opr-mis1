@@ -27,7 +27,7 @@
   "highlight_total_col_bg":     "#eae1f5",
   "highlight_plant_label_bg":   "#d1d5db",
 
-  "_doc_perf": "Page 4 (Plant Wise Performance of Main Items w.r.t APP) and pages 5-6 (Plant Wise Item Wise Production & CS to HM Ratio): Excel-style fill + matching dark text for the Annual Plan/APP column (perf_app_*), the month + Apr-YTD Actual columns (perf_act_*) and page 4's Ann. Cap. column (perf_cap_*). Separate from the shared highlight_* tokens so these pages can be retinted without touching any other page.",
+  "_doc_perf": "Page 4 (Plant Wise Performance of Main Items w.r.t APP) and pages 5-6 (Plant Wise Item Wise Production & CS to HM Ratio): Excel-style fill + matching dark text for the Annual Plan/APP column (perf_app_*), the month + Apr-YTD Actual columns (perf_act_*) page 4's Ann. Cap. column (perf_cap_*) and pages 5-6's two %Gr columns (perf_gr_bg). Separate from the shared highlight_* tokens so these pages can be retinted without touching any other page.",
 
   "perf_cap_bg":     "#F8CBAD",
   "perf_cap_text":   "#843C0C",
@@ -36,6 +36,7 @@
   "perf_app_border": "#BF9000",
   "perf_act_bg":     "#C6EFCE",
   "perf_act_text":   "#006100",
+  "perf_gr_bg":      "#e2e8f0",
 
   "_doc_plant_colors": "Pages 7-13 (10 Years Month Wise Production Trend): one fixed background per individual plant's stacked-letter label column, kept the same everywhere that plant appears across every trend page (SAIL/'5 Plants' aggregates keep their own highlight_agg_* colors above instead).",
 

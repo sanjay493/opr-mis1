@@ -1480,9 +1480,15 @@
            but not always the SAME whole pixel across every column in that
            row - Chromium was drawing that top/bottom rule at inconsistent
            thickness cell-to-cell, reading as a doubled hairline in some
-           columns. A clean integer width removes the rounding ambiguity. */
-        .page5-6-table tr.plant-first td { border-top: 2px solid {{ colors.cover_navy_dark }}; }
-        .page5-6-table tr.plant-last td  { border-bottom: 2px solid {{ colors.cover_navy_dark }} !important; }
+           columns. A clean integer width removes the rounding ambiguity.
+           Declared 2.4px so it still PRINTS as 2px: Chromium floors border
+           widths to whole px after zoom, and _fit_pages_for_print zooms a
+           page that's slightly too tall (page 5 at ~97%) - a plain 2px became
+           1.94px there and was floored to 1px, so page 5's separators came
+           out half page 6's weight. 2.4px floors to 2px at any zoom from 100%
+           down to ~84%, below _MIN_LEGIBLE_ZOOM. */
+        .page5-6-table tr.plant-first td { border-top: 2.4px solid {{ colors.cover_navy_dark }}; }
+        .page5-6-table tr.plant-last td  { border-bottom: 2.4px solid {{ colors.cover_navy_dark }} !important; }
 
         /* Each plant group's own rowspan'd label cell — only right/bottom
            declared: top comes from .plant-first td (this cell only ever
@@ -1493,8 +1499,8 @@
             font-weight: 700;
             text-align: center;
             vertical-align: middle;
-            border-right:  2px solid {{ colors.cover_navy_dark }} !important;
-            border-bottom: 2px solid {{ colors.cover_navy_dark }} !important;
+            border-right:  2.4px solid {{ colors.cover_navy_dark }} !important;
+            border-bottom: 2.4px solid {{ colors.cover_navy_dark }} !important;
         }
 
         /* Annual Plan ("APP") column — vertical walls (line after "yy-yy
@@ -1530,15 +1536,15 @@
         .page5-6-table th:has(+ th.col-ann) { border-right: 1px solid {{ colors.border_black }} !important; }
 
         /* Growth ("%Gr. <report month>") column — same light/dark pairing
-           idea as col-ann: a light bg (highlight_pct_row_bg, already used
-           elsewhere in this report for percentage-row highlighting - an
-           apt reuse for a %Gr column specifically) with its right wall in
+           idea as col-ann: a light slate bg (perf_gr_bg - its own token, a
+           step stronger than the highlight_pct_row_bg the Cat-wise/Segment-
+           wise % rows use, so it reads clearly here) with its right wall in
            border_dark, a deepened shade of that same neutral gray, instead
            of the unrelated navy used for the plant-group box lines. 2px,
            not 1.3px - same per-row redraw/rounding fix as col-ann above. */
         .page5-6-table td.col-mgr-wall,
         .page5-6-table thead th.col-mgr-wall {
-            background-color: {{ colors.highlight_pct_row_bg }} !important;
+            background-color: {{ colors.perf_gr_bg }} !important;
             border-right: 2px solid {{ colors.border_dark }};
         }
 
@@ -1546,7 +1552,7 @@
            light bg as the monthly %Gr column above; no right wall, it's the
            table's outer edge. */
         .page5-6-table td.col-ygr,
-        .page5-6-table thead th.col-ygr { background-color: {{ colors.highlight_pct_row_bg }} !important; }
+        .page5-6-table thead th.col-ygr { background-color: {{ colors.perf_gr_bg }} !important; }
 
         /* Actual columns (month + cumulative) — one shared class, same
            green perf_act_* tokens as page4 */
