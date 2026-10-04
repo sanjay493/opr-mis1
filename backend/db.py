@@ -3,6 +3,7 @@ import json
 import os
 import copy
 import functools
+import re
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from constants import ALL_PLANTS as PLANTS
@@ -2313,6 +2314,50 @@ def list_admin_notifications(limit: int = 30) -> List[Dict[str, Any]]:
             (int(limit),),
         ).fetchall()
         return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+# ── Is a month's production data final? (page 4's "Tentative" label) ──────
+# A month is final once each of these plants has its FINAL monthly report in
+# extraction_log for that month; interim uploads (daily/morning reports, DSP's
+# pcontrep/mcr1, BSL's DPR mail) don't count. BSP/ASP/SSP/VISL aren't
+# checked (per direct instruction, 2026-10-04: BSP re-uploads the same PPC MIS
+# workbook through and after the month, so no upload marks it final).
+# Months before _FINAL_STATUS_FROM predate the log tracking these uploads
+# (their final figures came from backfills), so they always count as final.
+_FINAL_STATUS_FROM = "2026-04"
+_FINAL_REPORT_RULES = {
+    "RSP": lambda src, fname, ym: src.startswith("Final Monthly Report"),
+    "ISP": lambda src, fname, ym: src.startswith(("Final Monthly Report", "Summarized Monthly Report")),
+    "BSL": lambda src, fname, ym: src.startswith("BSL Production of Main Products (PDF)"),
+    # DSP's monthly MIS PDF is named for its month: mis0826.pdf = Aug'26.
+    "DSP": lambda src, fname, ym: src == "DSP OMI PDF Report" and re.match(
+        rf"(?i)mis{ym[5:7]}{ym[2:4]}\b", fname or "") is not None,
+}
+
+
+def _production_month_status(report_month: str, log_rows) -> dict:
+    """Pure rule: log_rows = [(plant_name, source_type, file_name), ...] for
+    report_month -> {"tentative": bool, "missing": [plants without a final
+    monthly report]}."""
+    if report_month < _FINAL_STATUS_FROM:
+        return {"tentative": False, "missing": []}
+    missing = [plant for plant, rule in _FINAL_REPORT_RULES.items()
+               if not any(p == plant and rule(src or "", fname, report_month) for p, src, fname in log_rows)]
+    return {"tentative": bool(missing), "missing": missing}
+
+
+def production_month_status(report_month: str) -> dict:
+    """{"tentative", "missing"} for report_month from extraction_log — see
+    _production_month_status."""
+    init_db()
+    conn = connect()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT plant_name, source_type, file_name FROM extraction_log WHERE report_month = ?",
+                    (report_month,))
+        return _production_month_status(report_month, cur.fetchall())
     finally:
         conn.close()
 

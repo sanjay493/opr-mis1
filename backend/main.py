@@ -1032,6 +1032,9 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                 if page.get("page") == 4 or page.get("type") == "page4_table":
                     page["rows"] = generate_page4_rows(month)
                     page["type"] = "page4_table"
+                    # "Tentative" until every plant's final monthly report is in
+                    # (see db.production_month_status).
+                    page["tentative"] = db.production_month_status(month)["tentative"]
                 if page.get("page") == 5:
                     page["rows"] = generate_page5_rows(month)
                     page["type"] = "performance_summary_table"
@@ -1643,6 +1646,7 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
         if pg == 4 or p.get("type") == "page4_table":
             p["rows"] = generate_page4_rows(request.month)
             p["type"] = "page4_table"
+            p["tentative"] = db.production_month_status(request.month)["tentative"]
         if pg == 13:
             concast = generate_concast_data(request.month)
             p["monthly"] = concast["monthly"]

@@ -7,7 +7,10 @@
                 </h2>
             </div>
             <div class="page4-meta" style="display: flex; justify-content: space-between;">
-                <span>Tentative</span><span>Unit: '000 T</span>
+                {# "Tentative" only until RSP/ISP/BSL/DSP's final monthly reports are
+                   all uploaded for the month (db.production_month_status); the
+                   empty span keeps "Unit" right-aligned either way. #}
+                <span>{% if page.tentative is not defined or page.tentative %}Tentative{% endif %}</span><span>Unit: '000 T</span>
             </div>
             <table class="report-table page4-table">
                 <colgroup>

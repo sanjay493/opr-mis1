@@ -145,7 +145,9 @@ export default function MonthWiseProductionTemplate({ data, onCellChange, select
         </h2>
       </div>
       <div className="page4-meta" style={{ display: 'flex', justifyContent: 'space-between' }}>
-        <span>Tentative</span>
+        {/* Shown until every plant's final monthly report is in — see the
+            backend's db.production_month_status (`data.tentative`). */}
+        <span>{data?.tentative === false ? '' : 'Tentative'}</span>
         <span>Unit: '000 T</span>
       </div>
 
