@@ -73,7 +73,7 @@ _DEFAULTS: Dict[str, str] = {
     "text_muted":          "#64748b",
     "text_faint":          "#94a3b8",
     "text_accent_navy":    "#060177",
-    "highlight_report_fy_text": "#15803d",
+    "highlight_report_fy_text": "#0000ff",
     "text_black":          "#000000",
     "text_white":          "#ffffff",
     "text_dark_gray":      "#333333",
