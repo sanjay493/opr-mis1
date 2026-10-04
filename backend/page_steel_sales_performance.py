@@ -47,7 +47,7 @@ def generate_steel_sales_performance(report_month: str) -> dict:
     return {
         "type": "steel_sales_performance",
         "title": "Steel Sales Performance",
-        "month_heading": f"Report Month i.e. {month_label}",
+        "month_heading": f"{month_label}",
         "ytd_heading": ytd_label,
         "month_items": saved["month_items"],
         "ytd_items": saved["ytd_items"],
