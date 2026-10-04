@@ -44,6 +44,7 @@ export default function GlobalNavbar() {
             { label: 'Production, Stock & Special Steel Upload', link: '/upload', icon: '📤' },
             { label: 'Techno Upload', link: '/data-entry/techno', icon: '🔧' },
             { label: 'Coal / CO2 / Power Uploads', link: '/data-entry/uploads', icon: '🛢️' },
+            { label: 'Commentary & Market Upload', link: '/data-entry/commentary-market-upload', icon: '📝' },
           ]
         },
         {

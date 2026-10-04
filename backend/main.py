@@ -430,6 +430,7 @@ from api_breakdown import router as breakdown_router
 from api_production_loss import router as production_loss_router
 from api_key_highlights import router as key_highlights_router
 from api_steel_sales_highlights import router as steel_sales_highlights_router
+from api_market_commentary_upload import router as market_commentary_upload_router
 from api_capacity import router as capacity_router
 from api_cost_trend_extract import router as cost_trend_extract_router
 from api_cover import router as cover_router
@@ -909,6 +910,7 @@ app.include_router(breakdown_router)
 app.include_router(production_loss_router)
 app.include_router(key_highlights_router)
 app.include_router(steel_sales_highlights_router)
+app.include_router(market_commentary_upload_router)
 app.include_router(capacity_router)
 app.include_router(cost_trend_extract_router)
 app.include_router(cover_router)

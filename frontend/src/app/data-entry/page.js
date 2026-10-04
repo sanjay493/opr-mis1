@@ -33,6 +33,8 @@ const GROUPS = [
         description: 'Upload each plant\'s techno files (Technopara, Flash PDF, OISCO, MCR, Morning Report…), preview and save; browse saved techno data.' },
       { title: 'Coal / CO2 / Power Uploads', icon: '🛢️', link: '/data-entry/uploads',
         description: 'All-5-plants-at-once report uploads: coal consumption, CO2/Water/PM EPI, and power.' },
+      { title: 'Commentary & Market Upload', icon: '📝', link: '/data-entry/commentary-market-upload',
+        description: 'Upload the monthly CMO / BigMint deck PDF: Steel Sales month + YTD bullets (page 3.05) and the Key Prices chart (page 2.41).' },
       { title: 'Cost Trend Excel Extractor', icon: '📊', link: '/data-entry/cost-trend-extract',
         description: 'Upload an elementwise cost workbook to pull Variable and Fixed cost (Rs/T) for the Month or Till Month column.' },
       { title: 'Indian Steel Sector Performance (PIB)', icon: '🏗️', link: '/data-entry/steel-sector-performance',
