@@ -74,14 +74,24 @@ const FE_SINTER_UNITS = {
 };
 const FE_SINTER_KEY = 'tfe_in_sinter';
 
+// Avg Rake Detention Time: the report page (page_key_parameters.py's
+// "rake_detention" row) reads the Rake Detention summary's own figures
+// (rake_detention_summary, entered/extracted on /data-entry/rake-detention)
+// — CUR_MON_TY for the month, YTD_TY for till-month — and only falls back
+// to this form's techno_data value for a month with no summary. So when the
+// summary exists the row here shows those figures read-only and is left out
+// of Save, rather than storing a second, conflicting copy.
+const RAKE_KEY = 'avg_rake_detention_time';
+
 // Count of param/unit keys whose current value differs from the value
 // last loaded/saved — drives both the changed-cell highlight and the
 // "Save (N changes)" button label, same convention as techno-manual/
 // page.js's countChanges().
 function countChanges(generalMonth, generalTill, initGeneralMonth, initGeneralTill,
-                       feMonth, feTill, initFeMonth, initFeTill, feUnits) {
+                       feMonth, feTill, initFeMonth, initFeTill, feUnits, rakeFromSummary) {
   let n = 0;
   for (const { key } of GENERAL_PARAMS) {
+    if (key === RAKE_KEY && rakeFromSummary) continue;
     if ((generalMonth[key] ?? '') !== (initGeneralMonth[key] ?? '')) n++;
     if ((generalTill[key] ?? '') !== (initGeneralTill[key] ?? '')) n++;
   }
@@ -117,6 +127,9 @@ function KeyParametersManualInner() {
   const [initGeneralTill, setInitGeneralTill] = useState({});
   const [initFeMonth, setInitFeMonth] = useState({});
   const [initFeTill, setInitFeTill] = useState({});
+  // { month, till } from the Rake Detention summary, or null when this
+  // plant/month has no summary figures (row stays a manual fallback).
+  const [rakeSummary, setRakeSummary] = useState(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState(null);
@@ -154,6 +167,21 @@ function KeyParametersManualInner() {
       setFeTill(ft);
       setInitFeMonth(fm);
       setInitFeTill(ft);
+
+      // Rake Detention summary — a failure here just leaves the row as the
+      // manual fallback rather than blocking the rest of the form.
+      let rake = null;
+      try {
+        const rr = await fetch(`${API_BASE_URL}/api/rake-detention/grid?report_month=${reportMonth}`);
+        if (rr.ok) {
+          const rj = await rr.json();
+          const pick = (code) => (rj.summary || []).find((s) => s.period_row === code && s.plant === plant)?.value ?? null;
+          const month = pick('CUR_MON_TY');
+          const till = pick('YTD_TY');
+          if (month != null || till != null) rake = { month, till };
+        }
+      } catch { /* fallback to manual entry */ }
+      setRakeSummary(rake);
     } catch (err) {
       setStatus({ type: 'error', text: err.message });
     } finally {
@@ -165,7 +193,7 @@ function KeyParametersManualInner() {
 
   const totalChanges = countChanges(
     generalMonth, generalTill, initGeneralMonth, initGeneralTill,
-    feMonth, feTill, initFeMonth, initFeTill, feUnits,
+    feMonth, feTill, initFeMonth, initFeTill, feUnits, rakeSummary != null,
   );
 
   const saveUnit = async (unit, month_data, till_month_data) => {
@@ -185,6 +213,9 @@ function KeyParametersManualInner() {
       const month_data = {};
       const till_month_data = {};
       for (const { key, scale } of GENERAL_PARAMS) {
+        // Not sent at all (not even as null) while the summary supplies it,
+        // so a stored fallback value is left untouched.
+        if (key === RAKE_KEY && rakeSummary) continue;
         const mv = generalMonth[key] === '' || generalMonth[key] === undefined ? null : Number(generalMonth[key]);
         const tv = generalTill[key] === '' || generalTill[key] === undefined ? null : Number(generalTill[key]);
         month_data[key] = mv !== null && scale ? mv * scale : mv;
@@ -247,6 +278,20 @@ function KeyParametersManualInner() {
     </tr>
   );
 
+  const rakeSummaryRow = (label, unit) => (
+    <tr key={RAKE_KEY}>
+      <td className={es.itemCell}>
+        {label}
+        <div style={{ fontSize: '8.5pt', color: 'var(--ui-text-secondary)' }}>
+          from <a href="/data-entry/rake-detention">Rake Detention</a> summary (read-only)
+        </div>
+      </td>
+      <td style={{ color: 'var(--ui-text-secondary)' }}>{unit}</td>
+      <td className={es.r}>{rakeSummary.month ?? '—'}</td>
+      <td className={es.r}>{rakeSummary.till ?? '—'}</td>
+    </tr>
+  );
+
   const saveLabel = totalChanges > 0 ? `Save (${totalChanges} change${totalChanges > 1 ? 's' : ''})` : 'Save';
 
   return (
@@ -255,9 +300,11 @@ function KeyParametersManualInner() {
       title="Key Parameters — Manual Entry"
       description={<>
         Fields on the <a href="/report">Key Parameters</a> report page with no
-        file-upload source — CAPEX, Labour Productivity, Avg Rake Detention Time, Demurrage, HM Sent to
-        PCM/Sand Pit/Dry Pit, RLTIFR, and Sinter Fe (a correction/override for RSP, whose own techno upload
-        already fills it each month; the only source for every other plant).
+        file-upload source — CAPEX, Labour Productivity, Demurrage, HM Sent to PCM/Sand Pit/Dry Pit,
+        RLTIFR, and Sinter Fe (a correction/override for RSP, whose own techno upload already fills it each
+        month; the only source for every other plant). Avg Rake Detention Time comes from the{' '}
+        <a href="/data-entry/rake-detention">Rake Detention</a> summary and is shown read-only; it can be
+        entered here only for a month that has no rake detention summary.
       </>}
     >
       <ContextBar actions={<>
@@ -292,7 +339,7 @@ function KeyParametersManualInner() {
             </tr>
           </thead>
           <tbody>
-            {GENERAL_PARAMS.map((p, i) => renderRow(
+            {GENERAL_PARAMS.map((p, i) => (p.key === RAKE_KEY && rakeSummary) ? rakeSummaryRow(p.label, p.unit) : renderRow(
               p.key, p.label, p.unit,
               generalMonth[p.key], generalTill[p.key],
               (e) => setGeneralMonth((v) => ({ ...v, [p.key]: e.target.value })),
