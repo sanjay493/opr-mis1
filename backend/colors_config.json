@@ -27,6 +27,16 @@
   "highlight_total_col_bg":     "#eae1f5",
   "highlight_plant_label_bg":   "#d1d5db",
 
+  "_doc_page4": "Page 4 (Plant Wise Performance of Main Items w.r.t APP) only: Excel-style fill + matching dark text for its three highlighted column groups. Separate from the shared highlight_* tokens so retinting page 4 never changes pages 5-6 or others.",
+
+  "page4_cap_bg":     "#F8CBAD",
+  "page4_cap_text":   "#843C0C",
+  "page4_app_bg":     "#FFF2CC",
+  "page4_app_text":   "#7F6000",
+  "page4_app_border": "#BF9000",
+  "page4_act_bg":     "#C6EFCE",
+  "page4_act_text":   "#006100",
+
   "_doc_plant_colors": "Pages 7-13 (10 Years Month Wise Production Trend): one fixed background per individual plant's stacked-letter label column, kept the same everywhere that plant appears across every trend page (SAIL/'5 Plants' aggregates keep their own highlight_agg_* colors above instead).",
 
   "plant_color_bsp":  "#a9c5ec",

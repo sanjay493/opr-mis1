@@ -1333,31 +1333,38 @@
             font-family: Arial Narrow !important;
         }
 
-        /* Annual Capacity column — slightly more intense than the shared
-           khv_shortfall_box_bg token (which key_highlights.html also uses,
-           so retinting that shared token would've changed that other page
-           too) via its own dedicated highlight_capacity_bg entry. */
+        /* Page 4's three highlighted column groups use their own page4_*
+           tokens (Excel-style fill + matching dark text), so retinting them
+           never touches the shared highlight_* tokens pages 5-6 also use.
+           Annual Capacity column: peach. */
         .page4-table td.col-cap,
-        .page4-table thead th.col-cap { background-color: {{ colors.highlight_capacity_bg }} !important; }
+        .page4-table thead th.col-cap {
+            background-color: {{ colors.page4_cap_bg }} !important;
+            color: {{ colors.page4_cap_text }} !important;
+        }
 
         /* Annual APP column — left wall stays a plain dark divider (same
            weight/colour as the monthly-vs-cumulative wall below, col-ytd-app),
            marking entry into the highlighted block like any other section
-           break; right wall is highlight_actual_border, the dark pair to
-           this column's own highlight_actual_bg fill (same colour used for
-           page5-6's matching APP wall), so it reads as a deepened edge of
-           the highlight itself rather than a second plain divider. */
+           break; right wall is page4_app_border, the dark pair to this
+           column's own light-gold page4_app_bg fill, so it reads as a
+           deepened edge of the highlight itself rather than a second plain
+           divider. */
         .page4-table td.col-ann,
         .page4-table thead th.col-ann {
-            background-color: {{ colors.highlight_actual_bg }} !important;
+            background-color: {{ colors.page4_app_bg }} !important;
+            color: {{ colors.page4_app_text }} !important;
             border-left:  1px solid {{ colors.border_black }};
-            border-right: 1px solid {{ colors.highlight_actual_border }};
+            border-right: 1px solid {{ colors.page4_app_border }};
         }
 
-        /* Actual columns (month + cumulative) — identical treatment, one
-           shared class instead of two near-duplicate rules/classes. */
+        /* Actual columns (month + cumulative): green - identical treatment,
+           one shared class instead of two near-duplicate rules/classes. */
         .page4-table td.col-act-highlight,
-        .page4-table thead th.col-act-highlight { background-color: {{ colors.highlight_cumulative_bg }} !important; }
+        .page4-table thead th.col-act-highlight {
+            background-color: {{ colors.page4_act_bg }} !important;
+            color: {{ colors.page4_act_text }} !important;
+        }
 
         /* Cumulative section left wall — full table height (both header
            rows down through every body row): the class is on both the

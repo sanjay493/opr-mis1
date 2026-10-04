@@ -31,6 +31,14 @@ _DEFAULTS: Dict[str, str] = {
     "highlight_total_col_bg":      "#eae1f5",
     "highlight_plant_label_bg":    "#d1d5db",
 
+    "page4_cap_bg":     "#F8CBAD",
+    "page4_cap_text":   "#843C0C",
+    "page4_app_bg":     "#FFF2CC",
+    "page4_app_text":   "#7F6000",
+    "page4_app_border": "#BF9000",
+    "page4_act_bg":     "#C6EFCE",
+    "page4_act_text":   "#006100",
+
     "techno_cat_fuel_bg":          "#fde2c8",
     "techno_cat_energy_bg":        "#fff3c4",
     "techno_cat_process_bg":       "#cfe8ff",
