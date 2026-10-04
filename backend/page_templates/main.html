@@ -1474,17 +1474,52 @@
         .page5-6-table thead tr:last-child th { border-bottom: 1px solid {{ colors.border_black }} !important; }
         .page5-6-table thead tr:first-child th[rowspan] { border-bottom: 1px solid {{ colors.border_black }} !important; }
 
-        /* plant group separator - 1px black, same as page4's item-group
-           separator (.group-first td) and this table's own 1px black outer
-           frame (box-shadow above), so the group lines read as one weight
-           with the frame. 1px is an integer like every other border here,
-           so it stays 1px even when _fit_pages_for_print zooms the page. */
-        .page5-6-table tr.plant-first td { border-top: 1px solid {{ colors.border_black }}; }
-        .page5-6-table tr.plant-last td  { border-bottom: 1px solid {{ colors.border_black }} !important; }
+        /* ============================================================
+           PLANT GROUP SEPARATORS
+           ============================================================ */
+
+        /*
+           Important:
+           Draw each dark horizontal separator ONCE only.
+
+           We use the bottom edge of the preceding row for a group-start
+           separator, rather than drawing both:
+               previous-row border-bottom
+               + plant-first border-top
+
+           This prevents a visually doubled/thicker line.
+
+           1px black - same as page4's item-group separator and this
+           table's own 1px black outer frame (box-shadow above).
+        */
+
+        /* Start of a new plant group */
+        .page5-6-table tr:has(+ tr.plant-first) td {
+            border-bottom: 1px solid {{ colors.border_black }} !important;
+        }
+
+        /* Do NOT draw another border on the top of plant-first */
+        .page5-6-table tr.plant-first td {
+            border-top: none !important;
+        }
+
+        /* End of a plant group */
+        .page5-6-table tr.plant-last td {
+            border-bottom: 1px solid {{ colors.border_black }} !important;
+        }
+
+        /*
+           If plant-last is also the final table row, don't create a second
+           dark line over the table's outer box-shadow.
+        */
+        .page5-6-table tbody tr:last-child.plant-last td {
+            border-bottom: none !important;
+        }
 
         /* Each plant group's own rowspan'd label cell — only right/bottom
-           declared: top comes from .plant-first td (this cell only ever
-           renders on a plant-first row), left from the :first-child rule
+           declared: top comes from the preceding row's bottom edge (this
+           cell only ever renders on a plant-first row - see the plant group
+           separators above), left from the :first-child rule
            above (always the table's first column). */
         .page5-6-plant-cell {
             font-size: 8.5pt;
