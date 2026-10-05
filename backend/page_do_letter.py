@@ -10,12 +10,14 @@ layout) comes from the template unchanged; only text content changes. See
 build_do_letter_docx_bytes().
 
 Also builds the companion "Monthly DO Annexure" workbook (Ministry of Steel
-Part A/B/C indicators) the same way — do_annexure_template.xlsx. Only Part A
-rows 1-2 (Crude Steel / Finished Steel production, MT) have a source in this
-app's DB; everything else (Iron ore/Ferro scrap/PLI/MSME rows, quarterly
-capacity utilisation, Part B fund-utilisation, Part C sectoral indicators)
-has no data source here and is left exactly as the template shows — blank,
-not guessed. See build_do_annexure_xlsx_bytes().
+Part A/B/C indicators) the same way — do_annexure_template.xlsx. Part A rows
+1-2 (Crude Steel / Finished Steel production, MT) and the quarterly "% of
+Crude Steel Production operating capacity utilisation at SAIL" row (same
+day-prorated capacity source as page4.py's own CU% column) have a source in
+this app's DB; everything else (Iron ore/Ferro scrap/PLI/MSME rows, Part B
+fund-utilisation, Part C sectoral indicators) has no data source here and is
+left exactly as the template shows — blank, not guessed. See
+build_do_annexure_xlsx_bytes().
 
 Formulas cross-checked against Jul'26 in the reference docx, reproduced
 exactly to the tonne:
@@ -38,6 +40,7 @@ import os
 import io
 
 import db
+import page4
 from constants import FIVE_PLANTS as _5P
 
 _TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "do_letter_templates")
@@ -103,6 +106,79 @@ def _fetch_conversion(cur, month: str):
 def _sum_or_none(vals: dict, plants: list):
     present = [vals[p] for p in plants if p in vals]
     return sum(present) if present else None
+
+
+# Matches page4.py's own "CRUDE STEEL" row config (db_item="Total Crude
+# Steel", has_capacity=True) — the Part A quarterly indicator ("% of Crude
+# Steel Production operating capacity utilisation at SAIL") is the same
+# metric, just averaged over a quarter instead of a month.
+_CU_FIVE_PLANTS = _5P
+_CU_SAIL_SET = _5P + ["ASP", "SSP"]
+
+
+def _quarter_of(month: str):
+    """(fy, q) for an FY-quarter: Apr-Jun=1, Jul-Sep=2, Oct-Dec=3, Jan-Mar=4."""
+    y, m = int(month[:4]), int(month[5:7])
+    fy = y if m >= 4 else y - 1
+    q = (m - 4) % 12 // 3 + 1
+    return fy, q
+
+
+def _quarter_months(fy: int, q: int) -> list:
+    start = 4 + (q - 1) * 3
+    months = []
+    for i in range(3):
+        mm = start + i
+        yy = fy
+        if mm > 12:
+            mm -= 12
+            yy += 1
+        months.append(f"{yy}-{mm:02d}")
+    return months
+
+
+def _quarter_label(fy: int, q: int) -> str:
+    return f"Q{q}'{str(fy)[2:]}-{str(fy + 1)[2:]}"
+
+
+def _prev_quarter(fy: int, q: int):
+    q -= 1
+    if q == 0:
+        return fy - 1, 4
+    return fy, q
+
+
+_LAST_MONTH_OF_Q = {1: 6, 2: 9, 3: 12, 4: 3}
+
+
+def _last_completed_quarter(report_month: str):
+    """The most recent FY-quarter that's fully behind report_month — i.e.
+    report_month's own quarter if report_month is that quarter's last
+    month (Jun/Sep/Dec/Mar), else the quarter before it."""
+    fy, q = _quarter_of(report_month)
+    _, m = int(report_month[:4]), int(report_month[5:7])
+    if m == _LAST_MONTH_OF_Q[q]:
+        return fy, q
+    return _prev_quarter(fy, q)
+
+
+def _quarter_crude_steel_cu(cur, fy: int, q: int):
+    """Quarter CU% for Crude Steel at SAIL = sum of 3 months' actual over
+    sum of 3 months' day-prorated capacity (same day-prorating page4.py
+    uses for its own monthly/YTD CU% columns). None if any of the 3
+    months is missing actual or capacity data — never guessed."""
+    act_total, cap_total = 0.0, 0.0
+    for m in _quarter_months(fy, q):
+        vals = _fetch_item_month(cur, "Total Crude Steel", m, _CU_SAIL_SET)
+        act = _sum_or_none(vals, _CU_SAIL_SET)
+        if act is None:
+            return None
+        cap = page4._p4_capacity_at("SAIL", "Total Crude Steel", m, _CU_FIVE_PLANTS, _CU_SAIL_SET)
+        if cap is None:
+            return None
+        act_total += act
+        cap_total += cap * page4._days_in_month(m) / page4._p4_days_in_fy(m)
+    return round(act_total / cap_total * 100) if cap_total else None
 
 
 def _fetch_remarks(cur, report_month: str, item_name: str) -> dict:
@@ -303,6 +379,22 @@ def generate_do_letter_data(report_month: str) -> dict:
         cs_ytd_cply = ytd_sum(ytd_cply_months,  "Total Crude Steel", _CRUDE_STEEL_PLANTS, False)
         fs_ytd      = ytd_sum(ytd_months,      "Finished Steel", _FINISHED_STEEL_PLANTS, True)
         fs_ytd_cply = ytd_sum(ytd_cply_months,  "Finished Steel", _FINISHED_STEEL_PLANTS, True)
+
+        # Part A's "Information to be provided quarterly" row — last
+        # completed quarter as of report_month, the one before it, and the
+        # same quarter a year earlier (matches the reference letter's own
+        # Jul'26 column layout: Q4'25-26 / Q1'26-27 / Q1'25-26).
+        lcq_fy, lcq_q = _last_completed_quarter(report_month)
+        pq_fy, pq_q = _prev_quarter(lcq_fy, lcq_q)
+        cply_fy = lcq_fy - 1
+        quarter_cols = {
+            "prev_label": _quarter_label(pq_fy, pq_q),
+            "cur_label": _quarter_label(lcq_fy, lcq_q),
+            "cply_label": _quarter_label(cply_fy, lcq_q),
+            "crude_steel_cu_prev": _quarter_crude_steel_cu(cur, pq_fy, pq_q),
+            "crude_steel_cu_cur": _quarter_crude_steel_cu(cur, lcq_fy, lcq_q),
+            "crude_steel_cu_cply": _quarter_crude_steel_cu(cur, cply_fy, lcq_q),
+        }
     finally:
         conn.close()
 
@@ -314,6 +406,7 @@ def generate_do_letter_data(report_month: str) -> dict:
         "best_ever_bullets": bullets,
         "cs_ytd": cs_ytd, "cs_ytd_cply": cs_ytd_cply,
         "fs_ytd": fs_ytd, "fs_ytd_cply": fs_ytd_cply,
+        "quarter_cols": quarter_cols,
     }
 
 
@@ -490,12 +583,13 @@ def build_do_letter_docx_bytes(report_month: str) -> bytes:
 
 
 # ---------------------------------------------------------------------------
-# XLSX builder — mutates a copy of do_annexure_template.xlsx in place. Only
-# "Part A" rows 4-5 (Crude Steel / Finished Steel, the two indicators this
-# app actually has a data source for) are touched; everything else (rows
-# 6-10, the quarterly capacity-utilisation row, Part B, Part C) is left
-# exactly as the template shows — no rated-capacity/import-export/scheme-
-# fund/quality-reject data exists in this app's DB, so nothing to compute.
+# XLSX builder — mutates a copy of do_annexure_template.xlsx in place. "Part
+# A" rows 4-5 (Crude Steel / Finished Steel) and row 15 (quarterly Crude
+# Steel capacity utilisation, with row 14's quarter labels recomputed for
+# report_month) are touched; everything else (rows 6-10, Part B, Part C) is
+# left exactly as the template shows — no rated-capacity/import-export/
+# scheme-fund/quality-reject data exists in this app's DB for those, so
+# nothing to compute.
 # ---------------------------------------------------------------------------
 
 import calendar as _calendar
@@ -542,6 +636,14 @@ def build_do_annexure_xlsx_bytes(report_month: str) -> bytes:
     ws.cell(row=5, column=5, value=_mt(fs["cply"]))
     ws.cell(row=5, column=6, value=_mt(data["fs_ytd"]))
     ws.cell(row=5, column=7, value=_mt(data["fs_ytd_cply"]))
+
+    qc = data["quarter_cols"]
+    ws.cell(row=14, column=3, value=f" Quarter ({qc['prev_label']})")
+    ws.cell(row=14, column=4, value=f" Quarter ({qc['cur_label']})")
+    ws.cell(row=14, column=5, value=f" Quarter Previous FY ({qc['cply_label']})")
+    ws.cell(row=15, column=3, value=qc["crude_steel_cu_prev"])
+    ws.cell(row=15, column=4, value=qc["crude_steel_cu_cur"])
+    ws.cell(row=15, column=5, value=qc["crude_steel_cu_cply"])
 
     buf = io.BytesIO()
     wb.save(buf)
