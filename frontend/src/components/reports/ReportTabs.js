@@ -24,6 +24,7 @@ const VIEWS = {
   'production-loss-analysis': dynamic(() => import('./production-loss-analysis/View'), { loading }),
   'breakdown-analysis': dynamic(() => import('./breakdown-analysis/View'), { loading }),
   'capital-repair-calendar': dynamic(() => import('./capital-repair-calendar/View'), { loading }),
+  'bd-cr-log': dynamic(() => import('./bd-cr-log/View'), { loading }),
   'highlights': dynamic(() => import('./highlights/View'), { loading }),
   'major-production': dynamic(() => import('./major-production/View'), { loading }),
   'records-matrix': dynamic(() => import('./records-matrix/View'), { loading }),

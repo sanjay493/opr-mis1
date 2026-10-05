@@ -54,6 +54,7 @@ export const REPORT_GROUPS = [
       { id: 'production-loss-analysis', label: 'Production Loss Analysis', description: 'HM/CS/FS shortfall vs ABP explained by capital repair and breakdowns.' },
       { id: 'breakdown-analysis', label: 'Breakdown Analysis', description: 'Cross-plant breakdown events — filter, sort and chart.' },
       { id: 'capital-repair-calendar', label: 'Capital Repair Plan vs Actual', description: 'Gantt-style calendar: which months each unit was scheduled vs actually under repair.' },
+      { id: 'bd-cr-log', label: 'Breakdown & CR Log', description: 'Per plant, unit by unit: every breakdown and actual capital repair, month by month in date order.' },
     ],
   },
   {

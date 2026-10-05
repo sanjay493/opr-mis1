@@ -136,6 +136,7 @@ already clubbed the same way into `/reports/techno` (its own tab pattern, see
 | `bf-benchmark` | `/reports/special-steel-ipt` | `api_bf_benchmark.py`, `page_bf_benchmark_export.py` | `bf_benchmark_external_bf`, `bf_benchmark_external_data`, `bf_benchmark_sail_meta`, `techno_data` |
 | `production-loss-analysis` | `/reports/loss-breakdown` | `production_loss_analysis.py`, `api_production_loss.py` | `production_table`, `production_plan_table`, `capital_repair_table`, `breakdown_table`, `item_capacity_table`, `major_unit_daily_record` (capacities for the headroom model) |
 | `capital-repair-calendar` | `/reports/loss-breakdown` | `page_capital_repair.py:generate_capital_repair_calendar` (`/api/capital-repair-calendar…`), `page_capital_repair_calendar_export.py` | `capital_repair_table` |
+| `bd-cr-log` | `/reports/loss-breakdown` | frontend-only: merges `/api/breakdown` + `/api/capital-repair` (per plant/FY) into one table per unit, month-grouped in date order; CRs only once they have actual dates | `breakdown_table`, `capital_repair_table` |
 | `breakdown-analysis` | `/reports/loss-breakdown` | frontend-only (recharts); client-side aggregation over `GET /api/breakdown` (`api_breakdown.py`) | `breakdown_table` |
 | `ipt-fy` | `/reports/special-steel-ipt` | `page_ipt.py` | `ipt_table` |
 | `new-facilities` | `/reports/external` | (frontend-only / static) | — |
