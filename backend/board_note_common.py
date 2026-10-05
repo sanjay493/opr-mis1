@@ -146,11 +146,18 @@ def fmt_t(v) -> str:
     return f"{v * 1000.0:,.0f}"
 
 
-def imp_phrase(v: int) -> str:
+def imp_phrase(v) -> str:
+    if v is None:
+        return ""
     return f"an improvement of {v}%" if v >= 0 else f"a decline of {abs(v)}%"
 
 
-def improvement_pct(cur_v: float, cply_v: float, higher_is_better: bool) -> int:
+def improvement_pct(cur_v, cply_v, higher_is_better: bool):
+    """None when either figure is missing or `cply_v` is 0 (nothing to
+    divide by) -- a later task's SAIL techno-improvement sentences can
+    legitimately have a missing figure and must not crash or guess."""
+    if cur_v is None or cply_v is None or cply_v == 0:
+        return None
     if higher_is_better:
         return round((cur_v - cply_v) / cply_v * 100)
     return round((cply_v - cur_v) / cply_v * 100)
@@ -195,19 +202,36 @@ def conv_sum(cur, months: list):
     return total if found else None
 
 
+def _check_add_conv(plant: str, db_item: str, add_conv: bool) -> None:
+    """Conversion is only ever added for SAIL's Finished Steel figure -- never
+    any other plant, and never any other item, even SAIL's own."""
+    if add_conv and not (plant == "SAIL" and db_item == "Finished Steel"):
+        raise ValueError(
+            f"add_conv=True is only valid for plant='SAIL', db_item='Finished Steel' "
+            f"(got plant={plant!r}, db_item={db_item!r})"
+        )
+
+
 def row_values(cur, plant: str, db_item: str, cur_months: list, cply_months: list,
                 fy_start: int, add_conv: bool = False):
     """(ann, abp_period, act_period, pct_ful, cply_act, pct_gr) for one
     table row. add_conv: only true for SAIL Finished Steel."""
+    _check_add_conv(plant, db_item, add_conv)
     ann = period_sum(cur, "plan", fy_months(fy_start), plant, db_item)
     abp = period_sum(cur, "plan", cur_months, plant, db_item)
     act = period_sum(cur, "act", cur_months, plant, db_item)
     cply = period_sum(cur, "act", cply_months, plant, db_item)
     if add_conv:
-        cv = conv_sum(cur, cur_months) or 0.0
-        cvp = conv_sum(cur, cply_months) or 0.0
-        act = None if act is None else act + cv
-        cply = None if cply is None else cply + cvp
+        # A missing Conversion figure must blank out the total, not be
+        # silently treated as 0 (which would understate SAIL's Finished
+        # Steel and skew %Growth) -- consistent with best_ever, which
+        # already skips any FY it has no Conversion data for.
+        if act is not None:
+            cv = conv_sum(cur, cur_months)
+            act = act + cv if cv is not None else None
+        if cply is not None:
+            cvp = conv_sum(cur, cply_months)
+            cply = cply + cvp if cvp is not None else None
     pct = round(act / abp * 100) if (act is not None and abp) else None
     gr = round((act - cply) / cply * 100) if (act is not None and cply) else None
     return ann, abp, act, pct, cply, gr
@@ -223,6 +247,7 @@ def _fy_start_years(lo, hi):
 
 
 def best_ever(cur, plant: str, db_item: str, period_months_fn, cur_fy_start: int, add_conv: bool = False):
+    _check_add_conv(plant, db_item, add_conv)
     totals = {}
     for fy in _fy_start_years(1960, cur_fy_start):
         months = period_months_fn(fy)

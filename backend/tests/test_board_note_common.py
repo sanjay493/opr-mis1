@@ -1,3 +1,5 @@
+import pytest
+
 import board_note_common as bnc
 
 
@@ -130,3 +132,52 @@ def test_best_ever_bullets_skips_items_plant_has_no_data_for():
     bullets = bnc.best_ever_bullets(cur, "BSP", lambda fy: [f"{fy}-07", f"{fy}-08", f"{fy}-09"], 2026, style="q2")
     assert any("Hot Metal" in b for b in bullets)
     assert not any("Crude Steel" in b for b in bullets)  # no Crude Steel rows seeded for BSP
+
+
+def test_row_values_rejects_add_conv_for_non_sail_plant():
+    cur = _seeded_cursor()
+    with pytest.raises(ValueError):
+        bnc.row_values(cur, "BSP", "Finished Steel", ["2026-07", "2026-08", "2026-09"],
+                        ["2025-07", "2025-08", "2025-09"], fy_start=2026, add_conv=True)
+
+
+def test_best_ever_rejects_add_conv_for_non_finished_steel_item():
+    cur = _seeded_cursor()
+    with pytest.raises(ValueError):
+        bnc.best_ever(cur, "SAIL", "Hot Metal", lambda fy: [f"{fy}-07", f"{fy}-08", f"{fy}-09"], 2026, add_conv=True)
+
+
+def _seeded_cursor_finished_steel_no_conversion():
+    conn = sqlite3.connect(":memory:")
+    conn.execute("""CREATE TABLE production_table (report_month TEXT, plant_name TEXT,
+        item_name TEXT, month_actual REAL, PRIMARY KEY (report_month, plant_name, item_name))""")
+    conn.execute("""CREATE TABLE production_plan_table (report_month TEXT, plant_name TEXT,
+        item_name TEXT, month_actual REAL, PRIMARY KEY (report_month, plant_name, item_name))""")
+    rows_act = [
+        ("2026-07", "BSP", "Finished Steel", 400.0), ("2026-08", "BSP", "Finished Steel", 410.0),
+        ("2026-09", "BSP", "Finished Steel", 420.0),
+    ]
+    for m, p, i, v in rows_act:
+        conn.execute("INSERT INTO production_table VALUES (?,?,?,?)", (m, p, i, v))
+    conn.commit()
+    return conn.cursor()
+
+
+def test_row_values_blanks_act_when_conversion_missing_for_sail_finished_steel():
+    cur = _seeded_cursor_finished_steel_no_conversion()
+    ann, abp, act, pct, cply, gr = bnc.row_values(
+        cur, "SAIL", "Finished Steel", ["2026-07", "2026-08", "2026-09"],
+        ["2025-07", "2025-08", "2025-09"], fy_start=2026, add_conv=True)
+    assert act is None  # Finished Steel actuals exist but no Conversion rows -> blank, not understated
+
+
+def test_improvement_pct_returns_none_for_missing_cur_v():
+    assert bnc.improvement_pct(cur_v=None, cply_v=418, higher_is_better=False) is None
+
+
+def test_improvement_pct_returns_none_for_zero_cply_v():
+    assert bnc.improvement_pct(cur_v=424, cply_v=0, higher_is_better=False) is None
+
+
+def test_imp_phrase_returns_empty_for_none():
+    assert bnc.imp_phrase(None) == ""
