@@ -177,6 +177,18 @@ CREATE TABLE IF NOT EXISTS do_letter_remark_table (
     PRIMARY KEY (report_month, item_name, plant_name)
 ) ENGINE=InnoDB;
 
+-- Board Note generator: per-plant editable narrative text for "Additional
+-- highlights" and "Why narrative" fields. New quarters/plants start blank;
+-- text is not migrated or copied by any code path.
+CREATE TABLE IF NOT EXISTS board_note_manual_text (
+    report_fy CHAR(7)     NOT NULL,
+    quarter   TINYINT     NOT NULL,
+    plant     VARCHAR(16) NOT NULL,
+    field     VARCHAR(24) NOT NULL,
+    text      TEXT,
+    PRIMARY KEY (report_fy, quarter, plant, field)
+) ENGINE=InnoDB;
+
 -- Capital Repair plan (pages 36-40, Report_format/CR.pdf format). "actual"
 -- is derived/written by format_cr_actual() from actual_start/actual_end/
 -- actual_ongoing once a row is edited through the updated data-entry UI;

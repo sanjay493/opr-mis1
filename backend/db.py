@@ -288,6 +288,20 @@ def init_db():
         )
     """)
 
+    # Board Note generator: per-plant editable narrative text for "Additional
+    # highlights" and "Why narrative" fields. New quarters/plants start blank by
+    # convention; text is never migrated or copied by any code path.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS board_note_manual_text (
+            report_fy TEXT,
+            quarter   INTEGER,
+            plant     TEXT,
+            field     TEXT,
+            text      TEXT,
+            PRIMARY KEY (report_fy, quarter, plant, field)
+        )
+    """)
+
     # 6c. SAIL stock snapshot — Table D of the "1 page report" (Plants /
     # Stockyards / Stock in Transit / Total, '000T). Keyed by the report's
     # own snapshot date, not report_month — a single upload backfills
