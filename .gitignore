@@ -39,3 +39,4 @@ __pycache__/
 
 # Stitch capture snapshots (contain live data / user emails)
 frontend/.stitch/
+.worktrees/
