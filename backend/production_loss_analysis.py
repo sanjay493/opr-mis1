@@ -554,8 +554,12 @@ def _collect(stages: Dict[str, _Stage], month: str, item: str,
                     # days: a shop-wide slowdown, not a shop-wide stop - with
                     # no hours given there's no honest tonnage to put on it.
                     ev["unquantified"] = True
-                elif cr_units_days.get(key, set()) & set(day_h) and _CR_IN_BD.search(row.get("cause") or ""):
-                    ev["duplicate_of_cr"] = True     # the CR itself, also logged as a breakdown
+                elif row.get("capital_repair_id") or (
+                        cr_units_days.get(key, set()) & set(day_h) and _CR_IN_BD.search(row.get("cause") or "")):
+                    # The CR itself, also logged as a breakdown: explicitly
+                    # linked (breakdown_table.capital_repair_id), or guessed
+                    # for an unlinked row from same unit + days + CR wording.
+                    ev["duplicate_of_cr"] = True
                 else:
                     stage = stages[CAUSE_STAGE[cause]]
                     kind = row.get("sms_subtag") if unit_type == "SMS" else ""

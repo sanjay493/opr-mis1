@@ -219,12 +219,14 @@ CREATE TABLE IF NOT EXISTS breakdown_table (
     is_ongoing           TINYINT(1)   NOT NULL DEFAULT 0,
     cause                TEXT         NOT NULL,
     hours_lost_override  DOUBLE       NULL,
+    capital_repair_id    BIGINT       NULL,   -- capital_repair_table.id this entry IS
     created_by           VARCHAR(190),
     created_at           VARCHAR(40),
     updated_by           VARCHAR(190),
     updated_at           VARCHAR(40),
     KEY idx_breakdown_plant_unit (plant, unit_type, unit_name),
-    KEY idx_breakdown_start (start_ts)
+    KEY idx_breakdown_start (start_ts),
+    KEY idx_breakdown_cr (capital_repair_id)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS item_capacity_table (

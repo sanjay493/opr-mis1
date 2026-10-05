@@ -167,7 +167,7 @@ function emptyDraft(plant) {
   return {
     plant, unit_type: '', unit_name: '', sms_subtag: '',
     start_ts: '', end_ts: '', is_ongoing: false, date_only: false,
-    cause: '', hours_lost_override: '',
+    cause: '', hours_lost_override: '', capital_repair_id: '',
   };
 }
 
@@ -183,6 +183,7 @@ function draftFromRow(row) {
     date_only: isDateOnlyTs(row.start_ts) || (!row.start_ts && isDateOnlyTs(row.end_ts)),
     cause: row.cause || '',
     hours_lost_override: row.hours_lost_override != null ? String(row.hours_lost_override) : '',
+    capital_repair_id: row.capital_repair_id != null ? String(row.capital_repair_id) : '',
   };
 }
 
@@ -209,7 +210,17 @@ function draftPayload(d) {
     is_ongoing: d.is_ongoing,
     cause: d.cause.trim(),
     hours_lost_override: d.hours_lost_override === '' ? null : Number(d.hours_lost_override),
+    capital_repair_id: d.capital_repair_id === '' ? null : Number(d.capital_repair_id),
   };
+}
+
+// A capital repair the plant also logs here (exact date-times + a remark
+// naming it) is linked to its capital_repair_table row; every report then
+// counts it once, as the CR (backend bd_cr_link.py). The form only suggests
+// the link - the user picks it.
+function crLabel(c) {
+  const end = c.actual_ongoing ? 'ongoing' : (c.actual_end || '?');
+  return `${c.shop || ''}/${c.equipment || ''} · ${c.actual_start} → ${end} · ${c.activity || 'Capital repair'}`;
 }
 
 function Field({ label, hint, children }) {
@@ -258,6 +269,26 @@ function BreakdownForm({ plant, units, editRow, onDone, onCancel }) {
     : null;
   const overrideNum = draft.hours_lost_override === '' ? null : Number(draft.hours_lost_override);
   const counted = overrideNum != null && overrideNum >= 0 ? overrideNum : liveSpan;
+
+  // Capital repairs this entry may really be — refreshed (debounced) as the
+  // dates / remark change.
+  const [crCands, setCrCands] = useState({ suggested: null, list: [] });
+  useEffect(() => {
+    if (!draft.start_ts || draft.start_ts.length < 10) return undefined;
+    const params = new URLSearchParams({
+      plant: draft.plant, start_ts: draft.start_ts, is_ongoing: String(draft.is_ongoing),
+      cause: draft.cause, unit_name: draft.unit_name,
+    });
+    if (draft.end_ts) params.set('end_ts', draft.end_ts);
+    const t = setTimeout(() => {
+      fetch(`${API}/api/breakdown/cr-candidates?${params}`)
+        .then(res => (res.ok ? res.json() : { suggested_id: null, candidates: [] }))
+        .then(d => setCrCands({ suggested: d.suggested_id, list: d.candidates || [] }))
+        .catch(() => setCrCands({ suggested: null, list: [] }));
+    }, 500);
+    return () => clearTimeout(t);
+  }, [draft.plant, draft.start_ts, draft.end_ts, draft.is_ongoing, draft.cause, draft.unit_name]);
+  const suggestedCr = crCands.list.find(c => c.id === crCands.suggested);
 
   const submit = async () => {
     const v = validateDraft(draft);
@@ -432,6 +463,33 @@ function BreakdownForm({ plant, units, editRow, onDone, onCancel }) {
               </div>
             </Field>
           </div>
+        </div>
+
+        {/* Section: Capital repair link */}
+        <div style={{ marginTop: 14, marginBottom: 6 }}>
+          <Field label="Is this a capital repair?"
+            hint="Link it if this entry is a capital repair also logged here — reports then count it once, as the CR, timed by this entry's date-times.">
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <select style={{ ...S.input, minWidth: 420, maxWidth: '100%' }} value={draft.capital_repair_id}
+                onChange={e => set({ capital_repair_id: e.target.value })}>
+                <option value="">— Not a capital repair —</option>
+                {draft.capital_repair_id && !crCands.list.some(c => String(c.id) === draft.capital_repair_id) && (
+                  <option value={draft.capital_repair_id}>Capital repair #{draft.capital_repair_id}</option>
+                )}
+                {crCands.list.map(c => <option key={c.id} value={String(c.id)}>{crLabel(c)}</option>)}
+              </select>
+              {suggestedCr && draft.capital_repair_id === '' && (
+                <span style={{ fontSize: 12.5, color: '#92400e', background: '#fef3c7', padding: '5px 10px', borderRadius: 6 }}>
+                  Looks like {suggestedCr.shop}/{suggestedCr.equipment} capital repair
+                  <button type="button" onClick={() => set({ capital_repair_id: String(suggestedCr.id) })}
+                    style={{ marginLeft: 8, border: 'none', background: '#92400e', color: '#fff', borderRadius: 4,
+                             padding: '2px 8px', fontSize: 12, cursor: 'pointer' }}>
+                    Link
+                  </button>
+                </span>
+              )}
+            </div>
+          </Field>
         </div>
 
         {err && (
@@ -709,7 +767,13 @@ function BreakdownDataEntryPageInner() {
                         {fmtDuration(row._span)}
                         {row.is_ongoing && <span style={{ color: '#b45309' }}> +</span>}
                       </td>
-                      <td style={{ ...S.TD, whiteSpace: 'pre-wrap', maxWidth: 380 }}>{row.cause}</td>
+                      <td style={{ ...S.TD, whiteSpace: 'pre-wrap', maxWidth: 380 }}>
+                        {row.capital_repair_id != null && (
+                          <span title={`Linked to capital repair #${row.capital_repair_id} — reports count it once, as the CR`}
+                            style={{ ...S.chip, background: '#e8f0fe', color: '#1a56c4', marginRight: 6 }}>CR</span>
+                        )}
+                        {row.cause}
+                      </td>
                       <td style={{ ...S.TD, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                         {fmtHrs(row._counted)}
                         {overridden && <span title="manual override" style={{ color: '#7c3aed', marginLeft: 3 }}>✎</span>}

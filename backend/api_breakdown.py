@@ -5,16 +5,23 @@ to explain Hot Metal / Crude Steel / Finished Steel shortfalls vs ABP.
 
 Endpoints:
   GET    /api/breakdown                – list, filtered by plant/fy/unit_type/unit_name
+  GET    /api/breakdown/cr-candidates  – capital repairs an entry may really be (best first)
   POST   /api/breakdown                – create
   PATCH  /api/breakdown/{id}            – edit
   DELETE /api/breakdown/{id}            – delete
+
+capital_repair_id: a capital repair the plant also logged here (exact
+date-times + a remark naming it) is linked to its capital_repair_table row,
+and every report then counts the event once, as the CR - see bd_cr_link.py.
 """
 
+from datetime import date
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 
+import bd_cr_link
 import db as _db
 from plant_registry import UNIT_TYPES, is_valid_unit
 
@@ -46,6 +53,35 @@ def _validate_ts(start_ts: str, end_ts: Optional[str], is_ongoing: bool):
             raise HTTPException(400, "end_ts must not be before start_ts")
 
 
+_CR_COLS = ("id", "plant", "fy", "shop", "equipment", "activity", "actual_start", "actual_end", "actual_ongoing")
+
+
+def _actual_crs(plant: str) -> list:
+    """The plant's capital repairs that have actual dates (linkable)."""
+    conn = _db.connect()
+    try:
+        cur = conn.execute(
+            f"SELECT {', '.join(_CR_COLS)} FROM capital_repair_table "
+            "WHERE plant=? AND actual_start IS NOT NULL AND actual_start<>''", (plant,))
+        return [dict(zip(_CR_COLS, r)) for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+
+def _validate_cr_link(plant: str, cr_id: Optional[int]):
+    if cr_id is None:
+        return
+    conn = _db.connect()
+    try:
+        row = conn.execute("SELECT plant FROM capital_repair_table WHERE id=?", (cr_id,)).fetchone()
+    finally:
+        conn.close()
+    if row is None:
+        raise HTTPException(400, f"Capital repair {cr_id} not found")
+    if row[0] != plant:
+        raise HTTPException(400, f"Capital repair {cr_id} is {row[0]}'s, not {plant}'s")
+
+
 class BreakdownCreate(BaseModel):
     plant: str
     unit_type: str
@@ -56,6 +92,7 @@ class BreakdownCreate(BaseModel):
     is_ongoing: bool = False
     cause: str
     hours_lost_override: Optional[float] = None
+    capital_repair_id: Optional[int] = None
 
 
 class BreakdownUpdate(BaseModel):
@@ -68,6 +105,7 @@ class BreakdownUpdate(BaseModel):
     is_ongoing: Optional[bool] = None
     cause: Optional[str] = None
     hours_lost_override: Optional[float] = None
+    capital_repair_id: Optional[int] = None
 
 
 def _editor_email(request: Request) -> str:
@@ -95,6 +133,34 @@ async def list_breakdowns(plant: Optional[str] = Query(None), fy: Optional[str] 
     return {"rows": rows}
 
 
+@router.get("/cr-candidates")
+async def cr_candidates(plant: str = Query(...), start_ts: str = Query(...),
+                        end_ts: Optional[str] = Query(None), is_ongoing: bool = Query(False),
+                        cause: str = Query(""), unit_name: str = Query("")):
+    """The plant's capital repairs with actual dates starting within 60 days
+    of start_ts, nearest first, with bd_cr_link's suggestion (if any) on top
+    and its id in suggested_id."""
+    crs = _actual_crs(plant)
+    bd = {"plant": plant, "start_ts": start_ts, "end_ts": end_ts, "is_ongoing": is_ongoing,
+          "cause": cause, "unit_name": unit_name}
+    best = bd_cr_link.suggest_cr(bd, crs)
+    try:
+        s0 = date.fromisoformat(start_ts[:10])
+    except ValueError:
+        raise HTTPException(400, "start_ts must start with YYYY-MM-DD")
+
+    def gap(cr):
+        try:
+            return abs((date.fromisoformat(str(cr["actual_start"])[:10]) - s0).days)
+        except ValueError:
+            return 10 ** 6
+    near = sorted((c for c in crs if gap(c) <= 60), key=gap)
+    if best is not None:
+        near = [best] + [c for c in near if c["id"] != best["id"]]
+    return {"suggested_id": best["id"] if best else None,
+            "candidates": [{**c, "actual_ongoing": bool(c["actual_ongoing"])} for c in near]}
+
+
 @router.post("")
 async def create_breakdown(body: BreakdownCreate, request: Request):
     cause = (body.cause or "").strip()
@@ -103,12 +169,13 @@ async def create_breakdown(body: BreakdownCreate, request: Request):
     sms_subtag = body.sms_subtag if (body.unit_type == "SMS" and not _is_shop(body.unit_name)) else None
     _validate_unit(body.plant, body.unit_type, body.unit_name, sms_subtag)
     _validate_ts(body.start_ts, body.end_ts, body.is_ongoing)
+    _validate_cr_link(body.plant, body.capital_repair_id)
 
     new_id = _db.save_breakdown_entry(
         plant=body.plant, unit_type=body.unit_type, unit_name=body.unit_name, sms_subtag=sms_subtag,
         start_ts=body.start_ts, end_ts=None if body.is_ongoing else body.end_ts,
         is_ongoing=body.is_ongoing, cause=cause, hours_lost_override=body.hours_lost_override,
-        created_by=_editor_email(request),
+        created_by=_editor_email(request), capital_repair_id=body.capital_repair_id,
     )
     return {"status": "ok", "id": new_id}
 
@@ -144,6 +211,8 @@ async def update_breakdown(breakdown_id: int, body: BreakdownUpdate, request: Re
 
     if "cause" in fields and not (fields["cause"] or "").strip():
         raise HTTPException(400, "cause cannot be blank")
+    if "capital_repair_id" in fields or "plant" in fields:
+        _validate_cr_link(plant, fields.get("capital_repair_id", row.get("capital_repair_id")))
 
     ok = _db.update_breakdown_entry(breakdown_id, updated_by=_editor_email(request), **fields)
     if not ok:

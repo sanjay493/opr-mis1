@@ -162,6 +162,10 @@ export default function BreakdownAnalysisPage() {
   const [fFrom, setFFrom] = useState('');
   const [fTo, setFTo] = useState('');
   const [q, setQ] = useState('');
+  // Entries linked to a capital repair (capital_repair_id: the plant logged a
+  // CR in the breakdown log too) are that CR, not a breakdown - hidden unless
+  // asked for, so they aren't counted twice.
+  const [showCrLinked, setShowCrLinked] = useState(false);
   const [sort, setSort] = useState({ col: 'start_ts', dir: 'desc' });
 
   useEffect(() => {
@@ -192,6 +196,7 @@ export default function BreakdownAnalysisPage() {
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return enriched.filter(r => {
+      if (!showCrLinked && r.capital_repair_id != null) return false;
       if (fPlant && r.plant !== fPlant) return false;
       if (fFy && r._fy !== fFy) return false;
       if (fType && r.unit_type !== fType) return false;
@@ -206,7 +211,7 @@ export default function BreakdownAnalysisPage() {
       }
       return true;
     });
-  }, [enriched, fPlant, fFy, fType, fUnit, fStatus, fFrom, fTo, q]);
+  }, [enriched, fPlant, fFy, fType, fUnit, fStatus, fFrom, fTo, q, showCrLinked]);
 
   const sorted = useMemo(() => {
     const fn = SORTS[sort.col] || SORTS.start_ts;
@@ -390,6 +395,11 @@ export default function BreakdownAnalysisPage() {
             <input style={{ ...S.input, width: 220 }} value={q} onChange={e => setQ(e.target.value)}
               placeholder="unit or cause text…" />
           </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#374151', paddingBottom: 8 }}
+            title="Breakdown-log entries linked to their capital repair are that CR, not a breakdown">
+            <input type="checkbox" checked={showCrLinked} onChange={e => setShowCrLinked(e.target.checked)} />
+            Include CR-linked ({enriched.filter(r => r.capital_repair_id != null).length})
+          </label>
           {anyFilter && (
             <button onClick={clearAll} style={{ padding: '8px 16px', fontSize: 13, fontWeight: 600, background: '#f1f3f4', color: '#374151', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
               Clear filters

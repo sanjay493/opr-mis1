@@ -70,12 +70,12 @@ def _bd_rows_for_plant(plant: str):
     try:
         cur = conn.execute("""
             SELECT id, unit_type, unit_name, sms_subtag, start_ts, end_ts, is_ongoing, cause,
-                   hours_lost_override
+                   hours_lost_override, capital_repair_id
             FROM breakdown_table
             WHERE plant=?
         """, (plant,))
         cols = ["id", "unit_type", "unit_name", "sms_subtag", "start_ts", "end_ts", "is_ongoing", "cause",
-                "hours_lost_override"]
+                "hours_lost_override", "capital_repair_id"]
         return [dict(zip(cols, r)) for r in cur.fetchall()]
     finally:
         conn.close()

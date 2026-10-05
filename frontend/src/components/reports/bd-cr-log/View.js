@@ -116,8 +116,21 @@ function monthKey(ts) { return String(ts).slice(0, 7); }
 function monthLabel(ym) { return `${MON[Number(ym.slice(5, 7)) - 1]}'${ym.slice(2, 4)}`; }
 const subtagLabel = (s) => (s ? `${s.charAt(0)}${s.slice(1).toLowerCase()}` : '');
 
+// BD hours: the entered hours-lost override, else the start-to-end span. A
+// same-day entry with dates only (no times) and no hours entered has no
+// recorded duration - null, shown as "—" rather than a misleading "0m".
+function bdHours(b) {
+  if (b.hours_lost_override != null) return Number(b.hours_lost_override);
+  const dateOnlySameDay = !b.is_ongoing && String(b.start_ts).length <= 10
+    && String(b.end_ts || b.start_ts).slice(0, 10) === String(b.start_ts).slice(0, 10);
+  return dateOnlySameDay ? null : spanHours(b.start_ts, b.end_ts, b.is_ongoing);
+}
+
 // Breakdowns + actual capital repairs -> [{ key, type, name, events: [...] }]
 // one per unit, units ordered by type then name, events by start date.
+// A breakdown linked to its capital repair (capital_repair_id - the plant
+// logged the CR in the breakdown log too) is ONE event: a CR row in the CR's
+// unit table, timed by the breakdown's exact date-times.
 function buildUnits(breakdowns, repairs) {
   const units = new Map();
   const unitFor = (type, name) => {
@@ -126,14 +139,15 @@ function buildUnits(breakdowns, repairs) {
     if (!units.has(key)) units.set(key, { key, type: t, name, events: [] });
     return units.get(key);
   };
+  const crById = new Map(repairs.filter((r) => r.actual_start).map((r) => [r.id, r]));
+  const linkedBd = new Map();                          // cr id -> its breakdown entry
+  for (const b of breakdowns) {
+    if (b.capital_repair_id != null && crById.has(b.capital_repair_id)) linkedBd.set(b.capital_repair_id, b);
+  }
   for (const b of breakdowns) {
     if (!b.start_ts) continue;
-    // A same-day entry with dates only (no times) and no hours entered has no
-    // recorded duration - show "—", not a misleading "0m".
-    const dateOnlySameDay = !b.is_ongoing && String(b.start_ts).length <= 10
-      && String(b.end_ts || b.start_ts).slice(0, 10) === String(b.start_ts).slice(0, 10);
-    const counted = b.hours_lost_override != null ? Number(b.hours_lost_override)
-      : dateOnlySameDay ? null : spanHours(b.start_ts, b.end_ts, b.is_ongoing);
+    if (b.capital_repair_id != null && crById.has(b.capital_repair_id)) continue;   // shown as its CR
+    const counted = bdHours(b);
     unitFor(b.unit_type, b.unit_name).events.push({
       kind: 'BD', id: `bd-${b.id}`, start: b.start_ts,
       dates: fmtRange(b.start_ts, b.end_ts, b.is_ongoing),
@@ -148,11 +162,24 @@ function buildUnits(breakdowns, repairs) {
     const s = parseTs(r.actual_start);
     const e = r.actual_ongoing ? new Date() : parseTs(r.actual_end);
     const days = s && e ? Math.max(1, Math.round((e - s) / 86400000) + 1) : null;
+    const sub = [subtagLabel(r.sms_subtag), cu.sub && cu.sub !== cu.name ? cu.sub : ''].filter(Boolean).join(' · ');
+    const b = linkedBd.get(r.id);
+    if (b) {
+      // The breakdown entry's exact date-times and hours, the CR's activity
+      // plus the breakdown remark.
+      unitFor(cu.type, cu.name).events.push({
+        kind: 'CR', id: `cr-${r.id}`, start: b.start_ts, linked: true,
+        dates: fmtRange(b.start_ts, b.end_ts, b.is_ongoing),
+        sub, details: `${r.activity || 'Capital repair'} — ${b.cause}`,
+        duration: fmtHours(bdHours(b)) + (b.is_ongoing ? ' so far' : ''),
+        ongoing: !!b.is_ongoing,
+      });
+      continue;
+    }
     unitFor(cu.type, cu.name).events.push({
       kind: 'CR', id: `cr-${r.id}`, start: r.actual_start,
       dates: fmtRange(r.actual_start, r.actual_end, r.actual_ongoing),
-      sub: [subtagLabel(r.sms_subtag), cu.sub && cu.sub !== cu.name ? cu.sub : ''].filter(Boolean).join(' · '),
-      details: r.activity || 'Capital repair',
+      sub, details: r.activity || 'Capital repair',
       duration: days != null ? `${days} day${days === 1 ? '' : 's'}${r.actual_ongoing ? ' so far' : ''}` : '—',
       ongoing: !!r.actual_ongoing,
     });
@@ -209,6 +236,8 @@ export default function BdCrLogView() {
         One table per unit; each lists that unit&apos;s breakdowns and capital repairs in start-date order,
         grouped by the month they started. Capital repairs appear once they have actual dates (planned-only
         repairs are not listed). Breakdown hours are the entered hours lost, else the start-to-end span.
+        A capital repair the plant also logged in the breakdown log (linked on the Breakdown entry form) is
+        shown once, as the CR, timed by the breakdown entry&apos;s exact date-times (marked ⏱).
       </TabIntro>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', margin: '10px 0 12px' }}>
@@ -300,11 +329,15 @@ function UnitTable({ plant, unit }) {
                     </td>
                   )}
                   <td style={{ ...TD, whiteSpace: 'nowrap' }}>{ev.dates}</td>
-                  <td style={TD}>
+                  <td style={{ ...TD, whiteSpace: 'nowrap' }}>
                     <span style={{
                       padding: '1px 7px', borderRadius: 10, fontSize: '8pt', fontWeight: 700,
                       background: k.bg, color: k.fg,
                     }}>{k.label}</span>
+                    {ev.linked && (
+                      <span title="Also logged in the breakdown log — dates and duration taken from that entry's exact times"
+                        style={{ marginLeft: 4, fontSize: '8pt', color: '#5f6368' }}>⏱</span>
+                    )}
                   </td>
                   <td style={TD}>
                     {ev.sub && <span style={{ color: '#5f6368', marginRight: 6 }}>[{ev.sub}]</span>}

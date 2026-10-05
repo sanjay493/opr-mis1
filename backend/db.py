@@ -362,12 +362,20 @@ def init_db():
             is_ongoing           INTEGER NOT NULL DEFAULT 0,
             cause                TEXT NOT NULL,
             hours_lost_override  REAL,
+            capital_repair_id    INTEGER,            -- capital_repair_table.id this entry IS (see bd_cr_link)
             created_by           TEXT,
             created_at           TEXT,
             updated_by           TEXT,
             updated_at           TEXT
         )
     """)
+    # A capital repair also logged here (exact date-times + a remark naming
+    # it) is linked to its capital_repair_table row, so every report counts
+    # the event once, as the CR. Added 2026-10-05; MySQL:
+    # scripts/migrate_add_breakdown_cr_link.sql.
+    cursor.execute("PRAGMA table_info(breakdown_table)")
+    if "capital_repair_id" not in [r[1] for r in cursor.fetchall()]:
+        cursor.execute("ALTER TABLE breakdown_table ADD COLUMN capital_repair_id INTEGER")
 
     # 6d-3. Annual rated capacity per plant/item, with mid-FY change history.
     # One row per (plant, item, effective_month): the capacity in effect for
@@ -1864,8 +1872,9 @@ def list_breakdown_entries(plant: Optional[str] = None, fy: Optional[str] = None
 def save_breakdown_entry(plant: str, unit_type: str, unit_name: str, sms_subtag: Optional[str],
                           start_ts: str, end_ts: Optional[str], is_ongoing: bool,
                           cause: str, hours_lost_override: Optional[float],
-                          created_by: str) -> int:
-    """Create one breakdown event. Returns the new row id."""
+                          created_by: str, capital_repair_id: Optional[int] = None) -> int:
+    """Create one breakdown event. Returns the new row id. capital_repair_id
+    links it to the capital repair it really is (see bd_cr_link)."""
     from datetime import datetime
     init_db()
     conn = connect()
@@ -1873,24 +1882,24 @@ def save_breakdown_entry(plant: str, unit_type: str, unit_name: str, sms_subtag:
     cur = conn.execute("""
         INSERT INTO breakdown_table
             (plant, unit_type, unit_name, sms_subtag, start_ts, end_ts, is_ongoing,
-             cause, hours_lost_override, created_by, created_at, updated_by, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             cause, hours_lost_override, capital_repair_id, created_by, created_at, updated_by, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (plant, unit_type, unit_name, sms_subtag, start_ts, end_ts, int(is_ongoing),
-          cause, hours_lost_override, created_by, now, created_by, now))
+          cause, hours_lost_override, capital_repair_id, created_by, now, created_by, now))
     conn.commit()
     new_id = cur.lastrowid
     conn.close()
     activity_context.record(f"breakdown_table/{plant}/{unit_name}/{new_id}", None, {
         "plant": plant, "unit_type": unit_type, "unit_name": unit_name, "sms_subtag": sms_subtag,
         "start_ts": start_ts, "end_ts": end_ts, "is_ongoing": is_ongoing, "cause": cause,
-        "hours_lost_override": hours_lost_override,
+        "hours_lost_override": hours_lost_override, "capital_repair_id": capital_repair_id,
     })
     return new_id
 
 
 def update_breakdown_entry(breakdown_id: int, updated_by: str, **fields) -> bool:
     """Update the given fields (any subset of plant/unit_type/unit_name/sms_subtag/
-    start_ts/end_ts/is_ongoing/cause/hours_lost_override) on one breakdown event.
+    start_ts/end_ts/is_ongoing/cause/hours_lost_override/capital_repair_id) on one breakdown event.
     Returns False if the row doesn't exist."""
     from datetime import datetime
     init_db()
@@ -1900,7 +1909,7 @@ def update_breakdown_entry(breakdown_id: int, updated_by: str, **fields) -> bool
         conn.close()
         return False
     allowed = {"plant", "unit_type", "unit_name", "sms_subtag", "start_ts", "end_ts",
-               "is_ongoing", "cause", "hours_lost_override"}
+               "is_ongoing", "cause", "hours_lost_override", "capital_repair_id"}
     sets, args = [], []
     for k, v in fields.items():
         if k not in allowed:
