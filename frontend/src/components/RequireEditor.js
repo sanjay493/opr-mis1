@@ -1,11 +1,14 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useAuth } from '@/providers/AuthProvider';
+import { loginHref } from '@/components/auth/loginRedirect';
 
 /** Gates any page needing insert/update/delete/upload capability. */
 export default function RequireEditor({ children }) {
   const { user, loading } = useAuth();
+  const pathname = usePathname();
 
   if (loading) {
     return (
@@ -22,7 +25,7 @@ export default function RequireEditor({ children }) {
         <p style={{ color: '#5f6368', marginBottom: '20px' }}>
           This page requires an Editor or Administrator account.
         </p>
-        <Link href="/login" className="btn btn-primary">Log In</Link>
+        <Link href={loginHref(pathname)} className="btn btn-primary">Log In</Link>
       </div>
     );
   }

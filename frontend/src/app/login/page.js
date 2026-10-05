@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import GlobalNavbar from '@/components/GlobalNavbar';
 import { useAuth, API_BASE_URL } from '@/providers/AuthProvider';
 import { Icon, ICONS, authStyles as s } from '@/components/auth/AuthUI';
+import { safeNextPath } from '@/components/auth/loginRedirect';
 
 async function postJson(path, body) {
   const res = await fetch(`${API_BASE_URL}${path}`, {
@@ -46,9 +47,12 @@ export default function LoginPage() {
     if (step === 'code') codeInputRef.current?.focus();
   }, [step]);
 
+  // Back to the page a sign-in gate sent the user from (?next=), else home.
+  // Read at redirect time from window.location rather than useSearchParams,
+  // which would need a Suspense boundary around this prerendered page.
   const finish = async () => {
     await refresh();
-    router.push('/');
+    router.push(safeNextPath(new URLSearchParams(window.location.search).get('next')));
   };
 
   const handlePassword = async (e) => {
