@@ -1,0 +1,164 @@
+# Review package: 434868d..067db9c
+
+## Commits
+067db9c Add shared docx mutation helpers for Board Note adapters
+
+## Files changed
+ backend/board_note_docx_utils.py            | 86 +++++++++++++++++++++++++++++
+ backend/tests/test_board_note_docx_utils.py | 55 ++++++++++++++++++
+ 2 files changed, 141 insertions(+)
+
+## Diff
+diff --git a/backend/board_note_docx_utils.py b/backend/board_note_docx_utils.py
+new file mode 100644
+index 0000000..10ff31c
+--- /dev/null
++++ b/backend/board_note_docx_utils.py
+@@ -0,0 +1,86 @@
++"""Generic python-docx paragraph/cell mutation helpers shared by the Board
++Note document-generator adapters.
++
++Standalone module: depends only on `python-docx`. No DB access, no imports
++from any other board_note module. The four base helpers port the logic
++already proven in `page_do_letter.py` (`_set_paragraph_text`,
++`_set_cell_text`, `_remove_paragraph`, `_clone_paragraph_after`) under new
++public names so all adapters can share one implementation.
++"""
++
++import copy
++
++from docx.text.paragraph import Paragraph
++
++
++def set_para(paragraph, text: str) -> None:
++    """Overwrite a paragraph's visible text while keeping its first run's
++    formatting (font/bold/size) — python-docx's own `paragraph.text = ...`
++    doesn't exist, and Cell.text-style helpers drop formatting, hence this."""
++    runs = paragraph.runs
++    if not runs:
++        paragraph.add_run(text)
++        return
++    runs[0].text = text
++    for r in runs[1:]:
++        r.text = ""
++
++
++def replace_in_para(paragraph, replacements: list) -> None:
++    """Apply a sequence of (old, new) substring swaps to a paragraph's text,
++    then rewrite it with `set_para` (keeps the first run's formatting)."""
++    text = paragraph.text
++    for old, new in replacements:
++        text = text.replace(old, new)
++    set_para(paragraph, text)
++
++
++def remove_paragraph(paragraph) -> None:
++    el = paragraph._p
++    el.getparent().remove(el)
++
++
++def clone_paragraph_after(ref_paragraph, text: str):
++    """Deep-copies ref_paragraph's XML (preserving its run/paragraph
++    formatting and bullet numbering), inserts the copy immediately after it,
++    and sets the copy's text. Used when more lines are needed than the
++    template has slots for."""
++    new_p_el = copy.deepcopy(ref_paragraph._p)
++    ref_paragraph._p.addnext(new_p_el)
++    new_paragraph = Paragraph(new_p_el, ref_paragraph._parent)
++    set_para(new_paragraph, text)
++    return new_paragraph
++
++
++def set_cell(cell, text: str) -> None:
++    """Multi-line remark cells have one <w:p> per original line — clearing
++    only paragraphs[0] (often itself blank, the source of a stray leading
++    line break) left every later paragraph's old template text in place.
++    Extra paragraphs are removed outright (not just blanked) so a short or
++    empty remark doesn't leave trailing blank lines from the old text's
++    longer line count."""
++    paras = cell.paragraphs
++    set_para(paras[0], text)
++    for p in paras[1:]:
++        remove_paragraph(p)
++
++
++def fill_variable_bullets(slots: list, lines: list) -> None:
++    """Match `slots` (existing template paragraphs) to `lines` pairwise.
++
++    - Equal counts: just overwrite each slot's text.
++    - More lines than slots: clone extra paragraphs off the last placed
++      paragraph, in order, for each remaining line.
++    - More slots than lines: remove every unmatched trailing slot.
++    """
++    n = min(len(slots), len(lines))
++    for i in range(n):
++        set_para(slots[i], lines[i])
++
++    if len(lines) > len(slots):
++        last = slots[-1] if slots else None
++        for line in lines[len(slots):]:
++            last = clone_paragraph_after(last, line)
++    elif len(slots) > len(lines):
++        for slot in slots[n:]:
++            remove_paragraph(slot)
+diff --git a/backend/tests/test_board_note_docx_utils.py b/backend/tests/test_board_note_docx_utils.py
+new file mode 100644
+index 0000000..288d31b
+--- /dev/null
++++ b/backend/tests/test_board_note_docx_utils.py
+@@ -0,0 +1,55 @@
++import docx
++
++import board_note_docx_utils as u
++
++
++def _doc_with_paragraphs(*texts):
++    d = docx.Document()
++    paras = [d.add_paragraph(t) for t in texts]
++    return d, paras
++
++
++def test_set_para_keeps_first_run_formatting_and_clears_rest():
++    d, [p] = _doc_with_paragraphs("old")
++    p.add_run(" extra")
++    u.set_para(p, "new")
++    assert p.text == "new"
++
++
++def test_replace_in_para_substring_swap():
++    d, [p] = _doc_with_paragraphs("Q-2'25-26:")
++    u.replace_in_para(p, [("Q-2'25-26", "Q-2'26-27")])
++    assert p.text == "Q-2'26-27:"
++
++
++def test_set_cell_clears_extra_paragraphs():
++    d = docx.Document()
++    t = d.add_table(rows=1, cols=1)
++    cell = t.rows[0].cells[0]
++    cell.add_paragraph("second line")
++    u.set_cell(cell, "only line")
++    assert [p.text for p in cell.paragraphs] == ["only line"]
++
++
++def test_fill_variable_bullets_exact_fit():
++    d, slots = _doc_with_paragraphs("a", "b", "c")
++    u.fill_variable_bullets(slots, ["x", "y", "z"])
++    assert [p.text for p in d.paragraphs] == ["x", "y", "z"]
++
++
++def test_fill_variable_bullets_fewer_lines_removes_unused_slots():
++    d, slots = _doc_with_paragraphs("a", "b", "c")
++    u.fill_variable_bullets(slots, ["x"])
++    assert [p.text for p in d.paragraphs] == ["x"]
++
++
++def test_fill_variable_bullets_more_lines_clones_extra_paragraphs():
++    d, slots = _doc_with_paragraphs("a")
++    u.fill_variable_bullets(slots, ["x", "y", "z"])
++    assert [p.text for p in d.paragraphs] == ["x", "y", "z"]
++
++
++def test_fill_variable_bullets_empty_lines_removes_all_slots():
++    d, slots = _doc_with_paragraphs("a", "b")
++    u.fill_variable_bullets(slots, [])
++    assert [p.text for p in d.paragraphs] == []

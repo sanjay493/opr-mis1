@@ -1,0 +1,158 @@
+# Review package: 067db9c..11c2e0e
+
+## Commits
+11c2e0e Add Board Note manual-narrative storage (get/save + line helpers)
+
+## Files changed
+ backend/board_note_manual_text.py            | 72 ++++++++++++++++++++++++++++
+ backend/tests/test_board_note_manual_text.py | 63 ++++++++++++++++++++++++
+ 2 files changed, 135 insertions(+)
+
+## Diff
+diff --git a/backend/board_note_manual_text.py b/backend/board_note_manual_text.py
+new file mode 100644
+index 0000000..33d1a80
+--- /dev/null
++++ b/backend/board_note_manual_text.py
+@@ -0,0 +1,72 @@
++"""Manual narrative storage for the quarterly Board Note generator.
++
++Per-plant free-text entries keyed by (report_fy, quarter, plant, field) in
++`board_note_manual_text`. Two fields exist today (see FIELDS): editors add
++extra plant highlights the auto-generated data doesn't cover, and short
++narratives explaining notable variances ("why" text). An empty text value
++deletes the row rather than storing a blank, so a cleared textbox doesn't
++leave a stale empty row behind (same convention as do_letter_remark_table).
++"""
++
++import db
++
++FIELDS = ("additional_highlights", "why_narrative")
++
++
++def get_manual_text(fy: str, quarter: int) -> dict:
++    """Return {(plant, field): text} for every non-empty row in this period."""
++    conn = db.connect()
++    cur = conn.cursor()
++    try:
++        cur.execute(
++            "SELECT plant, field, text FROM board_note_manual_text WHERE report_fy=? AND quarter=?",
++            (fy, quarter),
++        )
++        return {(plant, field): text for plant, field, text in cur.fetchall() if text}
++    finally:
++        conn.close()
++
++
++def save_manual_text(fy: str, quarter: int, entries: list) -> int:
++    """Upsert or delete each entry ({"plant", "field", "text"}). An empty
++    (after strip) text deletes the row. Returns the count processed."""
++    conn = db.connect()
++    cur = conn.cursor()
++    try:
++        saved = 0
++        for e in entries:
++            plant = str(e.get("plant", "")).strip()
++            field = str(e.get("field", "")).strip()
++            text = str(e.get("text", "")).strip()
++            if not plant or not field:
++                continue
++            if text:
++                cur.execute("""
++                    INSERT INTO board_note_manual_text (report_fy, quarter, plant, field, text)
++                    VALUES (?, ?, ?, ?, ?)
++                    ON CONFLICT(report_fy, quarter, plant, field) DO UPDATE SET text = excluded.text
++                """, (fy, quarter, plant, field, text))
++            else:
++                cur.execute(
++                    "DELETE FROM board_note_manual_text WHERE report_fy=? AND quarter=? AND plant=? AND field=?",
++                    (fy, quarter, plant, field),
++                )
++            saved += 1
++        conn.commit()
++    finally:
++        conn.close()
++    return saved
++
++
++def additional_highlight_lines(manual: dict, plant: str) -> list:
++    """Non-blank, stripped lines of this plant's additional-highlights text."""
++    text = manual.get((plant, "additional_highlights"), "")
++    return [ln.strip() for ln in text.split("\n") if ln.strip()]
++
++
++def why_narrative_lines(manual: dict, plant: str, placeholder: str) -> list:
++    """Non-blank, stripped lines of this plant's why-narrative text, or
++    [placeholder] when there's nothing entered."""
++    text = manual.get((plant, "why_narrative"), "")
++    lines = [ln.strip() for ln in text.split("\n") if ln.strip()]
++    return lines or [placeholder]
+diff --git a/backend/tests/test_board_note_manual_text.py b/backend/tests/test_board_note_manual_text.py
+new file mode 100644
+index 0000000..d1afb29
+--- /dev/null
++++ b/backend/tests/test_board_note_manual_text.py
+@@ -0,0 +1,63 @@
++import sqlite3
++
++import pytest
++
++import board_note_manual_text as bnm
++
++
++@pytest.fixture
++def store(tmp_path, monkeypatch):
++    dbfile = tmp_path / "board_note.db"
++    conn = sqlite3.connect(dbfile)
++    conn.execute("""
++        CREATE TABLE board_note_manual_text (
++            report_fy TEXT, quarter INTEGER, plant TEXT, field TEXT, text TEXT,
++            PRIMARY KEY (report_fy, quarter, plant, field)
++        )
++    """)
++    conn.commit()
++    conn.close()
++
++    class _Conn:
++        def __init__(self):
++            self._c = sqlite3.connect(dbfile)
++        def cursor(self):
++            return self._c.cursor()
++        def commit(self):
++            self._c.commit()
++        def close(self):
++            self._c.close()
++
++    monkeypatch.setattr(bnm.db, "connect", _Conn)
++    return bnm
++
++
++def test_get_manual_text_empty_for_untouched_period(store):
++    assert store.get_manual_text("2026-27", 2) == {}
++
++
++def test_save_then_get_round_trip(store):
++    store.save_manual_text("2026-27", 2, [
++        {"plant": "BSP", "field": "additional_highlights", "text": "BF-8 record"},
++    ])
++    assert store.get_manual_text("2026-27", 2) == {("BSP", "additional_highlights"): "BF-8 record"}
++
++
++def test_empty_text_deletes_existing_row(store):
++    store.save_manual_text("2026-27", 2, [{"plant": "BSP", "field": "why_narrative", "text": "shutdown"}])
++    store.save_manual_text("2026-27", 2, [{"plant": "BSP", "field": "why_narrative", "text": ""}])
++    assert store.get_manual_text("2026-27", 2) == {}
++
++
++def test_new_period_never_sees_another_periods_text(store):
++    store.save_manual_text("2025-26", 2, [{"plant": "BSP", "field": "why_narrative", "text": "old year text"}])
++    assert store.get_manual_text("2026-27", 2) == {}
++
++
++def test_additional_highlight_lines_splits_and_strips_blanks():
++    manual = {("BSP", "additional_highlights"): "line one\n\nline two  "}
++    assert bnm.additional_highlight_lines(manual, "BSP") == ["line one", "line two"]
++
++
++def test_why_narrative_lines_uses_placeholder_when_blank():
++    assert bnm.why_narrative_lines({}, "BSP", "[Add narrative]") == ["[Add narrative]"]

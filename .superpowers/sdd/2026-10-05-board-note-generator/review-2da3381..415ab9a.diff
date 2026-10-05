@@ -1,0 +1,2018 @@
+# Review package: 2da3381..415ab9a
+
+## Commits
+415ab9a Add Q-2+H-1 Board Note adapter, retiring the one-off script it generalizes
+
+## Files changed
+ backend/board_note_q2.py                           | 580 +++++++++++++++++++++
+ .../board_note_q2_template.docx                    | Bin 0 -> 176519 bytes
+ 2 files changed, 580 insertions(+)
+
+## Diff
+diff --git a/backend/board_note_q2.py b/backend/board_note_q2.py
+new file mode 100644
+index 0000000..e688463
+--- /dev/null
++++ b/backend/board_note_q2.py
+@@ -0,0 +1,580 @@
++"""Q-2 + H-1 Board Note docx generator.
++
++Generalizes `_update_bn_board_report.py` (a one-off script that hand-patched
++one real document, `Report_format/BN_ Production Q-2 and H-1'25-26 R-2.docx`,
++from Q-2/H-1'25-26 to Q-2/H-1'26-27) into a reusable `generate(fy)` that
++fills `board_note_templates/board_note_q2_template.docx` (a verbatim copy of
++that same source file) for any financial year.
++
++IMPORTANT: the template is a partially-completed real draft, not a blank
++form -- the SAIL-level Q-2 section (narrative, table, best-ever bullets) had
++already been hand-updated to Q-2'26-27 figures when this template was
++copied, while everything else was still stale 25-26 content. This module
++must never rely on any paragraph "already looking right" for one fy --
++every period-specific paragraph listed in the index map below is
++unconditionally regenerated from the DB on every call.
++
++Index map (Step 2): derived directly from the template via
++`document.element.body.iterchildren()` (see dump technique in the design
++doc). Paragraph/table indices are into `docx.Document(...).paragraphs` /
++`.tables` as produced by python-docx for this exact template file -- if the
++template file is ever hand-edited, these must be re-derived.
++
++Known limitations (documented, not bugs):
++  - The MoU figures used in the opening "Finished Steel w.r.t. MoU" section
++    (`_FS_Q2_MOU`, `_FS_H1_MOU` below) are not sourced from the DB (no MoU
++    table exists); they are the FY2026-27 quarterly/half-yearly MoU values
++    carried over from the one-off script and must be updated by hand if
++    this generator is ever run for a different fy.
++  - The title (P3), the "SAIL and Plant-wise Production performance
++    during..." intro (P18/P19), and the techno section's "This was achieved
++    through..." bullets (P337-340) are left as template static text, same
++    as the one-off script -- they are not period-parameterized here.
++  - ASP, SSP and VISL have no "Highlights:" section in the template for
++    either Q-2 or H-1 (the source document simply didn't include one for
++    these three plants), so no highlights are written for them even if
++    `board_note_common.best_ever_bullets` would otherwise report a record;
++    there is no template slot to host that text without restructuring the
++    document, which is out of scope for a slot-filling adapter.
++  - No plant has a "why production fell short" block for H-1 in this
++    template (only Q-2) -- confirmed from the template structure, not an
++    oversight.
++"""
++
++import io
++
++import docx
++
++import board_note_common as bnc
++import board_note_docx_utils as bdu
++import board_note_manual_text as bnm
++import db
++import page_techno as pt
++import techno_period as tp
++
++TEMPLATE_PATH = "board_note_templates/board_note_q2_template.docx"
++
++# --------------------------------------------------------------------------
++# Index map (Step 2) -- re-derived directly against the template via
++# docx.Document(...).element.body.iterchildren(); every constant below is
++# commented with the literal heading/lead-in text it sits under so it can
++# be re-verified by eye against a fresh dump.
++# --------------------------------------------------------------------------
++
++# -- Opening "SAIL: Production performance for Finished Steel w.r.t. MoU" --
++P_FS_Q2_NARRATIVE = 9    # "The Production of Finished Steel during Q-2'26 was ..."
++P_FS_H1_NARRATIVE = 11   # "The Production of Finished Steel during April-September'26 was ..."
++TABLE_MOU = 0            # "Plant | MoU 2026-27 | Q-1'26-27 | Q-2'26-27 (ABP/Act/%Ful) | Apr-Sep'26 (ABP/Act/%Ful)"
++MOU_ROW_PLANT = {2: "BSP", 3: "DSP", 4: "RSP", 5: "BSL", 6: "ISP"}
++MOU_ROW_SPECIAL_STEEL = 7   # "Special Steel Plants" (ASP+SSP+VISL total)
++MOU_ROW_SAIL = 8            # "SAIL" (5 plants + special steel + Conversion)
++
++# These two are NOT sourced from the DB -- see module docstring.
++_FS_Q2_MOU = 4.448
++_FS_H1_MOU = 8.812
++
++# -- "SAIL and Plant-wise Production performance during Q-2... and H-1..." -
++P_PLANT_SECTION_TITLE = 48   # "Plant wise: Production performance during Q-2'25-26 and H-1'25-26 w.r.t. ABP"
++
++# -- SAIL: Q-2 section -------------------------------------------------------
++P_SAIL_Q2_HEADING = 21       # "SAIL: Production performance during Q-2'26-27 "
++P_SAIL_Q2_LABEL = 23         # "Q-2'26-27:"
++P_SAIL_Q2_SUMMARY = 24       # "Hot Metal production during Q-2'26-27 was ... Saleable Steel production was ..."
++TABLE_SAIL_Q2 = 1            # SAIL Q-2 ABP/Actual/%Ful/CPLY/%Gr table
++P_SAIL_Q2_HIGHLIGHTS_HEADING = 28   # "Highlights:"
++P_SAIL_Q2_HIGHLIGHTS_LEADIN = 29    # "SAIL achieved best ever Q-2 production for following:" (kept static)
++SAIL_Q2_HIGHLIGHTS_SLOTS = [30, 31, 32, 33]   # one bullet per core item, unconditionally regenerated
++
++# -- SAIL: H-1 section --------------------------------------------------------
++P_SAIL_H1_HEADING = 35       # "SAIL: Production performance during H-1'25-26 "
++P_SAIL_H1_LABEL = 37         # "H-1'25-26:"
++P_SAIL_H1_SUMMARY = 38       # "Hot Metal production during H-1'25-26 was ... Saleable Steel production was ..."
++TABLE_SAIL_H1 = 2            # SAIL H-1 ABP/Actual/%Ful/CPLY/%Gr table
++P_SAIL_H1_HIGHLIGHTS_HEADING = 41   # "Highlights:"
++P_SAIL_H1_HIGHLIGHTS_LEADIN = 42    # "SAIL achieved best ever Apr-Sep (H-1) production for following:" (kept static)
++SAIL_H1_HIGHLIGHTS_SLOTS = [43, 44, 45]       # template has 3 slots (Hot Metal often isn't a new H-1 record)
++
++# SAIL has no "why production fell short" block at all (neither Q-2 nor H-1).
++
++# -- Item-row configs for fill_period_table (row_idx, display, db_item, add_conv) --
++BIG5_ITEMS = [
++    (2, "Hot Metal", "Hot Metal", False),
++    (3, "Crude Steel", "Total Crude Steel", False),
++    (4, "Saleable Steel", "Saleable Steel", False),
++    (5, "Finished Steel", "Finished Steel", False),
++]
++SAIL_ITEMS = [
++    (2, "Hot Metal", "Hot Metal", False),
++    (3, "Crude Steel", "Total Crude Steel", False),
++    (4, "Saleable Steel", "Saleable Steel", False),
++    (5, "Finished Steel", "Finished Steel", True),   # SAIL Finished Steel includes Conversion
++]
++SPECIAL2_ITEMS = [
++    (2, "Crude Steel", "Total Crude Steel", False),
++    (3, "Saleable Steel", "Saleable Steel", False),
++    (4, "Finished Steel", "Finished Steel", False),
++]
++VISL_ITEMS = [
++    (2, "Saleable Steel", "Saleable Steel", False),
++    (3, "Finished Steel", "Finished Steel", False),
++]
++
++SPECIAL_STEEL_PLANTS = ["ASP", "SSP", "VISL"]
++
++# -- Per-plant (Big-5) index map ----------------------------------------------
++# (table_q2, table_h1, period_label_p_q2, period_label_p_h1,
++#  summary_p_q2, summary_p_h1, item_rows, summary_kind)
++BIG5_PLANT_CONFIG = {
++    # "BHILAI STEEL PLANT:" (P50)
++    "BSP": dict(table_q2=3, table_h1=4, label_q2=52, label_h1=73,
++                summary_q2=53, summary_h1=74, item_rows=BIG5_ITEMS, kind="big"),
++    # "DURGAPUR STEEL PLANT:" (P94)
++    "DSP": dict(table_q2=5, table_h1=6, label_q2=96, label_h1=116,
++                summary_q2=97, summary_h1=117, item_rows=BIG5_ITEMS, kind="big"),
++    # "ROURKELA STEEL PLANT:" (P127)
++    "RSP": dict(table_q2=7, table_h1=8, label_q2=129, label_h1=159,
++                summary_q2=130, summary_h1=160, item_rows=BIG5_ITEMS, kind="big"),
++    # "BOKARO STEEL PLANT" (P171)
++    "BSL": dict(table_q2=9, table_h1=10, label_q2=173, label_h1=214,
++                summary_q2=174, summary_h1=215, item_rows=BIG5_ITEMS, kind="big"),
++    # "IISCO STEEL PLANT:" (P230)
++    "ISP": dict(table_q2=11, table_h1=12, label_q2=232, label_h1=264,
++                summary_q2=233, summary_h1=265, item_rows=BIG5_ITEMS, kind="big"),
++}
++
++# "ALLOY STEELS PLANT:" (P280) / "SALEM STEEL PLANT:" (P293) /
++# "VISVESVARAYA IRON & STEEL PLANT:" (P312)
++SMALL_PLANT_CONFIG = {
++    "ASP": dict(table_q2=13, table_h1=14, label_q2=282, label_h1=289,
++                summary_q2=283, summary_h1=290, item_rows=SPECIAL2_ITEMS, kind="small"),
++    "SSP": dict(table_q2=15, table_h1=16, label_q2=295, label_h1=309,
++                summary_q2=296, summary_h1=310, item_rows=SPECIAL2_ITEMS, kind="small"),
++    "VISL": dict(table_q2=17, table_h1=18, label_q2=314, label_h1=323,
++                 summary_q2=316, summary_h1=325, item_rows=VISL_ITEMS, kind="visl"),
++}
++
++PLANT_CONFIG = {**BIG5_PLANT_CONFIG, **SMALL_PLANT_CONFIG}
++PLANT_ORDER = ["BSP", "DSP", "RSP", "BSL", "ISP", "ASP", "SSP", "VISL"]
++
++# -- Per-plant Highlights bullet slots -----------------------------------
++# Each entry's lead-in paragraph (e.g. "BSP achieved best ever Q-2
++# production for following:") is left untouched as static prose; the
++# slots listed are every paragraph after it (flattened, including any
++# second lead-in sentence some plants have, e.g. BSL/ISP's separate
++# "...Quarter..."/"...Q-2..." split) up to the next heading. ASP/SSP/VISL
++# have no "Highlights:" section at all in the template for either period.
++HIGHLIGHTS_SLOTS = {
++    # "Highlights:" (P28) / "SAIL achieved best ever Q-2 production for following:" (P29, kept)
++    ("SAIL", "q2"): SAIL_Q2_HIGHLIGHTS_SLOTS,
++    # "Highlights:" (P41) / "SAIL achieved best ever Apr-Sep (H-1) production for following:" (P42, kept)
++    ("SAIL", "h1"): SAIL_H1_HIGHLIGHTS_SLOTS,
++
++    # "Highlights:" (P56) / "BSP achieved best ever Q-2 production for following:" (P57, kept)
++    ("BSP", "q2"): [58, 59],
++    # "Highlights:" (P77) / "BSP achieved best ever H-1 production for following:" (P78, kept)
++    ("BSP", "h1"): [79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92],
++
++    # "Highlights:" (P102) -- no lead-in sentence in the template
++    ("DSP", "q2"): [103, 104],
++    # "Highlights:" (P121) -- no lead-in sentence in the template
++    ("DSP", "h1"): [122, 123, 124],
++
++    # "Highlights:" (P134) -- no lead-in sentence in the template
++    ("RSP", "q2"): [135, 136],
++    # "Highlights:" (P164) / "RSP achieved best ever H-1 production for following:" (P165, kept)
++    ("RSP", "h1"): [166, 167, 168, 169],
++
++    # "Highlights:" (P177) / "BSL achieved best ever Quarter production for following:" (P178, kept);
++    # P181's second lead-in ("BSL achieved best ever Q-2 production for following:") is flattened in
++    ("BSL", "q2"): [179, 180, 181, 182, 183, 184, 185],
++    # "Highlights:" (P219) / "BSL achieved best ever half yearly production for following:" (P220, kept);
++    # P224's second lead-in ("BSL achieved best ever H-1 production for following:") is flattened in
++    ("BSL", "h1"): [221, 222, 223, 224, 225, 226, 227, 228],
++
++    # "Highlights:" (P237) / "ISP achieved best ever Quarter production for following:" (P239, kept);
++    # P244's second lead-in ("ISP achieved best ever Q-2 production for following:") is flattened in
++    ("ISP", "q2"): [240, 241, 242, 244, 245, 246, 247, 248],
++    # "Highlights:" (P268) / "ISP achieved best ever Half-yearly production for following:" (P269, kept);
++    # P277's second lead-in ("ISP achieved best ever H-1 production for following:") is flattened in
++    ("ISP", "h1"): [270, 271, 272, 273, 274, 275, 277, 278, 279],
++
++    # ASP/SSP/VISL: no entries -- no "Highlights:" section exists for them in this template.
++}
++
++# -- Per-plant/SAIL "why production fell short" slots (Q-2 only; no unit has an H-1 block) --
++WHY_HEADING = {
++    # "Production Performance during Q-2'25-26:"
++    "BSP": 61, "DSP": 106, "RSP": 138, "BSL": 187, "ISP": 250,
++    "ASP": 286, "SSP": 299, "VISL": 319,
++}
++WHY_SLOTS = {
++    # "Hot Metal: The shortfall in production was mainly due to:" ... "Saleable Steel: ..."
++    "BSP": [63, 64, 65, 66, 67, 69, 71],
++    # "Hot Metal: BF-2: ..." / "Crude Steel:" / "Saleable Steel:"
++    "DSP": [108, 110, 111, 113, 114],
++    # "Hot Metal: Production was mainly affected due to following:" ... "Saleable Steel: ..."
++    "RSP": [140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 157],
++    # "BF-5: Blowing down has been deferred..." ... "Saleable Steel: As per Crude availability..."
++    "BSL": [189, 191, 192, 193, 194, 195, 196, 197, 199, 200, 201, 202, 203, 204, 205, 206, 207,
++            208, 209, 210, 211, 212],
++    # "Hot Metal: " / "BF-5: Capital Repair deferred..." ... "USM: Capital Repair deferred..."
++    "ISP": [251, 252, 254, 255, 256, 258, 259, 260, 261, 262],
++    # "Saleable Steel production was as per Crude Steel availability and availability of orders."
++    "ASP": [288],
++    # "Crude Steel production was affected due to the following issues: " ... bullets
++    "SSP": [301, 302, 303, 304, 305, 306, 307],
++    # "Saleable Steel production was as per availability of orders."
++    "VISL": [321],
++}
++
++# -- Techno-economic section -------------------------------------------------
++P_TECHNO_SECTION_TITLE = 329   # "SAIL and Plant-wise Major Techno-economic parameters performance during Q-2'25-26 and H-1'25-26:"
++TABLE_TECHNO = 19               # Parameters | Plant | Target | Q-2cur | Q-2cply | H-1cur | H-1cply
++P_TECHNO_PERF_HEADING = 331     # "Techno-economic Performance during H-1'25-26"
++P_TECHNO_COKE = 332             # "Coke Rate: SAIL registered an improvement of 2% w.r.t. CPLY."
++P_TECHNO_CDI = 333              # "CDI Rate: SAIL registered an improvement of 3% w.r.t. CPLY."
++P_TECHNO_FUEL = 334             # "Fuel Rate: SAIL registered an improvement of 2% w.r.t. CPLY."
++P_TECHNO_BFP = 335              # "BF Productivity: SAIL registered an improvement of 6% w.r.t. CPLY."
++# P337-340 ("This was achieved through...") are left as static template text -- see module docstring.
++
++TECHNO_PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP", "SAIL"]
++TECHNO_PARAMS = ["Coke Rate", "CDI Rate", "Fuel Rate", "BF Productivity"]
++
++
++# --------------------------------------------------------------------------
++# Table-fill / paragraph-text helpers (adapter-local; same shape as the
++# one-off script, now driven by board_note_common for all period math)
++# --------------------------------------------------------------------------
++
++def _cply_label_nl(label_fn, fy_start, quarter):
++    """A prior-year period label with a newline inserted after the quote
++    mark, matching the "Q-2'\\n25-26" style used in the CPLY half of every
++    table header."""
++    return label_fn(fy_start - 1, quarter).replace("’", "’\n")
++
++
++def fill_period_table(cur, table, plant, item_rows, cur_months, cply_months, fy_start):
++    for row_idx, _display, db_item, add_conv in item_rows:
++        ann, abp, act, pct, cply, gr = bnc.row_values(
++            cur, plant, db_item, cur_months, cply_months, fy_start, add_conv=add_conv
++        )
++        cells = table.rows[row_idx].cells
++        bdu.set_cell(cells[1], bnc.fmt_ann(ann))
++        bdu.set_cell(cells[2], bnc.fmt_tbl(abp, plant))
++        bdu.set_cell(cells[3], bnc.fmt_tbl(act, plant))
++        bdu.set_cell(cells[4], bnc.fmt_pct(pct))
++        bdu.set_cell(cells[5], bnc.fmt_tbl(cply, plant))
++        bdu.set_cell(cells[6], bnc.fmt_pct(gr))
++
++
++def set_period_header(table, cur_label, cply_label):
++    """Row 0 is the merged period label (repeated over the ABP/Actual/%Ful
++    trio of columns); row 1 keeps its own ABP/Actual/% Ful. sub-labels and
++    only gets the period-less cply/%Gr labels refreshed."""
++    row0, row1 = table.rows[0].cells, table.rows[1].cells
++    for c in (2, 3, 4):
++        bdu.set_cell(row0[c], cur_label)
++    bdu.set_cell(row1[2], "ABP")
++    bdu.set_cell(row1[3], "Actual")
++    bdu.set_cell(row1[4], "% Ful.")
++    bdu.set_cell(row0[5], f"{cply_label}\nAct.")
++    bdu.set_cell(row1[5], f"{cply_label}\nAct.")
++    bdu.set_cell(row0[6], f"% Gr. w.r.t.\n{cply_label}")
++    bdu.set_cell(row1[6], f"% Gr. w.r.t.\n{cply_label}")
++
++
++def set_abp_header(table, fy_start):
++    row0, row1 = table.rows[0].cells, table.rows[1].cells
++    label = f"ABP\n{fy_start}-{str(fy_start + 1)[2:]}"
++    bdu.set_cell(row0[1], label)
++    bdu.set_cell(row1[1], label)
++
++
++def plant_summary_big(cur, plant, months, cply_months, fy_start):
++    _, _, hm, hm_pct, _, _ = bnc.row_values(cur, plant, "Hot Metal", months, cply_months, fy_start)
++    _, _, cs, cs_pct, _, _ = bnc.row_values(cur, plant, "Total Crude Steel", months, cply_months, fy_start)
++    _, _, ss, ss_pct, _, _ = bnc.row_values(cur, plant, "Saleable Steel", months, cply_months, fy_start)
++    return (f"Hot Metal production during {{P}} was {bnc.fmt_mt(hm)} MT ({bnc.fmt_pct(hm_pct)}% of ABP), Crude Steel "
++            f"production was {bnc.fmt_mt(cs)} MT ({bnc.fmt_pct(cs_pct)}% of ABP) and Saleable Steel production was "
++            f"{bnc.fmt_mt(ss)} MT ({bnc.fmt_pct(ss_pct)}% of ABP). ")
++
++
++def plant_summary_small(cur, plant, months, cply_months, fy_start):
++    _, _, cs, cs_pct, _, _ = bnc.row_values(cur, plant, "Total Crude Steel", months, cply_months, fy_start)
++    _, _, ss, ss_pct, _, _ = bnc.row_values(cur, plant, "Saleable Steel", months, cply_months, fy_start)
++    return (f"Crude Steel production during {{P}} was {bnc.fmt_t(cs)} T ({bnc.fmt_pct(cs_pct)}% of ABP) and Saleable "
++            f"Steel production was {bnc.fmt_t(ss)} T ({bnc.fmt_pct(ss_pct)}% of ABP).")
++
++
++def plant_summary_visl(cur, plant, months, cply_months, fy_start):
++    _, _, ss, ss_pct, _, _ = bnc.row_values(cur, plant, "Saleable Steel", months, cply_months, fy_start)
++    return f"Saleable Steel production during {{P}} was {bnc.fmt_t(ss)} T ({bnc.fmt_pct(ss_pct)}% of ABP). "
++
++
++_SUMMARY_FN = {"big": plant_summary_big, "small": plant_summary_small, "visl": plant_summary_visl}
++
++
++def fmt_techno_target(param, v):
++    if v is None:
++        return None
++    return f"{v:.2f}" if param == "BF Productivity" else str(round(v))
++
++
++def techno_improvement(techno_by_param, param, higher_is_better=False):
++    sec = techno_by_param[param]
++    row = next(r for r in sec["rows"] if r["plant"] == "SAIL")
++    cur_v = row["values"]["H1cur"]["value"]
++    cply_v = row["values"]["H1cply"]["value"]
++    return bnc.improvement_pct(cur_v, cply_v, higher_is_better)
++
++
++# --------------------------------------------------------------------------
++# generate()
++# --------------------------------------------------------------------------
++
++def generate(fy: str) -> bytes:
++    fy_start = int(fy[:4])
++
++    Q1_CUR = bnc.quarter_months(fy_start, 1)
++    Q2_CUR = bnc.quarter_months(fy_start, 2)
++    Q2_CPLY = bnc.quarter_months(fy_start - 1, 2)
++    H1_CUR = bnc.long_period_months(fy_start, 2)
++    H1_CPLY = bnc.long_period_months(fy_start - 1, 2)
++
++    q2_label = bnc.quarter_label(fy_start, 2)
++    q2_cply_label = _cply_label_nl(bnc.quarter_label, fy_start, 2)
++    h1_label = bnc.long_period_label(fy_start, 2)
++    h1_cply_label = _cply_label_nl(bnc.long_period_label, fy_start, 2)
++    yy = str(fy_start)[2:]
++
++    manual = bnm.get_manual_text(fy, 2)
++
++    conn = db.connect()
++    cur = conn.cursor()
++    try:
++        doc = docx.Document(TEMPLATE_PATH)
++        tables = doc.tables
++        paras = doc.paragraphs
++
++        def para(i):
++            return paras[i]
++
++        # ---- SAIL Q-2 / H-1 tables -----------------------------------
++        set_abp_header(tables[TABLE_SAIL_Q2], fy_start)
++        set_period_header(tables[TABLE_SAIL_Q2], q2_label, q2_cply_label)
++        fill_period_table(cur, tables[TABLE_SAIL_Q2], "SAIL", SAIL_ITEMS, Q2_CUR, Q2_CPLY, fy_start)
++
++        set_abp_header(tables[TABLE_SAIL_H1], fy_start)
++        set_period_header(tables[TABLE_SAIL_H1], h1_label, h1_cply_label)
++        fill_period_table(cur, tables[TABLE_SAIL_H1], "SAIL", SAIL_ITEMS, H1_CUR, H1_CPLY, fy_start)
++
++        # ---- plant tables ---------------------------------------------
++        for plant in PLANT_ORDER:
++            cfg = PLANT_CONFIG[plant]
++            set_abp_header(tables[cfg["table_q2"]], fy_start)
++            set_period_header(tables[cfg["table_q2"]], q2_label, q2_cply_label)
++            fill_period_table(cur, tables[cfg["table_q2"]], plant, cfg["item_rows"], Q2_CUR, Q2_CPLY, fy_start)
++
++            set_abp_header(tables[cfg["table_h1"]], fy_start)
++            set_period_header(tables[cfg["table_h1"]], h1_label, h1_cply_label)
++            fill_period_table(cur, tables[cfg["table_h1"]], plant, cfg["item_rows"], H1_CUR, H1_CPLY, fy_start)
++
++        # ---- table 0: Finished Steel vs MoU (Actual columns only) -----
++        t0 = tables[TABLE_MOU]
++        for ridx, plant in MOU_ROW_PLANT.items():
++            q1 = bnc.period_sum(cur, "act", Q1_CUR, plant, "Finished Steel")
++            q2 = bnc.period_sum(cur, "act", Q2_CUR, plant, "Finished Steel")
++            h1 = bnc.period_sum(cur, "act", H1_CUR, plant, "Finished Steel")
++            cells = t0.rows[ridx].cells
++            bdu.set_cell(cells[2], bnc.fmt_ann(q1))
++            bdu.set_cell(cells[4], bnc.fmt_ann(q2))
++            bdu.set_cell(cells[7], bnc.fmt_ann(h1))
++
++        def special_steel_total(months):
++            total, found = 0.0, False
++            for p in SPECIAL_STEEL_PLANTS:
++                v = bnc.period_sum(cur, "act", months, p, "Finished Steel")
++                if v is not None:
++                    total += v
++                    found = True
++            return total if found else None
++
++        ssp_q1, ssp_q2, ssp_h1 = special_steel_total(Q1_CUR), special_steel_total(Q2_CUR), special_steel_total(H1_CUR)
++        cells = t0.rows[MOU_ROW_SPECIAL_STEEL].cells
++        bdu.set_cell(cells[2], bnc.fmt_ann(ssp_q1))
++        bdu.set_cell(cells[4], bnc.fmt_ann(ssp_q2))
++        bdu.set_cell(cells[7], bnc.fmt_ann(ssp_h1))
++
++        sail_q1 = (bnc.period_sum(cur, "act", Q1_CUR, "SAIL", "Finished Steel") or 0) + (bnc.conv_sum(cur, Q1_CUR) or 0)
++        sail_q2 = (bnc.period_sum(cur, "act", Q2_CUR, "SAIL", "Finished Steel") or 0) + (bnc.conv_sum(cur, Q2_CUR) or 0)
++        sail_h1 = (bnc.period_sum(cur, "act", H1_CUR, "SAIL", "Finished Steel") or 0) + (bnc.conv_sum(cur, H1_CUR) or 0)
++        cells = t0.rows[MOU_ROW_SAIL].cells
++        bdu.set_cell(cells[2], bnc.fmt_ann(sail_q1))
++        bdu.set_cell(cells[4], bnc.fmt_ann(sail_q2))
++        bdu.set_cell(cells[7], bnc.fmt_ann(sail_h1))
++
++        # ================================================================
++        # Paragraph text
++        # ================================================================
++
++        # -- opening Finished-Steel-vs-MoU narrative ---------------------
++        _, _, fs_q2_act, _, fs_q2_cply, _ = bnc.row_values(cur, "SAIL", "Finished Steel", Q2_CUR, Q2_CPLY,
++                                                             fy_start, add_conv=True)
++        _, _, fs_h1_act, _, fs_h1_cply, _ = bnc.row_values(cur, "SAIL", "Finished Steel", H1_CUR, H1_CPLY,
++                                                             fy_start, add_conv=True)
++        fs_q2_mt = None if fs_q2_act is None else fs_q2_act / 1000.0
++        fs_h1_mt = None if fs_h1_act is None else fs_h1_act / 1000.0
++        fs_q2_pct = round(fs_q2_mt / _FS_Q2_MOU * 100) if fs_q2_mt is not None else None
++        fs_h1_pct = round(fs_h1_mt / _FS_H1_MOU * 100) if fs_h1_mt is not None else None
++        fs_q2_gr = (round((fs_q2_act - fs_q2_cply) / fs_q2_cply * 100, 1)
++                    if fs_q2_act is not None and fs_q2_cply else None)
++        fs_h1_gr = (round((fs_h1_act - fs_h1_cply) / fs_h1_cply * 100, 1)
++                    if fs_h1_act is not None and fs_h1_cply else None)
++        bdu.set_para(
++            para(P_FS_Q2_NARRATIVE),
++            f"The Production of Finished Steel during Q-2’{yy} was {bnc.fmt_mt(fs_q2_act)} MT "
++            f"({bnc.fmt_pct(fs_q2_pct)}% of the quarterly MoU of {_FS_Q2_MOU} MT) with a growth of "
++            f"{bnc.fmt_pct(fs_q2_gr)}% over CPLY."
++        )
++        bdu.set_para(
++            para(P_FS_H1_NARRATIVE),
++            f"The Production of Finished Steel during April-September’{yy} was {bnc.fmt_mt(fs_h1_act)} MT "
++            f"({bnc.fmt_pct(fs_h1_pct)}% of the Apr-Sep’{yy} MoU of {_FS_H1_MOU} MT), with a growth of "
++            f"{bnc.fmt_pct(fs_h1_gr)}% over CPLY. "
++        )
++
++        # -- SAIL Q-2 heading + period label + summary -------------------
++        bdu.set_para(para(P_SAIL_Q2_HEADING), f"SAIL: Production performance during {q2_label} ")
++        bdu.set_para(para(P_SAIL_Q2_LABEL), f"{q2_label}:")
++        bdu.set_para(para(P_SAIL_Q2_SUMMARY),
++                     plant_summary_big(cur, "SAIL", Q2_CUR, Q2_CPLY, fy_start).replace("{P}", q2_label))
++
++        # -- SAIL Q-2 best-ever highlights (unconditionally regenerated) -
++        sail_q2_bullets = bnc.best_ever_bullets(cur, "SAIL", lambda f: bnc.quarter_months(f, 2), fy_start, "q2")
++        sail_q2_bullets += bnm.additional_highlight_lines(manual, "SAIL")
++        bdu.fill_variable_bullets([para(i) for i in HIGHLIGHTS_SLOTS[("SAIL", "q2")]], sail_q2_bullets)
++
++        # -- SAIL H-1 heading + period label + summary --------------------
++        bdu.set_para(para(P_SAIL_H1_HEADING), f"SAIL: Production performance during {h1_label} ")
++        bdu.set_para(para(P_SAIL_H1_LABEL), f"{h1_label}:")
++        bdu.set_para(para(P_SAIL_H1_SUMMARY),
++                     plant_summary_big(cur, "SAIL", H1_CUR, H1_CPLY, fy_start).replace("{P}", h1_label))
++
++        # -- SAIL H-1 best-ever highlights --------------------------------
++        sail_h1_bullets = bnc.best_ever_bullets(cur, "SAIL", lambda f: bnc.long_period_months(f, 2), fy_start, "h1")
++        sail_h1_bullets += bnm.additional_highlight_lines(manual, "SAIL")
++        bdu.fill_variable_bullets([para(i) for i in HIGHLIGHTS_SLOTS[("SAIL", "h1")]], sail_h1_bullets)
++
++        # -- plant-wise section title --------------------------------------
++        bdu.set_para(para(P_PLANT_SECTION_TITLE),
++                     f"Plant wise: Production performance during {q2_label} and {h1_label} w.r.t. ABP")
++
++        # -- per-plant heading/summary/highlights/why ----------------------
++        for plant in PLANT_ORDER:
++            cfg = PLANT_CONFIG[plant]
++            summary_fn = _SUMMARY_FN[cfg["kind"]]
++
++            bdu.set_para(para(cfg["label_q2"]), f"{q2_label}:")
++            bdu.set_para(para(cfg["summary_q2"]),
++                         summary_fn(cur, plant, Q2_CUR, Q2_CPLY, fy_start).replace("{P}", q2_label))
++
++            bdu.set_para(para(cfg["label_h1"]), f"{h1_label}:")
++            bdu.set_para(para(cfg["summary_h1"]),
++                         summary_fn(cur, plant, H1_CUR, H1_CPLY, fy_start).replace("{P}", h1_label))
++
++            # Highlights (Q-2 and H-1), only where the template has a slot range for this plant/period.
++            for period, months_fn, style in (("q2", lambda f: bnc.quarter_months(f, 2), "q2"),
++                                              ("h1", lambda f: bnc.long_period_months(f, 2), "h1")):
++                slots_idx = HIGHLIGHTS_SLOTS.get((plant, period))
++                if not slots_idx:
++                    continue
++                bullets = bnc.best_ever_bullets(cur, plant, months_fn, fy_start, style)
++                bullets += bnm.additional_highlight_lines(manual, plant)
++                bdu.fill_variable_bullets([para(i) for i in slots_idx], bullets)
++
++            # Why production fell short (Q-2 only; no unit has an H-1 block).
++            why_heading_idx = WHY_HEADING.get(plant)
++            if why_heading_idx is not None:
++                bdu.set_para(para(why_heading_idx), f"Production Performance during {q2_label}:")
++            why_slots_idx = WHY_SLOTS.get(plant)
++            if why_slots_idx:
++                placeholder = f"[Add production narrative for {plant} here]"
++                lines = bnm.why_narrative_lines(manual, plant, placeholder)
++                bdu.fill_variable_bullets([para(i) for i in why_slots_idx], lines)
++
++        # ================================================================
++        # Techno-economic section
++        # ================================================================
++        periods = [
++            {"label": "Q2cur", "months": Q2_CUR}, {"label": "Q2cply", "months": Q2_CPLY},
++            {"label": "H1cur", "months": H1_CUR}, {"label": "H1cply", "months": H1_CPLY},
++        ]
++        techno_res = tp.build_period_report(TECHNO_PLANTS, TECHNO_PARAMS, periods)
++        techno_by_param = {s["parameter"]: s for s in techno_res["sections"]}
++
++        report_month = H1_CUR[-1]   # last month of H-1 (September of fy_start)
++        targets = {}
++        for plant in ["BSP", "DSP", "RSP", "BSL", "ISP"]:
++            raw = pt._get_plant_techno_plan_targets(plant, report_month)
++            targets[plant] = {k[1]: v for k, v in raw.items()}
++        sail_targets_raw = pt.compute_sail_targets(fy)
++        targets["SAIL"] = {k[1]: v for k, v in sail_targets_raw.items()}
++        for plant in list(targets):
++            targets[plant] = bnc.fuel_rate_fallback(targets[plant])
++
++        t19 = tables[TABLE_TECHNO]
++        bdu.set_cell(t19.rows[0].cells[3], q2_label)
++        bdu.set_cell(t19.rows[1].cells[3], q2_label)
++        bdu.set_cell(t19.rows[0].cells[4], q2_cply_label)
++        bdu.set_cell(t19.rows[1].cells[4], q2_cply_label)
++        bdu.set_cell(t19.rows[0].cells[5], h1_label)
++        bdu.set_cell(t19.rows[1].cells[5], h1_label)
++        bdu.set_cell(t19.rows[0].cells[6], h1_cply_label)
++        bdu.set_cell(t19.rows[1].cells[6], h1_cply_label)
++        zz = str(fy_start + 1)[2:]
++        bdu.set_cell(t19.rows[0].cells[2], f"Target\n{yy}-{zz}")
++        bdu.set_cell(t19.rows[1].cells[2], f"{yy}-{zz}")
++
++        ri = 2
++        for param in TECHNO_PARAMS:
++            sec = techno_by_param[param]
++            row_by_plant = {r["plant"]: r["values"] for r in sec["rows"]}
++            for plant in TECHNO_PLANTS:
++                cells = t19.rows[ri].cells
++                vals = row_by_plant.get(plant, {})
++
++                def disp(label):
++                    d = vals.get(label)
++                    return d["display"] if d else ""
++
++                tgt = fmt_techno_target(param, (targets.get(plant) or {}).get(param))
++                if tgt is not None:
++                    bdu.set_cell(cells[2], tgt)
++                bdu.set_cell(cells[3], disp("Q2cur"))
++                bdu.set_cell(cells[4], disp("Q2cply"))
++                bdu.set_cell(cells[5], disp("H1cur"))
++                bdu.set_cell(cells[6], disp("H1cply"))
++                ri += 1
++
++        # -- techno section title + improvement commentary -----------------
++        bdu.set_para(
++            para(P_TECHNO_SECTION_TITLE),
++            f"SAIL and Plant-wise Major Techno-economic parameters performance during {q2_label} and {h1_label}:"
++        )
++        bdu.set_para(para(P_TECHNO_PERF_HEADING), f"Techno-economic Performance during {h1_label}")
++
++        coke_imp = techno_improvement(techno_by_param, "Coke Rate")
++        cdi_imp = techno_improvement(techno_by_param, "CDI Rate")
++        fuel_imp = techno_improvement(techno_by_param, "Fuel Rate")
++        bfp_imp = techno_improvement(techno_by_param, "BF Productivity", higher_is_better=True)
++
++        bdu.set_para(para(P_TECHNO_COKE), f"Coke Rate: SAIL registered {bnc.imp_phrase(coke_imp)} w.r.t. CPLY.")
++        bdu.set_para(para(P_TECHNO_CDI), f"CDI Rate: SAIL registered {bnc.imp_phrase(cdi_imp)} w.r.t. CPLY.")
++        bdu.set_para(para(P_TECHNO_FUEL), f"Fuel Rate: SAIL registered {bnc.imp_phrase(fuel_imp)} w.r.t. CPLY.")
++        bdu.set_para(para(P_TECHNO_BFP), f"BF Productivity: SAIL registered {bnc.imp_phrase(bfp_imp)} w.r.t. CPLY.")
++
++        buf = io.BytesIO()
++        doc.save(buf)
++        return buf.getvalue()
++    finally:
++        conn.close()
+diff --git a/backend/board_note_templates/board_note_q2_template.docx b/backend/board_note_templates/board_note_q2_template.docx
+new file mode 100644
+index 0000000..cc779d4
+--- /dev/null
++++ b/backend/board_note_templates/board_note_q2_template.docx
+@@ -0,0 +1,1415 @@
++        21[st] BOARD SUB-COMMITTEE MEETING TO BE HELD ON     OCTOBER, 2026
++ITEM NO _________
++                                       
++PRODUCTION PERFORMANCE DURING QUARTER-2'26-27 (JULY'26, AUGUST'26, SEPTEMBER'26 and APRIL-SEPTEMBER'26) 
++                                 (For Review)
++                                       
++                                       
++1.0 SAIL: Production performance for Finished Steel w.r.t. MoU 
++   
++   The Production of Finished Steel during Q-2'26-27 was 4.161 MT (89% of the quarterly MoU of 4.448 MT) with a growth of 2.3 % over CPLY.
++   
++   The Production of Finished Steel during April-September'26 was 8.040 MT (92% of the Apr-Sep'25 MoU of 8.812 MT), with a growth of 0.8% over CPLY. 
++   
++   
++   
++    Production of Finished Steel:
++                                                                                                                 Unit:'000 T                         
++Plant
++                                     MoU 
++                                    2026-27
++                                    Q-1'
++                                     26-27
++                                  Q-2'26-27
++                                 Apr-Sep'26
++                                       
++                                       
++                                       
++                                      MoU
++                                    Actual
++                                     % Ful
++                                      MoU
++                                    Actual
++                                     % Ful
++BSP
++                                     5377
++                                     1111
++                                     1395
++                                     1204
++                                       
++                                     2667
++                                     2401
++                                       
++DSP
++                                     1413
++                                      290
++                                      323
++                                      283
++                                       
++                                      648
++                                      539
++                                       
++RSP
++                                     4374
++                                     1027
++                                     1124
++                                     1038
++                                       
++                                     2161
++                                     2086
++                                       
++BSL
++                                     4319
++                                      982
++                                     1033
++                                     1096
++                                       
++                                     2122
++                                     2069
++                                       
++ISP
++                                     2137
++                                      497
++                                      479
++                                      540
++                                       
++                                     1025
++                                      946
++                                       
++Special Steel Plants
++                                      380
++                                      61
++                                      95
++                                      66
++                                       
++                                      189
++                                      116
++                                       
++SAIL
++                                     18000
++                                     4029
++                                     4448
++                                     4360
++                                       
++                                     8812
++                                     8389
++                                       
++
++2.0 SAIL and Plant-wise Production performance during Q-2'26-27 and 
++   H-1'26-27 (Apr-Sep'26) w.r.t. ABP
++
++ 2.1    SAIL: Production performance during Q-2'26-27 
++   
++   Q-2'26-27:
++   Hot Metal production during Q-2'26-27 was 5.152 MT (89% of ABP), Crude Steel production was 4.848 MT (86% of ABP) and Saleable Steel production was 4.890 MT (91% of ABP). 
++   
++                                                                  Unit:'000 T
++Item
++                                      ABP
++                                    2026-27
++                                  Q-2'26-27
++                                    Q-2'
++                                     25-26
++                                     Act.
++                                 % Gr. w.r.t.
++                                    Q-2'
++                                     25-26
++
++                                       
++                                      ABP
++                                    Actual
++                                    % Ful.
++                                       
++                                       
++Hot Metal
++                                     22850
++                                     5782
++                                     5152
++                                      89
++                                     4904
++                                       5
++Crude Steel
++                                     22198
++                                     5613
++                                     4848
++                                      86
++                                     4651
++                                       4
++Saleable Steel
++                                     21046
++                                     5360
++                                     4890
++                                      91
++                                     4855
++                                      0.7
++Finished Steel
++                                     18591
++                                     4795
++                                     4360
++                                      91
++                                     4233
++                                       3
++  
++   Highlights:
++   SAIL achieved best ever Q-2 production for following:
++ Hot Metal production of 5.152 MT (Previous best : 5.099 MT in Q-2'23-24)
++ Crude Steel production of 4.848 MT (Previous best : 4.802 MT in Q-2'23-24)
++ Saleable Steel production of 4.890 MT (Previous best : 4.855 MT in Q-2'25-26)
++ Finished Steel production of 4.360 MT (Previous best : 4.233 MT in Q-2'25-26)
++
++ 3.1    SAIL: Production performance during H-1'25-26 
++   
++   H-1'25-26:
++   Hot Metal production during H-1'25-26 was 10.031 MT (93% of ABP), Crude Steel production was 9.503 MT (91% of ABP) and Saleable Steel production was 9.567 MT (95% of ABP). 
++                                                                  Unit:'000 T
++Item
++                                      ABP
++                                    2025-26
++                                  H-1'25-26
++                                    H-1'
++                                     24-25
++                                     Act.
++                                 % Gr. w.r.t.
++                                    H-1'
++                                     24-25
++
++                                       
++                                      ABP
++                                    Actual
++                                    % Ful.
++                                       
++                                       
++Hot Metal
++                                     22025
++                                     10810
++                                     10031
++                                      93
++                                     10124
++                                      -1
++Crude Steel
++                                     21178
++                                     10389
++                                     9503
++                                      91
++                                     9458
++                                       0
++Saleable Steel
++                                     20523
++                                     10049
++                                     9567
++                                      95
++                                     8777
++                                       9
++Finished Steel
++                                     18109
++                                     8865
++                                     8096
++                                      91
++                                     7460
++                                       9
++  
++   Highlights:
++   SAIL achieved best ever Apr-Sep (H-1) production for following:
++ Crude Steel production of 9.503 MT (Prev. best : 9.470 MT in Apr-Sep`23)
++ Saleable Steel production of 9.567 MT (Prev. best : 9.167MT in Apr-Sep`23)
++ Finished Steel production of 8.096  MT (Prev. best : 7.799 MT in Apr-Sep'23)
++    (Plant wise production performance in tabular form is at Annexure-1a and 1b)
++   
++ 6.1    Plant wise: Production performance during Q-2'25-26 and H-1'25-26 w.r.t. ABP
++   
++   BHILAI STEEL PLANT:
++   
++   Q-2'25-26:
++   Hot Metal production during Q-2'25-26 was 1.412 MT (87% of ABP), Crude Steel production was 1.350 MT (85% of ABP) and Saleable Steel production was 1.408 MT (94% of ABP).                                                                                                               
++                                                       Unit:'000 T
++Item
++                                      ABP
++                                    2025-26
++                                  Q-2'25-26
++                                    Q-2'
++                                     24-25
++                                     Act.
++                                 % Gr. w.r.t.
++                                    Q-2'
++                                     24-25
++
++                                       
++                                      ABP
++                                    Actual
++                                    % Ful.
++                                       
++                                       
++Hot Metal
++                                     6600
++                                     1626
++                                     1412
++                                      87
++                                     1373
++                                       3
++Crude Steel
++                                     6415
++                                     1581
++                                     1350
++                                      85
++                                     1311
++                                       3
++Saleable Steel
++                                     5900
++                                     1500
++                                     1408
++                                      94
++                                     1251
++                                      13
++Finished Steel
++                                     5410
++                                     1403
++                                     1215
++                                      87
++                                     1156
++                                       5
++   
++   Highlights:
++   BSP achieved best ever Q-2 production for following:
++     o Saleable Steel production of 1.408 MT (Previous best : 1.349 MT in Q-2'23-24)
++     o Total Prime Rails (URM and RSM) production at 0.329 MT (Previous best was 0.305 MT during Q-2'24-25)
++
++   Production Performance during Q-2'25-26:
++   
++   Hot Metal: The shortfall in production was mainly due to:
++   oo BF-8 :
++     o Shutdown taken for axial cyclone bottom cone repair from 16.8.25 to 19.8.25, thereafter the blast furnace was under stabilisation till 25.8.25.
++     o Shutdown taken for axial cyclone repair jobs for 56 hrs from 2.9.25 to 4.9.25.
++   oo Wet and sticky raw material due to inclement weather conditions (Rain) affecting supply of fines and also resulting in burden movement issues in blast furnaces.
++      
++   Crude Steel: Production was as per Hot Metal availability
++   
++   Saleable Steel: Production was as per Crude steel availability and was further maximised by rolling from in-process semi-finished steel stock.
++   
++   H-1'25-26:
++   Hot Metal production during H-1'25-26 was 2.942 MT (90% of ABP), Crude Steel production was 2.833 MT (89% of ABP) and Saleable Steel production was 2.700 MT (92% of ABP). 
++                                                       Unit:'000 T
++Item
++                                      ABP
++                                    2025-26
++                                  H-1'25-26
++                                    H-1'
++                                     24-25
++                                     Act.
++                                 % Gr. w.r.t.
++                                    H-1'
++                                     24-25
++
++                                       
++                                      ABP
++                                    Actual
++                                    % Ful.
++                                       
++                                       
++Hot Metal
++                                     6600
++                                     3270
++                                     2942
++                                      90
++                                     2833
++                                       4
++Crude Steel
++                                     6415
++                                     3179
++                                     2833
++                                      89
++                                     2712
++                                       4
++Saleable Steel
++                                     5900
++                                     2925
++                                     2700
++                                      92
++                                     2532
++                                       7
++Finished Steel
++                                     5410
++                                     2683
++                                     2327
++                                      87
++                                     2317
++                                       0
++   
++   Highlights:
++   BSP achieved best ever H-1 production for following:
++   oo BF-8 production at 1.376 MT (Previous best was 1.353 MT during H-1'23-24)
++   oo SMS-3 production at 1.723 MT (Previous best was 1.711 MT during H-1'24-25)
++   oo Total Crude Steel production at 2.833 MT (Previous best was 2.815 MT during H-1'23-24)
++   oo BRM production at 0.504 MT (Previous best was 0.481 MT during H-1'24-25)
++   oo URM 
++     o Finished Rail production at 0.472 MT (Previous best was 0.442 MT during H-1'23-24)
++     o Prime Rail production at 0.454 MT (Previous best was 0.417 MT during H-1'23-24)
++     o Long Rail production at 0.423 MT (Previous best was 0.400 MT during H-1'23-24)
++   oo Total Rails (URM and RSM)
++     o Finished Rail production at 0.705 MT (Previous best was 0.694 MT during H-1'19-20)
++     o Prime Rail production at 0.645 MT (Previous best was 0.596 MT during H-1'24-25)
++     o Long Rail production at 0.517 MT (Previous best was 0.491 MT during H-1'24-25)
++   oo Total Saleable Steel production at 2.700 MT (Previous best was 2.576 MT during H-1'23-24).
++   oo Finished Steel production at 2.327 MT (Previous best was 2.317 MT during H-1'24-25).
++
++ 6.2    DURGAPUR STEEL PLANT:
++   
++   Q-2'25-26:
++   Hot Metal production during Q-2'25-26 was 0.605 MT (103% of ABP), Crude Steel production was 0.567 MT (105% of ABP) and Saleable Steel production was 0.541 MT (104% of ABP). 
++   
++   
++                                                                                                             Unit:'000 T
++Item
++                                      ABP
++                                    2025-26
++                                  Q-2'25-26
++                                    Q-2'
++                                     24-25
++                                     Act.
++                                 % Gr. w.r.t.
++                                    Q-2'
++                                     24-25
++
++                                       
++                                      ABP
++                                    Actual
++                                    % Ful.
++                                       
++                                       
++Hot Metal
++                                     2600
++                                      585
++                                      605
++                                      103
++                                      638
++                                      -5
++Crude Steel
++                                     2400
++                                      540
++                                      567
++                                      105
++                                      580
++                                      -2
++Saleable Steel
++                                     2289
++                                      519
++                                      541
++                                      104
++                                      556
++                                      -3
++Finished Steel
++                                     1422
++                                      325
++                                      294
++                                      91
++                                      283
++                                       4
++   
++   Highlights:
++   oo MM: Best ever Quarter production at 0.119 MT (Previous best was 0.114 MT during Q-4'23-24)
++   oo MSM: Best ever Q-2 production at 0.142 MT (Previous best was 0.137 MT during Q-2'24-25)
++   
++   Production Performance during Q-2'25-26:
++   
++   Hot Metal: BF-2: Capital Repair has been deferred (APP : Cat-II repair for 45 days in Aug-Sep'25)
++   
++   Crude Steel:
++   The production was as per Hot Metal availability
++   
++   Saleable Steel:
++   The production was as per Crude Steel availability 
++   
++   H-1'25-26:
++   Hot Metal production during H-1'25-26 was 1.184 MT (97% of ABP), Crude Steel production was 1.095 MT (97% of ABP) and Saleable Steel production was 1.049 MT (97% of ABP). 
++                                                                                                             Unit:'000 T
++Item
++                                      ABP
++                                    2025-26
++                                  H-1'25-26
++                                    H-1'
++                                     24-25
++                                     Act.
++                                 % Gr. w.r.t.
++                                    H-1'
++                                     24-25
++
++                                       
++                                      ABP
++                                    Actual
++                                    % Ful.
++                                       
++                                       
++Hot Metal
++                                     2600
++                                     1224
++                                     1184
++                                      97
++                                     1260
++                                      -6
++Crude Steel
++                                     2400
++                                     1132
++                                     1095
++                                      97
++                                     1128
++                                      -3
++Saleable Steel
++                                     2289
++                                     1083
++                                     1049
++                                      97
++                                     1073
++                                      -2
++Finished Steel
++                                     1422
++                                      652
++                                      584
++                                      90
++                                      560
++                                       4
++   
++   
++   Highlights:
++   oo MM: Best ever H-1 production at 0.219 MT (Previous best was 0.206 MT during H-1'24-25)
++   oo MSM: Best ever half-yearly production at 0.296 MT (Previous best was 0.283 MT during H-1'24-25)
++   oo Finished Steel: Best ever half-yearly production at 0.584 MT (Previous best was 0.577 MT during H-2'23-24)
++   
++   
++ 6.3    ROURKELA STEEL PLANT:
++   
++   Q-2'25-26:
++   Hot Metal production during Q-2'25-26 was 1.058 MT (87% of ABP), Crude Steel production was 0.983 MT (86% of ABP) and Saleable Steel production was 1.026 MT (91% of ABP). 
++   
++         		                                                       Unit:'000 T
++Item
++                                      ABP
++                                    2025-26
++                                  Q-2'25-26
++                                    Q-2'
++                                     24-25
++                                     Act.
++                                 % Gr. w.r.t.
++                                    Q-2'
++                                     24-25
++
++                                       
++                                      ABP
++                                    Actual
++                                    % Ful.
++                                       
++                                       
++Hot Metal
++                                     4730
++                                     1211
++                                     1058
++                                      87
++                                     1094
++                                      -3
++Crude Steel
++                                     4390
++                                     1141
++                                      983
++                                      86
++                                     1025
++                                      -4
++Saleable Steel
++                                     4400
++                                     1131
++                                     1026
++                                      91
++                                      998
++                                       3
++Finished Steel
++                                     4400
++                                     1131
++                                     1026
++                                      91
++                                      998
++                                       3
++   
++   Highlights:
++   oo BF-1 achieved best ever Quarter production at 0.288 MT (Previous best was 0.273 MT during Q-2'24-25)
++   oo NPM achieved best ever Quarter-2 production at 0.265 MT (Previous best was 0.258 MT during Q-2'23-24) 
++     
++   Production Performance during Q-2'25-26:
++   
++   Hot Metal: Production was mainly affected due to following:
++   oo Off take issues at SMSs.
++   oo BF-5: Capital Repairs taken for shot-creting and stove-2 hot blast valve change for 6 days from 26.7.25 to 30.7.25 and was under stabilization till 1.8.25 (APP : Capital repairs 6 days  in June'25). 
++   oo Both Blast Furnaces were affected due to sinter shortage as base mix belt got snapped for 32 hrs in Sep'25.
++   Crude Steel: 
++   oo Production was affected due to rescheduling of following major capital repairs:
++         # SMS 1 Converter-P: Capital repairs taken for relining from 14.9.25 to 26.9.25.  (APP: CR in Oct'25 for 9 days)
++         # SMS-1 Caster: Capital repairs taken from 26.7.25 to 1.8.25. (APP: CR for 5 days in Jun'25)
++         # SMS-2 Converter-A: Capital repairs taken from 24.7.25 to 4.8.25 (APP: CR for 12 days in Jun'25)
++         # SMS-2 Caster-3 : Capital repairs taken from 26.7.25 to 1.8.25. (APP: CR for 6 days in Jun'25)
++   oo SMS 1
++      + Converter-P: 
++         # Shutdown for ID fan job from 20.7.25 to 23.7.25.
++         # Shutdown for GCP duct cleaning & shell repair from 26.7.25 to 1.8.25
++      + Converter-Q: Shutdown for stack leakage arresting job from 30.6.25 to 5.7.25.
++   oo SMS-2 Converter-B: Shutdowns for 45 hrs due to operational issues such as skirt leakage arresting, lance gear box maintenance etc.
++   
++   Saleable Steel: The production was as per Crude Steel availability and maximised further by rolling of slabs available from inter plant transfers.
++   
++   H-1'25-26:
++   Hot Metal production during H-1'25-26 was 2.149 MT (91% of ABP), Crude Steel production was 1.992 MT (92% of ABP) and Saleable Steel production was 2.053 MT (94% of ABP). 
++   
++         		                                                       Unit:'000 T
++Item
++                                      ABP
++                                    2025-26
++                                  H-1'25-26
++                                    H-1'
++                                     24-25
++                                     Act.
++                                 % Gr. w.r.t.
++                                    H-1'
++                                     24-25
++
++                                       
++                                      ABP
++                                    Actual
++                                    % Ful.
++                                       
++                                       
++Hot Metal
++                                     4730
++                                     2356
++                                     2149
++                                      91
++                                     2199
++                                      -2
++Crude Steel
++                                     4390
++                                     2175
++                                     1992
++                                      92
++                                     2019
++                                      -1
++Saleable Steel
++                                     4400
++                                     2174
++                                     2053
++                                      94
++                                     2066
++                                      -1
++Finished Steel
++                                     4400
++                                     2174
++                                     2053
++                                      94
++                                     2066
++                                      -1
++   
++   Highlights:
++   RSP achieved best ever H-1 production for following:
++   oo BF-1 production at 0.555 MT (Previous best was 0.484 MT during H-1'24-25)
++   oo BF-5 production at 1.594 MT (Previous best was 1.513 MT during H-1'24-25)
++   oo NPM production at 0.504 MT (Previous best was 0.461 MT during H-1'23-24)
++   oo HSM-II production at 1.306 MT (Previous best was 1.265 MT during H-1'24-25)
++   
++ 6.4    BOKARO STEEL PLANT
++	
++   Q-2'25-26:
++   Hot Metal production during Q-2'25-26 was 1.064 MT (95% of ABP), Crude Steel production was 0.964 MT (89% of ABP) and Saleable Steel production was 1.104 MT (97% of ABP). 
++                                                                  Unit:'000 T
++Item
++                                      ABP
++                                    2025-26
++                                  Q-2'25-26
++                                    Q-2'
++                                     24-25
++                                     Act.
++                                 % Gr. w.r.t.
++                                    Q-2'
++                                     24-25
++
++                                       
++                                      ABP
++                                    Actual
++                                    % Ful.
++                                       
++                                       
++Hot Metal
++                                     5145
++                                     1123
++                                     1064
++                                      95
++                                     1237
++                                      -14
++Crude Steel
++                                     4885
++                                     1078
++                                      964
++                                      89
++                                     1103
++                                      -13
++Saleable Steel
++                                     4745
++                                     1139
++                                     1104
++                                      97
++                                     1065
++                                       4
++Finished Steel
++                                     4345
++                                     1039
++                                     1014
++                                      98
++                                      967
++                                       5
++   
++   Highlights:
++   BSL achieved best ever Quarter production for following:
++   oo Crude Steel production from SMS New at 0.299 MT (Previous best was 0.287 MT during Q-4'24-25)
++   oo Total CR saleable production at 0.352 MT (Previous best was 0.343 MT during Q-3'24-25)
++   BSL achieved best ever Q-2 production for following:
++   oo HR Coil production at 1.055 MT (Previous best was 1.038 MT during Q-2'24-25)
++   oo GP/GC production at 58,223 T (Previous best was 51,245 T during Q-2'24-25)
++   oo Total CR saleable production of CRM-III at 0.213 MT (Previous best was 0.202 MT during Q-2'24-25)
++   oo Saleable Steel production at 1.104 MT (Previous best was 1.065 MT during Q-2'24-25)
++   
++   Production Performance during Q-2'25-26:
++   
++   BF-5: Blowing down has been deferred (APP : Blowing down from Jul'25)
++   
++   Hot Metal: 
++   oo In view of less off take by SMS, following shutdowns were taken: .
++      # BF-1: Shutdown for Tap hole #2 shell welding from 4.9.25 to 7.9.25 in view of less offtake for 75 hrs 
++      # During Sep'25 shutdowns taken in view of less offtake by SMS-2 were BF-1- 177 hrs, BF-2  -  46 hrs, BF-4  -  191 hrs.
++   oo BF-2:  Capital Repair for shotcreting and normalisation from 17.8.25 to 29.8.25 (disconnection of stove 2.3 also done)  -  shut down extended by 8 days (APP : Capital Repair for shotcreting and normalisation for 4 days in Aug'25)
++   oo BF-4: Capital Repair taken from 10.8.25 to 14.8.25 for shotcreting. (Capital Repair for shotcreting was not envisaged for BF-4 in ABP).
++   oo Wet and sticky raw material due to inclement weather conditions (Rain) affecting supply of fines  resulted in Sinter shortage during 7.7.25 to 16.7.25 
++   
++   Crude Steel:
++   oo SMS-1 
++     Converter-D: 
++      # Shut down for 42 hrs from 9.9.25 to 11.9.25 for hood jam cleaning.
++      # Shut down for 31 hrs for boiler tube leakage arresting in Sep'25
++   oo SMS-2:
++     Converter-1:
++      # Operational issues like hose pipe gasket problem, hood leakage, GCP jobs etc. for about 65 hrs in Jul'25   
++     Converter-2:
++      # Capital repair for Relining & bull gear jobs from 6.8.25 to 29.9.25 (APP: CR for campaign repair and lance guide changing for 14 days in Aug-Sep'25)  -  shutdown extended by about a month.
++      # Shutdown for 21.5 hrs for hood leakage welding etc. in Jul'25
++     Production affected due to mixer crane-1 MH rope snapped from 28.9.25 onwards.
++: 
++   Saleable Steel: As per Crude availability and was maximised by rolling from stock.
++   
++   H-1'25-26:
++   Hot Metal production during H-1'25-26 was 2.248 MT (88% of ABP), Crude Steel production was 2.037 MT (84% of ABP) and Saleable Steel production was 2.245 MT (96% of ABP). 
++   
++                                                                  Unit:'000 T
++Item
++                                      ABP
++                                    2025-26
++                                  H-1'25-26
++                                    H-1'
++                                     24-25
++                                     Act.
++                                 % Gr. w.r.t.
++                                    H-1'
++                                     24-25
++
++                                       
++                                      ABP
++                                    Actual
++                                    % Ful.
++                                       
++                                       
++Hot Metal
++                                     5145
++                                     2546
++                                     2248
++                                      88
++                                     2477
++                                      -9
++Crude Steel
++                                     4885
++                                     2420
++                                     2037
++                                      84
++                                     2213
++                                      -8
++Saleable Steel
++                                     4745
++                                     2333
++                                     2245
++                                      96
++                                     1744
++                                      29
++Finished Steel
++                                     4345
++                                     2135
++                                     1996
++                                      93
++                                     1524
++                                      31
++   
++   Highlights:
++   BSL achieved best ever half yearly production for following:
++   oo Crude Steel production from SMS New at 0.555 MT (Previous best was 0.523 MT during H-2'24-25)
++   oo CRM-III GP/GC production at 0.114 MT (Previous best was 0.102 MT during H-2'24-25)
++   oo Saleable Steel production at 2.245 MT (Previous best was 2.117 MT during H-2'24-25)
++   BSL achieved best ever H-1 production for following:
++   oo HR Coil production at 2.075 MT (Previous best was 1.946 MT during H-1'21-22) 
++   oo CR Coil production at 0.530 MT (Previous best was 0.512 MT during H-1'21-22)
++   oo Total CR saleable production of CRM-III at 0.389 MT (Previous best was 0.353 MT during H-1'22-23)
++   oo Total CR saleable production at 0.652 MT (Previous best was 0.564 MT during H-1'18-19)
++   
++ 6.5    IISCO STEEL PLANT:
++   
++   Q-2'25-26:
++   Hot Metal production during Q-2'25-26 was 0.765 MT (118% of ABP), Crude Steel production was 0.717 MT (118% of ABP) and Saleable Steel production was 0.685 MT (117% of ABP). 
++                                                                               
++                                                                  Unit:'000 T
++Item
++                                      ABP
++                                    2025-26
++                                  Q-2'25-26
++                                    Q-2'
++                                     24-25
++                                     Act.
++                                 % Gr. w.r.t.
++                                    Q-2'
++                                     24-25
++
++                                       
++                                      ABP
++                                    Actual
++                                    % Ful.
++                                       
++                                       
++Hot Metal
++                                     2950
++                                      650
++                                      765
++                                      118
++                                      741
++                                       3
++Crude Steel
++                                     2770
++                                      606
++                                      717
++                                      118
++                                      697
++                                       3
++Saleable Steel
++                                     2675
++                                      584
++                                      685
++                                      117
++                                      649
++                                       6
++Finished Steel
++                                     2150
++                                      482
++                                      519
++                                      108
++                                      461
++                                      13
++   
++   Highlights:
++   
++   ISP achieved best ever Quarter production for following:
++   oo Crude Steel production at 0.717 MT (Previous best was 0.713 MT during Q-4'24-25)
++   oo Finished steel production at 0.519 MT (Previous best was 0.496 MT during Q-1'25-26)
++   oo Bar Mill production at 0.240 MT (Previous best was 0.222 MT during Q-2'23-24)
++   
++   ISP achieved best ever Q-2 production for following:
++   oo Total Sinter production at 1.156 MT (Previous best was 1.134 MT during Q-2'23-24)
++   oo Hot Metal production at 0.765 MT (Previous best was 0.741 MT during Q-2'24-25)
++   oo USM production at 0.152 MT (Previous best was 0.123 MT during Q-2'24-25)
++   oo Saleable Steel production at 0.685 MT (Previous best was 0.649 MT during Q-2'24-25)
++   
++   Production Performance during Q-2'25-26:
++   Hot Metal: 
++   BF-5: Capital Repair deferred (APP: CR for connecting 4th stove and shot-creting for 14 days during Sep'25)
++   
++   Crude Steel:
++   The production was as per Hot Metal availability 
++     oo SMS: Capital Repair deferred   (APP: CR for 13 days during Sep'25)
++   
++   Saleable Steel:
++   The production was as per Crude Steel availability 
++     oo WRM: Capital Repair deferred (APP CR for 10 days in Sep'25)
++     oo Bar Mill: Capital Repair deferred (APP CR for 10 days in Sep'25)
++     oo USM: Capital Repair deferred (APP CR for 12 days in Sep'25)
++   
++   H-1'25-26:
++   Hot Metal production during H-1'25-26 was 1.508 MT (107% of ABP), Crude Steel production was 1.405 MT (106% of ABP) and Saleable Steel production was 1.340 MT (105% of ABP). 
++                                                                  Unit:'000 T
++Item
++                                      ABP
++                                    2025-26
++                                  H-1'25-26
++                                    H-1'
++                                     24-25
++                                     Act.
++                                 % Gr. w.r.t.
++                                    H-1'
++                                     24-25
++
++                                       
++                                      ABP
++                                    Actual
++                                    % Ful.
++                                       
++                                       
++Hot Metal
++                                     2950
++                                     1414
++                                     1508
++                                      107
++                                     1354
++                                      11
++Crude Steel
++                                     2770
++                                     1325
++                                     1405
++                                      106
++                                     1259
++                                      12
++Saleable Steel
++                                     2675
++                                     1279
++                                     1340
++                                      105
++                                     1192
++                                      12
++Finished Steel
++                                     2150
++                                     1032
++                                     1016
++                                      98
++                                      877
++                                      16
++   
++   Highlights:
++   ISP achieved best ever Half-yearly production for following:
++   oo Hot Metal production at 1.508 MT (Previous best was 1.382 MT during H-2'22-23)
++   oo Crude Steel production at 1.405 MT (Previous best was 1.295 MT during H-2'22-23)
++   oo Bar Mill production at 0.457 MT (Previous best was 0.430 MT during H-2'22-23)
++   oo USM production at 0.317 MT (Previous best was 0.258 MT during H-2'24-25)
++   oo Finished steel production at 1.016 MT (Previous best was 0.888 MT during H-2'23-24)
++   oo Saleable Steel production at 1.340 MT (Previous best was 1.239 MT during H-2'22-23)
++     
++   ISP achieved best ever H-1 production for following:
++   oo Total Sinter production at 2.209 MT (Previous best was 2.160 MT during H-1'23-24)
++   oo WRM production at 0.241 MT (Previous best was 0.240 MT during H-1'24-25)
++ 6.6    ALLOY STEELS PLANT:
++
++   Q-2'25-26:
++   Crude Steel production during Q-2'25-26 was 36,633T (104% of ABP) and Saleable Steel production was 34,096 T (97% of ABP).
++                                                                  Unit:'000 T
++Item
++                                      ABP
++                                    2025-26
++                                  Q-2'25-26
++                                    Q-2'
++                                     24-25
++                                     Act.
++                                 % Gr. w.r.t.
++                                    Q-2'
++                                     24-25
++
++                                       
++                                      ABP
++                                    Actual
++                                    % Ful.
++                                       
++                                       
++Crude Steel
++                                      138
++                                    35.071
++                                    36.633
++                                      104
++                                    25.094
++                                      46
++Saleable Steel
++                                      140
++                                    35.273
++                                    34.096
++                                      97
++                                    27.626
++                                      23
++Finished Steel
++                                     7.110
++                                     1.790
++                                     1.473
++                                      82
++                                     0.778
++                                      89
++
++   Production Performance during Q-2'25-26:
++   
++   Saleable Steel production was as per Crude Steel availability and availability of orders.
++   H-1'25-26:
++   Crude Steel production during H-1'25-26 was 66,391 T (97% of ABP) and Saleable Steel production was 62,756 T (90% of ABP).
++                                                                  Unit:'000 T
++Item
++                                      ABP
++                                    2025-26
++                                  H-1'25-26
++                                    H-1'
++                                     24-25
++                                     Act.
++                                 % Gr. W.r.t.
++                                    H-1'
++                                     24-25
++
++                                       
++                                      ABP
++                                    Actual
++                                    % Ful.
++                                       
++                                       
++Crude Steel
++                                      138
++                                    68.365
++                                    66.391
++                                      97
++                                    50.637
++                                      31
++Saleable Steel
++                                      140
++                                    69.484
++                                    62.756
++                                      90
++                                    54.746
++                                      15
++Finished Steel
++                                     7.110
++                                     3.575
++                                     2.708
++                                      76
++                                     1.661
++                                      63
++   
++ 6.7    SALEM STEEL PLANT:
++
++   Q-2'25-26:
++   Crude Steel production during Q-2'25-26 was 31,557 T (70% of ABP) and Saleable Steel production was 49,741 T (62% of ABP).              
++                                                                  Unit:'000 T
++Item
++                                      ABP
++                                    2025-26
++                                  Q-2'25-26
++                                    Q-2'
++                                     24-25
++                                     Act.
++                                 % Gr. w.r.t.
++                                    Q-2'
++                                     24-25
++
++                                       
++                                      ABP
++                                    Actual
++                                    % Ful.
++                                       
++                                       
++Crude Steel
++                                      180
++                                    45.000
++                                    31.557
++                                      70
++                                    34.811
++                                      -9
++Saleable Steel
++                                      320
++                                    79.900
++                                    49.741
++                                      62
++                                    43.629
++                                      14
++Finished Steel
++                                      320
++                                    79.900
++                                    49.741
++                                      62
++                                    43.629
++                                      14
++                                                                               
++   Production Performance during Q-2'25-26:
++   
++   Crude Steel production was affected due to the following issues: 
++   oo Shut down taken for repairs from 13.7.25 to 25.7.25 to reduce inventory level at plant.
++   oo Shutdown from 2.9.25 to 17.9.25 due to Ferro-Chrome shortage at plant.
++   Saleable Steel production was affected due to the following:
++   oo Production was restricted due to low order availability of Carbon Steel  and to reduce inventory level of finished steel at plant in Jul'25 .
++   oo HRM: Shutdown taken from 20.8.25 to 23.8.25 for Steckel Mill exit pinch roll foundation jobs.
++   oo Production restricted as per crude steel production and order availability of carbon steel products in Sep'25.
++   
++   H-1'25-26:
++   oo Crude Steel production during H-1'25-26 was 75,168 T (84% of ABP) and Saleable Steel production was 101,609 T (64% of ABP).
++                                                                            Unit:'000 T
++Item
++                                      ABP
++                                    2025-26
++                                  H-1'25-26
++                                    H-1'
++                                     24-25
++                                     Act.
++                                 % Gr. w.r.t.
++                                    H-1'
++                                     24-25
++
++                                       
++                                      ABP
++                                    Actual
++                                    % Ful.
++                                       
++                                       
++Crude Steel
++                                      180
++                                    90.000
++                                    75.168
++                                      84
++                                    76.477
++                                      -2
++Saleable Steel
++                                      320
++                                    158.500
++                                    101.609
++                                      64
++                                    102.287
++                                      -1
++Finished Steel
++                                      320
++                                    158.500
++                                    101.609
++                                      64
++                                    102.287
++                                      -1
++ 6.8    VISVESVARAYA IRON & STEEL PLANT:
++
++   Q-2'25-26:
++   
++   Saleable Steel production during Q-2'25-26 was 8,000 T (58% of ABP). 
++                                                                  Unit:'000 T
++Item
++                                      ABP
++                                    2025-26
++                                  Q-2'25-26
++                                    Q-2'
++                                     24-25
++                                     Act.
++                                 % Gr. w.r.t.
++                                    Q-2'
++                                     24-25
++
++                                       
++                                      ABP
++                                    Actual
++                                    % Ful.
++                                       
++                                       
++Saleable Steel
++                                      55
++                                    13.880
++                                     8.091
++                                      58
++                                     6.127
++                                      32
++Finished Steel
++                                      55
++                                    13.880
++                                     8.091
++                                      58
++                                     6.127
++                                      32
++                                                                               
++   Production Performance during Q-2'25-26:
++   
++   Saleable Steel production was as per availability of orders.
++   
++   H-1'25-26:
++   
++   Saleable Steel production during H-1'25-26 was 16,135 T (58% of ABP). 
++   
++                                                                  Unit:'000 T
++Item
++                                      ABP
++                                    2025-26
++                                  Q-2'25-26
++                                    Q-2'
++                                     24-25
++                                     Act.
++                                 % Gr. w.r.t.
++                                    Q-2'
++                                     24-25
++
++                                       
++                                      ABP
++                                    Actual
++                                    % Ful.
++                                       
++                                       
++Saleable Steel
++                                      55
++                                    27.585
++                                    16.135
++                                      58
++                                    12.580
++                                      28
++Finished Steel
++                                      55
++                                    27.585
++                                    16.135
++                                      58
++                                    12.580
++                                      28
++                                       
++1.0 SAIL and Plant-wise Major Techno-economic parameters performance during Q-2'25-26 and H-1'25-26:
++   
++                                  Parameters
++                                     Plant
++                                    Target
++                                  Q-2'25-26
++                                  Q-2'24-25
++                                  H-1'25-26
++                                  H-1'24-25
++                                       
++                                       
++                                     25-26
++                                       
++                                       
++                                       
++                                       
++                                   Coke Rate
++                                   (kg/thm)
++                                       
++                                       
++                                       
++                                       
++                                      BSP
++                                      412
++                                      433
++                                      439
++                                      426
++                                      434
++                                       
++                                      DSP
++                                      441
++                                      469
++                                      462
++                                      469
++                                      461
++                                       
++                                      RSP
++                                      373
++                                      381
++                                      381
++                                      384
++                                      397
++                                       
++                                      BSL
++                                      420
++                                      459
++                                      452
++                                      450
++                                      449
++                                       
++                                      ISP
++                                      356
++                                      371
++                                      376
++                                      359
++                                      386
++                                       
++                                     SAIL
++                                      401
++                                      422
++                                      423
++                                      418
++                                      426
++                                 Overall CDI 
++                                     Rate
++                                  (kg/thm) 
++                                       
++                                       
++                                       
++                                      BSP
++                                      130
++                                      119
++                                      143
++                                      120
++                                      137
++                                       
++                                      DSP
++                                      78
++                                      65
++                                      67
++                                      55
++                                      62
++                                       
++                                      RSP
++                                      140
++                                      142
++                                      134
++                                      143
++                                      127
++                                       
++                                      BSL
++                                      105
++                                      82
++                                      81
++                                      87
++                                      84
++                                       
++                                      ISP
++                                      150
++                                      138
++                                      127
++                                      146
++                                      123
++                                       
++                                     SAIL
++                                      123
++                                      112
++                                      114
++                                      114
++                                      110
++                                   Fuel Rate
++                                  (kg/thm) 
++                                       
++                                       
++                                       
++                                      BSP
++                                      560
++                                      569
++                                      604
++                                      565
++                                      594
++                                       
++                                      DSP
++                                      538
++                                      556
++                                      551
++                                      546
++                                      544
++                                       
++                                      RSP
++                                      526
++                                      541
++                                      541
++                                      546
++                                      549
++                                       
++                                      BSL
++                                      540
++                                      556
++                                      549
++                                      554
++                                      548
++                                       
++                                      ISP
++                                      535
++                                      544
++                                      553
++                                      536
++                                      557
++                                       
++                                     SAIL
++                                      542
++                                      555
++                                      563
++                                      552
++                                      562
++                                BF Productivity
++                                  (t/m3/day)
++                              (Working Volume) 
++                                       
++                                      BSP
++                                     2.24
++                                     1.90
++                                     1.83
++                                     1.99
++                                     1.87
++                                       
++                                      DSP
++                                     1.97
++                                     1.74
++                                     1.80
++                                     1.76
++                                     1.79
++                                       
++                                      RSP
++                                     2.72
++                                     2.43
++                                     2.44
++                                     2.45
++                                     2.15
++                                       
++                                      BSL
++                                     2.20
++                                     1.85
++                                     1.86
++                                     1.92
++                                     1.89
++                                       
++                                      ISP
++                                     2.44
++                                     2.38
++                                     2.33
++                                     2.41
++                                     2.19
++                                       
++                                     SAIL
++                                     2.31
++                                     2.02
++                                     2.01
++                                     2.08
++                                     1.96
++   Techno-economic Performance during H-1'25-26
++   oo Coke Rate: SAIL registered an improvement of 2% w.r.t. CPLY.
++   oo CDI Rate: SAIL registered an improvement of 3% w.r.t. CPLY.
++   oo Fuel Rate: SAIL registered an improvement of 2% w.r.t. CPLY.
++   oo BF Productivity: SAIL registered an improvement of 6% w.r.t. CPLY.
++   
++   This was achieved through 
++   oo Enhanced usage of pellet in burden @ 11% (usage during CPLY was 9%)
++   oo Increased O2 enrichment in Blast Furnace @ 4.0% (usage during CPLY was 3.5%)
++   oo Closing down of old and inefficient units i.e. BF-1(closed in May'24) at BSP and BF-4(Banked from Jul'24) at RSP.
++   
++
++Submitted for consideration of the Board.
++
++  
++                                                               Manish Raj Gupta
++                               Director (Technical, Projects and Raw Materials)
++                                                                      Annexures
++
++
++1.
++Annexure-Ia
++:
++SAIL: Production performance during July'25, August'25 and September'25.
++
++Annexure-Ib
++:
++SAIL: Production performance during Q-2'25-26 and H-1'25-26
++2.
++Annexure-II
++:
++SAIL: Techno-economic parameters during Q-2'25-26 and H-1'25-26, best ever achieved, norms and benchmarks
++3.
++Annexure-III
++:
++SAIL: Production performance :New Facilities during 
++Q-2'25-26 and H-1'25-26
++4.
++Annexure-IV
++:
++SAIL: Techno-economic parameters for New Blast Furnaces during Q-2'25-26 and H-1'25-26
++5.
++Annexure-V
++:
++SAIL: Product mix performance during Q-2'25-26 and H-1'25-26
++
++                                                                               
++                                                                               
++   
++   
++   
++   

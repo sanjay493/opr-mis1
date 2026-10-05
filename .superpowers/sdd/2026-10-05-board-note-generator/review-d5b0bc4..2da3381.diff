@@ -1,0 +1,198 @@
+# Review package: d5b0bc4..2da3381
+
+## Commits
+2da3381 Guard add_conv to SAIL Finished Steel, blank instead of 0 on missing Conversion, make improvement_pct/imp_phrase None-safe
+
+## Files changed
+ backend/board_note_common.py            | 37 ++++++++++++++++++++----
+ backend/tests/test_board_note_common.py | 51 +++++++++++++++++++++++++++++++++
+ 2 files changed, 82 insertions(+), 6 deletions(-)
+
+## Diff
+diff --git a/backend/board_note_common.py b/backend/board_note_common.py
+index 86aa51a..f928ae1 100644
+--- a/backend/board_note_common.py
++++ b/backend/board_note_common.py
+@@ -139,25 +139,32 @@ def fmt_mt(v) -> str:
+         return ""
+     return f"{v / 1000.0:.3f}"
+ 
+ 
+ def fmt_t(v) -> str:
+     if v is None:
+         return ""
+     return f"{v * 1000.0:,.0f}"
+ 
+ 
+-def imp_phrase(v: int) -> str:
++def imp_phrase(v) -> str:
++    if v is None:
++        return ""
+     return f"an improvement of {v}%" if v >= 0 else f"a decline of {abs(v)}%"
+ 
+ 
+-def improvement_pct(cur_v: float, cply_v: float, higher_is_better: bool) -> int:
++def improvement_pct(cur_v, cply_v, higher_is_better: bool):
++    """None when either figure is missing or `cply_v` is 0 (nothing to
++    divide by) -- a later task's SAIL techno-improvement sentences can
++    legitimately have a missing figure and must not crash or guess."""
++    if cur_v is None or cply_v is None or cply_v == 0:
++        return None
+     if higher_is_better:
+         return round((cur_v - cply_v) / cply_v * 100)
+     return round((cply_v - cur_v) / cply_v * 100)
+ 
+ 
+ def fuel_rate_fallback(tgt: dict) -> dict:
+     """Return a new dict with "Fuel Rate" filled in as Coke Rate + Nut Coke
+     Rate + CDI Rate when it is None and all three components are present
+     -- same rule techno_aggregates.py applies to actuals."""
+     result = dict(tgt)
+@@ -188,48 +195,66 @@ def period_sum(cur, table: str, months: list, plant: str, db_item: str):
+ def conv_sum(cur, months: list):
+     total, found = 0.0, False
+     for m in months:
+         c = pdl._fetch_conversion(cur, m)
+         if c is not None:
+             total += c
+             found = True
+     return total if found else None
+ 
+ 
++def _check_add_conv(plant: str, db_item: str, add_conv: bool) -> None:
++    """Conversion is only ever added for SAIL's Finished Steel figure -- never
++    any other plant, and never any other item, even SAIL's own."""
++    if add_conv and not (plant == "SAIL" and db_item == "Finished Steel"):
++        raise ValueError(
++            f"add_conv=True is only valid for plant='SAIL', db_item='Finished Steel' "
++            f"(got plant={plant!r}, db_item={db_item!r})"
++        )
++
++
+ def row_values(cur, plant: str, db_item: str, cur_months: list, cply_months: list,
+                 fy_start: int, add_conv: bool = False):
+     """(ann, abp_period, act_period, pct_ful, cply_act, pct_gr) for one
+     table row. add_conv: only true for SAIL Finished Steel."""
++    _check_add_conv(plant, db_item, add_conv)
+     ann = period_sum(cur, "plan", fy_months(fy_start), plant, db_item)
+     abp = period_sum(cur, "plan", cur_months, plant, db_item)
+     act = period_sum(cur, "act", cur_months, plant, db_item)
+     cply = period_sum(cur, "act", cply_months, plant, db_item)
+     if add_conv:
+-        cv = conv_sum(cur, cur_months) or 0.0
+-        cvp = conv_sum(cur, cply_months) or 0.0
+-        act = None if act is None else act + cv
+-        cply = None if cply is None else cply + cvp
++        # A missing Conversion figure must blank out the total, not be
++        # silently treated as 0 (which would understate SAIL's Finished
++        # Steel and skew %Growth) -- consistent with best_ever, which
++        # already skips any FY it has no Conversion data for.
++        if act is not None:
++            cv = conv_sum(cur, cur_months)
++            act = act + cv if cv is not None else None
++        if cply is not None:
++            cvp = conv_sum(cur, cply_months)
++            cply = cply + cvp if cvp is not None else None
+     pct = round(act / abp * 100) if (act is not None and abp) else None
+     gr = round((act - cply) / cply * 100) if (act is not None and cply) else None
+     return ann, abp, act, pct, cply, gr
+ 
+ 
+ # --------------------------------------------------------------------------
+ # All-time best-ever
+ # --------------------------------------------------------------------------
+ 
+ 
+ def _fy_start_years(lo, hi):
+     return range(lo, hi + 1)
+ 
+ 
+ def best_ever(cur, plant: str, db_item: str, period_months_fn, cur_fy_start: int, add_conv: bool = False):
++    _check_add_conv(plant, db_item, add_conv)
+     totals = {}
+     for fy in _fy_start_years(1960, cur_fy_start):
+         months = period_months_fn(fy)
+         act = period_sum(cur, "act", months, plant, db_item)
+         if act is None:
+             continue
+         if add_conv:
+             cv = conv_sum(cur, months)
+             if cv is None:
+                 continue
+diff --git a/backend/tests/test_board_note_common.py b/backend/tests/test_board_note_common.py
+index deddb29..ecbdc71 100644
+--- a/backend/tests/test_board_note_common.py
++++ b/backend/tests/test_board_note_common.py
+@@ -1,10 +1,12 @@
++import pytest
++
+ import board_note_common as bnc
+ 
+ 
+ def test_quarter_months_q2():
+     assert bnc.quarter_months(2026, 2) == ["2026-07", "2026-08", "2026-09"]
+ 
+ 
+ def test_quarter_months_q4_wraps_into_next_calendar_year():
+     assert bnc.quarter_months(2026, 4) == ["2027-01", "2027-02", "2027-03"]
+ 
+@@ -123,10 +125,59 @@ def test_row_values_pct_and_growth():
+     assert (abp, act, cply) == (1515.0, 1530.0, 1410.0)
+     assert pct == 101  # round(1530/1515*100)
+     assert gr == 9     # round((1530-1410)/1410*100)
+ 
+ 
+ def test_best_ever_bullets_skips_items_plant_has_no_data_for():
+     cur = _seeded_cursor()
+     bullets = bnc.best_ever_bullets(cur, "BSP", lambda fy: [f"{fy}-07", f"{fy}-08", f"{fy}-09"], 2026, style="q2")
+     assert any("Hot Metal" in b for b in bullets)
+     assert not any("Crude Steel" in b for b in bullets)  # no Crude Steel rows seeded for BSP
++
++
++def test_row_values_rejects_add_conv_for_non_sail_plant():
++    cur = _seeded_cursor()
++    with pytest.raises(ValueError):
++        bnc.row_values(cur, "BSP", "Finished Steel", ["2026-07", "2026-08", "2026-09"],
++                        ["2025-07", "2025-08", "2025-09"], fy_start=2026, add_conv=True)
++
++
++def test_best_ever_rejects_add_conv_for_non_finished_steel_item():
++    cur = _seeded_cursor()
++    with pytest.raises(ValueError):
++        bnc.best_ever(cur, "SAIL", "Hot Metal", lambda fy: [f"{fy}-07", f"{fy}-08", f"{fy}-09"], 2026, add_conv=True)
++
++
++def _seeded_cursor_finished_steel_no_conversion():
++    conn = sqlite3.connect(":memory:")
++    conn.execute("""CREATE TABLE production_table (report_month TEXT, plant_name TEXT,
++        item_name TEXT, month_actual REAL, PRIMARY KEY (report_month, plant_name, item_name))""")
++    conn.execute("""CREATE TABLE production_plan_table (report_month TEXT, plant_name TEXT,
++        item_name TEXT, month_actual REAL, PRIMARY KEY (report_month, plant_name, item_name))""")
++    rows_act = [
++        ("2026-07", "BSP", "Finished Steel", 400.0), ("2026-08", "BSP", "Finished Steel", 410.0),
++        ("2026-09", "BSP", "Finished Steel", 420.0),
++    ]
++    for m, p, i, v in rows_act:
++        conn.execute("INSERT INTO production_table VALUES (?,?,?,?)", (m, p, i, v))
++    conn.commit()
++    return conn.cursor()
++
++
++def test_row_values_blanks_act_when_conversion_missing_for_sail_finished_steel():
++    cur = _seeded_cursor_finished_steel_no_conversion()
++    ann, abp, act, pct, cply, gr = bnc.row_values(
++        cur, "SAIL", "Finished Steel", ["2026-07", "2026-08", "2026-09"],
++        ["2025-07", "2025-08", "2025-09"], fy_start=2026, add_conv=True)
++    assert act is None  # Finished Steel actuals exist but no Conversion rows -> blank, not understated
++
++
++def test_improvement_pct_returns_none_for_missing_cur_v():
++    assert bnc.improvement_pct(cur_v=None, cply_v=418, higher_is_better=False) is None
++
++
++def test_improvement_pct_returns_none_for_zero_cply_v():
++    assert bnc.improvement_pct(cur_v=424, cply_v=0, higher_is_better=False) is None
++
++
++def test_imp_phrase_returns_empty_for_none():
++    assert bnc.imp_phrase(None) == ""

@@ -1,0 +1,87 @@
+# Review package: 5ff9a7c..434868d
+
+## Commits
+434868d Add board_note_manual_text table for Board Note editable narrative
+
+## Files changed
+ backend/db.py                    | 14 ++++++++++++++
+ backend/scripts/mysql_schema.sql | 12 ++++++++++++
+ 2 files changed, 26 insertions(+)
+
+## Diff
+diff --git a/backend/db.py b/backend/db.py
+index ca5015e..15506b6 100644
+--- a/backend/db.py
++++ b/backend/db.py
+@@ -281,20 +281,34 @@ def init_db():
+     cursor.execute("""
+         CREATE TABLE IF NOT EXISTS do_letter_remark_table (
+             report_month TEXT,
+             item_name    TEXT,   -- 'Crude Steel' | 'Finished Steel'
+             plant_name   TEXT,
+             remark       TEXT,
+             PRIMARY KEY (report_month, item_name, plant_name)
+         )
+     """)
+ 
++    # Board Note generator: per-plant editable narrative text for "Additional
++    # highlights" and "Why narrative" fields. New quarters/plants start blank by
++    # convention; text is never migrated or copied by any code path.
++    cursor.execute("""
++        CREATE TABLE IF NOT EXISTS board_note_manual_text (
++            report_fy TEXT,
++            quarter   INTEGER,
++            plant     TEXT,
++            field     TEXT,
++            text      TEXT,
++            PRIMARY KEY (report_fy, quarter, plant, field)
++        )
++    """)
++
+     # 6c. SAIL stock snapshot — Table D of the "1 page report" (Plants /
+     # Stockyards / Stock in Transit / Total, '000T). Keyed by the report's
+     # own snapshot date, not report_month — a single upload backfills
+     # several years of history at once (see sail_sales_stock_extractor.py).
+     cursor.execute("""
+         CREATE TABLE IF NOT EXISTS sail_stock_snapshot_table (
+             snapshot_date TEXT,               -- 'YYYY-MM-DD'
+             item_name     TEXT,               -- Plants / Stockyards / Stock In Transit / Total
+             value         REAL,
+             PRIMARY KEY (snapshot_date, item_name)
+diff --git a/backend/scripts/mysql_schema.sql b/backend/scripts/mysql_schema.sql
+index 9db2a05..1acfbd7 100644
+--- a/backend/scripts/mysql_schema.sql
++++ b/backend/scripts/mysql_schema.sql
+@@ -170,20 +170,32 @@ CREATE TABLE IF NOT EXISTS steel_sector_performance_table (
+ -- Annexure-B (Finished Steel) tables — entered ahead of time so the letter
+ -- (due the 1st of the following month) already has them when generated.
+ CREATE TABLE IF NOT EXISTS do_letter_remark_table (
+     report_month CHAR(7)     NOT NULL,
+     item_name    VARCHAR(32) NOT NULL,   -- 'Crude Steel' | 'Finished Steel'
+     plant_name   VARCHAR(8)  NOT NULL,
+     remark       TEXT,
+     PRIMARY KEY (report_month, item_name, plant_name)
+ ) ENGINE=InnoDB;
+ 
++-- Board Note generator: per-plant editable narrative text for "Additional
++-- highlights" and "Why narrative" fields. New quarters/plants start blank;
++-- text is not migrated or copied by any code path.
++CREATE TABLE IF NOT EXISTS board_note_manual_text (
++    report_fy CHAR(7)     NOT NULL,
++    quarter   TINYINT     NOT NULL,
++    plant     VARCHAR(16) NOT NULL,
++    field     VARCHAR(24) NOT NULL,
++    text      TEXT,
++    PRIMARY KEY (report_fy, quarter, plant, field)
++) ENGINE=InnoDB;
++
+ -- Capital Repair plan (pages 36-40, Report_format/CR.pdf format). "actual"
+ -- is derived/written by format_cr_actual() from actual_start/actual_end/
+ -- actual_ongoing once a row is edited through the updated data-entry UI;
+ -- shop/equipment/activity/schedule_days/period stay free text (print
+ -- source of truth). unit_type/unit_name/sms_subtag/planned_days feed
+ -- production_loss_analysis.py — see backend/scripts/migrate_add_cr_breakdown.sql
+ -- for the ALTER TABLE that added these columns to the already-live DB.
+ CREATE TABLE IF NOT EXISTS capital_repair_table (
+     id            BIGINT AUTO_INCREMENT PRIMARY KEY,
+     plant         VARCHAR(8)   NOT NULL,
