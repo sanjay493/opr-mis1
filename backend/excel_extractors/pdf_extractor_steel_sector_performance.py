@@ -257,10 +257,22 @@ def _group_table_rows(data_rows):
     return groups
 
 
+def _strip_trailing_empty_columns(rows):
+    """Drops trailing column(s) that are blank everywhere — header cell AND
+    every row's cell in that column — which pdfplumber occasionally grids in
+    from a stray vertical border line with no content behind it (seen on
+    tables 2/4a/5 of some releases). A column whose header is blank but that
+    actually holds data (or vice versa) is left alone."""
+    while rows and rows[0] and not rows[0][-1] and all(not r[-1] for r in rows[1:]):
+        rows = [r[:-1] for r in rows]
+    return rows
+
+
 def _table_dict(raw_table, heading_text):
     if not raw_table:
         return None
     rows = [[_norm_cell(c) for c in row] for row in raw_table]
+    rows = _strip_trailing_empty_columns(rows)
     headers, *body = rows
     body = [r for r in body if not (r[0] or "").startswith(_NET_TRADE_ROW_PREFIX)]
     data_rows = [r for r in body if not _is_footnote_row(r)]
