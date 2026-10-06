@@ -53,6 +53,25 @@ _TEXT_HEADINGS = [
 ]
 _ALL_HEADINGS = _TABLE_HEADINGS + _TEXT_HEADINGS
 
+# Free-text sections are matched by their wording and keyed 6 / 7 / 8 by
+# topic, not by printed number: the number drifts month to month (Green Steel
+# is "8." in August but "7." in September, and September has no International
+# Co-operation section at all).
+_TEXT_HEADING_PATTERNS = [
+    ("6", re.compile(r'^\d+\.\s*Policy Initiatives')),
+    ("7", re.compile(r'^\d+\.\s*International Co-operation')),
+    ("8", re.compile(r'^\d+\.\s*Green Steel Initiatives')),
+]
+
+# A "Net Trade Position" sentence sits beside table 3a in the release, as a
+# table row (August) or as its own unlabeled table (September). It is kept as
+# a 3a footnote from the page text, and never as a data row.
+_NET_TRADE_ROW_PREFIX = "Net Trade"
+_NET_TRADE_RE = re.compile(
+    r"India was net (importer|exporter) of finished steel in terms of quantity for\s+"
+    r"(?:Position\s+)?the period of ([A-Za-z]{3}\s*[–-]\s*[A-Za-z]{3} \d{4})"
+)
+
 _ITEM_LABELS_1A = ["Crude Steel", "Hot Metal", "Finished Steel"]
 
 # Trailing boilerplate that sometimes shares a text line with real content
@@ -67,6 +86,10 @@ _FOOTER_RE = re.compile(r'^Source:\s*Provisional JPC data', re.IGNORECASE)
 # heuristic _is_footnote_row() uses for a trailing row like 1b's "Top 7
 # includes...".
 _NOTE_RE = re.compile(r'^Note\s*:', re.IGNORECASE)
+
+# A text line ending in one of these closes its sentence, so a page break
+# after it starts a new paragraph rather than continuing the old one.
+_SENTENCE_END_RE = re.compile(r'[.!?:;)]\s*$')
 
 
 def _clean_num(v):
@@ -98,7 +121,10 @@ def _load_pages(file_path):
     for page in pdf.pages:
         pages.append({
             "lines": page.extract_text_lines(),
-            "tables": page.extract_tables(),
+            "tables": [
+                {"top": table.bbox[1], "rows": table.extract()}
+                for table in page.find_tables()
+            ],
         })
     pdf.close()
     return pages
@@ -110,29 +136,77 @@ def _find_heading_positions(pages):
     for pi, page in enumerate(pages):
         for li, line in enumerate(page["lines"]):
             text = line["text"].strip()
-            for key, prefix in _ALL_HEADINGS:
-                if key in found:
-                    continue
-                if text.startswith(prefix):
+            for key, prefix in _TABLE_HEADINGS:
+                if key not in found and text.startswith(prefix):
                     found[key] = (pi, li)
+            key = _text_heading_key(text)
+            if key is not None and key not in found:
+                found[key] = (pi, li)
     return found
 
 
+def _heading_coords(pages, positions, key):
+    """(page_idx, top) of heading `key`, comparable against table tops."""
+    pi, li = positions[key]
+    return (pi, pages[pi]["lines"][li]["top"])
+
+
 def _map_tables_to_headings(pages, positions, table_keys):
-    """Zips table headings to tables strictly by document order across the
-    WHOLE pdf (not per-page): a heading's own table sometimes renders on
-    the NEXT physical page (e.g. '1c. Steel Prices' sits at the bottom of
-    page 1 but its table starts page 2), so matching must not assume same-
-    page placement. Relies on every table heading having exactly one table
-    of its own, in the same relative order they're printed — true for this
-    fixed-template report (verified: 7 table headings, 7 tables found,
-    same order, on a real file)."""
-    ordered_keys = sorted(
-        (k for k in table_keys if k in positions),
-        key=lambda k: positions[k],
-    )
-    all_tables = [t for page in pages for t in page["tables"]]
-    return {k: all_tables[i] for i, k in enumerate(ordered_keys) if i < len(all_tables)}
+    """Gives each table heading the table printed under it: the first table
+    that starts after the heading and before the next heading in the
+    document (across page breaks — '1c. Steel Prices' sits at the bottom of
+    page 1 while its table starts on page 2). Tables are claimed once each,
+    so an unlabeled table (September's stand-alone 'Net Trade Position' box)
+    is simply not claimed by any heading and drops out, instead of shifting
+    every later table one place as strict order-matching did."""
+    all_tables = [
+        (pi, table["top"], table["rows"])
+        for pi, page in enumerate(pages)
+        for table in page["tables"]
+    ]
+    ordered = sorted(positions, key=lambda k: positions[k])
+    claimed = set()
+    out = {}
+    for key in ordered:
+        if key not in table_keys:
+            continue
+        start = _heading_coords(pages, positions, key)
+        nxt = _next_heading_key(positions, key)
+        end = _heading_coords(pages, positions, nxt) if nxt else None
+        candidates = [
+            (i, t) for i, t in enumerate(all_tables)
+            if i not in claimed
+            and (t[0], t[1]) > start
+            and (end is None or (t[0], t[1]) < end)
+        ]
+        if candidates:
+            i, t = min(candidates, key=lambda c: (c[1][0], c[1][1]))
+            claimed.add(i)
+            out[key] = t[2]
+    return out
+
+
+def _text_heading_key(text):
+    """'6'/'7'/'8' if this line is one of the free-text section headings (by
+    wording, whatever number it's printed with), else None."""
+    for key, pattern in _TEXT_HEADING_PATTERNS:
+        if pattern.match(text):
+            return key
+    return None
+
+
+def _net_trade_sentence(text):
+    """The 'Net Trade Position' sentence from a release's plain text, or None
+    if this release doesn't carry one. Shared by the PDF and URL paths."""
+    m = _NET_TRADE_RE.search(text)
+    if not m:
+        return None
+    return (f"Net Trade Position: India was net {m.group(1)} of finished steel in terms of "
+            f"quantity for the period of {m.group(2)}")
+
+
+def _net_trade_note(pages):
+    return _net_trade_sentence(" ".join(line["text"].strip() for page in pages for line in page["lines"]))
 
 
 def _is_footnote_row(row):
@@ -188,6 +262,7 @@ def _table_dict(raw_table, heading_text):
         return None
     rows = [[_norm_cell(c) for c in row] for row in raw_table]
     headers, *body = rows
+    body = [r for r in body if not (r[0] or "").startswith(_NET_TRADE_ROW_PREFIX)]
     data_rows = [r for r in body if not _is_footnote_row(r)]
     footnotes = [r[0] for r in body if _is_footnote_row(r)]
     return {
@@ -250,7 +325,7 @@ def _text_block(pages, positions, key, next_key):
                 continue
             if end is not None and (pi, li) >= end:
                 return out
-            out.append(line)
+            out.append(dict(line, page=pi))
     return out
 
 
@@ -260,19 +335,28 @@ def _paragraphs_from_lines(lines):
     spacing), between paragraphs ~13pt+ (verified against this report's own
     layout). Stops at the footer 'Source: Provisional JPC data...' line
     rather than folding it into the last paragraph."""
-    paras, cur, prev_bottom = [], [], None
+    paras, cur, prev_bottom, prev_page = [], [], None, None
     for line in lines:
         text = line["text"].strip()
         if not text:
             continue
         if _FOOTER_RE.match(text):
             break
-        gap = None if prev_bottom is None else line["top"] - prev_bottom
-        if cur and gap is not None and gap > _PARA_GAP_THRESHOLD:
+        page = line.get("page")
+        if prev_page is not None and page != prev_page:
+            # Across a page break the vertical gap means nothing (tops restart
+            # near the top of the page), so decide by the sentence instead: a
+            # page that ends mid-sentence continues the paragraph.
+            starts_new = bool(cur) and _SENTENCE_END_RE.search(cur[-1]) is not None
+        else:
+            gap = None if prev_bottom is None else line["top"] - prev_bottom
+            starts_new = bool(cur) and gap is not None and gap > _PARA_GAP_THRESHOLD
+        if starts_new:
             paras.append(" ".join(cur))
             cur = []
         cur.append(text)
         prev_bottom = line["bottom"]
+        prev_page = page
     if cur:
         paras.append(" ".join(cur))
     return paras
@@ -356,11 +440,18 @@ def extract_preview(file_path: str, report_month: str, **_kwargs) -> dict:
             "build the report's SAIL-share table without it."
         )
 
+    net_trade = _net_trade_note(pages)
+    if net_trade and tables.get("3a") is not None:
+        tables["3a"]["footnotes"].append(net_trade)
+
+    # A section the release doesn't contain is left out entirely (not stored
+    # as an empty block), so the review page flags it as missing. Each section
+    # runs to the next heading in document order, whichever section that is.
     text_sections = {}
-    ordered_text_keys = [k for k, _ in _TEXT_HEADINGS]
-    for i, (key, _prefix) in enumerate(_TEXT_HEADINGS):
-        next_key = ordered_text_keys[i + 1] if i + 1 < len(ordered_text_keys) else None
-        lines = _text_block(pages, positions, key, next_key)
+    for key, _prefix in _TEXT_HEADINGS:
+        if key not in positions:
+            continue
+        lines = _text_block(pages, positions, key, _next_heading_key(positions, key))
         text_sections[key] = {
             "heading": _heading_text(pages, positions, key),
             "paragraphs": _paragraphs_from_lines(lines),

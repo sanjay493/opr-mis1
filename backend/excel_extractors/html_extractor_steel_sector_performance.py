@@ -220,12 +220,21 @@ def extract_preview_from_url(url: str, report_month: str, **_kwargs) -> dict:
         if not text:
             continue
 
+        # Free-text sections are recognized by wording (the printed number
+        # drifts: Green Steel is "8." in August, "7." in September), so they're
+        # checked before the numbered table headings.
+        text_key = _pdf_mod._text_heading_key(text)
+        if text_key is not None:
+            if text_key not in heading_text:
+                current_key = text_key
+                heading_text[current_key] = text
+                text_paragraphs[current_key] = []
+            continue
+
         m = _HEADING_RE.match(text)
-        if m and m.group(1) in _ALL_KEYS and m.group(1) not in heading_text:
+        if m and m.group(1) in _TABLE_KEYS and m.group(1) not in heading_text:
             current_key = m.group(1)
             heading_text[current_key] = text
-            if current_key in _TEXT_KEYS:
-                text_paragraphs[current_key] = []
             continue
 
         if _FOOTER_RE.match(text):
@@ -263,10 +272,20 @@ def extract_preview_from_url(url: str, report_month: str, **_kwargs) -> dict:
             "build the report's SAIL-share table without it."
         )
 
+    # The Net Trade sentence sits in a table cell (not a <p>), so it's read
+    # from the page text. Same footnote the PDF path produces.
+    net_trade = _pdf_mod._net_trade_sentence(_clean_text(container.get_text(" ", strip=True)))
+    if net_trade and tables.get("3a") is not None:
+        tables["3a"]["footnotes"].append(net_trade)
+
+    # A section the release doesn't contain is left out (not stored as an empty
+    # block), so the review page flags it as missing.
     text_sections = {}
     for key, _prefix in _TEXT_HEADINGS:
+        if key not in heading_text:
+            continue
         text_sections[key] = {
-            "heading": heading_text.get(key),
+            "heading": heading_text[key],
             "paragraphs": text_paragraphs.get(key, []),
         }
 
