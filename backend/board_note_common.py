@@ -266,6 +266,8 @@ def best_ever(cur, plant: str, db_item: str, period_months_fn, cur_fy_start: int
 def best_ever_bullets(cur, plant: str, period_months_fn, cur_fy_start: int, style: str) -> list:
     """style: 'q1' -> 'Previous best : X MT in Q-1'YY-ZZ'
               'q2' -> 'Previous best : X MT in Q-2'YY-ZZ'
+              'q3' -> 'Previous best : X MT in Q-3'YY-ZZ'
+              '9m' -> 'Prev. best : X MT in Apr-Dec'YY'
               'h1' -> 'Prev. best : X MT in Apr-Sep'YY'"""
     bullets = []
     for label, db_item in ITEMS_FOR_PLANT.get(plant, []):
@@ -277,10 +279,12 @@ def best_ever_bullets(cur, plant: str, period_months_fn, cur_fy_start: int, styl
         cur_mt = round(cur_v / 1000.0, 3)
         prev_mt = round(prev_v / 1000.0, 3)
         yy = str(prev_fy)[2:]
-        if style in ("q1", "q2"):
+        if style in ("q1", "q2", "q3"):
             zz = str(prev_fy + 1)[2:]
             q = style[1]
             bullets.append(f"{label} production of {cur_mt} MT (Previous best : {prev_mt} MT in Q-{q}'{yy}-{zz})")
+        elif style == "9m":
+            bullets.append(f"{label} production of {cur_mt} MT (Prev. best : {prev_mt} MT in Apr-Dec'{yy})")
         else:
             bullets.append(f"{label} production of {cur_mt} MT (Prev. best : {prev_mt} MT in Apr-Sep'{yy})")
     return bullets

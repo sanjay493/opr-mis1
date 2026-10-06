@@ -52,3 +52,16 @@ Task 4: minor (deferred): best_ever_bullets' unknown style/plant falls through s
 Task 4: minor (deferred): bullet MT figures use round(v/1000,3) not fmt_mt, so trailing zeros aren't padded ("1.53" not "1.530").
 Task 4: minor (deferred): best_ever scans FY 1960..cur for every item — correct but many small queries against MySQL; inherited from the validated reference script, not a regression.
 Task 4: minor (deferred): trivial _fy_start_years wrapper; stray module-level loop variable _p.
+
+Task 6: Ruling: Q-1 techno table carries Specific Energy Consumption in place of Fuel Rate — the template's four parameter rows are Coke, CDI, BF Productivity, Specific Energy; the adapter follows the template, not Q-2's param set — cost if wrong: a Fuel Rate row would need a template change, not a code change.
+Task 6: Ruling: plan Step 3 expected four improvement sentences under the techno table — the Q-1 template has none (title paragraph goes straight to the table), so none are generated — cost if wrong: no commentary line under the Q-1 techno table, which matches the source document.
+Task 6: Ruling: DSP and ISP have no "Highlights:" section in the Q-1 template (nor ASP/SSP/VISL, as in Q-2), so their best-ever bullets are computed but have no slot and are not written — cost: a DSP or ISP Q-1 record will not appear in the note; this is visible to the user and should be flagged.
+Task 6: Ruling: BSL's static "SMS-1 new grade HSQ550" paragraph is a highlight slot and is overwritten, along with the rest of BSL's static bullets (same policy Q-2 applies) — cost: that sentence must be re-entered in additional highlights if it should appear.
+Task 6: Ruling: per-unit why narrative is replaced by manual text or the placeholder, as in Q-2 — cost: the source document's Q-1 narrative disappears from the output until entered in the manual-text box.
+Task 6: Ruling: best_ever_bullets gained a 'q1' style via a shared branch that also serves 'q2' (same wording, Q-n) — cost: none for Q-2; covered by the full suite (232 passed).
+Task 6: Ruling: board_note_q1 imports the table/summary helpers from board_note_q2 rather than copying ~150 lines — cost: a later change to those q2 helpers changes Q-1 output too; moving them to a shared module is deferred.
+Task 6: Ruling: blank paragraph P139 inside BSL's highlights block is removed before filling, so generated bullets are contiguous — cost: none.
+Task 6: Ruling: no MoU table or Finished-Steel-vs-MoU opening (plan Step 3 said skip; confirmed — table 0 is the SAIL ABP/Actual table, not a MoU table) — cost: none.
+Task 6: minor (deferred): P0 meeting date "JULY, 2026" and the signatory block are left static, as in Q-2 — the date is not regenerated for other periods.
+Task 6: live-DB check (FY 2026-27): SAIL HM Q-1 ABP 5504 / Actual 5051 / %Ful 92 / CPLY 5128 and BSP Coke Rate target 407 / Q-1 429 match the Q-1'26-27 source document; BSP HM best-ever bullet 1.579 MT (prev 1.53, Q-1'25-26) is a real record; SAIL HM has no record for Q-1 so no SAIL bullet; FY 2025-26 and empty FY 2040-41 generate without error.
+Task 6: complete (commits f6348b2..039d1a9, tests: bash -c 'cd backend && /c/opr-mis1/backend/venv/Scripts/python.exe -m pytest tests -q' → 232 passed, 126 skipped in 61.70s (0:01:01))
