@@ -93,6 +93,8 @@ from page_finished_steel_report import (
     resolve_item as resolve_finished_steel_item,
 )
 from page_do_letter import build_do_letter_docx_bytes, build_do_annexure_xlsx_bytes
+from page_board_note import generate_board_note_docx_bytes
+import board_note_manual_text
 import page_production_fy_export
 import page_production_trend
 import page_special_steel_fy_export
@@ -5343,6 +5345,61 @@ async def save_do_letter_remarks(payload: dict):
         conn.commit()
     finally:
         conn.close()
+    return {"saved": saved}
+
+
+# ---------------------------------------------------------------------------
+# Quarterly Board Note — .docx for any FY and quarter, plus the per-plant
+# manual narrative it merges in. See page_board_note.py.
+# ---------------------------------------------------------------------------
+
+def _parse_board_note_period(fy: str, quarter) -> int:
+    """Validate an (fy, quarter) pair from a query string or JSON body;
+    returns the quarter as an int or raises a 400."""
+    if not re.fullmatch(r"\d{4}-\d{2}", str(fy)):
+        raise HTTPException(status_code=400, detail="fy must be YYYY-YY")
+    try:
+        q = int(quarter)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="quarter must be 1-4")
+    if q not in (1, 2, 3, 4):
+        raise HTTPException(status_code=400, detail="quarter must be 1-4")
+    return q
+
+
+@app.get("/api/board-note/docx")
+async def board_note_docx(fy: str = Query(...), quarter: str = Query(...)):
+    """Download the quarterly Board Note (.docx) for `fy` and `quarter` (1-4)."""
+    q = _parse_board_note_period(fy, quarter)
+    try:
+        content = generate_board_note_docx_bytes(fy, q)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Board Note generation failed: {e}")
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f'attachment; filename="BoardNote_{fy}_Q{q}.docx"'},
+    )
+
+
+@app.get("/api/board-note/manual-text")
+async def get_board_note_manual_text(fy: str = Query(...), quarter: str = Query(...)):
+    """Manual narrative already entered for `fy`/`quarter` —
+    {plant: {field: text}} with fields additional_highlights and why_narrative."""
+    q = _parse_board_note_period(fy, quarter)
+    out = {}
+    for (plant, field), text in board_note_manual_text.get_manual_text(fy, q).items():
+        out.setdefault(plant, {})[field] = text
+    return out
+
+
+@app.post("/api/board-note/manual-text")
+async def save_board_note_manual_text(payload: dict):
+    """Upsert or delete manual narrative. Body: {"report_fy": "2026-27",
+    "quarter": 2, "entries": [{"plant": "BSP", "field": "why_narrative",
+    "text": "..."}]}. An empty text deletes that row."""
+    q = _parse_board_note_period(payload.get("report_fy", ""), payload.get("quarter", ""))
+    saved = board_note_manual_text.save_manual_text(payload["report_fy"], q, payload.get("entries", []))
     return {"saved": saved}
 
 
