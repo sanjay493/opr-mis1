@@ -79,6 +79,7 @@ export const REPORT_GROUPS = [
     tabs: [
       { id: 'new-facilities', label: 'New Facilities (Annexure-III)', description: 'New facilities annexure.' },
       { id: 'do-letter', label: 'Monthly DO Letter', description: 'Monthly DO letter with Annexure remarks.' },
+      { id: 'board-note', label: 'Quarterly Board Note', description: 'Quarterly Board Note (production performance) for any FY and quarter, with editable narrative.' },
       { id: 'jpc-report', label: 'JPC Monthly Report', description: 'JPC monthly report export.' },
       { id: 'one-page-report', label: '1-Page Report', description: 'Single-page summary report.' },
       { id: 'plant-performance-items', label: 'Plant Wise Performance (Excel)', description: 'Plant Wise Performance of Main Items, tonnage to 3 decimals, Excel download.' },
