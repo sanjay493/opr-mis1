@@ -34,7 +34,7 @@ function prettyKey(key) {
     .replace(/\bBof\b/g, 'BOF');
 }
 
-const METRIC_LABEL = { month: 'Actual (Month)', cply: 'CPLY', till_month: 'Cumulative (Till Month)' };
+const METRIC_LABEL = { month: 'Actual (Month)', till_month: 'Cumulative (Till Month)' };
 
 export default function TechnoMonthlyView() {
   const def = getDefaultPeriod();
@@ -47,7 +47,7 @@ export default function TechnoMonthlyView() {
   const [fromYear, setFromYear] = useState(def.year);
   const [toMonthName, setToMonthName] = useState(def.monthName);
   const [toYear, setToYear] = useState(def.year);
-  const [metric, setMetric] = useState('month');     // 'month' | 'cply' | 'till_month'
+  const [metric, setMetric] = useState('month');     // 'month' | 'till_month'
 
   const [view, setView] = useState('major');       // 'major' | 'db'
   const [plant, setPlant] = useState('BSP');       // db view only
@@ -115,15 +115,6 @@ export default function TechnoMonthlyView() {
     return () => { cancelled = true; };
   }, [mode, view, plant, fromReportMonth, toReportMonth]);
 
-  // The DB view has no CPLY figure — if 'cply' was selected while on the
-  // Major view, switching to DB view would leave `metric` pointing at a
-  // field that doesn't exist there (the <select> falls back to showing its
-  // first option, silently hiding the mismatch, while every DB cell lookup
-  // keyed on the stale 'cply' would just come back blank).
-  useEffect(() => {
-    if (view === 'db' && metric === 'cply') setMetric('month');
-  }, [view, metric]);
-
   // DB view: flatten {unit: {month:{}, till_month:{}}} into ordered rows
   const dbUnits = dbData?.units || {};
   const dbUnitNames = Object.keys(dbUnits).sort();
@@ -140,9 +131,9 @@ export default function TechnoMonthlyView() {
   const firstDb = periodDb.find((d) => d && Object.keys(d.units || {}).length);
   const periodDbUnitNames = Object.keys(firstDb?.units || {}).sort();
 
-  const metricOptions = view === 'major'
-    ? ['month', 'cply', 'till_month']
-    : ['month', 'till_month']; // the DB view's own data has no CPLY figure
+  // Period mode offers no CPLY metric — the single-month Major table
+  // already shows CPLY and CPLY YTD columns.
+  const metricOptions = ['month', 'till_month'];
 
   // ── Export: the exact table currently on screen, as
   // {title, subtitle, columns, sections: [{title, rows: [{cells, highlight}]}]}
