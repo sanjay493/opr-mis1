@@ -189,6 +189,14 @@ CREATE TABLE IF NOT EXISTS board_note_manual_text (
     PRIMARY KEY (report_fy, quarter, plant, field)
 ) ENGINE=InnoDB;
 
+CREATE TABLE IF NOT EXISTS secretary_review_text (
+    report_month CHAR(7)     NOT NULL,
+    block_key    VARCHAR(32) NOT NULL,
+    text         TEXT,
+    updated_at   VARCHAR(19),
+    PRIMARY KEY (report_month, block_key)
+) ENGINE=InnoDB;
+
 -- Capital Repair plan (pages 36-40, Report_format/CR.pdf format). "actual"
 -- is derived/written by format_cr_actual() from actual_start/actual_end/
 -- actual_ongoing once a row is edited through the updated data-entry UI;

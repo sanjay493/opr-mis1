@@ -302,6 +302,18 @@ def init_db():
         )
     """)
 
+    # Secretary Review deck: editable narrative per (month, block). See
+    # secretary_review_text.py; block keys in secretary_review_layout.BLOCKS.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS secretary_review_text (
+            report_month TEXT,
+            block_key    TEXT,
+            text         TEXT,
+            updated_at   TEXT,
+            PRIMARY KEY (report_month, block_key)
+        )
+    """)
+
     # 6c. SAIL stock snapshot — Table D of the "1 page report" (Plants /
     # Stockyards / Stock in Transit / Total, '000T). Keyed by the report's
     # own snapshot date, not report_month — a single upload backfills
