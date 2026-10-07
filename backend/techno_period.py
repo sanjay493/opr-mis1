@@ -99,6 +99,11 @@ def _weighted_combine(method: str, items: List[tuple]):
         return None, method
 
     if method in ("weighted", "harmonic"):
+        # Zero production (furnace down) means no weight: leave the month out,
+        # unless every month is zero.
+        produced = [(v, w) for v, w in items if w != 0]
+        if produced:
+            items = produced
         usable = [(v, w) for v, w in items
                   if w is not None and w > 0 and not (method == "harmonic" and v <= 0)]
         if len(usable) < len(items):

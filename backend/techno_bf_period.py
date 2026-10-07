@@ -152,12 +152,16 @@ def _range_cell(plant: str, unit: str, key: str, months: List[str],
     monthly = _furnace_range_values(plant, unit, [key], months, month_cache)[key]
     if not monthly:
         return {"value": None, "display": "", "warnings": ["No data in this period."]}
-    weights: Dict[str, float] = {}
-    if basis:
-        wkey = (plant, unit)
-        if wkey not in weight_cache:
-            weight_cache[wkey] = _tc._unit_production(plant, unit, months)
-        weights = weight_cache[wkey]
+    wkey = (plant, unit, tuple(months))
+    if wkey not in weight_cache:
+        weight_cache[wkey] = _tc._unit_production(plant, unit, months)
+    production = weight_cache[wkey]
+    # A month with no production that reports 0 is a shutdown month, not
+    # data — left out, as techno_cumulative's YTD cumulative does.
+    running = {m: v for m, v in monthly.items() if not (v == 0 and not production.get(m))}
+    if running:
+        monthly = running
+    weights = production if basis else {}
     items = [(v, weights.get(m)) for m, v in monthly.items()]
     value, method_used = _weighted_combine(method, items)
     warnings = []
@@ -183,17 +187,17 @@ def _furnace_production_t(plant: str, unit: str, months: List[str],
 def _production_cell(plant: str, unit: str, key: str, months: List[str],
                      cache: Dict[tuple, Dict[str, float]]) -> Dict:
     """Production (t, summed over `months`) or Avg. Daily Prod (that sum /
-    the calendar days of the months it covers) for one furnace."""
+    the calendar days of every month in `months`, whether or not the furnace
+    produced in it) for one furnace."""
     prod = _furnace_production_t(plant, unit, months, cache)
     if not prod:
         return {"value": None, "display": "", "warnings": ["No production data in this period."]}
     total = sum(prod.values())
-    value = total if key == "production" else total / sum(_days(m) for m in prod)
+    value = total if key == "production" else total / sum(_days(m) for m in months)
     warnings = []
     missing = [m for m in months if m not in prod]
     if missing:
-        warnings.append("No production data for " + ", ".join(_month_label(m) for m in missing)
-                        + (" — Avg. Daily Prod covers the other months only." if key != "production" else "."))
+        warnings.append("No production data for " + ", ".join(_month_label(m) for m in missing) + ".")
     return {"value": value, "display": int(round(value)), "warnings": warnings}
 
 

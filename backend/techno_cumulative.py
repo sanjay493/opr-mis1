@@ -194,7 +194,13 @@ def _unit_production(plant: str, unit: str, months,
         f"SELECT report_month, month_actual FROM production_table "
         f"WHERE plant_name=? AND item_name IN ({ph_i}) AND report_month IN ({ph_m})",
         [plant, *candidates, *months])
-    weights = {m: v for m, v in cur.fetchall() if v is not None and v > 0}
+    # A month recorded as 0 is kept as weight 0 (the furnace was down), not
+    # treated as missing: a weighted average then leaves that month out
+    # instead of falling back to a simple average over every month.
+    weights: Dict[str, float] = {}
+    for m, v in cur.fetchall():
+        if v is not None and v >= 0:
+            weights[m] = max(v, weights.get(m, 0.0))
     conn.close()
 
     for m in months:
@@ -307,6 +313,18 @@ def compute_cumulative_from_values(
 
     method, basis = get_rule(param_key)
 
+    # A furnace's months with no production that report a 0 are shutdown
+    # months, not data: drop them (whatever the method) so the cumulative
+    # covers only the months it actually ran — unless that leaves nothing.
+    if unit.startswith("BF-"):
+        prod = _unit_production(plant, unit, months, current_production, report_month)
+        down = [m for m in months if values.get(m) == 0 and not prod.get(m)]
+        if down and len(down) < len(values):
+            values = {m: v for m, v in values.items() if m not in down}
+            warnings.append(
+                f"No production (furnace down) in {', '.join(down)} — its zero "
+                "value is excluded from the cumulative.")
+
     # Resolve weights
     weights: Dict[str, float] = {}
     weight_desc = None
@@ -379,12 +397,20 @@ def aggregate_values(
         # aggregate. If any valued month lacks a weight (or is unusable for
         # the harmonic mean), fall back to the simple average of ALL monthly
         # values so the result always spans the full period.
+        # A month with zero production (furnace down) carries no weight —
+        # it's left out of the weighted figure rather than being unusable.
+        down = [m for m in months if values.get(m) is not None and weights.get(m) == 0]
         unusable = [
             m for m in months
-            if values.get(m) is not None
+            if values.get(m) is not None and m not in down
             and (weights.get(m) is None
                  or (method == "harmonic" and values[m] <= 0))
         ]
+        if not unusable and len(down) == sum(1 for m in months if values.get(m) is not None):
+            unusable = down  # nothing produced in the whole period — no weights at all
+        elif down and not unusable:
+            warnings.append(
+                f"Zero production in {', '.join(down)} — excluded from the weighted figure.")
         if unusable:
             label = ("production-weighted average" if method == "weighted"
                      else "production-weighted harmonic mean")
@@ -407,6 +433,10 @@ def aggregate_values(
             if v is None:
                 continue
             w = weights[m]
+            if w == 0:
+                rows.append({"month": m, "value": v, "weight": w, "product": None})
+                steps.append(f"{m}: zero production — excluded.")
+                continue
             usable.append((m, v, w))
             term = round(v * w, 4) if method == "weighted" else round(w / v, 4)
             rows.append({"month": m, "value": v, "weight": w, "product": term})
