@@ -55,7 +55,7 @@ def test_cr_line_ongoing_clipped():
 
 
 def test_effective_texts_prefers_saved_including_blank(monkeypatch):
-    monkeypatch.setattr(t, "default_texts", lambda m: {k: "DB " + k for k, _, _ in t.BLOCKS})
+    monkeypatch.setattr(t, "default_texts", lambda m, keys=None: {k: "DB " + k for k, _, _ in t.BLOCKS})
     monkeypatch.setattr(t.srt, "get_texts", lambda m: {"hl_DSP": "", "hl_SAIL": "mine"})
     eff = t.effective_texts("2026-09")
     assert eff["hl_DSP"] == {"text": "", "saved": True}
@@ -78,3 +78,61 @@ def test_unit_summaries_caps_at_month_hours():
            _ev("2026-09-02", "2026-09-02", hours=40.0, cause="d")]
     s = t.unit_summaries(evs, "2026-09")
     assert len(s) == 1 and s[0]["hours"] == 30 * 24
+
+
+def test_unit_line_strips_shop_prefix():
+    a = {"unit_name": "Shop: BF", "cause": "relining", "hours": 72}
+    assert t._unit_line(a) == "BF: relining – 3 days"
+    assert t._unit_line(dict(a, unit_name="  shop :SMS-2", cause="")) == "SMS-2 – 3 days"
+    assert t._unit_line(dict(a, unit_name="Workshop: X")) == "Workshop: X: relining – 3 days"
+
+
+class _FakeConn:
+    def cursor(self):
+        return None
+
+    def close(self):
+        pass
+
+
+def _kind_spies(monkeypatch):
+    calls = []
+
+    def spy(kind, prefix):
+        def fn(cur, month, labels):
+            calls.append(kind)
+            return {k: kind for k, _, _ in t.BLOCKS if k.startswith(prefix)}
+        return fn
+
+    monkeypatch.setattr(t.db, "connect", lambda: _FakeConn())
+    monkeypatch.setattr(t, "_hl_texts", spy("hl", ("hl_",)))
+    monkeypatch.setattr(t, "_bd_texts", spy("bd", ("delay_", "bd_")))
+    monkeypatch.setattr(t, "_cr_texts", spy("cr", ("cr_",)))
+    return calls
+
+
+def test_default_text_computes_only_its_kind(monkeypatch):
+    calls = _kind_spies(monkeypatch)
+    assert t.default_text("2026-09", "cr_BSP_prev") == "cr"
+    assert calls == ["cr"]
+    calls.clear()
+    assert t.default_text("2026-09", "delay_fs") == "bd"
+    assert calls == ["bd"]
+
+
+def test_default_texts_all_keys(monkeypatch):
+    calls = _kind_spies(monkeypatch)
+    out = t.default_texts("2026-09")
+    assert len(out) == 30 and sorted(calls) == ["bd", "cr", "hl"]
+    assert out["hl_SAIL"] == "hl" and out["bd_ISP_MILL"] == "bd" and out["cr_ISP_cur"] == "cr"
+
+
+def test_effective_texts_skips_defaults_when_all_saved(monkeypatch):
+    calls = _kind_spies(monkeypatch)
+    monkeypatch.setattr(t.srt, "get_texts", lambda m: {"hl_SAIL": "mine", "cr_BSP_cur": ""})
+    assert t.effective_texts("2026-09", ["hl_SAIL", "cr_BSP_cur"]) == {
+        "hl_SAIL": {"text": "mine", "saved": True}, "cr_BSP_cur": {"text": "", "saved": True}}
+    assert calls == []
+    eff = t.effective_texts("2026-09", ["hl_SAIL", "hl_BSP"])
+    assert eff == {"hl_SAIL": {"text": "mine", "saved": True}, "hl_BSP": {"text": "hl", "saved": False}}
+    assert calls == ["hl"]

@@ -166,6 +166,12 @@ PAGE_MODULES = {
             ("POST", "/api/do-letter/remarks", False),
         ],
     },
+    "secretary_review": {
+        "label": "Secretary Review",
+        "routes": [
+            ("POST", "/api/secretary-review/texts", False),
+        ],
+    },
     "coal_blend_targets": {
         "label": "Coal Blend Targets",
         "routes": [

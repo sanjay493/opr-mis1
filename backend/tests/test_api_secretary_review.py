@@ -51,3 +51,46 @@ def test_pptx_missing_template_is_500(monkeypatch):
     monkeypatch.setattr(api.psr, "render_pptx", boom)
     r = client.post("/api/secretary-review/pptx", json={"month": "2026-09", "texts": {}})
     assert r.status_code == 500 and "template" in r.json()["detail"].lower()
+
+
+def test_save_texts_coerces_values_to_str(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(api.srt, "save_texts", lambda m, t: seen.update(t) or len(t))
+    r = client.post("/api/secretary-review/texts",
+                    json={"month": "2026-09", "texts": {"hl_SAIL": None, "hl_BSP": 12, "hl_DSP": ["a"]}})
+    assert r.status_code == 200
+    assert seen == {"hl_SAIL": "", "hl_BSP": "12", "hl_DSP": "['a']"}
+
+
+def test_pptx_coerces_values_to_str(monkeypatch):
+    seen = {}
+
+    def fake(m, t):
+        seen.update(t)
+        return api.psr.RenderResult(content=b"PK", filename="x.pptx")
+    monkeypatch.setattr(api.psr, "render_pptx", fake)
+    r = client.post("/api/secretary-review/pptx", json={"month": "2026-09", "texts": {"hl_SAIL": None, "delay_fs": 3}})
+    assert r.status_code == 200 and seen == {"hl_SAIL": "", "delay_fs": "3"}
+
+
+def test_default_text_computes_one_block(monkeypatch):
+    calls = []
+    monkeypatch.setattr(api.pst, "default_text", lambda m, k: calls.append((m, k)) or "DB text")
+    monkeypatch.setattr(api.pst, "default_texts", lambda *a, **k: (_ for _ in ()).throw(AssertionError("all blocks")))
+    r = client.get("/api/secretary-review/default-text?month=2026-09&block=cr_BSP_cur")
+    assert r.json() == {"key": "cr_BSP_cur", "text": "DB text"} and calls == [("2026-09", "cr_BSP_cur")]
+
+
+def test_handlers_run_in_threadpool():
+    import inspect
+    for route in api.router.routes:
+        assert not inspect.iscoroutinefunction(route.endpoint), route.path
+
+
+def test_texts_save_is_gated_but_download_is_not():
+    import main
+    assert main._match_gated("POST", "/api/secretary-review/texts") == ("secretary_review", False)
+    assert not main._is_gated("POST", "/api/secretary-review/pptx")
+    assert not main._is_gated("GET", "/api/secretary-review/texts")
+    r = TestClient(main.app).post("/api/secretary-review/texts", json={"month": "2026-09", "texts": {}})
+    assert r.status_code == 401

@@ -9,10 +9,18 @@ import page_secretary_review_texts as pst
 import secretary_review_text as srt
 from secretary_review_layout import BLOCKS, validate_month
 
+# Plain `def` handlers: building the context, defaults and the deck takes
+# seconds, so FastAPI runs them in its threadpool instead of blocking the
+# event loop. POST /texts is gated by constants.PAGE_MODULES["secretary_review"].
 router = APIRouter(prefix="/api/secretary-review", tags=["secretary-review"])
 
 _KEYS = {k for k, _, _ in BLOCKS}
 _PPTX = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+
+
+def _texts(payload):
+    """Known block keys only; values coerced to str (None -> "")."""
+    return {k: "" if v is None else str(v) for k, v in (payload.get("texts") or {}).items() if k in _KEYS}
 
 
 def _month(month):
@@ -22,7 +30,7 @@ def _month(month):
 
 
 @router.get("/context")
-async def context(month: str = Query(None)):
+def context(month: str = Query(None)):
     if month is None:
         month = psr.latest_month()
         if month is None:
@@ -36,7 +44,7 @@ async def context(month: str = Query(None)):
 
 
 @router.get("/texts")
-async def get_texts(month: str = Query(...)):
+def get_texts(month: str = Query(...)):
     _month(month)
     eff = pst.effective_texts(month)
     return {"month": month,
@@ -44,24 +52,24 @@ async def get_texts(month: str = Query(...)):
 
 
 @router.post("/texts")
-async def save_texts(payload: dict):
+def save_texts(payload: dict):
     month = _month(payload.get("month"))
-    texts = {k: v for k, v in (payload.get("texts") or {}).items() if k in _KEYS}
+    texts = _texts(payload)
     return {"saved": srt.save_texts(month, texts)}
 
 
 @router.get("/default-text")
-async def default_text(month: str = Query(...), block: str = Query(...)):
+def default_text(month: str = Query(...), block: str = Query(...)):
     _month(month)
     if block not in _KEYS:
         raise HTTPException(status_code=400, detail=f"unknown block {block!r}")
-    return {"key": block, "text": pst.default_texts(month).get(block, "")}
+    return {"key": block, "text": pst.default_text(month, block)}
 
 
 @router.post("/pptx")
-async def pptx(payload: dict):
+def pptx(payload: dict):
     month = _month(payload.get("month"))
-    texts = {k: v for k, v in (payload.get("texts") or {}).items() if k in _KEYS}
+    texts = _texts(payload)
     try:
         res = psr.render_pptx(month, texts)
     except FileNotFoundError as e:

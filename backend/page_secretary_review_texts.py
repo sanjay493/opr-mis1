@@ -126,8 +126,14 @@ def _days(hours):
     return f"{d} day" if d == 1 else f"{d} days"
 
 
+def _unit_label(name):
+    """'Shop: BF' -> 'BF', so the line doesn't read 'Shop: BF: cause'."""
+    return re.sub(r"^\s*shop\s*:\s*", "", name or "", flags=re.I)
+
+
 def _unit_line(a):
-    head = f"{a['unit_name']}: {a['cause']}" if a["cause"] else a["unit_name"]
+    name = _unit_label(a["unit_name"])
+    head = f"{name}: {a['cause']}" if a["cause"] else name
     return f"{head} – {_days(a['hours'])}"
 
 
@@ -213,36 +219,79 @@ def highlight_text(cur, scope, labels):
     return "\n".join([f"{who} {period} {labels['fy_label']} production for following:-"] + lines)
 
 
-def default_texts(month):
-    labels = period_labels(month)
+def _hl_texts(cur, month, labels):
+    out = {"hl_SAIL": highlight_text(cur, "SAIL", labels)}
+    for p in PLANTS:
+        out[f"hl_{p}"] = highlight_text(cur, p, labels)
+    return out
+
+
+def _bd_texts(cur, month, labels):
+    """Delay (slides 4, 6) and breakdown (slides 21-24) blocks."""
+    summaries = unit_summaries(_fetch_breakdowns(cur, month), month)
+    out = {"delay_hmcs": delay_text(summaries, HMCS_TYPES, labels["mon"]),
+           "delay_fs": delay_text(summaries, FS_TYPES, labels["mon"])}
+    for p in BD_PLANTS:
+        for g, _ in BD_GROUPS:
+            out[f"bd_{p}_{g}"] = bd_group_text(summaries, p, g)
+    return out
+
+
+def _cr_texts(cur, month, labels):
     y, m = int(month[:4]), int(month[5:7])
     upto = dt.date(y, m, calendar.monthrange(y, m)[1])
     upto_prev = dt.date(y - 1, m, calendar.monthrange(y - 1, m)[1])
     fy_window = bnc.fy_months(labels["fy_start"])
     out = {}
-    conn = db.connect()
-    cur = conn.cursor()
-    try:
-        out["hl_SAIL"] = highlight_text(cur, "SAIL", labels)
-        for p in PLANTS:
-            out[f"hl_{p}"] = highlight_text(cur, p, labels)
-        summaries = unit_summaries(_fetch_breakdowns(cur, month), month)
-        out["delay_hmcs"] = delay_text(summaries, HMCS_TYPES, labels["mon"])
-        out["delay_fs"] = delay_text(summaries, FS_TYPES, labels["mon"])
-        for p in BD_PLANTS:
-            for g, _ in BD_GROUPS:
-                out[f"bd_{p}_{g}"] = bd_group_text(summaries, p, g)
-        for p in PLANTS:
-            out[f"cr_{p}_cur"] = "\n".join(cr_line(r, upto) for r in _fetch_cr(cur, p, labels["fy_label"], upto))
-            prev = "\n".join(cr_line(r, upto_prev) for r in _fetch_cr(cur, p, labels["fy_prev_label"], upto_prev))
-            out[f"cr_{p}_prev"] = prev or (srt.latest_saved_before(f"cr_{p}_prev", month, fy_window) or "")
-    finally:
-        conn.close()
+    for p in PLANTS:
+        out[f"cr_{p}_cur"] = "\n".join(cr_line(r, upto) for r in _fetch_cr(cur, p, labels["fy_label"], upto))
+        prev = "\n".join(cr_line(r, upto_prev) for r in _fetch_cr(cur, p, labels["fy_prev_label"], upto_prev))
+        out[f"cr_{p}_prev"] = prev or (srt.latest_saved_before(f"cr_{p}_prev", month, fy_window) or "")
+    return out
+
+
+def _kind_fn(key):
+    if key.startswith("hl_"):
+        return _hl_texts
+    if key.startswith(("delay_", "bd_")):
+        return _bd_texts
+    return _cr_texts
+
+
+def default_texts(month, keys=None):
+    """DB-derived text for every block, or only for the kinds (highlights,
+    delays/breakdowns, capital repairs) that `keys` needs. Returns all 30
+    keys; blocks outside `keys`' kinds are ''."""
+    labels = period_labels(month)
+    wanted = [k for k, _, _ in BLOCKS] if keys is None else list(keys)
+    fns = []
+    for k in wanted:
+        fn = _kind_fn(k)
+        if fn not in fns:
+            fns.append(fn)
+    out = {}
+    if fns:
+        conn = db.connect()
+        cur = conn.cursor()
+        try:
+            for fn in fns:
+                out.update(fn(cur, month, labels))
+        finally:
+            conn.close()
     return {k: out.get(k, "") for k, _, _ in BLOCKS}
 
 
-def effective_texts(month):
+def default_text(month, key):
+    """One block's DB-derived text, computing only that block's kind."""
+    return default_texts(month, [key]).get(key, "")
+
+
+def effective_texts(month, keys=None):
+    """{key: {"text", "saved"}} for every block, or only `keys`. Defaults are
+    computed only for requested blocks with no saved text."""
+    wanted = [k for k, _, _ in BLOCKS] if keys is None else [k for k, _, _ in BLOCKS if k in set(keys)]
     saved = srt.get_texts(month)
-    defaults = default_texts(month)
+    missing = [k for k in wanted if k not in saved]
+    defaults = default_texts(month, missing) if missing else {}
     return {k: {"text": saved[k] if k in saved else defaults.get(k, ""), "saved": k in saved}
-            for k, _, _ in BLOCKS}
+            for k in wanted}
