@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ReportPage } from '../ReportUI';
 
 const API = process.env.NEXT_PUBLIC_API_URL || '';
@@ -31,6 +31,9 @@ export default function SecretaryReviewPage() {
   const [busy, setBusy] = useState('');
   const [error, setError] = useState(null);
   const [msg, setMsg] = useState(null);
+  // The month on screen, read by async replies started for an earlier month.
+  const monthRef = useRef(month);
+  useEffect(() => { monthRef.current = month; }, [month]);
 
   // First load: the backend picks the latest month with production data.
   useEffect(() => {
@@ -80,13 +83,16 @@ export default function SecretaryReviewPage() {
 
   const textsPayload = () => Object.fromEntries(blocks.map((b) => [b.key, b.text]));
 
+  // A reply that arrives after the month changed is dropped, so one month's
+  // default never lands in another month's block.
   const resetBlock = async (key) => {
+    const m = month;
     setError(null);
     try {
-      const body = await getJson(`${API}/api/secretary-review/default-text?month=${month}&block=${key}`);
-      setText(key, body.text);
+      const body = await getJson(`${API}/api/secretary-review/default-text?month=${m}&block=${key}`);
+      if (monthRef.current === m) setText(key, body.text);
     } catch (e) {
-      setError(`Reset failed: ${e.message}`);
+      if (monthRef.current === m) setError(`Reset failed: ${e.message}`);
     }
   };
 
@@ -149,7 +155,7 @@ export default function SecretaryReviewPage() {
     <ReportPage
       maxWidth={960}
       title={<>Secretary Review (PPTX)</>}
-      description={<>Monthly &ldquo;SECRETARY REVIEW Operations Inputs&rdquo; deck. Tables and charts come from the database for the chosen month. The narrative below starts from the database (breakdowns, capital repairs, best-ever records); edit it, save it for the month, then download. Download uses the text on screen, saved or not.</>}
+      description={<>Monthly &ldquo;SECRETARY REVIEW Operations Inputs&rdquo; deck. Tables and charts come from the database for the chosen month. The narrative below starts from the database (breakdowns, capital repairs, best-ever records); edit it, save it for the month, then download. Download uses the text on screen, saved or not. Saved text is frozen for that month: later changes in the database won&apos;t appear in it unless you reset the block from the database and save again.</>}
     >
       <div style={{ ...box, display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
         <label style={{ fontSize: '11pt', fontWeight: 600 }} htmlFor="sr-month">Month</label>
@@ -224,7 +230,8 @@ export default function SecretaryReviewPage() {
                       <span style={{ fontSize: '8.5pt', padding: '2px 8px', borderRadius: '10px', color: bd.color, backgroundColor: bd.bg }}>{bd.text}</span>
                       <button
                         onClick={() => resetBlock(b.key)}
-                        style={{ marginLeft: 'auto', fontSize: '9pt', border: '1px solid #dadce0', borderRadius: '4px', background: '#fff', padding: '3px 10px', cursor: 'pointer' }}
+                        disabled={!ready || !!busy}
+                        style={{ marginLeft: 'auto', fontSize: '9pt', border: '1px solid #dadce0', borderRadius: '4px', background: '#fff', padding: '3px 10px', cursor: !ready || busy ? 'not-allowed' : 'pointer', opacity: !ready || busy ? 0.5 : 1 }}
                       >
                         Reset from DB
                       </button>
