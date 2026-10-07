@@ -170,6 +170,8 @@ PAGE_MODULES = {
         "label": "Secretary Review",
         "routes": [
             ("POST", "/api/secretary-review/texts", False),
+            # "Reset from DB" — reverts a block to the DB default, so not a delete right
+            ("DELETE", "/api/secretary-review/texts", False),
         ],
     },
     "coal_blend_targets": {

@@ -94,3 +94,25 @@ def test_texts_save_is_gated_but_download_is_not():
     assert not main._is_gated("GET", "/api/secretary-review/texts")
     r = TestClient(main.app).post("/api/secretary-review/texts", json={"month": "2026-09", "texts": {}})
     assert r.status_code == 401
+
+
+def test_reset_unlinks_saved_text_and_returns_default(monkeypatch):
+    deleted = []
+    monkeypatch.setattr(api.srt, "delete_texts", lambda m, keys: deleted.append((m, list(keys))) or 1)
+    monkeypatch.setattr(api.pst, "default_text", lambda m, k: "DB text")
+    r = client.delete("/api/secretary-review/texts?month=2026-09&block=hl_BSL")
+    assert r.status_code == 200
+    assert r.json() == {"key": "hl_BSL", "text": "DB text", "saved": False}
+    assert deleted == [("2026-09", ["hl_BSL"])]
+
+
+def test_reset_rejects_unknown_block_and_bad_month():
+    assert client.delete("/api/secretary-review/texts?month=2026-09&block=nope").status_code == 400
+    assert client.delete("/api/secretary-review/texts?month=26-09&block=hl_BSL").status_code == 400
+
+
+def test_reset_is_gated():
+    import main
+    assert main._match_gated("DELETE", "/api/secretary-review/texts") == ("secretary_review", False)
+    r = TestClient(main.app).delete("/api/secretary-review/texts?month=2026-09&block=hl_BSL")
+    assert r.status_code == 401

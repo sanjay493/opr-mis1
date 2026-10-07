@@ -83,31 +83,46 @@ export default function SecretaryReviewPage() {
 
   const textsPayload = () => Object.fromEntries(blocks.map((b) => [b.key, b.text]));
 
-  // A reply that arrives after the month changed is dropped, so one month's
-  // default never lands in another month's block.
+  // "Reset from DB" drops the block's saved text, so it follows the database
+  // again. A reply that arrives after the month changed is dropped, so one
+  // month's default never lands in another month's block.
   const resetBlock = async (key) => {
     const m = month;
     setError(null);
     try {
-      const body = await getJson(`${API}/api/secretary-review/default-text?month=${m}&block=${key}`);
-      if (monthRef.current === m) setText(key, body.text);
+      const body = await getJson(
+        `${API}/api/secretary-review/texts?month=${m}&block=${key}`,
+        { method: 'DELETE' },
+      );
+      if (monthRef.current === m) {
+        setBlocks((prev) => prev.map((b) => (
+          b.key === key ? { ...b, text: body.text, saved: false, edited: false } : b
+        )));
+      }
     } catch (e) {
       if (monthRef.current === m) setError(`Reset failed: ${e.message}`);
     }
   };
 
+  // Only edited blocks are saved; untouched ones stay linked to the database.
   const saveAll = async () => {
-    setBusy('saving');
+    const edited = blocks.filter((b) => b.edited);
     setError(null);
     setMsg(null);
+    if (!edited.length) {
+      setMsg('Nothing edited — no text to save.');
+      return;
+    }
+    setBusy('saving');
     try {
       await getJson(`${API}/api/secretary-review/texts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ month, texts: textsPayload() }),
+        body: JSON.stringify({ month, texts: Object.fromEntries(edited.map((b) => [b.key, b.text])) }),
       });
-      setBlocks((prev) => prev.map((b) => ({ ...b, saved: true, edited: false })));
-      setMsg(`Saved narrative for ${ctx?.labels?.mon || month}.`);
+      const keys = new Set(edited.map((b) => b.key));
+      setBlocks((prev) => prev.map((b) => (keys.has(b.key) ? { ...b, saved: true, edited: false } : b)));
+      setMsg(`Saved ${edited.length} edited block${edited.length > 1 ? 's' : ''} for ${ctx?.labels?.mon || month}.`);
     } catch (e) {
       setError(`Save failed: ${e.message}`);
     } finally {
@@ -155,7 +170,7 @@ export default function SecretaryReviewPage() {
     <ReportPage
       maxWidth={960}
       title={<>Secretary Review (PPTX)</>}
-      description={<>Monthly &ldquo;SECRETARY REVIEW Operations Inputs&rdquo; deck. Tables and charts come from the database for the chosen month. The narrative below starts from the database (breakdowns, capital repairs, best-ever records); edit it, save it for the month, then download. Download uses the text on screen, saved or not. Saved text is frozen for that month: later changes in the database won&apos;t appear in it unless you reset the block from the database and save again.</>}
+      description={<>Monthly &ldquo;SECRETARY REVIEW Operations Inputs&rdquo; deck. Tables and charts come from the database for the chosen month. The narrative below starts from the database (breakdowns, capital repairs, best-ever records); edit it, save it for the month, then download. Download uses the text on screen, saved or not. Only blocks you edit are saved; a saved block keeps its text for that month. Untouched blocks stay linked to the database and follow the month you pick. &ldquo;Reset from DB&rdquo; removes a block&apos;s saved text and links it to the database again.</>}
     >
       <div style={{ ...box, display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
         <label style={{ fontSize: '11pt', fontWeight: 600 }} htmlFor="sr-month">Month</label>
@@ -170,7 +185,7 @@ export default function SecretaryReviewPage() {
           {busy === 'downloading' ? 'Generating…' : '⬇ Download PPTX'}
         </button>
         <button onClick={saveAll} disabled={!ready || !!busy} style={btn(!ready || !!busy, '#0f9d58')}>
-          {busy === 'saving' ? 'Saving…' : 'Save all text'}
+          {busy === 'saving' ? 'Saving…' : 'Save edited text'}
         </button>
       </div>
 

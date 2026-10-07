@@ -11,7 +11,7 @@ from secretary_review_layout import BLOCKS, validate_month
 
 # Plain `def` handlers: building the context, defaults and the deck takes
 # seconds, so FastAPI runs them in its threadpool instead of blocking the
-# event loop. POST /texts is gated by constants.PAGE_MODULES["secretary_review"].
+# event loop. POST and DELETE /texts are gated by constants.PAGE_MODULES["secretary_review"].
 router = APIRouter(prefix="/api/secretary-review", tags=["secretary-review"])
 
 _KEYS = {k for k, _, _ in BLOCKS}
@@ -56,6 +56,17 @@ def save_texts(payload: dict):
     month = _month(payload.get("month"))
     texts = _texts(payload)
     return {"saved": srt.save_texts(month, texts)}
+
+
+@router.delete("/texts")
+def unlink_text(month: str = Query(...), block: str = Query(...)):
+    """"Reset from DB": drop the block's saved text so it follows the DB
+    default again; returns that default."""
+    _month(month)
+    if block not in _KEYS:
+        raise HTTPException(status_code=400, detail=f"unknown block {block!r}")
+    srt.delete_texts(month, [block])
+    return {"key": block, "text": pst.default_text(month, block), "saved": False}
 
 
 @router.get("/default-text")

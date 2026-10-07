@@ -58,3 +58,12 @@ def test_latest_saved_before(store):
     assert store.latest_saved_before("cr_BSP_prev", "2026-10", window) == "sep"
     assert store.latest_saved_before("cr_BSP_prev", "2026-09", window) == "aug"
     assert store.latest_saved_before("cr_BSP_prev", "2026-04", window) is None
+
+
+def test_delete_texts_unlinks_only_given_blocks(store):
+    store.save_texts("2026-09", {"hl_BSL": "a", "hl_BSP": "b"})
+    store.save_texts("2026-08", {"hl_BSL": "aug"})
+    assert store.delete_texts("2026-09", ["hl_BSL", "hl_SAIL"]) == 1
+    assert store.get_texts("2026-09") == {"hl_BSP": "b"}
+    assert store.get_texts("2026-08") == {"hl_BSL": "aug"}
+    assert store.delete_texts("2026-09", []) == 0

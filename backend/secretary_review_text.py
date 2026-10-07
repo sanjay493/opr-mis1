@@ -42,6 +42,25 @@ def save_texts(month: str, texts: dict) -> int:
         conn.close()
 
 
+def delete_texts(month: str, keys) -> int:
+    """Drop the saved rows for `keys`, so those blocks follow the DB default
+    again. Returns the number of rows removed."""
+    keys = [str(k).strip() for k in keys if str(k).strip()]
+    if not keys:
+        return 0
+    conn = db.connect()
+    cur = conn.cursor()
+    try:
+        phs = ",".join("?" for _ in keys)
+        cur.execute(f"DELETE FROM secretary_review_text WHERE report_month=? AND block_key IN ({phs})",
+                    [month] + keys)
+        n = cur.rowcount
+        conn.commit()
+        return n
+    finally:
+        conn.close()
+
+
 def latest_saved_before(block_key: str, month: str, window: list):
     candidates = sorted(m for m in window if m < month)
     if not candidates:
