@@ -26,6 +26,7 @@ export default function SecretaryReviewPage() {
   const [month, setMonth] = useState('');
   const [ctx, setCtx] = useState(null);
   const [blocks, setBlocks] = useState([]);
+  const [loadedMonth, setLoadedMonth] = useState('');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState(null);
@@ -55,6 +56,7 @@ export default function SecretaryReviewPage() {
       .then(([c, t]) => {
         if (cancelled) return;
         setCtx(c);
+        setLoadedMonth(month);
         setBlocks(t.blocks.map((b) => ({ ...b, edited: false })));
       })
       .catch((e) => { if (!cancelled) setError(`Failed to load ${month}: ${e.message}`); })
@@ -64,6 +66,9 @@ export default function SecretaryReviewPage() {
 
   const changeMonth = (m) => {
     setMonth(m);
+    setCtx(null);
+    setBlocks([]);
+    setLoadedMonth('');
     setLoading(true);
     setError(null);
     setMsg(null);
@@ -138,7 +143,7 @@ export default function SecretaryReviewPage() {
     padding: '10px 24px', fontSize: '11pt', fontWeight: 700, border: 'none', borderRadius: '6px',
     cursor: disabled ? 'not-allowed' : 'pointer', backgroundColor: disabled ? '#dadce0' : color, color: '#ffffff',
   });
-  const ready = MONTH_RE.test(month) && !loading;
+  const ready = MONTH_RE.test(month) && !loading && loadedMonth === month;
 
   return (
     <ReportPage
