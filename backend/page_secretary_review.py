@@ -7,14 +7,20 @@ Production figures come from page4._p4_row_values so they match the MIS
 report; techno figures from techno_period.build_period_report."""
 
 import calendar
+import io
+from dataclasses import dataclass, field
 
 import board_note_common as bnc
 import db
 import page4
+import page_secretary_review_texts as pst
 import page_techno as pt
+import secretary_review_pptx as sp
 import techno_period as tp
 from constants import FIVE_PLANTS
-from secretary_review_layout import KPIS, PLANTS, SCOPES, period_labels
+from pptx import Presentation
+from secretary_review_layout import (BD_GROUPS, BD_PLANTS, BLOCKS, KPIS, PLANTS, SCOPES,
+                                     TEMPLATE_PATH, period_labels)
 
 ITEMS = [("HM", "Hot Metal"), ("CS", "Total Crude Steel"), ("FS", "Finished Steel"), ("SS", "Saleable Steel")]
 _P4 = {i["db_item"]: i for i in page4.PAGE4_ITEMS}
@@ -168,3 +174,156 @@ def build_context(month):
         warnings.append(f"No production actuals for {labels['mon']}")
     techno = build_techno(labels, warnings)
     return {"labels": labels, "production": production, "techno": techno, "warnings": warnings}
+
+
+# --------------------------------------------------------------------------
+# Render
+# --------------------------------------------------------------------------
+
+ITEM_BY_LABEL = {"hot metal": "HM", "crude steel": "CS", "finished steel": "FS", "saleable steel": "SS"}
+PLANT_ROW = {"bsp": "BSP", "dsp": "DSP", "rsp": "RSP", "bsl": "BSL", "isp": "ISP", "ssps": "SSPs", "total": "SAIL"}
+VALUE_COLS = ("cap", "app_m", "act_m", "gr_m", "cu_m", "app_ytd", "act_ytd", "gr_ytd", "cu_ytd")
+
+
+@dataclass
+class RenderResult:
+    content: bytes
+    filename: str
+    warnings: list = field(default_factory=list)
+
+
+def _fmt(v):
+    return "" if v is None else str(round(v))
+
+
+def _fill_values(row, values):
+    for i, key in enumerate(VALUE_COLS, start=1):
+        if i < len(row.cells):
+            sp.set_text_lines(row.cells[i].text_frame, [_fmt((values or {}).get(key))])
+
+
+def _fill_item_table(table, production, scope):
+    """Rows labelled by item (slide 2 and the plant slides)."""
+    for row in table.rows:
+        item = ITEM_BY_LABEL.get(sp.norm(row.cells[0].text))
+        if item:
+            _fill_values(row, production[item].get(scope))
+
+
+def _fill_section_table(table, production):
+    """Item header rows followed by plant rows (slides 3 and 5)."""
+    item = None
+    for row in table.rows:
+        label = sp.norm(row.cells[0].text)
+        if label in ITEM_BY_LABEL:
+            item = ITEM_BY_LABEL[label]
+        elif item and label in PLANT_ROW:
+            scope = PLANT_ROW[label]
+            if item == "FS" and scope == "SAIL":
+                scope = "TOTAL_CONV"
+            _fill_values(row, production[item].get(scope))
+
+
+def _lines(text):
+    return [ln for ln in (text or "").splitlines() if ln.strip()]
+
+
+def _fill_hl(shape, text):
+    lines = _lines(text)
+    if not lines:
+        sp.remove_shape(shape)
+    else:
+        sp.set_text_lines(shape.table.cell(0, 1).text_frame, lines, header_bold=True)
+
+
+def _fill_bd(shape, plant, texts):
+    table = shape.table
+    for i, (g, _) in enumerate(BD_GROUPS):
+        if i < len(table.rows):
+            sp.set_text_lines(table.cell(i, 1).text_frame, _lines(texts.get(f"bd_{plant}_{g}")), header_bold=True)
+    empty = [i for i in range(len(table.rows)) if not table.cell(i, 1).text.strip()]
+    if len(empty) == len(table.rows):
+        for i in reversed(range(1, len(table.rows))):
+            sp.remove_row(table, i)
+        sp.set_text_lines(table.cell(0, 0).text_frame, [""])
+        sp.set_text_lines(table.cell(0, 1).text_frame, ["No major breakdowns"])
+    else:
+        for i in reversed(empty):
+            sp.remove_row(table, i)
+
+
+def _fill_cr(shape, texts):
+    for row in shape.table.rows:
+        plant = row.cells[0].text.strip().upper()
+        if plant in PLANTS and len(row.cells) >= 3:
+            sp.set_text_lines(row.cells[1].text_frame, _lines(texts.get(f"cr_{plant}_cur")), header_bold=True)
+            sp.set_text_lines(row.cells[2].text_frame, _lines(texts.get(f"cr_{plant}_prev")), header_bold=True)
+
+
+def _fill_charts(shapes, techno, labels, warn):
+    for scope in SCOPES:
+        for key, _, fmt in KPIS:
+            t = techno[scope][key]
+            ab = calendar.month_abbr[int(t["month_used"][5:])]
+            ytd_cat = labels["ytd_cat"] if t["month_used"] == labels["month"] else f"Apr-{ab}"
+            head = [labels["fy_m2"], labels["fy_m1"], labels["fy_tgt"]]
+            head_vals = [t["fy_m2"], t["fy_m1"], t["target"]]
+            bar = shapes.get(f"ch_{scope}_{key}")
+            if bar is None:
+                warn(f"template shape ch_{scope}_{key} not found")
+            else:
+                sp.replace_chart_data(bar.chart, head + [ab, ytd_cat], head_vals + [t["month"], t["ytd"]], fmt)
+            trend = shapes.get(f"trend_{scope}_{key}")
+            if trend is None:
+                warn(f"template shape trend_{scope}_{key} not found")
+            else:
+                sp.replace_chart_data(trend.chart, head + [a for a, _ in t["trend"]],
+                                      head_vals + [v for _, v in t["trend"]], fmt)
+
+
+def render_pptx(month, texts=None):
+    ctx = build_context(month)
+    labels, production = ctx["labels"], ctx["production"]
+    warnings = list(ctx["warnings"])
+    eff = {k: v["text"] for k, v in pst.effective_texts(month).items()}
+    merged = {k: (texts[k] if texts and k in texts else eff.get(k, "")) for k, _, _ in BLOCKS}
+
+    prs = Presentation(str(TEMPLATE_PATH))
+    shapes = sp.named_shapes(prs)
+
+    def get(name):
+        sh = shapes.get(name)
+        if sh is None:
+            warnings.append(f"template shape {name} not found")
+        return sh
+
+    if (sh := get("tbl_sail")) is not None:
+        _fill_item_table(sh.table, production, "SAIL")
+    for p in PLANTS:
+        if (sh := get(f"tbl_{p}")) is not None:
+            _fill_item_table(sh.table, production, p)
+    for name in ("tbl_plants_hm_cs", "tbl_plants_ss_fs"):
+        if (sh := get(name)) is not None:
+            _fill_section_table(sh.table, production)
+
+    if (sh := get("tbl_sail_hl")) is not None:
+        _fill_hl(sh, merged["hl_SAIL"])
+    for p in PLANTS:
+        if (sh := get(f"tbl_{p}_hl")) is not None:
+            _fill_hl(sh, merged[f"hl_{p}"])
+    for name, key in (("tbl_delay_hmcs", "delay_hmcs"), ("tbl_delay_fs", "delay_fs")):
+        if (sh := get(name)) is not None:
+            sp.set_text_lines(sh.table.cell(0, 1).text_frame, _lines(merged[key]), header_bold=True)
+    for name in ("tbl_cr_1", "tbl_cr_2"):
+        if (sh := get(name)) is not None:
+            _fill_cr(sh, merged)
+    for p in BD_PLANTS:
+        if (sh := get(f"tbl_bd_{p}")) is not None:
+            _fill_bd(sh, p, merged)
+
+    _fill_charts(shapes, ctx["techno"], labels, warnings.append)
+    sp.replace_placeholders(prs, {"MON": labels["mon"], "YTD": labels["ytd"], "CPLY": labels["cply"],
+                                  "YTD_PREV": labels["ytd_prev"], "PERIOD": labels["period_hdr"]})
+    buf = io.BytesIO()
+    prs.save(buf)
+    return RenderResult(content=buf.getvalue(), filename=labels["filename"], warnings=warnings)
