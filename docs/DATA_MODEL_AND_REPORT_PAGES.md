@@ -144,6 +144,7 @@ already clubbed the same way into `/reports/techno` (its own tab pattern, see
 | `special-steel-physical` | `/reports/production-analysis` | `page_special_steel_physical.py` | `special_steel_phys_perf`, `special_steel_phys_meta`, `special_steel_phys_note` |
 | `iron-ore-mines` | `/reports/mines` | `page_sail_mines.py` (mine-level) | `mines_production_monthly`, `mines_despatch_*`, `mines_booked_qty_*` |
 | `sefi`, `steel-bulletin` | `/reports/external` | frontend-only | `production_table` |
+| `secretary-review` | `/reports/external` | `page_secretary_review.py` (+ `_texts`, `secretary_review_pptx.py`, `secretary_review_layout.py`), `api_secretary_review.py` (`/api/secretary-review/*`); template `secretary_review_templates/secretary_review.pptx` (built by `scripts/prep_secretary_review_template.py`) | `production_table`, `production_plan_table`, `item_capacity_table`, `techno_data`, `techno_plan_fy`, `breakdown_table`, `capital_repair_table`, `secretary_review_text` |
 
 ---
 
@@ -319,6 +320,7 @@ mid-FY change history (`db.get_effective_capacity` = latest row ≤ month).
 |---|---|---|---|
 | `page3_narrative` | `(report_month)` → `production_narrative`, `highlights` | `/api/page3-narrative` (inline edit on `/report` page 3) | `page3_highlights.py` / page 3 assembly |
 | `key_highlights_narrative` | `(report_month)` → `achievements`, `shortfalls`, `focus_areas` (JSON) | `frontend/src/components/entry/key-highlights/Form.js` (`api_key_highlights.py`) | `page_key_highlights.py` (built, not currently in the report) |
+| `secretary_review_text` | `(report_month, block_key)` → `text`, `updated_at`; `''` = block intentionally empty | `components/reports/secretary-review/View.js` → `/api/secretary-review/texts` | `page_secretary_review.py` (Secretary Review .pptx) |
 
 ### 4.13 BF benchmarking
 

@@ -52,3 +52,4 @@ pymysql==1.2.0
 
 # Testing
 pytest==9.1.1
+httpx2==2.13.1   # fastapi TestClient (API tests)

@@ -434,6 +434,7 @@ from api_key_highlights import router as key_highlights_router
 from api_steel_sales_highlights import router as steel_sales_highlights_router
 from api_market_commentary_upload import router as market_commentary_upload_router
 from api_capacity import router as capacity_router
+from api_secretary_review import router as secretary_review_router
 from api_cost_trend_extract import router as cost_trend_extract_router
 from api_cover import router as cover_router
 
@@ -914,6 +915,7 @@ app.include_router(key_highlights_router)
 app.include_router(steel_sales_highlights_router)
 app.include_router(market_commentary_upload_router)
 app.include_router(capacity_router)
+app.include_router(secretary_review_router)
 app.include_router(cost_trend_extract_router)
 app.include_router(cover_router)
 
