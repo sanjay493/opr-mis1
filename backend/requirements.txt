@@ -33,6 +33,7 @@ pydantic==2.13.5
 python-multipart==0.0.32
 openpyxl==3.1.5
 python-docx==1.2.0  # Monthly D.O. Letter (page_do_letter.py) — mutates do_letter_templates/*.docx in place
+python-pptx==1.0.2  # Secretary Review deck (page_secretary_review.py) — fills secretary_review_templates/*.pptx
 xlrd==2.0.2
 pandas==3.0.5
 pdfplumber==0.11.10
