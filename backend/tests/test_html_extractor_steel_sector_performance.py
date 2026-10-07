@@ -63,3 +63,23 @@ def test_table_1a_items_are_read_from_the_page(monkeypatch):
 def test_non_pib_host_is_refused_before_any_fetch():
     with pytest.raises(ValueError):
         h._fetch_html("https://example.com/PressReleasePage.aspx?PRID=1")
+
+
+@pytest.mark.parametrize("given, expected", [
+    ("https://www.pib.gov.in/PressReleaseDetail.aspx?PRID=2319469&reg=48&lang=1",
+     "https://www.pib.gov.in/PressReleasePage.aspx?PRID=2319469&reg=48&lang=1"),
+    ("https://pib.gov.in/PressReleaseIframePage.aspx?PRID=2306471",
+     "https://www.pib.gov.in/PressReleasePage.aspx?PRID=2306471&lang=1"),
+    (SEP_URL, "https://www.pib.gov.in/PressReleasePage.aspx?PRID=2319469&lang=1"),
+])
+def test_any_pib_release_link_is_fetched_as_press_release_page(given, expected):
+    assert h._page_url(given) == expected
+
+
+@pytest.mark.parametrize("bad", [
+    "https://example.com/PressReleasePage.aspx?PRID=1",
+    "https://www.pib.gov.in/PressReleasePage.aspx",
+])
+def test_non_pib_or_id_less_links_are_rejected(bad):
+    with pytest.raises(ValueError):
+        h._page_url(bad)

@@ -399,7 +399,7 @@ export default function SteelSectorPerformancePage() {
           </h1>
           <p style={{ fontSize: '11pt', color: '#5f6368', marginTop: '6px' }}>
             Paste the URL of the monthly PIB (Ministry of Steel) &quot;Indian Steel Sector Performance&quot;
-            press release (pib.gov.in/PressReleasePage.aspx), or upload the release PDF
+            press release (any pib.gov.in link with PRID=…, e.g. PressReleasePage.aspx or PressReleaseDetail.aspx), or upload the release PDF
             (Report_format/&quot;Indian Steel Sector Performance in &lt;Mon&gt;&apos;&lt;YY&gt;.pdf&quot;).
             Every table (Production Overview, Producer wise Production, Steel Prices, Demand,
             Finished Steel Import &amp; Export, Domestic Raw Material Prices, Key Indices) and narrative

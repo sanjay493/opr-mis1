@@ -56,9 +56,18 @@ _FOOTER_RE = _pdf_mod._FOOTER_RE
 _CONTAINER_CLASS = "innner-page-main-about-us-content-right-part"
 
 
-def _fetch_html(url: str) -> str:
-    import requests
-    from urllib.parse import urlparse
+def _page_url(url: str) -> str:
+    """The PressReleasePage.aspx form of any pib.gov.in release link.
+
+    PIB links the same release under several pages: PressReleasePage.aspx
+    (the layout this module parses), PressReleaseDetail.aspx (a newer layout
+    without div.innner-page-main-about-us-content-right-part, which is what
+    PIB's own listing and share links now hand out),
+    PressReleaseIframePage.aspx, ... All take the same PRID, so any link that
+    carries one is rewritten to PressReleasePage.aspx?PRID=<id>&lang=1
+    (lang=1 = English).
+    """
+    from urllib.parse import urlparse, parse_qs, urlencode
 
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https") or parsed.hostname not in _ALLOWED_HOSTS:
@@ -66,6 +75,24 @@ def _fetch_html(url: str) -> str:
             "Only pib.gov.in press release URLs are supported "
             "(e.g. https://www.pib.gov.in/PressReleasePage.aspx?PRID=...)."
         )
+    query = {k.lower(): v for k, v in parse_qs(parsed.query).items()}
+    prid = (query.get("prid") or [""])[0].strip()
+    if not prid.isdigit():
+        raise ValueError(
+            "That pib.gov.in link has no press release id (PRID=...) — open "
+            "the release on PIB and copy its address."
+        )
+    params = {"PRID": prid}
+    if query.get("reg"):
+        params["reg"] = query["reg"][0]
+    params["lang"] = "1"
+    return f"https://www.pib.gov.in/PressReleasePage.aspx?{urlencode(params)}"
+
+
+def _fetch_html(url: str) -> str:
+    import requests
+
+    url = _page_url(url)
     # PIB's edge filtering 403s anything with a recognizable bot/library
     # signature in the User-Agent (verified: a bare "python-requests" UA and
     # one naming this app both got 403; an ordinary browser UA gets 200) —
