@@ -38,6 +38,13 @@ def test_set_text_lines_escapes_and_drops_blanks():
     Presentation(io.BytesIO(buf.getvalue()))
 
 
+def test_set_text_lines_header_bold_accepts_colon_dash():
+    prs, _, gf = _deck_with_table()
+    tf = gf.table.cell(0, 1).text_frame
+    sp.set_text_lines(tf, ["Highlights for following:-  ", "Plan met:–", "body - text"], header_bold=True)
+    assert [p.runs[0].font.bold for p in tf.paragraphs] == [True, True, False]
+
+
 def test_set_text_lines_empty_list_leaves_one_empty_paragraph():
     prs, _, gf = _deck_with_table()
     tf = gf.table.cell(0, 0).text_frame

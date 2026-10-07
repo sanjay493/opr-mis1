@@ -19,6 +19,7 @@ import secretary_review_pptx as sp
 import techno_period as tp
 from constants import FIVE_PLANTS
 from pptx import Presentation
+from pptx.oxml.ns import qn
 from secretary_review_layout import (BD_GROUPS, BD_PLANTS, BLOCKS, KPIS, PLANTS, SCOPES,
                                      TEMPLATE_PATH, period_labels)
 
@@ -260,6 +261,76 @@ def _fill_cr(shape, texts):
             sp.set_text_lines(row.cells[2].text_frame, _lines(texts.get(f"cr_{plant}_prev")), header_bold=True)
 
 
+LINE_FACTOR = 1.2          # line height = font size x this
+CELL_MARGIN_EMU = 91440    # default top + bottom cell margins
+DEFAULT_SZ = 1400
+MIN_SZ = 800
+
+
+def _base_sz(cells):
+    for c in cells:
+        tc = c._tc
+        for tag in ("a:rPr", "a:endParaRPr"):
+            el = tc.find(".//" + qn(tag))
+            if el is not None and el.get("sz"):
+                return int(el.get("sz"))
+    return DEFAULT_SZ
+
+
+def _wrapped_lines(cell, sz, col_w):
+    """Lines the cell's paragraphs take at font size sz (hundredths of a point),
+    with a rough wrap estimate (average glyph width 0.5 em)."""
+    total = 0
+    for p in cell.text_frame.paragraphs:
+        ppr = p._p.find(qn("a:pPr"))
+        indent = int(ppr.get("marL", 0)) if ppr is not None else 0
+        usable = max(col_w - indent - 2 * 5355, 1)
+        chars = max(int(usable / (sz / 100 * 0.5 * 12700)), 1)
+        total += max(1, -(-len(p.text) // chars))
+    return total
+
+
+def _fit_table_text(shape, cells, slide_h, warn, label):
+    """PowerPoint does not shrink table text, so estimate whether the written
+    lines fit between the table's top and the slide bottom and, if not, shrink
+    the narrative cells' font in 0.5 pt steps (floor MIN_SZ). Rows without
+    narrative cells keep their template height. Warn when even the floor is
+    too big."""
+    table = shape.table
+    budget = max(shape.height, slide_h - shape.top)
+    narrative = {id(c._tc) for c in cells}
+    base = _base_sz(cells)
+    fixed, text_rows = 0, []
+    for r in table.rows:
+        idx = [i for i, c in enumerate(r.cells) if id(c._tc) in narrative]
+        if idx:
+            text_rows.append((r, idx))
+        else:
+            n = max(len(c.text_frame.paragraphs) for c in r.cells)
+            fixed += max(r.height, int(n * DEFAULT_SZ / 100 * LINE_FACTOR * 12700) + CELL_MARGIN_EMU)
+
+    def lines(sz):
+        return [max(_wrapped_lines(r.cells[i], sz, table.columns[i].width) for i in idx)
+                for r, idx in text_rows]
+
+    def need(sz):
+        return sum(n * sz / 100 * LINE_FACTOR * 12700 + CELL_MARGIN_EMU for n in lines(sz))
+
+    avail = budget - fixed
+    if need(base) <= avail:
+        return
+    sz = base
+    while sz > MIN_SZ and need(sz) > avail:
+        sz = max(MIN_SZ, sz - 50)
+    for c in cells:
+        for el in c._tc.iter(qn("a:rPr"), qn("a:endParaRPr")):
+            el.set("sz", str(sz))
+    for (r, _), n in zip(text_rows, lines(sz)):
+        r.height = int(n * sz / 100 * LINE_FACTOR * 12700 + CELL_MARGIN_EMU)
+    if need(sz) > avail:
+        warn(f"{label}: {sum(lines(sz))} lines – may overflow; trim the text on the page")
+
+
 def _fill_charts(shapes, techno, labels, warn):
     for scope in SCOPES:
         for key, _, fmt in KPIS:
@@ -320,6 +391,27 @@ def render_pptx(month, texts=None):
     for p in BD_PLANTS:
         if (sh := get(f"tbl_bd_{p}")) is not None:
             _fill_bd(sh, p, merged)
+
+
+    slide_of = {}
+    for n, slide in enumerate(prs.slides, 1):
+        for sh in slide.shapes:
+            slide_of.setdefault(sh.name, n)
+    kinds = {"hl": "Highlights", "delay": "Delay report", "cr": "Capital repairs", "bd": "Breakdowns"}
+    for name, sh in shapes.items():
+        kind = "hl" if name.endswith("_hl") else name.split("_")[1] if name.startswith("tbl_") else None
+        if kind not in kinds or sh._element.getparent() is None or not getattr(sh, "has_table", False):
+            continue
+        t = sh.table
+        if kind == "cr":
+            cells = [r.cells[c] for r in t.rows if r.cells[0].text.strip().upper() in PLANTS
+                     and len(r.cells) >= 3 for c in (1, 2)]
+        elif kind == "bd":
+            cells = [r.cells[1] for r in t.rows]
+        else:
+            cells = [t.cell(0, 1)]
+        _fit_table_text(sh, cells, prs.slide_height, warnings.append,
+                        f"{kinds[kind]} (slide {slide_of[name]})")
 
     _fill_charts(shapes, ctx["techno"], labels, warnings.append)
     sp.replace_placeholders(prs, {"MON": labels["mon"], "YTD": labels["ytd"], "CPLY": labels["cply"],

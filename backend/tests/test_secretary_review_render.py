@@ -89,3 +89,37 @@ def test_missing_texts_fall_back_to_effective(monkeypatch):
     res = psr.render_pptx("2030-01", {"delay_fs": "MILL: x – 3 days"})
     out = Presentation(io.BytesIO(res.content))
     assert sp.named_shapes(out)["tbl_delay_fs"].table.cell(0, 1).text == "MILL: x – 3 days"
+
+
+def _cr_run_sizes(out):
+    t = sp.named_shapes(out)["tbl_cr_1"].table
+    return {int(r.font._element.get("sz")) for row in t.rows if row.cells[0].text.strip().upper() in L.PLANTS
+            for c in list(row.cells)[1:3]
+            for p in c.text_frame.paragraphs for r in p.runs if r.font._element.get("sz")}
+
+
+def _render_cr(n):
+    texts = {k: "" for k, _, _ in L.BLOCKS}
+    texts["cr_BSP_cur"] = "\n".join(f"Item {i}: repair work" for i in range(n))
+    res = psr.render_pptx("2030-01", texts)
+    return res, Presentation(io.BytesIO(res.content))
+
+
+def test_long_capital_repairs_text_is_scaled():
+    res, out = _render_cr(25)
+    sizes = _cr_run_sizes(out)
+    assert sizes and max(sizes) < 1200 and min(sizes) >= 800
+    if min(sizes) == 800:
+        assert any("Capital repairs (slide 19)" in w for w in res.warnings)
+
+
+def test_overlong_capital_repairs_text_warns():
+    res, out = _render_cr(45)
+    assert _cr_run_sizes(out) == {800}
+    assert any("Capital repairs (slide 19)" in w and "may overflow" in w for w in res.warnings)
+
+
+def test_short_capital_repairs_text_keeps_template_size():
+    res, out = _render_cr(3)
+    assert _cr_run_sizes(out) == {1200}
+    assert not any("Capital repairs" in w for w in res.warnings)

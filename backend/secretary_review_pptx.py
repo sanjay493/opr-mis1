@@ -44,7 +44,7 @@ def _rpr_from_end(end):
 def set_text_lines(text_frame, lines, header_bold=False):
     """Replace the frame's paragraphs with one paragraph per non-blank line,
     each formatted like the frame's first paragraph/run. header_bold: a line
-    ending in ':' is bold, every other line not bold."""
+    ending in ':', ':-' or ':–' is bold, every other line not bold."""
     lines = [ln.rstrip() for ln in (lines or []) if ln and ln.strip()] or [""]
     tx = text_frame._txBody
     paras = tx.findall(qn("a:p"))
@@ -72,7 +72,7 @@ def set_text_lines(text_frame, lines, header_bold=False):
             if rpr is None:
                 rpr = OxmlElement("a:rPr")
                 r.insert(0, rpr)
-            rpr.set("b", "1" if line.endswith(":") else "0")
+            rpr.set("b", "1" if line.endswith((":", ":-", ":–")) else "0")
         end = p.find(qn("a:endParaRPr"))
         if end is not None:
             end.addprevious(r)
