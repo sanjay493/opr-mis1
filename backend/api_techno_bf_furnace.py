@@ -1,6 +1,7 @@
 """
 Blast Furnace Techno Report API — furnace-wise export for a custom month
-range, a single month + its Apr->month cumulative, or a full financial year.
+range (each month plus the range's cumulative) or one or more full financial
+years.
 Backs /reports/techno-bf-furnace. See techno_bf_period.py for the data
 layer this just validates input for and calls.
 
@@ -26,11 +27,11 @@ router = APIRouter(prefix="/api/techno-bf-furnace", tags=["techno-bf-furnace"])
 class ReportRequest(BaseModel):
     furnaces: List[str]                  # "PLANT:UNIT" keys, e.g. "BSP:BF-8"
     params: Optional[List[str]] = None   # param keys; empty/None = all
-    mode: str                            # "range" | "month_till" | "annual"
+    mode: str                            # "range" | "annual"
     start_month: Optional[str] = None    # mode == "range"
     end_month: Optional[str] = None      # mode == "range"
-    month: Optional[str] = None          # mode == "month_till"
-    fy_end_year: Optional[int] = None    # mode == "annual" (FY ending March of this year)
+    fy_end_years: Optional[List[int]] = None  # mode == "annual" (FYs ending March of these years)
+    fy_end_year: Optional[int] = None    # mode == "annual", single-FY form of fy_end_years
 
 
 @router.get("/meta")
@@ -60,41 +61,32 @@ def _build(body: ReportRequest) -> dict:
             raise HTTPException(400, str(e))
         return _bf.build_range_report(furnaces, params, months)
 
-    if body.mode == "month_till":
-        if not body.month:
-            raise HTTPException(400, "month is required for mode='month_till'")
-        m_label = _bf._month_label(body.month)
-        ytd_months = None
-        try:
-            import db as _db
-            ytd_months = _db.get_ytd_months(body.month)
-        except Exception:
-            pass
-        cum_label = f"{_bf._month_label(ytd_months[0])} - {m_label} (Cumulative)" if ytd_months and len(ytd_months) > 1 else f"{m_label} (Cumulative)"
-        periods = [
-            {"label": f"{m_label} (Month)", "report_month": body.month, "period": "month"},
-            {"label": cum_label, "report_month": body.month, "period": "till_month"},
-        ]
-        return _bf.build_direct_report(furnaces, params, periods)
-
     if body.mode == "annual":
-        if not body.fy_end_year:
-            raise HTTPException(400, "fy_end_year is required for mode='annual'")
-        march = _bf.fy_march_month(body.fy_end_year)
-        fy_label = f"{body.fy_end_year - 1}-{str(body.fy_end_year % 100).zfill(2)}"
-        periods = [{"label": f"FY {fy_label} (Annual, Apr-Mar)", "report_month": march, "period": "till_month"}]
+        years = _fy_end_years(body)
+        if not years:
+            raise HTTPException(400, "Select at least one financial year for mode='annual'")
+        periods = [
+            {"label": f"FY {y - 1}-{str(y % 100).zfill(2)} (Annual, Apr-Mar)",
+             "report_month": _bf.fy_march_month(y), "period": "till_month"}
+            for y in years
+        ]
         return _bf.build_direct_report(furnaces, params, periods)
 
     raise HTTPException(400, f"Unknown mode: {body.mode}")
 
 
+def _fy_end_years(body: ReportRequest) -> List[int]:
+    years = body.fy_end_years or ([body.fy_end_year] if body.fy_end_year else [])
+    return sorted(set(years))
+
+
 def _subtitle(body: ReportRequest) -> str:
     if body.mode == "range":
         return f"Period: {body.start_month} to {body.end_month}"
-    if body.mode == "month_till":
-        return f"Report month: {body.month}"
     if body.mode == "annual":
-        return f"Financial Year ending March {body.fy_end_year}"
+        years = _fy_end_years(body)
+        fys = ", ".join(f"{y - 1}-{str(y % 100).zfill(2)}" for y in years)
+        return f"Financial Year{'s' if len(years) > 1 else ''}: {fys}"
     return ""
 
 

@@ -1,7 +1,7 @@
 """
 Blast Furnace Techno Report — furnace-wise export for an arbitrary custom
-month range, a single month + its Apr->month cumulative, or a full
-financial year (Apr->March).
+month range (each month plus the range's cumulative) or one or more full
+financial years (Apr->March).
 
 Reuses:
   - bf_benchmark_registry's furnace roster (SAIL_BF_UNITS_BY_PLANT) and
@@ -12,7 +12,7 @@ Reuses:
   - api_bf_benchmark._sail_period_values for the two periods techno_data
     itself already stores pre-aggregated (a month's own actual, and
     Apr->that-month cumulative, via db._maybe_recompute_derived_params) —
-    "month_till" and "annual" modes are just this, called once.
+    "annual" mode is just this, called once per FY.
   - techno_cumulative's per-parameter weighting rules (get_rule) and
     furnace-wise production weights (_unit_production) for "range" mode,
     which is NOT YTD-aligned so techno_data has no pre-computed figure for
@@ -23,6 +23,7 @@ Reuses:
   - techno_period._weighted_combine for the actual value/weight -> result
     math — pure, plant/furnace-agnostic, no reason to re-implement it.
 """
+import calendar as _cal
 import datetime as _dt
 from typing import Dict, List, Optional
 
@@ -43,8 +44,20 @@ FURNACE_BY_KEY = {f["key"]: f for f in FURNACES}
 # Display-only param list for the frontend's picker — dynamic (monthly)
 # params only; working_volume_m3 is a static per-furnace spec, not
 # something a report over a time period computes.
+# Production and Avg. Daily Prod aren't read from techno_data here: both come
+# from the furnace's own rows in production_table (the monthly production
+# uploads), Production shown in tonnes (the BF Benchmarking registry's unit is
+# Million T) and Avg. Daily Prod = that production / calendar days.
+_PRODUCTION_KEYS = {"production", "avg_daily_rate"}
+_UNIT_OVERRIDES = {"production": "in T"}
+
+
+def _report_param(p: Dict) -> Dict:
+    return {**p, "unit": _UNIT_OVERRIDES.get(p["key"], p["unit"])}
+
+
 REPORT_PARAMS = [
-    {"key": p["key"], "label": p["label"], "unit": p["unit"]}
+    {"key": p["key"], "label": p["label"], "unit": _UNIT_OVERRIDES.get(p["key"], p["unit"])}
     for p in BF_BENCHMARK_PARAMS if not p["static"]
 ]
 
@@ -61,13 +74,13 @@ def resolve_furnaces(keys: List[str]) -> List[Dict]:
 
 def resolve_params(keys: Optional[List[str]]) -> List[Dict]:
     if not keys:
-        return [PARAM_BY_KEY[k] for k in DYNAMIC_PARAM_KEYS]
+        return [_report_param(PARAM_BY_KEY[k]) for k in DYNAMIC_PARAM_KEYS]
     out = []
     for k in keys:
         p = PARAM_BY_KEY.get(k)
         if p is None or p.get("static"):
             raise ValueError(f"Unknown/unsupported parameter: {k}")
-        out.append(p)
+        out.append(_report_param(p))
     return out
 
 
@@ -155,29 +168,82 @@ def _range_cell(plant: str, unit: str, key: str, months: List[str],
             "warnings": warnings}
 
 
+def _furnace_production_t(plant: str, unit: str, months: List[str],
+                          cache: Dict[tuple, Dict[str, float]]) -> Dict[str, float]:
+    """{month: production in tonnes} for one furnace — production_table's
+    furnace-wise month_actual ('000 t) via techno_cumulative._unit_production,
+    which also covers a month missing there from the furnace's techno
+    'production' figure (and, for a single-BF plant, the plant's Hot Metal)."""
+    ck = (plant, unit, tuple(months))
+    if ck not in cache:
+        cache[ck] = {m: v * 1000.0 for m, v in _tc._unit_production(plant, unit, months).items()}
+    return cache[ck]
+
+
+def _production_cell(plant: str, unit: str, key: str, months: List[str],
+                     cache: Dict[tuple, Dict[str, float]]) -> Dict:
+    """Production (t, summed over `months`) or Avg. Daily Prod (that sum /
+    the calendar days of the months it covers) for one furnace."""
+    prod = _furnace_production_t(plant, unit, months, cache)
+    if not prod:
+        return {"value": None, "display": "", "warnings": ["No production data in this period."]}
+    total = sum(prod.values())
+    value = total if key == "production" else total / sum(_days(m) for m in prod)
+    warnings = []
+    missing = [m for m in months if m not in prod]
+    if missing:
+        warnings.append("No production data for " + ", ".join(_month_label(m) for m in missing)
+                        + (" — Avg. Daily Prod covers the other months only." if key != "production" else "."))
+    return {"value": value, "display": int(round(value)), "warnings": warnings}
+
+
+def _days(ym: str) -> int:
+    return _cal.monthrange(int(ym[:4]), int(ym[5:7]))[1]
+
+
 def build_range_report(furnaces: List[Dict], params: List[Dict], months: List[str]) -> Dict:
-    """Custom (non-YTD-aligned) month range — one combined period column,
+    """Custom (non-YTD-aligned) month range — one column per month (that
+    month's own figure, read straight from techno_data), then, for a range of
+    more than one month, a cumulative column over exactly these months:
     weighted/harmonic/summed/averaged per parameter's own techno_cumulative
     rule, using that furnace's own production during exactly these months
     as the weight (falls back to a plain average, with a warning, for any
     month the weight can't be resolved for — same fallback semantics as
     every other cumulative calc in this app)."""
-    label = f"{_month_label(months[0])} - {_month_label(months[-1])}" if len(months) > 1 else _month_label(months[0])
+    month_labels = [_month_label(m) for m in months]
+    cum_label = f"{month_labels[0]} - {month_labels[-1]} (Cumulative)" if len(months) > 1 else None
     weight_cache: Dict[tuple, Dict[str, float]] = {}
     month_cache: Dict[tuple, Dict] = {}
+    prod_cache: Dict[tuple, Dict[str, float]] = {}
     sections = []
     for pdef in params:
         key = pdef["key"]
-        rows = [
-            {"furnace": f["label"], "values": {label: _range_cell(f["plant"], f["unit"], key, months, weight_cache, month_cache)}}
-            for f in furnaces
-        ]
+        rows = []
+        for f in furnaces:
+            if key in _PRODUCTION_KEYS:
+                values = {
+                    label: _production_cell(f["plant"], f["unit"], key, [m], prod_cache)
+                    for m, label in zip(months, month_labels)
+                }
+                if cum_label:
+                    values[cum_label] = _production_cell(f["plant"], f["unit"], key, months, prod_cache)
+                rows.append({"furnace": f["label"], "values": values})
+                continue
+            monthly = _furnace_range_values(f["plant"], f["unit"], [key], months, month_cache)[key]
+            values = {
+                label: {"value": monthly.get(m), "display": _fmt_bf_value(monthly.get(m), key), "warnings": []}
+                for m, label in zip(months, month_labels)
+            }
+            if cum_label:
+                values[cum_label] = _range_cell(f["plant"], f["unit"], key, months, weight_cache, month_cache)
+            rows.append({"furnace": f["label"], "values": values})
         sections.append({"parameter": pdef["label"], "unit": pdef["unit"], "rows": rows})
-    return {"periods": [label], "furnaces": [f["label"] for f in furnaces], "sections": sections}
+    periods = month_labels + ([cum_label] if cum_label else [])
+    return {"periods": periods, "furnaces": [f["label"] for f in furnaces], "sections": sections}
 
 
 def build_direct_report(furnaces: List[Dict], params: List[Dict], periods: List[Dict]) -> Dict:
-    """month_till / annual modes — every period here is a single
+    """annual mode — every period here is a single
     (report_month, period) pair techno_data already has pre-aggregated
     (see _sail_period_values), so this is a straight read, no combining.
 
@@ -193,6 +259,13 @@ def build_direct_report(furnaces: List[Dict], params: List[Dict], periods: List[
             cache[ck] = _sail_period_values(plant, unit, report_month, period)
         return cache[ck]
 
+    prod_cache: Dict[tuple, Dict[str, float]] = {}
+
+    def _period_months(p):
+        if p["period"] == "month":
+            return [p["report_month"]]
+        return months_in_range(f"{_fy_start_year(p['report_month'])}-04", p["report_month"])
+
     sections = []
     for pdef in params:
         key = pdef["key"]
@@ -200,6 +273,9 @@ def build_direct_report(furnaces: List[Dict], params: List[Dict], periods: List[
         for f in furnaces:
             values = {}
             for p in periods:
+                if key in _PRODUCTION_KEYS:
+                    values[p["label"]] = _production_cell(f["plant"], f["unit"], key, _period_months(p), prod_cache)
+                    continue
                 v = _values(f["plant"], f["unit"], p["report_month"], p["period"]).get(key)
                 if v is None and p["period"] == "till_month":
                     # No stored Apr->month cumulative for this furnace/param

@@ -1,7 +1,7 @@
 """
 Excel / PDF export for the Blast Furnace Techno Report (frontend:
-/reports/techno-bf-furnace) — furnace-wise custom-period/month-and-till-
-month/annual data, from techno_bf_period.build_range_report /
+/reports/techno-bf-furnace) — furnace-wise custom-period/annual data,
+from techno_bf_period.build_range_report /
 build_direct_report's {periods, furnaces, sections} shape.
 
 Visual style mirrors page_techno_custom_export.py's Custom Period mode

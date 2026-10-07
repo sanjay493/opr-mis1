@@ -8,6 +8,8 @@ import {
 } from './shared';
 
 const fmtNum = (v) => fmtNum3(v, 2);
+// Production (t) and Avg. Daily Prod (TPD) come back as whole numbers.
+const fmtDisplay = (d) => (Number.isInteger(d) ? d.toLocaleString('en-IN') : d);
 
 export default function TechnoBfFurnaceView() {
   const def = getDefaultPeriod();
@@ -15,20 +17,22 @@ export default function TechnoBfFurnaceView() {
   const [metaError, setMetaError] = useState(null);
   const [selectedFurnaces, setSelectedFurnaces] = useState([]);
   const [selectedParams, setSelectedParams] = useState([]);
-  const [mode, setMode] = useState('month_till'); // 'range' | 'month_till' | 'annual'
+  const [mode, setMode] = useState('range'); // 'range' | 'annual'
   const [error, setError] = useState(null);
   const [downloading, setDownloading] = useState(null);
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState(null);
 
   // Duration inputs
-  const [startMonthName, setStartMonthName] = useState(def.monthName);
-  const [startYear, setStartYear] = useState(def.year);
+  // Range defaults to April of the latest month's FY through that month.
+  const defFyStartYear = MONTH_NAMES_FULL.indexOf(def.monthName) >= 3 ? def.year : String(Number(def.year) - 1);
+  const [startMonthName, setStartMonthName] = useState('April');
+  const [startYear, setStartYear] = useState(defFyStartYear);
   const [endMonthName, setEndMonthName] = useState(def.monthName);
   const [endYear, setEndYear] = useState(def.year);
-  const [monthName, setMonthName] = useState(def.monthName);
-  const [year, setYear] = useState(def.year);
-  const [fyEndYear, setFyEndYear] = useState(String(CURRENT_FY_END_YEAR));
+  // Annual: one column per selected FY (end year). Defaults to the last
+  // completed FY — the current one has no March figures yet.
+  const [fyEndYears, setFyEndYears] = useState([CURRENT_FY_END_YEAR - 1]);
 
   useEffect(() => {
     fetch(`${API_BASE}/api/techno-bf-furnace/meta`)
@@ -43,6 +47,8 @@ export default function TechnoBfFurnaceView() {
 
   const toggleFurnace = (key) => setSelectedFurnaces((prev) =>
     prev.includes(key) ? prev.filter((x) => x !== key) : [...prev, key]);
+  const toggleFy = (y) => setFyEndYears((prev) =>
+    prev.includes(y) ? prev.filter((x) => x !== y) : [...prev, y].sort((a, b) => a - b));
   const toggleParam = (key) => setSelectedParams((prev) =>
     prev.includes(key) ? prev.filter((x) => x !== key) : [...prev, key]);
 
@@ -58,10 +64,8 @@ export default function TechnoBfFurnaceView() {
     if (mode === 'range') {
       body.start_month = `${startYear}-${MONTH_NUM[startMonthName]}`;
       body.end_month = `${endYear}-${MONTH_NUM[endMonthName]}`;
-    } else if (mode === 'month_till') {
-      body.month = `${year}-${MONTH_NUM[monthName]}`;
     } else if (mode === 'annual') {
-      body.fy_end_year = parseInt(fyEndYear, 10);
+      body.fy_end_years = fyEndYears;
     }
     return body;
   };
@@ -74,6 +78,7 @@ export default function TechnoBfFurnaceView() {
 
   const fetchReport = () => {
     if (selectedFurnaces.length === 0) { setError('Select at least one furnace.'); return; }
+    if (mode === 'annual' && fyEndYears.length === 0) { setError('Select at least one financial year.'); return; }
     setLoading(true);
     setError(null);
     fetch(`${API_BASE}/api/techno-bf-furnace/report`, {
@@ -108,10 +113,10 @@ export default function TechnoBfFurnaceView() {
   return (
     <div>
       <TabIntro>
-        Furnace-wise techno-economic parameters for any SAIL blast furnace — a custom month range
-        (weighted average, harmonic mean, or sum, whichever the parameter uses, weighted by that
-        furnace&apos;s own production during exactly that range), a single month alongside its
-        April-to-that-month cumulative, or a full financial year (April-March).
+        Furnace-wise techno-economic parameters for any SAIL blast furnace — each month of a custom
+        month range plus that range&apos;s cumulative (weighted average, harmonic mean, or sum,
+        whichever the parameter uses, weighted by that furnace&apos;s own production during exactly
+        that range), or one or more full financial years (April-March) side by side.
       </TabIntro>
 
       <ErrorBox>{metaError}</ErrorBox>
@@ -172,7 +177,7 @@ export default function TechnoBfFurnaceView() {
             <div style={{ fontSize: '11pt', fontWeight: 600, color: '#202124', marginBottom: '8px' }}>Duration</div>
             <div style={{ marginBottom: '12px' }}>
               <SegmentedToggle
-                options={[['range', 'Start - End Month'], ['month_till', 'Month + Till-Month'], ['annual', 'Annual (Apr-Mar)']]}
+                options={[['range', 'Start - End Month'], ['annual', 'Annual (Apr-Mar)']]}
                 value={mode} onChange={setMode}
               />
             </div>
@@ -200,27 +205,25 @@ export default function TechnoBfFurnaceView() {
               </div>
             )}
 
-            {mode === 'month_till' && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <label style={{ fontSize: '10.5pt', fontWeight: 600 }}>Month</label>
-                <select value={monthName} onChange={(e) => setMonthName(e.target.value)} style={selStyle}>
-                  {MONTH_NAMES_FULL.map((m) => <option key={m}>{m}</option>)}
-                </select>
-                <select value={year} onChange={(e) => setYear(e.target.value)} style={selStyle}>
-                  {YEARS.map((y) => <option key={y}>{y}</option>)}
-                </select>
-                <span style={{ fontSize: '9.5pt', color: '#5f6368' }}>
-                  → shows this month&apos;s own figure and the Apr-to-this-month cumulative, side by side.
-                </span>
+            {mode === 'range' && (
+              <div style={{ fontSize: '9.5pt', color: '#5f6368', marginTop: '8px' }}>
+                → shows each month&apos;s own figure, then the From-to-To cumulative.
               </div>
             )}
 
             {mode === 'annual' && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <label style={{ fontSize: '10.5pt', fontWeight: 600 }}>Financial Year ending March</label>
-                <select value={fyEndYear} onChange={(e) => setFyEndYear(e.target.value)} style={selStyle}>
-                  {FY_END_YEARS.map((y) => <option key={y} value={y}>{y} (FY {y - 1}-{String(y % 100).padStart(2, '0')})</option>)}
-                </select>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '10.5pt', fontWeight: 600 }}>Financial Years (Apr-Mar)</span>
+                  <button onClick={() => setFyEndYears([])} style={{ ...pillStyle(false), padding: '3px 10px', fontSize: '9pt' }}>None</button>
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', maxHeight: '110px', overflowY: 'auto' }}>
+                  {FY_END_YEARS.map((y) => (
+                    <button key={y} onClick={() => toggleFy(y)} style={{ ...pillStyle(fyEndYears.includes(y)), padding: '5px 12px', fontSize: '9.5pt' }}>
+                      FY {y - 1}-{String(y % 100).padStart(2, '0')}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -284,7 +287,7 @@ export default function TechnoBfFurnaceView() {
                           return (
                             <td key={label} style={{ ...cell, textAlign: 'right', fontWeight: 700 }}
                               title={(cd.warnings || []).length ? cd.warnings.join(' ') : undefined}>
-                              {cd.display !== undefined && cd.display !== '' ? cd.display : fmtNum(cd.value)}{fellBack ? '*' : ''}{computed ? '†' : ''}
+                              {cd.display !== undefined && cd.display !== '' ? fmtDisplay(cd.display) : fmtNum(cd.value)}{fellBack ? '*' : ''}{computed ? '†' : ''}
                             </td>
                           );
                         })}
