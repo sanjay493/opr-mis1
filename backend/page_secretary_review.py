@@ -205,12 +205,17 @@ def _fill_values(row, values):
             sp.set_text_lines(row.cells[i].text_frame, [_fmt((values or {}).get(key))])
 
 
+def _row_scope(item, scope):
+    """SAIL Finished Steel is shown with Conversion added (slides 2 and 5)."""
+    return "TOTAL_CONV" if (item == "FS" and scope == "SAIL") else scope
+
+
 def _fill_item_table(table, production, scope):
     """Rows labelled by item (slide 2 and the plant slides)."""
     for row in table.rows:
         item = ITEM_BY_LABEL.get(sp.norm(row.cells[0].text))
         if item:
-            _fill_values(row, production[item].get(scope))
+            _fill_values(row, production[item].get(_row_scope(item, scope)))
 
 
 def _fill_section_table(table, production):
@@ -221,10 +226,7 @@ def _fill_section_table(table, production):
         if label in ITEM_BY_LABEL:
             item = ITEM_BY_LABEL[label]
         elif item and label in PLANT_ROW:
-            scope = PLANT_ROW[label]
-            if item == "FS" and scope == "SAIL":
-                scope = "TOTAL_CONV"
-            _fill_values(row, production[item].get(scope))
+            _fill_values(row, production[item].get(_row_scope(item, PLANT_ROW[label])))
 
 
 def _lines(text):

@@ -17,7 +17,8 @@ REF = Path(__file__).parent / "fixtures" / "secretary_review_sep26_reference.ppt
 
 # (slide, row, col) -> reason, for reference-deck cells the DB no longer reproduces.
 # Every entry needs a reason checked by hand.
-KNOWN_TABLE_DIFFS = {}
+_FS_CONV = "user asked (2026-10-07): slide 2 SAIL Finished Steel includes Conversion, like slide 5's Total"
+KNOWN_TABLE_DIFFS = {(2, 4, c): _FS_CONV for c in (3, 4, 5, 7, 8, 9)}
 
 
 def _num(s):
@@ -73,6 +74,17 @@ def test_tables_match_reference(rendered):
                     if b is not None and (a is None or abs(a - b) > 1) and (idx, r, c) not in KNOWN_TABLE_DIFFS:
                         diffs.append((idx, r, c, co.text, cr.text))
     assert not diffs, diffs
+
+
+@live
+def test_sail_finished_steel_includes_conversion_on_slides_2_and_5(rendered):
+    _, out = rendered
+    s2 = [c.text for c in _perf_tables(out.slides[1])[0].rows[4].cells]
+    # slide 5: Saleable Steel section first, Finished Steel second -> last "Total" row
+    fs_total = [r for r in _perf_tables(out.slides[4])[0].rows if sp.norm(r.cells[0].text) == "total"][-1]
+    assert sp.norm(s2[0]) == "finished steel"
+    assert s2[1:] == [c.text for c in fs_total.cells][1:]
+    assert _num(s2[3]) in (1375, 1376)
 
 
 @live

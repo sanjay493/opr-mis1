@@ -37,7 +37,9 @@ def context(month: str = Query(None)):
             raise HTTPException(status_code=404, detail="No production data in the DB")
     _month(month)
     ctx = psr.build_context(month)
-    summary = [{"item": name, **{k: ctx["production"][key]["SAIL"][k] for k in ("app_m", "act_m", "app_ytd", "act_ytd")}}
+    # Same SAIL rows as slide 2 (Finished Steel includes Conversion).
+    summary = [{"item": name, **{k: ctx["production"][key][psr._row_scope(key, "SAIL")][k]
+                                 for k in ("app_m", "act_m", "app_ytd", "act_ytd")}}
                for key, name in psr.ITEMS]
     return {"labels": ctx["labels"], "filename": ctx["labels"]["filename"],
             "warnings": ctx["warnings"], "summary": summary}
