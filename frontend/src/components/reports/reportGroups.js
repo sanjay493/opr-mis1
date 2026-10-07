@@ -71,6 +71,17 @@ export const REPORT_GROUPS = [
     ],
   },
   {
+    id: 'excel',
+    route: '/reports/excel',
+    title: 'Excel Report',
+    description: 'Reports with Excel downloads: plant-wise performance of main items and the product-mix report.',
+    icon: '📗',
+    tabs: [
+      { id: 'plant-performance-items', label: 'Plant Wise Performance (Excel)', description: 'Plant Wise Performance of Main Items, tonnage to 3 decimals, Excel download.' },
+      { id: 'pmix-fy', label: 'Pmix Report (Year-wise)', description: 'Product-mix report, financial-year view.' },
+    ],
+  },
+  {
     id: 'external',
     route: '/reports/external',
     title: 'External Reports',
@@ -83,8 +94,6 @@ export const REPORT_GROUPS = [
       { id: 'secretary-review', label: 'Secretary Review (PPTX)', description: 'Monthly Secretary Review operations deck (.pptx) with editable narrative.' },
       { id: 'jpc-report', label: 'JPC Monthly Report', description: 'JPC monthly report export.' },
       { id: 'one-page-report', label: '1-Page Report', description: 'Single-page summary report.' },
-      { id: 'plant-performance-items', label: 'Plant Wise Performance (Excel)', description: 'Plant Wise Performance of Main Items, tonnage to 3 decimals, Excel download.' },
-      { id: 'pmix-fy', label: 'Pmix Report (Year-wise)', description: 'Product-mix report, financial-year view.' },
       { id: 'sefi', label: 'SEFI Report', description: 'SEFI report.' },
       { id: 'steel-bulletin', label: 'Inputs for Steel Bulletin', description: 'Inputs feeding the Steel Bulletin.' },
     ],

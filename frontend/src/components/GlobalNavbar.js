@@ -95,6 +95,7 @@ export default function GlobalNavbar() {
         { label: 'Iron Ore Mines', link: '/reports/mines', icon: '⛏️' },
         { label: 'Loss, Breakdown & Capital Repair', link: '/reports/loss-breakdown', icon: '🛠️' },
         { label: 'Techno Reports', link: '/reports/techno', icon: '⚙️' },
+        { label: 'Excel Report', link: '/reports/excel', icon: '📗' },
       ]
     },
     {
