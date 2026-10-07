@@ -62,3 +62,19 @@ def test_effective_texts_prefers_saved_including_blank(monkeypatch):
     assert eff["hl_SAIL"] == {"text": "mine", "saved": True}
     assert eff["hl_BSP"] == {"text": "DB hl_BSP", "saved": False}
     assert len(eff) == 30
+
+
+def test_unit_summaries_merges_overlapping_events():
+    evs = [_ev("2026-09-10 00:00", "2026-09-12 00:00", cause="first"),
+           _ev("2026-09-11 00:00", "2026-09-13 00:00", cause="second")]
+    s = t.unit_summaries(evs, "2026-09")
+    assert len(s) == 1 and s[0]["hours"] == 72
+
+
+def test_unit_summaries_caps_at_month_hours():
+    evs = [_ev("2026-08-20 00:00", None, ongoing=1, cause="a"),
+           _ev("2026-09-01 00:00", None, ongoing=1, cause="b"),
+           _ev("2026-09-05 00:00", "2026-09-20 00:00", cause="c"),
+           _ev("2026-09-02", "2026-09-02", hours=40.0, cause="d")]
+    s = t.unit_summaries(evs, "2026-09")
+    assert len(s) == 1 and s[0]["hours"] == 30 * 24

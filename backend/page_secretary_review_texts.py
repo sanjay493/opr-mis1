@@ -42,19 +42,45 @@ def _parse_ts(s):
     return None
 
 
-def event_hours(ev, month):
+def event_interval(ev, month):
+    """Clipped [lo, hi) of a time-based event in the month, or None."""
+    if ev.get("hours_lost_override") is not None:
+        return None
     s, e = _bounds(month)
     start = _parse_ts(ev["start_ts"])
     if start is None:
-        return 0.0
-    if ev.get("hours_lost_override") is not None:
-        return float(ev["hours_lost_override"]) if s <= start < e else 0.0
+        return None
     if ev.get("is_ongoing") or not ev.get("end_ts"):
         end = e
     else:
         end = _parse_ts(ev["end_ts"]) or start
     lo, hi = max(start, s), min(end, e)
-    return max((hi - lo).total_seconds() / 3600.0, 0.0)
+    return (lo, hi) if hi > lo else None
+
+
+def event_hours(ev, month):
+    if ev.get("hours_lost_override") is not None:
+        s, e = _bounds(month)
+        start = _parse_ts(ev["start_ts"])
+        if start is None:
+            return 0.0
+        return float(ev["hours_lost_override"]) if s <= start < e else 0.0
+    iv = event_interval(ev, month)
+    return (iv[1] - iv[0]).total_seconds() / 3600.0 if iv else 0.0
+
+
+def _merged_hours(intervals):
+    total, cur_lo, cur_hi = 0.0, None, None
+    for lo, hi in sorted(intervals):
+        if cur_hi is None or lo > cur_hi:
+            if cur_hi is not None:
+                total += (cur_hi - cur_lo).total_seconds() / 3600.0
+            cur_lo, cur_hi = lo, hi
+        elif hi > cur_hi:
+            cur_hi = hi
+    if cur_hi is not None:
+        total += (cur_hi - cur_lo).total_seconds() / 3600.0
+    return total
 
 
 def clean_cause(cause, unit_name):
@@ -67,18 +93,26 @@ def clean_cause(cause, unit_name):
 
 
 def unit_summaries(events, month):
+    s, e = _bounds(month)
+    cap = (e - s).total_seconds() / 3600.0
     agg = {}
     for ev in events:
         h = event_hours(ev, month)
         if h <= 0:
             continue
         k = (ev["plant"], ev["unit_type"], ev["unit_name"])
-        a = agg.setdefault(k, {"plant": k[0], "unit_type": k[1], "unit_name": k[2], "hours": 0.0, "_top": (0.0, "")})
-        a["hours"] += h
+        a = agg.setdefault(k, {"plant": k[0], "unit_type": k[1], "unit_name": k[2], "hours": 0.0,
+                               "_top": (0.0, ""), "_iv": [], "_pt": 0.0})
+        iv = event_interval(ev, month)
+        if iv:
+            a["_iv"].append(iv)
+        else:
+            a["_pt"] += h
         if h > a["_top"][0]:
             a["_top"] = (h, ev.get("cause") or "")
     out = []
     for a in agg.values():
+        a["hours"] = min(_merged_hours(a.pop("_iv")) + a.pop("_pt"), cap)
         if a["hours"] >= BD_MIN_HOURS:
             top = a.pop("_top")
             a["cause"] = clean_cause(top[1], a["unit_name"])
