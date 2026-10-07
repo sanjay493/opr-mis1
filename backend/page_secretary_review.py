@@ -98,16 +98,18 @@ def _num(d):
         return None
 
 
-def _targets(labels):
+def _targets(labels, warnings):
     """{scope: {param: target}}; a scope whose targets can't be read (e.g. an
-    FY with no techno_plan_fy rows yet) gets {} and shows as 'no FY target'."""
+    FY with no techno_plan_fy rows yet) gets {} and shows as 'no FY target',
+    with the error added to warnings."""
     out = {}
     fetch = {"SAIL": lambda: pt.compute_sail_targets(labels["fy_label"])}
     fetch.update({p: (lambda p=p: pt._get_plant_techno_plan_targets(p, labels["month"])) for p in PLANTS})
     for scope, fn in fetch.items():
         try:
             raw = fn() or {}
-        except Exception:
+        except Exception as e:
+            warnings.append(f"{scope} techno targets could not be read: {e}")
             raw = {}
         out[scope] = bnc.fuel_rate_fallback({k[1]: v for k, v in raw.items()})
     return out
@@ -129,7 +131,7 @@ def build_techno(labels, warnings):
     res = tp.build_period_report(SCOPES, [name for _, name, _ in KPIS], periods)
     display = {p["name"]: p["display_name"] for p in tp._build_major_params()}
     sections = {s["parameter"]: {r["plant"]: r["values"] for r in s["rows"]} for s in res["sections"]}
-    targets = _targets(labels)
+    targets = _targets(labels, warnings)
 
     def vals(name, scope):
         return sections.get(display.get(name, name), {}).get(scope, {})
@@ -229,11 +231,14 @@ def _lines(text):
     return [ln for ln in (text or "").splitlines() if ln.strip()]
 
 
-def _fill_hl(shape, text):
+def _fill_hl(shape, text, header):
+    """header: the left cell, the same '<period> Highlights' on every slide
+    (the template's plant tables say just 'Highlights')."""
     lines = _lines(text)
     if not lines:
         sp.remove_shape(shape)
     else:
+        sp.set_text_lines(shape.table.cell(0, 0).text_frame, [header])
         sp.set_text_lines(shape.table.cell(0, 1).text_frame, lines, header_bold=True)
 
 
@@ -356,8 +361,10 @@ def render_pptx(month, texts=None):
     ctx = build_context(month)
     labels, production = ctx["labels"], ctx["production"]
     warnings = list(ctx["warnings"])
-    eff = {k: v["text"] for k, v in pst.effective_texts(month).items()}
-    merged = {k: (texts[k] if texts and k in texts else eff.get(k, "")) for k, _, _ in BLOCKS}
+    texts = texts or {}
+    missing = [k for k, _, _ in BLOCKS if k not in texts]
+    eff = {k: v["text"] for k, v in pst.effective_texts(month, missing).items()} if missing else {}
+    merged = {k: (texts[k] if k in texts else eff.get(k, "")) for k, _, _ in BLOCKS}
 
     prs = Presentation(str(TEMPLATE_PATH))
     shapes = sp.named_shapes(prs)
@@ -377,11 +384,12 @@ def render_pptx(month, texts=None):
         if (sh := get(name)) is not None:
             _fill_section_table(sh.table, production)
 
+    hl_header = f"{labels['period_hdr']} Highlights"
     if (sh := get("tbl_sail_hl")) is not None:
-        _fill_hl(sh, merged["hl_SAIL"])
+        _fill_hl(sh, merged["hl_SAIL"], hl_header)
     for p in PLANTS:
         if (sh := get(f"tbl_{p}_hl")) is not None:
-            _fill_hl(sh, merged[f"hl_{p}"])
+            _fill_hl(sh, merged[f"hl_{p}"], hl_header)
     for name, key in (("tbl_delay_hmcs", "delay_hmcs"), ("tbl_delay_fs", "delay_fs")):
         if (sh := get(name)) is not None:
             sp.set_text_lines(sh.table.cell(0, 1).text_frame, _lines(merged[key]), header_bold=True)
@@ -391,7 +399,6 @@ def render_pptx(month, texts=None):
     for p in BD_PLANTS:
         if (sh := get(f"tbl_bd_{p}")) is not None:
             _fill_bd(sh, p, merged)
-
 
     slide_of = {}
     for n, slide in enumerate(prs.slides, 1):

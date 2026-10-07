@@ -41,11 +41,17 @@ def _rpr_from_end(end):
     return rpr
 
 
+# Characters XML 1.0 forbids; lxml raises on them.
+_XML_ILLEGAL = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\ufffe\uffff]")
+
+
 def set_text_lines(text_frame, lines, header_bold=False):
     """Replace the frame's paragraphs with one paragraph per non-blank line,
     each formatted like the frame's first paragraph/run. header_bold: a line
-    ending in ':', ':-' or ':–' is bold, every other line not bold."""
-    lines = [ln.rstrip() for ln in (lines or []) if ln and ln.strip()] or [""]
+    ending in ':', ':-' or ':–' is bold, every other line not bold.
+    Characters illegal in XML are dropped."""
+    lines = [_XML_ILLEGAL.sub("", ln) for ln in (lines or []) if ln]
+    lines = [ln.rstrip() for ln in lines if ln.strip()] or [""]
     tx = text_frame._txBody
     paras = tx.findall(qn("a:p"))
     proto = copy.deepcopy(paras[0]) if paras else OxmlElement("a:p")

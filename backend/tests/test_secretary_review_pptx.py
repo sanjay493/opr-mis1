@@ -84,3 +84,15 @@ def test_replace_chart_data_keeps_point_formatting():
     assert len(chart._chartSpace.xpath(".//c:dPt")) == before == 1
     assert list(chart.plots[0].categories) == ["FY26", "FY27", "FY'28 Target", "Oct", "Apr-Oct"]
     assert chart.plots[0].series[0].values == (421.0, None, 400.0, 432.0, 424.0)
+
+
+def test_set_text_lines_drops_xml_illegal_characters():
+    prs, _, gf = _deck_with_table()
+    tf = gf.table.cell(0, 1).text_frame
+    bad = "a\x00b\x07c\x0bd\x0c\x1fe￾￿\tf"
+    sp.set_text_lines(tf, [bad, "\x01\x02", "ok"])
+    assert [p.text for p in tf.paragraphs] == ["abcde\tf", "ok"]
+    buf = io.BytesIO()
+    prs.save(buf)                                   # lxml would raise on the raw characters
+    out = Presentation(io.BytesIO(buf.getvalue()))
+    assert sp.named_shapes(out)["tbl_x"].table.cell(0, 1).text_frame.paragraphs[0].text == "abcde\tf"
