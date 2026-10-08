@@ -503,9 +503,6 @@ export default function TechnoCustomView() {
                                   fontWeight: 700,
                                 }} title={reported ? cd.note : (fellBack ? cd.warnings.join(' ') : 'Calculated for this period')}>
                                   {cd.display || '—'}{fellBack ? '*' : ''}
-                                  {reported && (
-                                    <sup style={{ fontSize: '7.5pt', fontWeight: 700, color: isSail ? '#3c2f00' : '#188038', marginLeft: 2 }}>R</sup>
-                                  )}
                                 </td>
                               );
                             })}
@@ -517,7 +514,7 @@ export default function TechnoCustomView() {
                 </tbody>
               </table>
               <div style={{ padding: '8px 12px', fontSize: '9pt', color: '#5f6368', borderTop: '1px solid #e8eaed' }}>
-                <sup style={{ fontWeight: 700, color: '#188038' }}>R</sup> reported till-month cumulative, exactly as in the Major report (page 27) — used whenever a period runs month-by-month from April (Q1, H1, full FY, Apr–any month). For HM / Scrap consumption and TMI at two-shop plants (BSP, RSP, BSL) the shops' reported cumulatives are combined, weighted by each shop's crude steel — the same rule page 27 uses for SAIL (hover a cell to see the shop figures). Other periods are calculated fresh.
+                Whenever a period runs month-by-month from April (Q1, H1, full FY, Apr–any month) till month cumulative data are shown. For HM / Scrap consumption and TMI at two-shop plants (BSP, RSP, BSL) the shops&apos; reported cumulatives are combined, weighted by each shop&apos;s crude steel — the same rule page 27 uses for SAIL (hover a cell to see the shop figures). Other periods are calculated fresh.
                 <br />* production-weight data was incomplete for one or more months in that period — a simple average is shown instead of the weighted/harmonic figure (hover the cell for detail).
               </div>
             </div>
