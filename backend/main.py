@@ -4923,9 +4923,10 @@ async def steel_sector_performance_preview_url(payload: dict):
     (no file upload) — same preview shape as the PDF-upload endpoint above,
     so the frontend's review/edit/save flow is identical either way."""
     url = (payload.get("url") or "").strip()
+    html = payload.get("html") or ""
     month = (payload.get("month") or "").strip()
-    if not url:
-        raise HTTPException(status_code=400, detail="url is required")
+    if not url and not html.strip():
+        raise HTTPException(status_code=400, detail="url or html is required")
     if not month:
         raise HTTPException(status_code=400, detail="month is required")
 
@@ -4933,15 +4934,24 @@ async def steel_sector_performance_preview_url(payload: dict):
     sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "excel_extractors")))
     try:
         import html_extractor_steel_sector_performance as _ssp_html_mod
-        result = _ssp_html_mod.extract_preview_from_url(url, month)
-        result["source_file"] = url
+        if html.strip():
+            # The page's HTML pasted in (PIB unreachable from the server) —
+            # parsed as-is, nothing fetched.
+            result = _ssp_html_mod.extract_preview_from_html(html, month, source_url=url or None)
+            result["source_file"] = url or "PIB release (pasted HTML)"
+        else:
+            result = _ssp_html_mod.extract_preview_from_url(url, month)
+            result["source_file"] = url
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         import requests
         if isinstance(e, requests.exceptions.RequestException):
-            raise HTTPException(status_code=400, detail=f"Could not fetch that URL: {e}")
+            raise HTTPException(
+                status_code=400,
+                detail=(f"Could not fetch that URL after 3 tries ({e}). PIB may be slow or "
+                        "unreachable — try again, or paste the page's HTML instead."))
         raise HTTPException(status_code=500, detail=f"Extraction failed: {type(e).__name__}: {e}")
 
 

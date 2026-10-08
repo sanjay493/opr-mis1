@@ -97,19 +97,28 @@ def _fetch_html(url: str) -> str:
     # signature in the User-Agent (verified: a bare "python-requests" UA and
     # one naming this app both got 403; an ordinary browser UA gets 200) —
     # so this impersonates a normal browser rather than identifying itself.
-    resp = requests.get(
-        url,
-        headers={
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-            ),
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        },
-        timeout=20,
-    )
-    resp.raise_for_status()
-    return resp.text
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        ),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    }
+    # PIB normally answers in about a second but intermittently stalls for
+    # longer than any sensible single timeout — retry a stalled or dropped
+    # request a couple of times before giving up. (The data-entry page can
+    # also take the page's HTML pasted in, for when PIB stays unreachable.)
+    import time
+    attempts = 3
+    for attempt in range(1, attempts + 1):
+        try:
+            resp = requests.get(url, headers=headers, timeout=(10, 45))
+            resp.raise_for_status()
+            return resp.text
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
+            if attempt == attempts:
+                raise
+            time.sleep(2 * attempt)
 
 
 def _clean_text(s) -> str:
@@ -200,16 +209,23 @@ def _table_rows(table_tag):
 
 
 def extract_preview_from_url(url: str, report_month: str, **_kwargs) -> dict:
+    return extract_preview_from_html(_fetch_html(url), report_month, source_url=url)
+
+
+def extract_preview_from_html(html: str, report_month: str, source_url=None) -> dict:
+    """Same as extract_preview_from_url, from the page's HTML already in hand
+    — the whole page or just its content div, as copied from the browser."""
     from bs4 import BeautifulSoup
 
-    html = _fetch_html(url)
+    url = source_url
     soup = BeautifulSoup(html, "html.parser")
     container = soup.find("div", class_=_CONTAINER_CLASS)
     if container is None:
         raise ValueError(
             "Could not find the press release content on this page — verify "
-            "the URL is a PIB 'PressReleasePage.aspx' link for the Ministry "
-            "of Steel monthly release."
+            "it is the PIB release for the Ministry of Steel monthly report "
+            "(pasted HTML must include div.innner-page-main-about-us-content-"
+            "right-part)."
         )
 
     title_el = container.find(id="Titleh2")

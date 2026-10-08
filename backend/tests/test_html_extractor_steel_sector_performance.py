@@ -83,3 +83,34 @@ def test_any_pib_release_link_is_fetched_as_press_release_page(given, expected):
 def test_non_pib_or_id_less_links_are_rejected(bad):
     with pytest.raises(ValueError):
         h._page_url(bad)
+
+
+def test_pasted_html_is_parsed_like_a_fetched_page():
+    with open(os.path.join(FIXTURES, "pib_sep_container.html"), encoding="utf-8") as f:
+        page = f.read()
+    preview = h.extract_preview_from_html(page, "2026-09")
+    assert preview["tables"]["1a"]["rows"][0][:2] == ["Crude Steel", "14.1"]
+    assert preview["source_url"] is None
+
+
+def test_fetch_retries_a_stalled_request(monkeypatch):
+    import requests
+
+    calls = []
+
+    class _Resp:
+        text = "<html>ok</html>"
+
+        def raise_for_status(self):
+            pass
+
+    def fake_get(url, **_kw):
+        calls.append(url)
+        if len(calls) < 3:
+            raise requests.exceptions.ReadTimeout("stalled")
+        return _Resp()
+
+    monkeypatch.setattr(requests, "get", fake_get)
+    monkeypatch.setattr("time.sleep", lambda _s: None)
+    assert h._fetch_html(SEP_URL) == "<html>ok</html>"
+    assert len(calls) == 3

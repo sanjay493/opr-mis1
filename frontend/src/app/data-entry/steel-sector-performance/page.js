@@ -287,6 +287,10 @@ export default function SteelSectorPerformancePage() {
   }, []);
   const [file, setFile] = useState(null);
   const [sourceUrl, setSourceUrl] = useState('');
+  // The release page's HTML, pasted in when PIB can't be reached from the
+  // server (copied from the browser: the whole page or its content div).
+  const [showPaste, setShowPaste] = useState(false);
+  const [pastedHtml, setPastedHtml] = useState('');
   const [preview, setPreview] = useState(null);
   const [extracting, setExtracting] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -314,8 +318,8 @@ export default function SteelSectorPerformancePage() {
     }
   };
 
-  const handleExtractUrl = async () => {
-    if (!sourceUrl.trim()) return;
+  const handleExtractUrl = async (html = '') => {
+    if (!sourceUrl.trim() && !html.trim()) return;
     setExtracting(true);
     setError(null);
     setPreview(null);
@@ -324,7 +328,7 @@ export default function SteelSectorPerformancePage() {
       const res = await fetch(`${API}/api/steel-sector-performance/preview-url`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: sourceUrl.trim(), month: srcMonth }),
+        body: JSON.stringify({ url: sourceUrl.trim(), html, month: srcMonth }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.detail || `HTTP ${res.status}`);
@@ -435,13 +439,46 @@ export default function SteelSectorPerformancePage() {
               style={{ ...selectStyle, flex: 1, minWidth: '320px' }}
             />
             <button
-              onClick={handleExtractUrl}
+              onClick={() => handleExtractUrl()}
               disabled={!sourceUrl.trim() || extracting}
               style={btnStyle(!sourceUrl.trim() || extracting)}
             >
               {extracting ? 'Extracting…' : 'Extract from URL'}
             </button>
+            <button
+              onClick={() => setShowPaste((v) => !v)}
+              style={{ background: 'none', border: 'none', color: '#1a73e8', fontSize: '9.5pt', cursor: 'pointer', padding: 0 }}
+            >
+              {showPaste ? 'Hide pasted HTML' : 'PIB not loading? Paste the page HTML'}
+            </button>
           </div>
+
+          {showPaste && (
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', flexWrap: 'wrap', marginBottom: '12px' }}>
+              <span style={{ fontSize: '9.5pt', fontWeight: 600, color: '#5f6368', minWidth: '90px', paddingTop: '6px' }}>Page HTML</span>
+              <div style={{ flex: 1, minWidth: '320px' }}>
+                <textarea
+                  value={pastedHtml}
+                  onChange={(e) => setPastedHtml(e.target.value)}
+                  placeholder={'<div class="innner-page-main-about-us-content-right-part"> …'}
+                  rows={6}
+                  style={{ ...selectStyle, width: '100%', boxSizing: 'border-box', fontFamily: 'monospace', fontSize: '9pt' }}
+                />
+                <div style={{ fontSize: '9pt', color: '#5f6368', marginTop: '4px' }}>
+                  Open the release in your browser, right-click the page → View page source (or Inspect the
+                  content block → Copy → Copy outerHTML), and paste it here. The URL above, if filled in, is
+                  kept as the source link.
+                </div>
+              </div>
+              <button
+                onClick={() => handleExtractUrl(pastedHtml)}
+                disabled={!pastedHtml.trim() || extracting}
+                style={btnStyle(!pastedHtml.trim() || extracting)}
+              >
+                {extracting ? 'Extracting…' : 'Extract from HTML'}
+              </button>
+            </div>
+          )}
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '4px' }}>
             <span style={{ fontSize: '9.5pt', fontWeight: 600, color: '#5f6368', minWidth: '90px' }}>PDF file</span>
