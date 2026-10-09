@@ -34,6 +34,7 @@ plant_name, item_name), later uploads overwriting earlier ones for the same
 month with no special "first upload of the FY" handling needed.
 """
 import datetime
+import re
 from typing import Dict, List, Optional
 
 import openpyxl
@@ -116,7 +117,30 @@ def _clean(v) -> Optional[float]:
     try:
         return float(s.replace(",", ""))
     except (ValueError, TypeError):
+        pass
+    # Typing slips seen in real files: "26..4" for 26.4
+    try:
+        return float(re.sub(r"\.{2,}", ".", s.replace(",", "")))
+    except (ValueError, TypeError):
         return None
+
+
+def _read(ws, row: int, col: int, where: str, warnings: List[str]) -> Optional[float]:
+    """_clean, plus a warning whenever the cell is typed text rather than a
+    number. Excel leaves such a cell out of the sheet's own totals, so the
+    plant should correct the workbook even when the value could be read."""
+    raw = ws.cell(row=row, column=col).value
+    val = _clean(raw)
+    if isinstance(raw, str) and raw.strip() not in ("", "-", "—"):
+        cell = f"{openpyxl.utils.get_column_letter(col)}{row}"
+        if val is None:
+            warnings.append(f"{where}: cell {cell} has text {raw!r}, not a number; skipped.")
+        else:
+            warnings.append(
+                f"{where}: cell {cell} has text {raw!r}; read as {val:g}. "
+                "Excel leaves it out of the sheet's own totals, so ask the plant to correct it."
+            )
+    return val
 
 
 def extract_power_omi(file_path: str) -> dict:
@@ -139,10 +163,11 @@ def extract_power_omi(file_path: str) -> dict:
     all_cols = dict(_FIXED_COLS)
     all_cols.update(ly_cols)
 
-    records: List[dict] = []
+    # Locate every plant block first: which months the file has actually
+    # reported is a whole-file fact, needed before any block is read.
+    blocks = []
     months_seen = set()
     plants_found = []
-
     r = 7
     for plant in _PLANTS:
         prow = None
@@ -161,37 +186,47 @@ def extract_power_omi(file_path: str) -> dict:
         if len(month_rows) < 12:
             warnings.append(f"{plant}: only found {len(month_rows)}/12 month rows.")
         months_seen.update(month_rows)
+        blocks.append((plant, month_rows, cum_row))
+        r = (cum_row + 1) if cum_row is not None else (prow + 14)
 
+    # PLAN and LAST-YEAR are pre-filled for the whole FY, and so are some
+    # other cells (SAIL's Sp. Power Cons, CFP's formula zeros), so a filled
+    # cell doesn't mean the month has happened. A month is reported once any
+    # plant has a non-zero Actual Total or Total Power Consump in it — the
+    # latter covers SSP/VISP, whose generation columns are always blank.
+    reported = set()
+    for _, month_rows, _ in blocks:
+        for mo, row_idx in month_rows.items():
+            if any(_clean(ws.cell(row=row_idx, column=_FIXED_COLS[k]).value)
+                   for k in ("actual_total", "total_power_consump")):
+                reported.add(mo)
+    latest_month = max(reported) if reported else None
+
+    records: List[dict] = []
+    for plant, month_rows, cum_row in blocks:
         for month, row_idx in month_rows.items():
+            future = latest_month is None or month > latest_month
             for item, col in all_cols.items():
-                val = _clean(ws.cell(row=row_idx, column=col).value)
+                if future and not item.startswith(("plan_", "last_year_")):
+                    continue
+                val = _read(ws, row_idx, col, f"{plant} {month} {item}", warnings)
                 if val is not None:
                     records.append({
                         "report_month": month, "plant_name": plant,
                         "item_name": item, "value": val,
                     })
 
-        if cum_row is not None and month_rows:
-            # NOT max(month_rows) — every month row exists year-round since
-            # PLAN is pre-filled for the whole FY even for months that
-            # haven't happened yet (see module docstring), so that would
-            # always resolve to next March regardless of how far the file
-            # has actually been reported. The Cum row instead belongs to
-            # the latest month that actually HAS an actual_total figure.
-            reported_months = [
-                mo for mo, row_idx in month_rows.items()
-                if ws.cell(row=row_idx, column=_FIXED_COLS["actual_total"]).value is not None
-            ]
-            latest_month = max(reported_months) if reported_months else max(month_rows)
+        # The Cum row is the FY-to-date total through the latest reported
+        # month — the same month for every plant, including the ones (SSP,
+        # VISP, CFP) with no usable Actual Total of their own.
+        if cum_row is not None and latest_month is not None:
             for item, col in all_cols.items():
-                val = _clean(ws.cell(row=cum_row, column=col).value)
+                val = _read(ws, cum_row, col, f"{plant} Cum {item}", warnings)
                 if val is not None:
                     records.append({
                         "report_month": latest_month, "plant_name": plant,
                         "item_name": f"{item}_cum", "value": val,
                     })
-
-        r = (cum_row + 1) if cum_row is not None else (prow + 14)
 
     if not records:
         raise ValueError(

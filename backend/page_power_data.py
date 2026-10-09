@@ -96,14 +96,13 @@ def generate_power_data(report_month: str) -> dict:
         else:
             month_vals.setdefault((plant, rm), {})[item] = value
 
-    # Freshest cum snapshot at-or-before the selected report_month (falls
-    # back to the latest available in the FY if none is at-or-before yet —
-    # e.g. viewing April before April's own upload has happened).
+    # Freshest cum snapshot at-or-before the selected report_month. Never a
+    # later one: an Aug report must not show the Apr-Sep cumulative.
     cum_vals: dict = {}
     for (plant, base), points in cum_candidates.items():
         eligible = [p for p in points if p[0] <= report_month]
-        chosen = max(eligible, key=lambda p: p[0]) if eligible else max(points, key=lambda p: p[0])
-        cum_vals.setdefault(plant, {})[base] = chosen[1]
+        if eligible:
+            cum_vals.setdefault(plant, {})[base] = max(eligible)[1]
 
     fy_start_year = fy_months[0].split("-")[0]
     fy_end_year = fy_months[-1].split("-")[0][-2:]
@@ -114,6 +113,11 @@ def generate_power_data(report_month: str) -> dict:
         rows = []
         for rm in fy_months:
             vals = month_vals.get((plant, rm), {})
+            if rm > report_month:
+                # Months after the report month show only what was known in
+                # advance (PLAN, LAST YEAR), even once their actuals are in.
+                vals = {k: v for k, v in vals.items()
+                        if k.startswith(("plan_", "last_year_"))}
             rows.append({
                 "month": _month_label(rm),
                 "plan": _row_dict(vals, _PLAN_ITEMS, "plan_"),
