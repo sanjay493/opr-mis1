@@ -211,7 +211,7 @@ export default function SecretaryReviewPage() {
             <table style={{ borderCollapse: 'collapse', fontSize: '10pt', width: '100%' }}>
               <thead>
                 <tr style={{ textAlign: 'right', color: '#5f6368' }}>
-                  <th style={{ textAlign: 'left' }}>Item</th><th>APP {ctx.labels.mon}</th><th>Actual</th><th>APP {ctx.labels.ytd}</th><th>Actual</th>
+                  <th style={{ textAlign: 'left' }}>Item</th><th>{ctx.plan_label || 'APP'} {ctx.labels.mon}</th><th>Actual</th><th>{ctx.plan_label || 'APP'} {ctx.labels.ytd}</th><th>Actual</th>
                 </tr>
               </thead>
               <tbody>

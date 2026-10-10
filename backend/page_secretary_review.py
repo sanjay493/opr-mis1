@@ -4,7 +4,8 @@ build_context(month) gathers the month's numbers; render_pptx(month, texts)
 fills secretary_review_templates/secretary_review.pptx (see
 scripts/prep_secretary_review_template.py for how the template was made).
 Production figures come from page4._p4_row_values so they match the MIS
-report; techno figures from techno_period.build_period_report."""
+report, against MoU when mou_plan_table has the report month for every
+item (plan_basis), else APP; techno figures from techno_period.build_period_report."""
 
 import calendar
 import io
@@ -25,6 +26,7 @@ from secretary_review_layout import (BD_GROUPS, BD_PLANTS, BLOCKS, KPIS, PLANTS,
 
 ITEMS = [("HM", "Hot Metal"), ("CS", "Total Crude Steel"), ("FS", "Finished Steel"), ("SS", "Saleable Steel")]
 _P4 = {i["db_item"]: i for i in page4.PAGE4_ITEMS}
+BASIS_LABEL = {"app": "APP", "mou": "MoU"}
 
 
 def latest_month():
@@ -43,13 +45,26 @@ def latest_month():
 # Production
 # --------------------------------------------------------------------------
 
-def _prod_row(cur, month, plant, db_item, members=None):
-    """members: an explicit plant list summed as one row (the SSPs row)."""
+def plan_basis(cur, month):
+    """'mou' when mou_plan_table has rows for the month for every deck item,
+    else 'app'."""
+    try:
+        cur.execute("SELECT DISTINCT item_name FROM mou_plan_table "
+                    "WHERE report_month=? AND month_actual IS NOT NULL", (month,))
+        have = {r[0] for r in cur.fetchall()}
+    except Exception:
+        return "app"
+    return "mou" if all(db_item in have for _, db_item in ITEMS) else "app"
+
+
+def _prod_row(cur, month, plant, db_item, members=None, plan="plan"):
+    """members: an explicit plant list summed as one row (the SSPs row).
+    plan: page4's plan table key, 'plan' (APP) or 'mou'."""
     cfg = _P4[db_item]
     sail_set = members if members is not None else cfg["sail_set"]
     p = "SAIL" if members is not None else plant
     raw, cap = page4._p4_row_values(cur, month, p, db_item, False, cfg.get("five_plants", []),
-                                    sail_set, has_capacity=True, raw=True)
+                                    sail_set, has_capacity=True, raw=True, plan=plan)
     return {"cap": cap, "app_m": raw[1], "act_m": raw[2], "cply_m": raw[5], "gr_m": raw[6],
             "cu_m": raw[7], "app_ytd": raw[8], "act_ytd": raw[9], "cply_ytd": raw[12],
             "gr_ytd": raw[13], "cu_ytd": raw[14]}
@@ -73,12 +88,13 @@ def _with_conversion(cur, month, row):
     return r
 
 
-def build_production(cur, month):
+def build_production(cur, month, basis="app"):
+    plan = "mou" if basis == "mou" else "plan"
     out = {}
     for key, db_item in ITEMS:
-        rows = {s: _prod_row(cur, month, s, db_item) for s in SCOPES}
+        rows = {s: _prod_row(cur, month, s, db_item, plan=plan) for s in SCOPES}
         ssps = [p for p in _P4[db_item]["sail_set"] if p not in FIVE_PLANTS]
-        rows["SSPs"] = _prod_row(cur, month, "SSPs", db_item, members=ssps) if ssps else None
+        rows["SSPs"] = _prod_row(cur, month, "SSPs", db_item, members=ssps, plan=plan) if ssps else None
         if key == "FS":
             rows["TOTAL_CONV"] = _with_conversion(cur, month, rows["SAIL"])
         out[key] = rows
@@ -170,13 +186,16 @@ def build_context(month):
     warnings = []
     conn = db.connect()
     try:
-        production = build_production(conn.cursor(), month)
+        cur = conn.cursor()
+        basis = plan_basis(cur, month)
+        production = build_production(cur, month, basis)
     finally:
         conn.close()
     if production["HM"]["SAIL"]["act_m"] is None:
         warnings.append(f"No production actuals for {labels['mon']}")
     techno = build_techno(labels, warnings)
-    return {"labels": labels, "production": production, "techno": techno, "warnings": warnings}
+    return {"labels": labels, "basis": basis, "production": production, "techno": techno,
+            "warnings": warnings}
 
 
 # --------------------------------------------------------------------------
@@ -227,6 +246,17 @@ def _fill_section_table(table, production):
             item = ITEM_BY_LABEL[label]
         elif item and label in PLANT_ROW:
             _fill_values(row, production[item].get(_row_scope(item, PLANT_ROW[label])))
+
+
+def _relabel_plan_headers(table, label):
+    """The template's plan column headers say 'APP'; the cell text is exactly
+    that, so only those cells change."""
+    if label == "APP":
+        return
+    for row in table.rows:
+        for cell in row.cells:
+            if cell.text.strip() == "APP":
+                sp.set_text_lines(cell.text_frame, [label])
 
 
 def _lines(text):
@@ -377,14 +407,18 @@ def render_pptx(month, texts=None):
             warnings.append(f"template shape {name} not found")
         return sh
 
+    plan_label = BASIS_LABEL[ctx["basis"]]
     if (sh := get("tbl_sail")) is not None:
         _fill_item_table(sh.table, production, "SAIL")
+        _relabel_plan_headers(sh.table, plan_label)
     for p in PLANTS:
         if (sh := get(f"tbl_{p}")) is not None:
             _fill_item_table(sh.table, production, p)
+            _relabel_plan_headers(sh.table, plan_label)
     for name in ("tbl_plants_hm_cs", "tbl_plants_ss_fs"):
         if (sh := get(name)) is not None:
             _fill_section_table(sh.table, production)
+            _relabel_plan_headers(sh.table, plan_label)
 
     hl_header = f"{labels['period_hdr']} Highlights"
     if (sh := get("tbl_sail_hl")) is not None:

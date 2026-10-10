@@ -41,7 +41,8 @@ def context(month: str = Query(None)):
     summary = [{"item": name, **{k: ctx["production"][key][psr._row_scope(key, "SAIL")][k]
                                  for k in ("app_m", "act_m", "app_ytd", "act_ytd")}}
                for key, name in psr.ITEMS]
-    return {"labels": ctx["labels"], "filename": ctx["labels"]["filename"],
+    return {"labels": ctx["labels"], "plan_label": psr.BASIS_LABEL[ctx["basis"]],
+            "filename": ctx["labels"]["filename"],
             "warnings": ctx["warnings"], "summary": summary}
 
 

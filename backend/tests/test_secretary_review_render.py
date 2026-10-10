@@ -40,7 +40,7 @@ def fake_context(month):
     kpi = {"fy_m2": 1.0, "fy_m1": 1.0, "target": 1.0, "month": 1.0, "ytd": 1.0, "month_used": month,
            "trend": [(calendar.month_abbr[int(m[5:])], 1.0) for m in months]}
     techno = {s: {k: dict(kpi) for k, _, _ in L.KPIS} for s in L.SCOPES}
-    return {"labels": labels, "production": production, "techno": techno, "warnings": []}
+    return {"labels": labels, "basis": "app", "production": production, "techno": techno, "warnings": []}
 
 
 @pytest.fixture
@@ -55,10 +55,29 @@ def offline(monkeypatch):
 
 @pytest.fixture(scope="module")
 def rendered():
+    """Against APP, as the reference deck is, even once MoU is loaded."""
     texts = {k: "" for k, _, _ in L.BLOCKS}
     texts["hl_SAIL"] = "Line one:\nLine two"
-    res = psr.render_pptx("2026-09", texts)
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(psr, "plan_basis", lambda cur, month: "app")
+        res = psr.render_pptx("2026-09", texts)
     return res, Presentation(io.BytesIO(res.content))
+
+
+def _plan_headers(prs):
+    return {c.text.strip() for s in prs.slides for sh in s.shapes if getattr(sh, "has_table", False)
+            for row in sh.table.rows for c in row.cells if c.text.strip() in ("APP", "MoU")}
+
+
+def test_mou_basis_relabels_plan_headers(offline, monkeypatch):
+    monkeypatch.setattr(psr, "build_context", lambda m: {**fake_context(m), "basis": "mou"})
+    res = psr.render_pptx("2026-09", {k: "" for k, _, _ in L.BLOCKS})
+    assert _plan_headers(Presentation(io.BytesIO(res.content))) == {"MoU"}
+
+
+def test_app_basis_keeps_app_headers(offline):
+    res = psr.render_pptx("2026-09", {k: "" for k, _, _ in L.BLOCKS})
+    assert _plan_headers(Presentation(io.BytesIO(res.content))) == {"APP"}
 
 
 @live
