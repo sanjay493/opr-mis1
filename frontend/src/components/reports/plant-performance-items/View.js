@@ -132,20 +132,23 @@ function PerfTable({ section, decimals }) {
 
 export default function PlantPerformanceItemsView() {
   const [month, setMonth] = useState(previousMonth());
-  // Remembered per browser; storage can be unavailable (private window,
-  // server prerender), in which case the default of 3 is used.
-  const [decimals, setDecimals] = useState(() => {
-    try {
-      const saved = window.localStorage.getItem(DECIMALS_KEY);
-      return ['0', '1', '2', '3'].includes(saved) ? Number(saved) : 3;
-    } catch {
-      return 3;
-    }
-  });
+  const [decimals, setDecimals] = useState(3);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [downloading, setDownloading] = useState(null); // null | 'xlsx' | 'pdf'
+
+  // The saved choice is applied after mount, not in useState's initialiser:
+  // the server prerenders with 3, and an initialiser reading localStorage
+  // would leave the select showing 3 while downloads used the saved value.
+  // Storage can be unavailable (private window), leaving the default.
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(DECIMALS_KEY);
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time sync from browser storage
+      if (['0', '1', '2', '3'].includes(saved)) setDecimals(Number(saved));
+    } catch { /* keep the default */ }
+  }, []);
 
   const changeDecimals = (d) => {
     setDecimals(d);
@@ -205,7 +208,6 @@ export default function PlantPerformanceItemsView() {
                    style={{ padding: '6px 8px', fontSize: '10.5pt', border: '1px solid #dadce0', borderRadius: 6 }} />
             <label htmlFor="pp-decimals" style={{ fontSize: '10.5pt', fontWeight: 600, color: '#3c4043' }}>Decimals</label>
             <select id="pp-decimals" value={decimals} onChange={(e) => changeDecimals(Number(e.target.value))}
-                    suppressHydrationWarning
                     style={{ padding: '6px 8px', fontSize: '10.5pt', border: '1px solid #dadce0', borderRadius: 6 }}>
               {[0, 1, 2, 3].map((d) => <option key={d} value={d}>{d}</option>)}
             </select>

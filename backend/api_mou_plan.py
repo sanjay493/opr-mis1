@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent / "excel_extractors"))
 from excel_extractor_mou_plan import extract_mou_plan  # noqa: E402
 
 import db  # noqa: E402
+from page4 import PAGE4_ITEMS  # noqa: E402
 
 router = APIRouter(prefix="/api/mou-plan", tags=["mou-plan"])
 
@@ -40,6 +41,24 @@ def _existing_conflicts(records: list) -> list:
     return conflicts
 
 
+def sail_set_warnings(records: list) -> list:
+    """Warn about non-zero targets for plants that page 4 leaves out of an
+    item's SAIL total (e.g. VISL Pig Iron). The extractor already checks the
+    file's SAIL row against the sum of all its plant rows, so with no such
+    plants the report's SAIL row equals the workbook's."""
+    sail_sets = {cfg["db_item"]: set(cfg.get("sail_set", [])) for cfg in PAGE4_ITEMS}
+    outside = {}
+    for rec in records:
+        members = sail_sets.get(rec["item_name"])
+        if members is not None and rec["plant_name"] not in members and rec["value"]:
+            outside.setdefault((rec["item_name"], rec["plant_name"]), []).append(rec["report_month"])
+    return [
+        f"{item} {plant}: non-zero MoU target in {len(months)} month(s), but the report's SAIL total "
+        f"for {item} does not include {plant}, so it will be lower than the workbook's SAIL row."
+        for (item, plant), months in sorted(outside.items())
+    ]
+
+
 @router.post("/preview")
 async def preview_mou_plan(file: UploadFile = File(..., description="MoU plan workbook (.xlsx)")):
     suffix = Path(file.filename or "upload.xlsx").suffix or ".xlsx"
@@ -58,7 +77,7 @@ async def preview_mou_plan(file: UploadFile = File(..., description="MoU plan wo
             "records": result["records"],
             "months": result["months"],
             "items_found": result["items_found"],
-            "warnings": result["warnings"],
+            "warnings": result["warnings"] + sail_set_warnings(result["records"]),
             "record_count": len(result["records"]),
             "has_existing": bool(conflicts),
             "existing_conflicts_count": len(conflicts),

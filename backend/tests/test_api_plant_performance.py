@@ -56,3 +56,19 @@ def test_pdf_html_has_both_pages():
 def test_pdf_small_negative_pct_is_zero():
     import plant_performance_pdf as ppdf
     assert ppdf._p(-0.3) == "0" and ppdf._p(-0.6) == "-1"
+
+
+def test_pdf_uses_only_config_colours():
+    import re
+    import plant_performance_pdf as ppdf
+    sec = {"labels": app_mod._labels("2026-08", "app"), "pct_idx": sorted(app_mod.PCT_IDX),
+           "rows": [dict(ROW)], "has_plan": True}
+    colors = {k: "#123456" for k in ("perf_app_bg", "perf_app_text", "perf_act_bg", "perf_act_text", "perf_gr_bg",
+                                     "perf_cap_bg", "perf_cap_text", "border_medium", "text_primary")}
+    html = ppdf.build_html([sec], 3, colors)
+    assert set(re.findall(r"#[0-9a-fA-F]{6}\b", html)) == {"#123456"}
+
+
+def test_pdf_endpoint_runs_off_the_event_loop():
+    import inspect
+    assert not inspect.iscoroutinefunction(app_mod.plant_performance_pdf_download)

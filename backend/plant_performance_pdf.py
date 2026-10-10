@@ -76,15 +76,15 @@ def build_html(sections, decimals, colors):
         return colors.get(k, dflt)
     css = f"""
   @page {{ size: A4 landscape; margin: 12mm 10mm; }}
-  body {{ font-family: Arial, sans-serif; margin: 0; color: #0f172a; }}
+  body {{ font-family: Arial, sans-serif; margin: 0; color: {c("text_primary", "#0f172a")}; }}
   .sheet {{ page-break-after: always; width: {_W_PX}px; }}
   .sheet:last-child {{ page-break-after: auto; }}
-  .hd {{ display: flex; justify-content: space-between; border-bottom: 1.5px solid #0f172a; }}
+  .hd {{ display: flex; justify-content: space-between; border-bottom: 1.5px solid {c("text_primary", "#0f172a")}; }}
   h1 {{ font-size: 12pt; margin: 0 0 2px; }}
   .sub {{ display: flex; justify-content: space-between; font-size: 8pt; font-style: italic; margin: 2px 0 4px; }}
   .note {{ font-size: 9pt; font-weight: 700; margin: 2px 0 4px; }}
   table {{ border-collapse: collapse; width: 100%; font-size: 7.5pt; }}
-  th, td {{ border: 1px solid #94a3b8; padding: 1px 4px; text-align: right; white-space: nowrap; }}
+  th, td {{ border: 1px solid {c("border_medium", "#94a3b8")}; padding: 1px 4px; text-align: right; white-space: nowrap; }}
   th {{ text-align: center; font-weight: 700; }}
   .l {{ text-align: left; }} .c {{ text-align: center; }} .b {{ font-weight: 700; }}
   .item {{ white-space: normal; vertical-align: middle; }}

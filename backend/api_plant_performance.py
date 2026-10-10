@@ -10,9 +10,7 @@ have a MoU target (page4.MOU_DB_ITEMS).
   GET /api/plant-performance-main-items/xlsx?month=YYYY-MM&decimals=N -> .xlsx (2 sheets)
   GET /api/plant-performance-main-items/pdf?month=YYYY-MM&decimals=N  -> .pdf (2 pages)
 """
-import asyncio
 import calendar
-import concurrent.futures
 import io
 import re
 
@@ -226,15 +224,15 @@ def plant_performance_xlsx(month: str = Query(...), decimals: int = Query(3)):
 
 
 @router.get("/pdf")
-async def plant_performance_pdf_download(month: str = Query(...), decimals: int = Query(3)):
+def plant_performance_pdf_download(month: str = Query(...), decimals: int = Query(3)):
+    # A plain def, so FastAPI runs it in its threadpool: the DB queries and
+    # the synchronous Playwright render must not block the event loop.
     _check_month(month)
     _check_decimals(decimals)
     db.init_db()
     sections = [_section(month, "app"), _section(month, "mou")]
     html = plant_performance_pdf.build_html(sections, decimals, load_colors_config())
-    loop = asyncio.get_running_loop()
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-        content = await loop.run_in_executor(pool, plant_performance_pdf.render, html)
+    content = plant_performance_pdf.render(html)
     fname = f"Plant_Performance_APP_MoU_{month}.pdf"
     return Response(content, media_type="application/pdf",
                     headers={"Content-Disposition": f'attachment; filename="{fname}"'})

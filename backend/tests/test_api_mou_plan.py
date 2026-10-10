@@ -54,3 +54,11 @@ def test_insert_then_conflict_then_replace(client):
 def test_insert_without_records_is_400(client):
     tc, _ = client
     assert tc.post("/api/mou-plan/insert", json={"records": []}).status_code == 400
+
+
+def test_plant_outside_page4_sail_set_is_warned():
+    recs = [{"report_month": "2026-04", "plant_name": "VISL", "item_name": "Pig Iron", "value": 2.0},
+            {"report_month": "2026-04", "plant_name": "VISL", "item_name": "Total Crude Steel", "value": 0.0},
+            {"report_month": "2026-04", "plant_name": "ASP", "item_name": "Total Crude Steel", "value": 1.0}]
+    w = api_mou_plan.sail_set_warnings(recs)
+    assert len(w) == 1 and "VISL" in w[0] and "Pig Iron" in w[0]
