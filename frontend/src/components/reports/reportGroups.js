@@ -74,10 +74,10 @@ export const REPORT_GROUPS = [
     id: 'excel',
     route: '/reports/excel',
     title: 'Excel Report',
-    description: 'Reports with Excel downloads: plant-wise performance of main items and the product-mix report.',
+    description: 'Reports with Excel downloads: plant-wise performance of main items (APP & MoU) and the product-mix report.',
     icon: '📗',
     tabs: [
-      { id: 'plant-performance-items', label: 'Plant Wise Performance (Excel)', description: 'Plant Wise Performance of Main Items, tonnage to 3 decimals, Excel download.' },
+      { id: 'plant-performance-items', label: 'Plant Wise Performance (APP & MoU)', description: 'Plant Wise Performance of Main Items against APP and MoU; Excel and PDF download.' },
       { id: 'pmix-fy', label: 'Pmix Report (Year-wise)', description: 'Product-mix report, financial-year view.' },
     ],
   },
