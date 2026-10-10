@@ -93,6 +93,17 @@ def init_db():
         )
     """)
 
+    # MoU month-wise production targets — see api_mou_plan.py.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS mou_plan_table (
+            report_month TEXT,
+            plant_name TEXT,
+            item_name TEXT,
+            month_actual REAL,
+            PRIMARY KEY (report_month, plant_name, item_name)
+        )
+    """)
+
     # 2b. Special Steel ABP (Annual Business Plan) — one monthly target per
     # plant, entered for all 12 months of a FY at once via the Special Steel
     # ABP Entry page. plant_name matches special_steel_orders' values (the 5
