@@ -182,6 +182,15 @@ are named `get_*` (read) and `save_* / upsert_* / merge_upsert_*` (write).
   (one file loads all 12 months); `frontend/src/app/data-entry/targets/page.js`.
 - **Read by:** same pages as `production_table` (ABP / APP / %FF columns).
 
+#### `mou_plan_table`
+`(report_month, plant_name, item_name)` → `month_actual` ('000 T). Month-wise
+MoU targets, per plant only (SAIL / 5 Plants are summed by the reader), for
+`Hot Metal`, `Total Crude Steel`, `Saleable Steel`, `Pig Iron`, `Finished Steel`.
+- **Populated by:** `excel_extractor_mou_plan.py` via `api_mou_plan.py`
+  (`POST /api/mou-plan/insert`); Uploads page, "MoU Plan (Excel)".
+- **Read by:** `page4.generate_page4_rows(basis="mou")` →
+  `/reports/excel` Plant Wise Performance, MoU page (Excel/PDF downloads).
+
 ### 4.2 Power
 
 #### `power_data_table`
@@ -609,7 +618,7 @@ export default function XPage() {
 | `co2-water-pm` | Sp. CO₂ / Water / PM emission, 5 plants, month + till-month (wraps `TechnoExtractedParams`) | `/api/techno/data`, `/api/techno/manual/save` (via component) | `techno_data` (`General`) |
 | `co2-water-pm-manual` | Same three params, plain manual grid | `/api/techno/manual/{entry,save}` | `techno_data` (`General`) |
 | `coal-consumption` | Coal blend / consumption + coal-OMI opening stock | `/api/techno/data`, `/api/coal-omi/opening-stock` | `techno_data` (coal keys) |
-| `uploads` | Coal-CO₂, Coal-OMI and Power-OMI **file** extraction (preview + insert) | `/api/coal-co2/{preview,insert}`, `/api/coal-omi/{preview,insert}`, `/api/power-omi/{preview,insert}` | `techno_data`, `power_data_table` |
+| `uploads` | Coal-CO₂, Coal-OMI, Power-OMI and MoU Plan **file** extraction (preview + insert) | `/api/coal-co2/{preview,insert}`, `/api/coal-omi/{preview,insert}`, `/api/power-omi/{preview,insert}`, `/api/mou-plan/{preview,insert}` | `techno_data`, `power_data_table`, `mou_plan_table` |
 | `special-steel` | ISP special-steel manual entry + corrections (grade grid) | `/api/special-steel-manual/save` (+ grades/products) | `special_steel_orders` |
 | `special-steel-abp` | Special-steel ABP, 12 months per plant at once | `/api/special-steel-abp` | `special_steel_abp_table` |
 | `special-steel-grade-clubs` | Combine near-duplicate quality grades into one report row | `/api/special-steel/grade-clubs`, `/api/special-steel/{grades,products}` | `special_steel_grade_clubs` |

@@ -1,20 +1,25 @@
 """
 "Plant Wise Performance of Main Items" — the PDF report's page 4 as an
-External Report: same rows/columns (page4.generate_page4_rows), but with the
-unrounded figures (raw=True) so the Excel download carries actual tonnage to
-3 decimal places instead of the PDF's whole numbers.
+External Report, against APP and against MoU: same rows/columns
+(page4.generate_page4_rows), but with the unrounded figures (raw=True) so
+downloads carry tonnage to the chosen number of decimals (0-3) instead of
+the monthly PDF's whole numbers. The MoU version keeps only the items that
+have a MoU target (page4.MOU_DB_ITEMS).
 
-  GET /api/plant-performance-main-items?month=YYYY-MM        -> JSON rows
-  GET /api/plant-performance-main-items/xlsx?month=YYYY-MM   -> .xlsx download
+  GET /api/plant-performance-main-items?month=YYYY-MM&basis=app|mou   -> JSON rows
+  GET /api/plant-performance-main-items/xlsx?month=YYYY-MM&decimals=N -> .xlsx (2 sheets)
+  GET /api/plant-performance-main-items/pdf?month=YYYY-MM&decimals=N  -> .pdf (2 pages)
 """
 import calendar
 import io
 import re
 
 from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 
 import db
+import plant_performance_pdf
+from colors_loader import load_colors_config
 from page4 import generate_page4_rows
 
 router = APIRouter(prefix="/api/plant-performance-main-items", tags=["plant-performance"])
@@ -23,16 +28,19 @@ router = APIRouter(prefix="/api/plant-performance-main-items", tags=["plant-perf
 # every other value is a quantity ('000 T, or nos/day for Oven Pushing).
 PCT_IDX = {4, 6, 7, 11, 13, 14}
 
+_BASIS = {"app": "APP", "mou": "MoU"}
+
 _MON = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
 
-def _labels(month: str) -> dict:
+def _labels(month: str, basis: str = "app") -> dict:
     y, m = int(month[:4]), int(month[5:7])
     fy = y if m >= 4 else y - 1
     sy, py = f"{y % 100:02d}", f"{(y - 1) % 100:02d}"
     return {
         "title": f"Plant Wise Performance of Main Items during {calendar.month_name[m]}'{sy} "
                  f"and Apr-{_MON[m]}'{sy}",
+        "basis": _BASIS[basis],
         "fy": f"{fy % 100:02d}-{(fy + 1) % 100:02d}",
         "month": f"{_MON[m]}'{sy}",
         "cply": f"{_MON[m]}'{py}",
@@ -41,9 +49,9 @@ def _labels(month: str) -> dict:
     }
 
 
-def _rows(month: str) -> list:
+def _rows(month: str, basis: str = "app") -> list:
     out = []
-    for r in generate_page4_rows(month, raw=True):
+    for r in generate_page4_rows(month, raw=True, basis=basis):
         display = r.get("display_name", "")
         plant = r["label"][len(display):].strip() if r["label"].startswith(display) else ""
         out.append({
@@ -57,32 +65,51 @@ def _rows(month: str) -> list:
     return out
 
 
+def _section(month: str, basis: str) -> dict:
+    rows = _rows(month, basis)
+    return {
+        "labels": _labels(month, basis),
+        "pct_idx": sorted(PCT_IDX),
+        "rows": rows,
+        "has_plan": any(r["values"][0] is not None for r in rows),
+    }
+
+
 def _check_month(month: str):
     if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", month or ""):
         raise HTTPException(status_code=400, detail="month must be YYYY-MM")
 
 
+def _check_basis(basis: str):
+    if basis not in _BASIS:
+        raise HTTPException(status_code=400, detail="basis must be 'app' or 'mou'")
+
+
+def _check_decimals(decimals: int):
+    if not 0 <= decimals <= 3:
+        raise HTTPException(status_code=400, detail="decimals must be 0, 1, 2 or 3")
+
+
+def _qty_fmt(decimals: int) -> str:
+    return "#,##0" if decimals == 0 else "#,##0." + "0" * decimals
+
+
 @router.get("")
-def plant_performance(month: str = Query(...)):
+def plant_performance(month: str = Query(...), basis: str = Query("app")):
     _check_month(month)
+    _check_basis(basis)
     db.init_db()
-    return {"month": month, "labels": _labels(month), "pct_idx": sorted(PCT_IDX), "rows": _rows(month)}
+    return {"month": month, "basis": basis, **_section(month, basis)}
 
 
-@router.get("/xlsx")
-def plant_performance_xlsx(month: str = Query(...)):
-    _check_month(month)
-    from openpyxl import Workbook
+def _write_sheet(ws, month: str, basis: str, decimals: int):
     from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
     from openpyxl.utils import get_column_letter
 
-    db.init_db()
-    L = _labels(month)
-    rows = _rows(month)
+    sec = _section(month, basis)
+    L, rows = sec["labels"], sec["rows"]
+    B = L["basis"]
 
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Plant Performance"
     thin = Side(style="thin", color="94A3B8")
     border = Border(left=thin, right=thin, top=thin, bottom=thin)
     hdr_fill = PatternFill("solid", fgColor="DBEAFE")
@@ -94,13 +121,15 @@ def plant_performance_xlsx(month: str = Query(...)):
 
     ws.cell(1, 1, L["title"]).font = Font(bold=True, size=13, color="1E3A8A")
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=ncols - 3)
-    ws.cell(1, ncols - 2, "w.r.t APP").font = bold
+    ws.cell(1, ncols - 2, f"w.r.t {B}").font = bold
     ws.cell(2, 1, "Tentative").font = Font(italic=True)
+    if not sec["has_plan"]:
+        ws.cell(2, 4, f"No {B} data uploaded for FY {L['fy']}").font = Font(bold=True, color="B91C1C")
     ws.cell(2, ncols, "Unit: '000 T").font = Font(italic=True)
     ws.cell(2, ncols).alignment = Alignment(horizontal="right")
 
     h1, h2 = 3, 4
-    top = [("Items", 1, 1), ("Plant", 2, 2), ("Ann.\nCap.", 3, 3), (f"APP\n{L['fy']}", 4, 4),
+    top = [("Items", 1, 1), ("Plant", 2, 2), ("Ann.\nCap.", 3, 3), (f"{B}\n{L['fy']}", 4, 4),
            (L["month"], 5, 8), (f"{L['cply']}\nAct.", 9, 9), (f"%Gr.\n{L['cply']}", 10, 10), ("CU%", 11, 11),
            (L["ytd"], 12, 15), (f"{L['ytd_cply']}\nAct.", 16, 16), (f"%Gr.\n{L['ytd_cply']}", 17, 17),
            ("CU%", 18, 18)]
@@ -110,7 +139,7 @@ def plant_performance_xlsx(month: str = Query(...)):
             ws.merge_cells(start_row=h1, start_column=c1, end_row=h1, end_column=c2)
         else:
             ws.merge_cells(start_row=h1, start_column=c1, end_row=h2, end_column=c1)
-    for i, t in enumerate(["APP", "Act.", "Var", "%Ful."]):
+    for i, t in enumerate([B, "Act.", "Var", "%Ful."]):
         ws.cell(h2, 5 + i, t)
         ws.cell(h2, 12 + i, t)
     for r in (h1, h2):
@@ -118,7 +147,7 @@ def plant_performance_xlsx(month: str = Query(...)):
             cell = ws.cell(r, c)
             cell.font, cell.fill, cell.alignment, cell.border = bold, hdr_fill, center, border
 
-    qty_fmt, pct_fmt = "#,##0.000", "0"
+    qty_fmt, pct_fmt = _qty_fmt(decimals), "0"
     r = h2 + 1
     i = 0
     while i < len(rows):
@@ -169,12 +198,41 @@ def plant_performance_xlsx(month: str = Query(...)):
     ws.row_dimensions[h1].height = 30
     ws.freeze_panes = ws.cell(h2 + 1, 3)
 
+
+@router.get("/xlsx")
+def plant_performance_xlsx(month: str = Query(...), decimals: int = Query(3)):
+    _check_month(month)
+    _check_decimals(decimals)
+    from openpyxl import Workbook
+
+    db.init_db()
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "w.r.t APP"
+    _write_sheet(ws, month, "app", decimals)
+    _write_sheet(wb.create_sheet("w.r.t MoU"), month, "mou", decimals)
+
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
-    fname = f"Plant_Performance_Main_Items_{month}.xlsx"
+    fname = f"Plant_Performance_APP_MoU_{month}.xlsx"
     return StreamingResponse(
         buf,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{fname}"'},
     )
+
+
+@router.get("/pdf")
+def plant_performance_pdf_download(month: str = Query(...), decimals: int = Query(3)):
+    # A plain def, so FastAPI runs it in its threadpool: the DB queries and
+    # the synchronous Playwright render must not block the event loop.
+    _check_month(month)
+    _check_decimals(decimals)
+    db.init_db()
+    sections = [_section(month, "app"), _section(month, "mou")]
+    html = plant_performance_pdf.build_html(sections, decimals, load_colors_config())
+    content = plant_performance_pdf.render(html)
+    fname = f"Plant_Performance_APP_MoU_{month}.pdf"
+    return Response(content, media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="{fname}"'})

@@ -896,6 +896,203 @@ function PowerOmiExtractRow({ apiBase, onSuccess }) {
   );
 }
 
+// MoU month-wise production targets — feeds mou_plan_table, see
+// backend/api_mou_plan.py and excel_extractors/excel_extractor_mou_plan.py.
+// Like Power-OIS, one upload covers the whole FY, so it ignores reportMonth.
+// The preview sums each item's plant rows per month (the stored SAIL total).
+function MouPlanExtractRow({ apiBase, onSuccess }) {
+  const [file, setFile] = React.useState(null);
+  const [busy, setBusy] = React.useState(false);
+  const [status, setStatus] = React.useState(null);
+  const [preview, setPreview] = React.useState(null);
+  const inputRef = React.useRef();
+
+  const handlePreview = async () => {
+    if (!file) return;
+    setBusy(true);
+    setStatus(null);
+    setPreview(null);
+    const form = new FormData();
+    form.append('file', file);
+    try {
+      const res = await fetch(`${apiBase}/api/mou-plan/preview`, { method: 'POST', body: form });
+      const json = await parseJsonResponse(res);
+      if (!res.ok) throw new Error(json.detail || 'Preview failed');
+      setPreview(json);
+    } catch (err) {
+      setStatus({ type: 'error', text: err.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const doSave = async (confirmReplace) => {
+    const res = await fetch(`${apiBase}/api/mou-plan/insert`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        records: preview.records,
+        source_file: preview.source_file,
+        ...(confirmReplace ? { confirm_replace: true } : {}),
+      }),
+    });
+    return { res, json: await parseJsonResponse(res) };
+  };
+
+  const handleConfirmSave = async () => {
+    if (!preview) return;
+    setBusy(true);
+    setStatus(null);
+    try {
+      let { res, json } = await doSave(false);
+      if (res.status === 409) {
+        if (!window.confirm(`${json.detail}\n\nReplace the existing values?`)) {
+          setBusy(false);
+          return;
+        }
+        ({ res, json } = await doSave(true));
+      }
+      if (!res.ok) throw new Error(json.detail || 'Save failed');
+      setStatus({ type: 'success', text: `✓ Saved ${json.saved} value(s)` });
+      setPreview(null);
+      setFile(null);
+      if (inputRef.current) inputRef.current.value = '';
+      onSuccess();
+    } catch (err) {
+      setStatus({ type: 'error', text: err.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleCancel = () => { setPreview(null); setStatus(null); };
+
+  const cellStyle = { padding: '4px 8px', fontSize: 12.5, textAlign: 'right', borderBottom: '1px solid #f1f3f4' };
+  const labelCellStyle = { padding: '4px 8px', fontSize: 12.5, borderBottom: '1px solid #f1f3f4', color: '#374151' };
+
+  // SAIL total per item per month ('000 T) — a sanity check against the file's own SAIL row.
+  const totals = React.useMemo(() => {
+    if (!preview) return {};
+    const out = {};
+    for (const rec of preview.records) {
+      out[rec.item_name] = out[rec.item_name] || {};
+      out[rec.item_name][rec.report_month] = (out[rec.item_name][rec.report_month] || 0) + rec.value;
+    }
+    return out;
+  }, [preview]);
+  const fmt3 = (v) => (v == null ? '—' : v.toFixed(3));
+
+  return (
+    <div style={{
+      marginBottom: 16, padding: '12px 14px',
+      background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8,
+    }}>
+      <div style={{ fontSize: 14, fontWeight: 700, color: '#1e40af', marginBottom: 4 }}>
+        MoU Plan (Excel): month-wise MoU production targets, all plants, whole FY
+      </div>
+      <div style={{ fontSize: 12, color: '#5f6368', marginBottom: 10 }}>
+        The yearly &quot;MoU YY-YY.xlsx&quot; workbook (Report_format/ABP): Hot Metal, Crude Steel, Saleable Steel,
+        Pig Iron and Finished Steel targets per plant for each month. Plant rows are stored; SAIL totals are
+        calculated. Feeds the MoU page of Plant Wise Performance on /reports/excel.
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <input ref={inputRef} type="file" accept=".xlsx"
+          onChange={e => { setFile(e.target.files[0]); setStatus(null); setPreview(null); }}
+          style={{ fontSize: 13, flex: 1, minWidth: 200 }}
+          suppressHydrationWarning
+        />
+        {!preview && (
+          <button onClick={handlePreview} disabled={!file || busy}
+            style={{
+              padding: '7px 18px', background: busy ? '#5f6368' : '#1a73e8',
+              color: '#fff', border: 'none', borderRadius: 6, fontSize: 13,
+              cursor: file && !busy ? 'pointer' : 'not-allowed', fontWeight: 600, whiteSpace: 'nowrap',
+            }}
+          >
+            {busy ? 'Extracting…' : 'Preview'}
+          </button>
+        )}
+        {preview && (
+          <>
+            <button onClick={handleConfirmSave} disabled={busy}
+              style={{
+                padding: '7px 18px', background: busy ? '#5f6368' : '#1a73e8',
+                color: '#fff', border: 'none', borderRadius: 6, fontSize: 13,
+                cursor: busy ? 'not-allowed' : 'pointer', fontWeight: 600, whiteSpace: 'nowrap',
+              }}
+            >
+              {busy ? 'Saving…' : 'Confirm & Save'}
+            </button>
+            <button onClick={handleCancel} disabled={busy}
+              style={{
+                padding: '7px 14px', background: '#fff', color: '#5f6368',
+                border: '1px solid #dadce0', borderRadius: 6, fontSize: 13,
+                cursor: busy ? 'not-allowed' : 'pointer', fontWeight: 600, whiteSpace: 'nowrap',
+              }}
+            >
+              Cancel
+            </button>
+          </>
+        )}
+      </div>
+
+      <div style={{ marginTop: 10 }}><StatusMsg status={status} /></div>
+
+      {preview && (
+        <div style={{ marginTop: 6 }}>
+          {preview.has_existing && (
+            <div style={{
+              marginBottom: 8, padding: '6px 12px', borderRadius: 6, fontSize: 12,
+              background: '#fffbeb', color: '#92400e', border: '1px solid #fde68a',
+            }}>
+              ⚠ {preview.existing_conflicts_count} MoU value(s) already exist for months in this file —
+              saving will ask to confirm overwriting them.
+            </div>
+          )}
+          {preview.warnings.length > 0 && (
+            <div style={{
+              marginBottom: 8, padding: '6px 12px', borderRadius: 6, fontSize: 12,
+              background: '#fffbeb', color: '#92400e', border: '1px solid #fde68a',
+            }}>
+              {preview.warnings.map((w, i) => <div key={i}>⚠ {w}</div>)}
+            </div>
+          )}
+          <div style={{ fontSize: 12.5, color: '#374151', marginBottom: 6 }}>
+            {preview.record_count} value(s) found across {preview.months.length} month(s)
+            ({preview.months[0]} – {preview.months[preview.months.length - 1]}) for {preview.items_found.length} item(s).
+          </div>
+
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: '#374151', marginBottom: 4 }}>
+            SAIL total (&apos;000 T), sum of plant rows — sanity check
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ borderCollapse: 'collapse', width: '100%', background: '#fff', borderRadius: 6, overflow: 'hidden' }}>
+              <thead>
+                <tr style={{ background: '#f8f9fa' }}>
+                  <th style={{ ...labelCellStyle, fontWeight: 700, textAlign: 'left' }}>Item</th>
+                  {preview.months.map(mo => (
+                    <th key={mo} style={{ ...cellStyle, fontWeight: 700 }}>{mo}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {preview.items_found.map(it => (
+                  <tr key={it}>
+                    <td style={labelCellStyle}>{it}</td>
+                    {preview.months.map(mo => (
+                      <td key={mo} style={cellStyle}>{fmt3(totals[it]?.[mo])}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 function UploadsExtractionInner() {
   const def = getDefaultPeriod();
@@ -947,6 +1144,8 @@ function UploadsExtractionInner() {
         <CoalOmiExtractRow reportMonth={reportMonth} apiBase={API_BASE_URL} onSuccess={() => {}} />
 
         <PowerOmiExtractRow apiBase={API_BASE_URL} onSuccess={() => {}} />
+
+        <MouPlanExtractRow apiBase={API_BASE_URL} onSuccess={() => {}} />
       </div>
     </div>
   );

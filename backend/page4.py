@@ -63,6 +63,13 @@ PAGE4_ITEMS = [
 # entry, per direct instruction).
 CAPACITY_DB_ITEMS = {"Hot Metal", "Total Crude Steel", "Saleable Steel", "Finished Steel"}
 
+# Items that have a MoU target (excel_extractor_mou_plan.ITEM_MAP values) —
+# the MoU page of the Plant Wise Performance report shows only these.
+MOU_DB_ITEMS = frozenset({"Hot Metal", "Total Crude Steel", "Saleable Steel", "Pig Iron", "Finished Steel"})
+
+# _p4_get's `table` argument -> DB table. "plan" is APP; "mou" is the MoU target.
+_TABLES = {"act": "production_table", "plan": "production_plan_table", "mou": "mou_plan_table"}
+
 def _days_in_month(month_str: str) -> int:
     try:
         y, m = int(month_str[:4]), int(month_str[5:7])
@@ -101,7 +108,7 @@ _FS_ALIAS = frozenset({"SSP", "VISL"})
 
 def _p4_query_one(cur, table, month, plant, db_item):
     """Single plant, single month. SSP/VISL fall back to Saleable Steel for Finished Steel."""
-    tbl = "production_table" if table == "act" else "production_plan_table"
+    tbl = _TABLES[table]
     cur.execute(
         f"SELECT month_actual FROM {tbl} WHERE report_month=? AND plant_name=? AND item_name=?",
         (month, plant, db_item),
@@ -132,7 +139,7 @@ def _p4_query_sum(cur, table, month, plants, db_item):
                 total += v
                 found = True
         return total if found else None
-    tbl = "production_table" if table == "act" else "production_plan_table"
+    tbl = _TABLES[table]
     phs = ",".join("?" for _ in plants)
     cur.execute(
         f"SELECT SUM(month_actual) FROM {tbl} WHERE report_month=? AND plant_name IN ({phs}) AND item_name=?",
@@ -176,12 +183,12 @@ def _p4_ytd_nos(cur, months, plant, db_item, five_plants, sail_set):
     return tw / td if td > 0 else None
 
 
-def _p4_ytd_nos_plan(cur, months, plant, db_item, five_plants, sail_set):
+def _p4_ytd_nos_plan(cur, months, plant, db_item, five_plants, sail_set, plan="plan"):
     """Weighted average plan (for nos/day) across YTD months."""
     tw = 0.0
     td = 0
     for m in months:
-        v = _p4_get(cur, "plan", m, plant, db_item, five_plants, sail_set)
+        v = _p4_get(cur, plan, m, plant, db_item, five_plants, sail_set)
         if v is not None:
             days = _days_in_month(m)
             tw += v * days
@@ -240,7 +247,7 @@ def _raw_gr(c, p):
 
 
 def _p4_row_values(cur, month, plant, db_item, is_nos_day, five_plants, sail_set, has_capacity=False,
-                   raw=False):
+                   raw=False, plan="plan"):
     """Compute the Capacity value plus the 15 display values (13 original +
     2 CU% columns) for one page-4 row. raw=True returns the same 15 values
     (and capacity) as unrounded numbers / None instead of display strings -
@@ -264,18 +271,18 @@ def _p4_row_values(cur, month, plant, db_item, is_nos_day, five_plants, sail_set
     prev = db.get_cply_month(month)
     ytd_prev = db.get_ytd_months(prev)
 
-    plan_m   = _p4_get(cur, "plan", month, plant, db_item, five_plants, sail_set)
+    plan_m   = _p4_get(cur, plan, month, plant, db_item, five_plants, sail_set)
     act_m    = _p4_get(cur, "act",  month, plant, db_item, five_plants, sail_set)
     act_cply = _p4_get(cur, "act",  prev,  plant, db_item, five_plants, sail_set)
 
     if is_nos_day:
-        ann          = _p4_ytd_nos_plan(cur, _fy_months(month), plant, db_item, five_plants, sail_set)
-        plan_ytd     = _p4_ytd_nos_plan(cur, ytd_m,    plant, db_item, five_plants, sail_set)
+        ann          = _p4_ytd_nos_plan(cur, _fy_months(month), plant, db_item, five_plants, sail_set, plan)
+        plan_ytd     = _p4_ytd_nos_plan(cur, ytd_m,    plant, db_item, five_plants, sail_set, plan)
         act_ytd      = _p4_ytd_nos(cur, ytd_m,    plant, db_item, five_plants, sail_set)
         act_ytd_cply = _p4_ytd_nos(cur, ytd_prev, plant, db_item, five_plants, sail_set)
     else:
-        ann          = _p4_ytd_sum(cur, "plan", _fy_months(month), plant, db_item, five_plants, sail_set)
-        plan_ytd     = _p4_ytd_sum(cur, "plan", ytd_m,    plant, db_item, five_plants, sail_set)
+        ann          = _p4_ytd_sum(cur, plan, _fy_months(month), plant, db_item, five_plants, sail_set)
+        plan_ytd     = _p4_ytd_sum(cur, plan, ytd_m,    plant, db_item, five_plants, sail_set)
         act_ytd      = _p4_ytd_sum(cur, "act",  ytd_m,    plant, db_item, five_plants, sail_set)
         act_ytd_cply = _p4_ytd_sum(cur, "act", ytd_prev, plant, db_item, five_plants, sail_set)
 
@@ -399,14 +406,21 @@ def _safe_cu(act_s, capacity):
     return str(round(a / capacity * 100))
 
 
-def generate_page4_rows(month: str, raw: bool = False) -> list:
+def generate_page4_rows(month: str, raw: bool = False, basis: str = "app") -> list:
     """Build all page-4 rows for `month`. raw=True: values/capacity are
-    unrounded numbers (None when missing) instead of display strings."""
+    unrounded numbers (None when missing) instead of display strings.
+    basis='mou' takes the plan columns from mou_plan_table and keeps only
+    MOU_DB_ITEMS."""
+    if basis not in ("app", "mou"):
+        raise ValueError(f"basis must be 'app' or 'mou', not {basis!r}")
+    plan = "mou" if basis == "mou" else "plan"
     conn = db.connect()
     cur = conn.cursor()
     rows = []
     try:
         for cfg in PAGE4_ITEMS:
+            if basis == "mou" and cfg["db_item"] not in MOU_DB_ITEMS:
+                continue
             display  = cfg["display"]
             db_item  = cfg["db_item"]
             is_nos   = cfg.get("is_nos_day", False)
@@ -420,7 +434,7 @@ def generate_page4_rows(month: str, raw: bool = False) -> list:
 
             for plant in cfg["plants"]:
                 values, capacity = _p4_row_values(cur, month, plant, db_item, is_nos, five_p, sail_set, has_cap,
-                                                  raw=raw)
+                                                  raw=raw, plan=plan)
                 # Hide VISL in HOT METAL when all key actuals are nil
                 if display == "HOT METAL" and plant == "VISL":
                     if all(values[i] in ("", None) for i in [2, 5, 9, 12]):
@@ -460,7 +474,7 @@ def generate_page4_rows(month: str, raw: bool = False) -> list:
                            None, conv_ytd, None, None, conv_ytd_cply, _raw_gr(conv_ytd, conv_ytd_cply), None],
             })
             fs_vals, fs_cap = _p4_row_values(cur, month, "SAIL", "Finished Steel", False, _5P, fs_sail_set,
-                                             has_capacity=True, raw=True)
+                                             has_capacity=True, raw=True, plan=plan)
 
             def _add(a, b):
                 return None if (a is None and b is None) else (a or 0.0) + (b or 0.0)
@@ -502,7 +516,7 @@ def generate_page4_rows(month: str, raw: bool = False) -> list:
         })
 
         sail_fs_vals, sail_fs_capacity = _p4_row_values(
-            cur, month, "SAIL", "Finished Steel", False, _5P, fs_sail_set, has_capacity=True)
+            cur, month, "SAIL", "Finished Steel", False, _5P, fs_sail_set, has_capacity=True, plan=plan)
         # Add conversion to the UNROUNDED FS actuals — adding to the already
         # rounded row strings can shift the displayed total by 1 vs page 3
         # (e.g. 3967.24+100.33=4067.57 → 4068, but 3967+100.33 → 4067).

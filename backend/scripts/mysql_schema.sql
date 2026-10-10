@@ -23,6 +23,17 @@ CREATE TABLE IF NOT EXISTS production_plan_table (
     PRIMARY KEY (report_month, plant_name, item_name)
 ) ENGINE=InnoDB;
 
+-- MoU (Memorandum of Understanding) month-wise production targets, same
+-- shape as production_plan_table. Fed by api_mou_plan.py from the yearly
+-- "MoU YY-YY.xlsx" workbook; read by page4.generate_page4_rows(basis="mou").
+CREATE TABLE IF NOT EXISTS mou_plan_table (
+    report_month CHAR(7)      NOT NULL,
+    plant_name   VARCHAR(32)  NOT NULL,
+    item_name    VARCHAR(64)  NOT NULL,
+    month_actual DOUBLE,
+    PRIMARY KEY (report_month, plant_name, item_name)
+) ENGINE=InnoDB;
+
 -- Power-OIS monthly power data — same narrow shape as production_table,
 -- its own table since item_name values (plan_own, actual_total,
 -- wheeling_px, last_year_own_cpp_cum, etc.) come from a different
