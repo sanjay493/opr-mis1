@@ -181,3 +181,43 @@ def test_improvement_pct_returns_none_for_zero_cply_v():
 
 def test_imp_phrase_returns_empty_for_none():
     assert bnc.imp_phrase(None) == ""
+
+
+def _mou_cursor(rows):
+    conn = sqlite3.connect(":memory:")
+    conn.execute("""CREATE TABLE mou_plan_table (report_month TEXT, plant_name TEXT,
+        item_name TEXT, month_actual REAL, PRIMARY KEY (report_month, plant_name, item_name))""")
+    conn.executemany("INSERT INTO mou_plan_table VALUES (?,?,?,?)", rows)
+    return conn.cursor()
+
+
+def test_fs_mou_sums_plants_and_months():
+    cur = _mou_cursor([(m, p, "Finished Steel", v) for m in ("2026-07", "2026-08")
+                       for p, v in (("BSP", 100.0), ("ASP", 10.0))] + [("2026-07", "BSP", "Hot Metal", 999.0)])
+    assert bnc.fs_mou(cur, ["2026-07", "2026-08"], ["BSP"]) == 200.0
+    assert bnc.fs_mou(cur, ["2026-07", "2026-08"], ["BSP", "ASP"]) == 220.0
+
+
+def test_fs_mou_none_when_a_month_is_missing():
+    cur = _mou_cursor([("2026-07", "BSP", "Finished Steel", 100.0)])
+    assert bnc.fs_mou(cur, ["2026-07", "2026-08"], ["BSP"]) is None
+
+
+def test_fs_mou_none_when_table_missing():
+    cur = sqlite3.connect(":memory:").cursor()
+    assert bnc.fs_mou(cur, ["2026-07"], ["BSP"]) is None
+
+
+def test_sail_mou_plants_are_all_eight():
+    assert set(bnc.SAIL_MOU_PLANTS) == {"BSP", "DSP", "RSP", "BSL", "ISP", "ASP", "SSP", "VISL"}
+
+
+def test_mou_clause_text():
+    assert bnc.mou_clause(4360.0, 4858.5, "quarterly") == " (90% of the quarterly MoU of 4.859 MT)"
+    assert bnc.mou_clause(None, 4858.5, "quarterly") == ""
+    assert bnc.mou_clause(4360.0, None, "quarterly") == ""
+
+
+def test_pct_ful():
+    assert bnc.pct_ful(90.0, 100.0) == "90"
+    assert bnc.pct_ful(None, 100.0) == "" and bnc.pct_ful(90.0, None) == "" and bnc.pct_ful(90.0, 0) == ""

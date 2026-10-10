@@ -4,11 +4,11 @@ Fills `board_note_templates/board_note_q3_template.docx` (a verbatim copy of
 `Report_format/BN_ Production Q-3 and 9M'25-26.docx`) for any financial year,
 using the same technique and shared helpers as `board_note_q2.py`.
 
-MoU: the Finished-Steel-vs-MoU opening and table 0 need annual / quarterly /
-9M MoU targets, which are not in the DB (`page3_highlights.py` records the
-same limitation for FY2026-27). The template's MoU cells are FY2025-26
-targets, so for any FY they are blanked rather than carried over, and every
-%Ful that depends on them is blank. Actuals are always filled from the DB.
+MoU: the Finished-Steel-vs-MoU opening and table 0 take the annual /
+quarterly / 9M Finished Steel MoU from mou_plan_table (bnc.fs_mou) when it
+has the whole FY. Otherwise the template's MoU cells (FY2025-26 targets) are
+blanked rather than carried over, every %Ful that depends on them is blank,
+and the opening drops its MoU clause. Actuals are always filled from the DB.
 
 Known limitations (documented, not bugs):
   - ASP, SSP and VISL have no "Highlights:" section in this template for
@@ -267,7 +267,13 @@ def generate(fy: str) -> bytes:
             bq2.set_period_header(tables[cfg["table_9m"]], l_label, l_cply_label)
             bq2.fill_period_table(cur, tables[cfg["table_9m"]], plant, cfg["item_rows"], L_CUR, L_CPLY, fy_start)
 
-        # ---- table 0: Finished Steel actuals (MoU cells blanked) ------------
+        # ---- table 0: Finished Steel vs MoU (MoU blank if not in the DB) ----
+        FY_CUR = bnc.fy_months(fy_start)
+        mou_in_db = bnc.fs_mou(cur, FY_CUR, bnc.SAIL_MOU_PLANTS) is not None
+
+        def _mou(months, plants):
+            return bnc.fs_mou(cur, months, plants) if mou_in_db else None
+
         t0 = tables[TABLE_MOU]
         mou_col = f"MoU \n{fy_start}-{str(fy_start + 1)[2:]}"
         for row in (t0.rows[0].cells, t0.rows[1].cells):
@@ -277,38 +283,56 @@ def generate(fy: str) -> bytes:
         for c in (5, 6, 7):
             bdu.set_cell(t0.rows[0].cells[c], l_label)
 
-        def _fill_mou_row(ridx, q3_act, l_act):
+        def _fill_mou_row(ridx, q3_act, l_act, plants):
             cells = t0.rows[ridx].cells
-            for c in (1, 2, 4, 5, 7):
-                bdu.set_cell(cells[c], "")
+            ann, q3_mou, l_mou = _mou(FY_CUR, plants), _mou(Q3_CUR, plants), _mou(L_CUR, plants)
+            bdu.set_cell(cells[1], bnc.fmt_ann(ann))
+            bdu.set_cell(cells[2], bnc.fmt_ann(q3_mou))
             bdu.set_cell(cells[3], bnc.fmt_ann(q3_act))
+            bdu.set_cell(cells[4], bnc.pct_ful(q3_act, q3_mou))
+            bdu.set_cell(cells[5], bnc.fmt_ann(l_mou))
             bdu.set_cell(cells[6], bnc.fmt_ann(l_act))
+            bdu.set_cell(cells[7], bnc.pct_ful(l_act, l_mou))
 
         for ridx, plant in MOU_ROW_PLANT.items():
             _fill_mou_row(ridx,
                           bnc.period_sum(cur, "act", Q3_CUR, plant, "Finished Steel"),
-                          bnc.period_sum(cur, "act", L_CUR, plant, "Finished Steel"))
+                          bnc.period_sum(cur, "act", L_CUR, plant, "Finished Steel"), [plant])
         _fill_mou_row(MOU_ROW_SPECIAL_STEEL,
-                      _special_steel_total(cur, Q3_CUR), _special_steel_total(cur, L_CUR))
+                      _special_steel_total(cur, Q3_CUR), _special_steel_total(cur, L_CUR), SPECIAL_STEEL_PLANTS)
         _fill_mou_row(MOU_ROW_SAIL,
-                      _sail_finished_with_conv(cur, Q3_CUR), _sail_finished_with_conv(cur, L_CUR))
+                      _sail_finished_with_conv(cur, Q3_CUR), _sail_finished_with_conv(cur, L_CUR),
+                      bnc.SAIL_MOU_PLANTS)
+        for row in t0.rows:
+            for cell in row.cells:
+                bdu.clear_strike_and_colour(cell)
 
-        # ---- Finished Steel opening (no MoU clause) -------------------------
+        # ---- Finished Steel opening (MoU clause only with MoU in the DB) ----
         _, _, fs_q3_act, _, fs_q3_cply, fs_q3_gr = bnc.row_values(
             cur, "SAIL", "Finished Steel", Q3_CUR, Q3_CPLY, fy_start, add_conv=True)
         _, _, fs_l_act, _, fs_l_cply, fs_l_gr = bnc.row_values(
             cur, "SAIL", "Finished Steel", L_CUR, L_CPLY, fy_start, add_conv=True)
-        bdu.set_para(para(P_MOU_HEADING), "SAIL: Production performance for Finished Steel ")
+        bdu.set_para(para(P_MOU_HEADING), "SAIL: Production performance for Finished Steel "
+                     + ("w.r.t. MoU " if mou_in_db else ""))
+        q3_clause = bnc.mou_clause(fs_q3_act, _mou(Q3_CUR, bnc.SAIL_MOU_PLANTS), "quarterly")
+        l_clause = bnc.mou_clause(fs_l_act, _mou(L_CUR, bnc.SAIL_MOU_PLANTS), f"Apr-Dec’{yy}")
         bdu.set_para(
             para(P_FS_Q3_NARRATIVE),
-            f"The Production of Finished Steel during {q3_label} was {bnc.fmt_mt(fs_q3_act)} MT "
+            f"The Production of Finished Steel during {q3_label} was {bnc.fmt_mt(fs_q3_act)} MT{q3_clause} "
             f"with a growth of {bnc.fmt_pct(fs_q3_gr)}% over CPLY."
         )
         bdu.set_para(
             para(P_FS_9M_NARRATIVE),
-            f"The Production of Finished Steel during April-December’{yy} was {bnc.fmt_mt(fs_l_act)} MT, "
+            f"The Production of Finished Steel during April-December’{yy} was {bnc.fmt_mt(fs_l_act)} MT{l_clause}, "
             f"with a growth of {bnc.fmt_pct(fs_l_gr)}% over CPLY. "
         )
+        charts = bdu.fs_charts(doc)
+        if "quarter" in charts:
+            bdu.fill_fs_chart(charts["quarter"], q3_label.replace("’", "'"),
+                              _mou(Q3_CUR, bnc.SAIL_MOU_PLANTS), fs_q3_act, fs_q3_cply)
+        if "long" in charts:
+            bdu.fill_fs_chart(charts["long"], f"Apr-Dec'{yy}",
+                              _mou(L_CUR, bnc.SAIL_MOU_PLANTS), fs_l_act, fs_l_cply)
 
         # ---- title, intro, plant-wise title ---------------------------------
         bdu.set_para(para(P_TITLE), _title_text(fy_start))

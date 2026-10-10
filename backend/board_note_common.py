@@ -202,6 +202,41 @@ def conv_sum(cur, months: list):
     return total if found else None
 
 
+# Finished Steel MoU (mou_plan_table, uploaded from the MoU workbook). The
+# workbook's SAIL row is the sum of all eight plants -- no Conversion -- so
+# SAIL's MoU is summed over these; the notes' SAIL actual still includes
+# Conversion, as the MoU table always has.
+SAIL_MOU_PLANTS = ("BSP", "DSP", "RSP", "BSL", "ISP", "ASP", "SSP", "VISL")
+
+
+def fs_mou(cur, months: list, plants) -> "float | None":
+    """Finished Steel MoU summed over plants and months; None unless every
+    month has a MoU row for at least one of the plants (a part-period MoU
+    would give a wrong %Ful)."""
+    total = 0.0
+    try:
+        for m in months:
+            v = page4._p4_query_sum(cur, "mou", m, list(plants), "Finished Steel")
+            if v is None:
+                return None
+            total += v
+    except Exception:
+        return None
+    return total
+
+
+def pct_ful(act, mou) -> str:
+    return str(round(act / mou * 100)) if (act is not None and mou) else ""
+
+
+def mou_clause(act, mou, what: str) -> str:
+    """' (91% of the quarterly MoU of 4.504 MT)' for the Finished Steel
+    narrative; '' when either figure is missing. act/mou in '000 T."""
+    if act is None or not mou:
+        return ""
+    return f" ({pct_ful(act, mou)}% of the {what} MoU of {mou / 1000:.3f} MT)"
+
+
 def _check_add_conv(plant: str, db_item: str, add_conv: bool) -> None:
     """Conversion is only ever added for SAIL's Finished Steel figure -- never
     any other plant, and never any other item, even SAIL's own."""

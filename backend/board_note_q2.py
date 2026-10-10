@@ -21,11 +21,10 @@ doc). Paragraph/table indices are into `docx.Document(...).paragraphs` /
 template file is ever hand-edited, these must be re-derived.
 
 Known limitations (documented, not bugs):
-  - The MoU figures used in the opening "Finished Steel w.r.t. MoU" section
-    (`_FS_Q2_MOU`, `_FS_H1_MOU` below) are not sourced from the DB (no MoU
-    table exists); they are the FY2026-27 quarterly/half-yearly MoU values
-    carried over from the one-off script and must be updated by hand if
-    this generator is ever run for a different fy.
+  - Finished Steel MoU (table 0's MoU cells and the opening narrative)
+    comes from mou_plan_table when it has the whole FY (bnc.fs_mou). Without
+    it the template's own MoU cells and `_FS_Q2_MOU`/`_FS_H1_MOU` below are
+    used; those are FY2025-26 figures carried over from the one-off script.
   - The techno section's "This was achieved through..." bullets (P337-340)
     are left as template static text, same as the one-off script -- they
     are not period-parameterized here. (The title P3 and the "SAIL and
@@ -76,11 +75,10 @@ TABLE_MOU = 0            # "Plant | MoU 2026-27 | Q-1'26-27 | Q-2'26-27 (ABP/Act
 MOU_ROW_PLANT = {2: "BSP", 3: "DSP", 4: "RSP", 5: "BSL", 6: "ISP"}
 MOU_ROW_SPECIAL_STEEL = 7   # "Special Steel Plants" (ASP+SSP+VISL total)
 MOU_ROW_SAIL = 8            # "SAIL" (5 plants + special steel + Conversion)
-# Table 0's MoU columns (cells 3 and 6 of every data row) are themselves
-# static per-plant MoU targets baked into the template (no DB source for
-# them -- same limitation as _FS_Q2_MOU/_FS_H1_MOU below); only the header
-# labels and the %Ful columns (cells 5 and 8, derived from those MoU cells)
-# are regenerated here.
+# Table 0's MoU columns (cells 1 annual, 3 Q-2, 6 H-1) come from
+# mou_plan_table when it has the FY; otherwise the template's static cells
+# are kept. %Ful (cells 5 and 8) is derived from whatever MoU cells end up
+# there.
 
 # -- Annexure index (table 20) -- titles only, no actual annexure content ---
 TABLE_ANNEXURE_INDEX = 20
@@ -93,7 +91,7 @@ TABLE_ANNEXURE_INDEX = 20
 # "4. Annexure-IV : SAIL: Techno-economic parameters for New Blast Furnaces during Q-2'25-26 and H-1'25-26"
 # "5. Annexure-V : SAIL: Product mix performance during Q-2'25-26 and H-1'25-26"
 
-# These two are NOT sourced from the DB -- see module docstring.
+# Fallback only, when mou_plan_table lacks the FY -- see module docstring.
 _FS_Q2_MOU = 4.448
 _FS_H1_MOU = 8.812
 
@@ -546,12 +544,18 @@ def generate(fy: str) -> bytes:
         t0 = tables[TABLE_MOU]
         set_mou_table_header(t0, fy_start)
 
-        def _fill_mou_row(ridx, q1, q2, h1):
+        FY_CUR = bnc.fy_months(fy_start)
+        mou_in_db = bnc.fs_mou(cur, FY_CUR, bnc.SAIL_MOU_PLANTS) is not None
+
+        def _fill_mou_row(ridx, q1, q2, h1, plants):
             """Fill Q-1/Q-2/H-1 Actual cells (2/4/7) and derive %Ful (5/8)
-            from the Q-2/H-1 MoU cells (3/6), which are static per-plant
-            MoU targets baked into the template -- never guess a %Ful when
-            the MoU cell is blank/unparseable."""
+            from the Q-2/H-1 MoU cells (3/6): from the DB when it has the
+            FY's MoU, else the template's static cells -- never guess a %Ful
+            when the MoU cell is blank/unparseable."""
             cells = t0.rows[ridx].cells
+            if mou_in_db:
+                for c, months in ((1, FY_CUR), (3, Q2_CUR), (6, H1_CUR)):
+                    bdu.set_cell(cells[c], bnc.fmt_ann(bnc.fs_mou(cur, months, plants)))
             bdu.set_cell(cells[2], bnc.fmt_ann(q1))
             bdu.set_cell(cells[4], bnc.fmt_ann(q2))
             bdu.set_cell(cells[7], bnc.fmt_ann(h1))
@@ -564,7 +568,7 @@ def generate(fy: str) -> bytes:
             q1 = bnc.period_sum(cur, "act", Q1_CUR, plant, "Finished Steel")
             q2 = bnc.period_sum(cur, "act", Q2_CUR, plant, "Finished Steel")
             h1 = bnc.period_sum(cur, "act", H1_CUR, plant, "Finished Steel")
-            _fill_mou_row(ridx, q1, q2, h1)
+            _fill_mou_row(ridx, q1, q2, h1, [plant])
 
         def special_steel_total(months):
             total, found = 0.0, False
@@ -576,7 +580,7 @@ def generate(fy: str) -> bytes:
             return total if found else None
 
         ssp_q1, ssp_q2, ssp_h1 = special_steel_total(Q1_CUR), special_steel_total(Q2_CUR), special_steel_total(H1_CUR)
-        _fill_mou_row(MOU_ROW_SPECIAL_STEEL, ssp_q1, ssp_q2, ssp_h1)
+        _fill_mou_row(MOU_ROW_SPECIAL_STEEL, ssp_q1, ssp_q2, ssp_h1, SPECIAL_STEEL_PLANTS)
 
         def _sail_finished_with_conv(months):
             """None-propagating SAIL Finished-Steel-plus-Conversion total --
@@ -591,7 +595,12 @@ def generate(fy: str) -> bytes:
         sail_q1 = _sail_finished_with_conv(Q1_CUR)
         sail_q2 = _sail_finished_with_conv(Q2_CUR)
         sail_h1 = _sail_finished_with_conv(H1_CUR)
-        _fill_mou_row(MOU_ROW_SAIL, sail_q1, sail_q2, sail_h1)
+        _fill_mou_row(MOU_ROW_SAIL, sail_q1, sail_q2, sail_h1, bnc.SAIL_MOU_PLANTS)
+        if mou_in_db:
+            # The template marks its stale MoU figures in red strike-through.
+            for row in t0.rows:
+                for cell in row.cells:
+                    bdu.clear_strike_and_colour(cell)
 
         # ---- Annexure index (table 20) -- titles only -------------------
         t20 = tables[TABLE_ANNEXURE_INDEX]
@@ -624,26 +633,33 @@ def generate(fy: str) -> bytes:
                                                              fy_start, add_conv=True)
         _, _, fs_h1_act, _, fs_h1_cply, _ = bnc.row_values(cur, "SAIL", "Finished Steel", H1_CUR, H1_CPLY,
                                                              fy_start, add_conv=True)
-        fs_q2_mt = None if fs_q2_act is None else fs_q2_act / 1000.0
-        fs_h1_mt = None if fs_h1_act is None else fs_h1_act / 1000.0
-        fs_q2_pct = round(fs_q2_mt / _FS_Q2_MOU * 100) if fs_q2_mt is not None else None
-        fs_h1_pct = round(fs_h1_mt / _FS_H1_MOU * 100) if fs_h1_mt is not None else None
+        if mou_in_db:
+            fs_q2_mou = bnc.fs_mou(cur, Q2_CUR, bnc.SAIL_MOU_PLANTS)
+            fs_h1_mou = bnc.fs_mou(cur, H1_CUR, bnc.SAIL_MOU_PLANTS)
+        else:
+            fs_q2_mou, fs_h1_mou = _FS_Q2_MOU * 1000, _FS_H1_MOU * 1000
         fs_q2_gr = (round((fs_q2_act - fs_q2_cply) / fs_q2_cply * 100, 1)
                     if fs_q2_act is not None and fs_q2_cply else None)
         fs_h1_gr = (round((fs_h1_act - fs_h1_cply) / fs_h1_cply * 100, 1)
                     if fs_h1_act is not None and fs_h1_cply else None)
         bdu.set_para(
             para(P_FS_Q2_NARRATIVE),
-            f"The Production of Finished Steel during Q-2’{yy} was {bnc.fmt_mt(fs_q2_act)} MT "
-            f"({bnc.fmt_pct(fs_q2_pct)}% of the quarterly MoU of {_FS_Q2_MOU} MT) with a growth of "
+            f"The Production of Finished Steel during Q-2’{yy} was {bnc.fmt_mt(fs_q2_act)} MT"
+            f"{bnc.mou_clause(fs_q2_act, fs_q2_mou, 'quarterly')} with a growth of "
             f"{bnc.fmt_pct(fs_q2_gr)}% over CPLY."
         )
         bdu.set_para(
             para(P_FS_H1_NARRATIVE),
-            f"The Production of Finished Steel during April-September’{yy} was {bnc.fmt_mt(fs_h1_act)} MT "
-            f"({bnc.fmt_pct(fs_h1_pct)}% of the Apr-Sep’{yy} MoU of {_FS_H1_MOU} MT), with a growth of "
+            f"The Production of Finished Steel during April-September’{yy} was {bnc.fmt_mt(fs_h1_act)} MT"
+            f"{bnc.mou_clause(fs_h1_act, fs_h1_mou, f'Apr-Sep’{yy}')}, with a growth of "
             f"{bnc.fmt_pct(fs_h1_gr)}% over CPLY. "
         )
+        charts = bdu.fs_charts(doc)
+        if "quarter" in charts:
+            bdu.fill_fs_chart(charts["quarter"], f"Q-2'{yy}-{str(fy_start + 1)[2:]}",
+                              fs_q2_mou, fs_q2_act, fs_q2_cply)
+        if "long" in charts:
+            bdu.fill_fs_chart(charts["long"], f"Apr-Sep'{yy}", fs_h1_mou, fs_h1_act, fs_h1_cply)
 
         # -- SAIL Q-2 heading + period label + summary -------------------
         bdu.set_para(para(P_SAIL_Q2_HEADING), f"SAIL: Production performance during {q2_label} ")
