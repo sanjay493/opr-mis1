@@ -7,7 +7,8 @@ and % growth, built entirely from `production_table`.
 Values not tracked anywhere in the DB (confirmed by checking against a real
 month's data, not just grepping for the label) are left blank rather than
 guessed — see the per-item comments below. The MoU/Var/%Ful. columns on the
-"MoU report" sheet are always blank: this app has no MoU-target data source.
+"MoU report" sheet come from mou_plan_table (blank for a month with no MoU
+loaded).
 """
 import io
 from datetime import date
@@ -33,11 +34,17 @@ def _mlabel(ym: str) -> str:
 _FS_ALIAS = frozenset({"SSP", "VISL"})   # no dedicated "Finished Steel" row
 
 
-def _one(cur, plant, item, month):
+# table: production_table (actuals) or mou_plan_table (MoU targets) --
+# both keyed by report_month / plant_name / item_name, in '000 T.
+_TABLES = ("production_table", "mou_plan_table")
+
+
+def _one(cur, plant, item, month, table="production_table"):
     if not item:
         return None
+    assert table in _TABLES
     cur.execute(
-        "SELECT month_actual FROM production_table WHERE plant_name=? AND item_name=? AND report_month=?",
+        f"SELECT month_actual FROM {table} WHERE plant_name=? AND item_name=? AND report_month=?",
         (plant, item, month),
     )
     r = cur.fetchone()
@@ -55,20 +62,20 @@ def _one_of(cur, plant, items, month):
     return None
 
 
-def _fs(cur, plant, month):
+def _fs(cur, plant, month, table="production_table"):
     """'Finished Steel', SSP/VISL falling back to Saleable Steel (matches
     page4.py's convention — those two plants have no dedicated FS row)."""
-    v = _one(cur, plant, "Finished Steel", month)
+    v = _one(cur, plant, "Finished Steel", month, table)
     if v is None and plant in _FS_ALIAS:
-        return _one(cur, plant, "Saleable Steel", month)
+        return _one(cur, plant, "Saleable Steel", month, table)
     return v
 
 
-def _sum(cur, combos, month):
+def _sum(cur, combos, month, table="production_table"):
     """combos: [(plant, item), ...]. Sums whatever is found; None if nothing found."""
     total, found = 0.0, False
     for plant, item in combos:
-        v = _one(cur, plant, item, month)
+        v = _one(cur, plant, item, month, table)
         if v is not None:
             total += v
             found = True
@@ -439,7 +446,7 @@ def _build_sinter_sheet(ws, cur, month, cply_month):
     _autosize(ws, [14, 13, 13, 13])
 
 
-# ── Sheet 4: MoU report (MoU/Var/%Ful columns always blank) ────────────────
+# ── Sheet 4: MoU report (MoU/Var/%Ful from mou_plan_table) ─────────────────
 
 _MOU_ITEMS = ["Hot Metal", "Total Crude Steel", "Saleable Steel", "Pig Iron", "Finished Steel"]
 _MOU_LABELS = {"Hot Metal": "HOT METAL", "Total Crude Steel": "CRUDE STEEL",
@@ -455,29 +462,38 @@ _MOU_PLANT_ROWS = {
 }
 
 
-def _mou_value(cur, db_item, plant, month):
+def _mou_value(cur, db_item, plant, month, table="production_table"):
+    """One MoU-sheet cell: the actual (production_table) or, with
+    table="mou_plan_table", the MoU target, under the same plant rules."""
     if plant == "5 Plants":
         # None of the 5 core plants need the SSP/VISL Finished-Steel alias.
-        return _sum(cur, [(p, db_item) for p in _5P], month)
+        return _sum(cur, [(p, db_item) for p in _5P], month, table)
     if plant == "SAIL":
         sail_set = _5P + (["VISL"] if db_item in ("Hot Metal", "Pig Iron") else ["ASP", "SSP", "VISL"])
         total, found = 0.0, False
         for p in sail_set:
-            v = _fs(cur, p, month) if db_item == "Finished Steel" else _one(cur, p, db_item, month)
+            v = (_fs(cur, p, month, table) if db_item == "Finished Steel"
+                 else _one(cur, p, db_item, month, table))
             if v is not None:
                 total += v
                 found = True
         return round(total, 3) if found else None
     if db_item == "Finished Steel":
-        return _fs(cur, plant, month)
-    return _one(cur, plant, db_item, month)
+        return _fs(cur, plant, month, table)
+    return _one(cur, plant, db_item, month, table)
+
+
+def _ful(act, mou):
+    if act is None or not mou:
+        return None
+    return round(act / mou * 100, 1)
 
 
 def _build_mou_sheet(ws, cur, month, cply_month):
     ws.cell(row=1, column=1, value=f"Production Performance during {_mlabel(month)}").font = _TITLE_FONT
     ws.cell(row=2, column=9, value="w.r.t   MoU").font = _UNIT_FONT
     ws.cell(row=3, column=9, value="Unit:'000 T").font = _UNIT_FONT
-    headers = ["Items", "Plant", "MoU", _mlabel(month), "", "", "", _mlabel(cply_month), "% Gr. over"]
+    headers = ["Items", "Plant", _mlabel(month), "", "", "", _mlabel(cply_month), "% Gr. over"]
     for col, text in enumerate(headers, start=1):
         if text:
             c = ws.cell(row=4, column=col, value=text)
@@ -494,14 +510,19 @@ def _build_mou_sheet(ws, cur, month, cply_month):
         first = True
         for plant in _MOU_PLANT_ROWS[db_item]:
             act = _mou_value(cur, db_item, plant, month)
+            mou = _mou_value(cur, db_item, plant, month, "mou_plan_table")
+            mou = None if mou is None else round(mou, 3)
             cply = _mou_value(cur, db_item, plant, cply_month)
+            bold = plant in ("5 Plants", "SAIL")
             _label_cell(ws, row, 1, _MOU_LABELS[db_item] if first else "")
-            _label_cell(ws, row, 2, plant, bold=(plant in ("5 Plants", "SAIL")))
-            # col 3 MoU, col 4 Var, col 5 %Ful. — always blank (no MoU-target source)
-            for col in (3, 5, 6):
-                ws.cell(row=row, column=col).border = _BORDER
-            _num_cell(ws, row, 4, act, bold=(plant in ("5 Plants", "SAIL")))
-            _num_cell(ws, row, 7, cply, bold=(plant in ("5 Plants", "SAIL")))
+            _label_cell(ws, row, 2, plant, bold=bold)
+            # MoU / Var / %Ful. from mou_plan_table; blank when the month's
+            # MoU isn't loaded
+            _num_cell(ws, row, 3, mou, bold=bold)
+            _num_cell(ws, row, 4, act, bold=bold)
+            _num_cell(ws, row, 5, _sub(act, mou), bold=bold)
+            _num_cell(ws, row, 6, _ful(act, mou), bold=bold, pct=True)
+            _num_cell(ws, row, 7, cply, bold=bold)
             _num_cell(ws, row, 8, _gr(act, cply), pct=True)
             first = False
             row += 1

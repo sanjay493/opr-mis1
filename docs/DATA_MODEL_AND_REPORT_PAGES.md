@@ -126,7 +126,7 @@ already clubbed the same way into `/reports/techno` (its own tab pattern, see
 |---|---|---|---|
 | `one-page-report` | `/reports/external` | `page_one_page_report.py` | `sail_sales_table`, `sail_sales_note_table`, `sail_stock_snapshot_table`, `production_table` |
 | `do-letter` | `/reports/external` | `page_do_letter.py` (`/api/do-letter…`) | `production_table`, `production_plan_table`, `do_letter_remark_table` |
-| `jpc-report` | `/reports/external` | `page_jpc_report.py` (`/api/jpc-report` → xlsx) | `production_table` |
+| `jpc-report` | `/reports/external` | `page_jpc_report.py` (`/api/jpc-report` → xlsx) | `production_table`, `mou_plan_table` |
 | `production-items` | `/reports/production-analysis` | `page_finished_steel_report.py` (`/api/finished-steel-report…`; Oven Pushing / Sinter / Hot Metal / Crude Steel / Pig Iron / Finished Steel / Saleable Steel) | `production_table` |
 | `records-matrix` | `/reports/highlights-records` | `page_records.py` (`/api/records`) | `production_table` |
 | `pmix-fy` | `/reports/external` | `page_pmix_fy_report.py` | `production_table` |
@@ -192,6 +192,8 @@ MoU targets, per plant only (SAIL / 5 Plants are summed by the reader), for
   `/reports/excel` Plant Wise Performance, MoU page (Excel/PDF downloads).
   `board_note_common.fs_mou` → Board Note (Q-2/Q-3/Q-4) Finished-Steel-vs-MoU
   table and opening, when the FY is loaded.
+  `page_jpc_report._mou_value(..., "mou_plan_table")` → JPC report, "MoU
+  report" sheet's MoU / Var / %Ful. columns.
   Also `page_secretary_review.plan_basis`: the Secretary Review .pptx uses
   MoU instead of APP (and relabels its "APP" headers) when every deck item
   has MoU rows for the report month.
