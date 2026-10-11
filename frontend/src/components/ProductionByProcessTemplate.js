@@ -153,7 +153,7 @@ export default function ProductionByProcessTemplate({ data, selectedMonth }) {
       {sankey_svg && (
         <div style={{ marginTop: '8pt' }}>
           <div style={{ fontSize: '9pt', fontWeight: 700, color: '#1e293b', textTransform: 'uppercase', marginBottom: 3 }}>
-            Hot Metal to Saleable Steel Flow — SAIL, Till Apr-{shortM}&apos;{shortY}
+            Hot Metal to Finished Steel Flow — SAIL, Till Apr-{shortM}&apos;{shortY}
           </div>
           <div style={{ border: '1px solid #cbd5e1', borderRadius: 4, padding: '2px 6px' }}
                dangerouslySetInnerHTML={{ __html: sankey_svg }} />
