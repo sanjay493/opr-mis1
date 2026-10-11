@@ -3,12 +3,12 @@ SAIL Pmix FY report — Report_format/pmix.xlsx format ("Pmix'26-27 ACT" sheet):
 year-wise, month-wise Product Mix Performance for a selected financial year
 (Apr-Mar), with 4 quarterly sum columns and a full-year cumulative column.
 
-Reuses page_jpc_report.compute_pmix_rows() row-by-row (called once per FY
-month) so this stays in sync with the JPC report's Pmix sheet — same plant
-blocks, SAIL rollup, Finished Steel / ASP / SSP / VISL / Totals section,
-same blanks where nothing is tracked in the DB.
+Product-mix rows come from this module's own compute_pmix_fy_rows() (called
+once per FY month): plant blocks, SAIL rollup, Finished Steel / ASP / SSP /
+VISL / Totals section. The mapping is this report's own, not the JPC
+report's; only page_jpc_report's small lookup helpers are shared.
 
-Four extra rows beyond compute_pmix_rows(), specific to this template:
+Four extra rows beyond compute_pmix_fy_rows(), specific to this template:
   Finished Steel (conversion)          — SAIL/"Conversion" (page4.py's
                                           existing SAIL-incl.-conversion item)
   Finished Steel including Conversion  — Finished Steel (Total) + Conversion
@@ -28,7 +28,7 @@ from openpyxl.utils import get_column_letter
 
 import db
 from constants import FIVE_PLANTS as _5P
-from page_jpc_report import compute_pmix_rows, _one, _one_of, _sum, _fs, _mou_value
+from page_jpc_report import _one, _one_of, _sum, _fs, _sub, _mou_value
 
 _MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -91,6 +91,208 @@ def _plant_hdr(ws, row, label, start_col, end_col):
         ws.cell(row=row, column=col).fill = _PLANT_FILL
         ws.cell(row=row, column=col).border = _BORDER
     ws.cell(row=row, column=start_col, value=label).font = _PLANT_FONT
+
+
+# ── Product-mix rows ("Pmix'yy-yy ACT" sheet) ──────────────────────────────
+# This report's own item mapping — kept separate from page_jpc_report.py's
+# Pmix sheet so either can change without moving the other; only the small
+# lookup helpers (_one, _one_of, _sum, _fs, _sub) are shared.
+
+# Per-plant mill breakdown. Each entry: (label, plant, item_name_or_None).
+# item_name=None → left blank: either confirmed not tracked anywhere in this
+# app's DB (checked against page_catwise_saleable.py's item catalog + a live
+# query, not just a label grep), or a row Report_format/work/Pmix.xlsx's own
+# template keeps as a permanent blank placeholder (e.g. BSP's "BBM blooms"/
+# "BBM/billets", DSP's CC Blooms/SPU rows) — will be filled in once a source
+# is extracted, for the ones that aren't placeholders.
+_BSP_ITEMS = [
+    ("WRM",                   "BSP", "WIRERODS"),
+    ("TMT coils(WRM)",        "BSP", "TMT COILS(WRM)"),
+    ("Others (WRM)",          "BSP", "OTHERS(WRM)"),
+    ("TMT Bars (MM)",         "BSP", "TMT BARS(MM)"),
+    ("Lt Strls (MM)",         "BSP", "LT STRS(MM)"),
+    ("Rounds & Bars (BRM)",   "BSP", "BARS&RODMILL"),
+    ("Rail (RSM)",            "BSP", "RSM_RAIL"),
+    ("Rail (URM)",            "BSP", "URM_RAIL"),
+    ("Hy.Struls.",            "BSP", None),
+    ("Plates",                "BSP", "PLATEMILL"),
+    ("BBM Blooms",            "BSP", None),   # permanent blank placeholder — see note above
+    ("BBM Billets",           "BSP", None),   # permanent blank placeholder — see note above
+    # CC BILLET/BLOOM/SLAB (direct-extractor naming) vs SEMIS BilletS/BLOOM/
+    # SLABS (the name main.py's normalize_item_name folds BSP's semis-
+    # breakdown onto for anything saved via the confirm-extraction path) —
+    # see the chat response this came from. Check both so a month isn't
+    # blank just because its upload went through confirm-extraction.
+    ("CC Billets",            "BSP", ("CC BILLET", "SEMIS BilletS")),
+    ("CC bloom",              "BSP", ("CC BLOOM", "SEMIS BLOOM")),
+    ("CC slab",               "BSP", ("CC SLAB", "SEMIS SLABS")),
+    ("Semis Total",           "BSP", "Saleable Semis"),
+    ("Saleable Steel",        "BSP", "Saleable Steel"),
+]
+_DSP_ITEMS = [
+    ("Med Structurals (SM)",  "DSP", "SM"),   # Section Mill — see page_segment_wise.py's Med.Structurals = MSM+SM
+    ("Med Structurals (MSM)", "DSP", "MSM"),
+    ("Round & bars (MM)",     "DSP", "MM"),
+    ("Wheel & Axle",          "DSP", "WAP"),
+    ("CC Blooms",             "DSP", None),   # permanent blank placeholder — see note above
+    ("CC Blooms from New BRC","DSP", None),   # permanent blank placeholder — see note above
+    ("CC Billets",            "DSP", None),   # permanent blank placeholder — see note above
+    ("SPU Kandrori",          "DSP", None),   # permanent blank placeholder — see note above
+    ("SPU Jagdishpur",        "DSP", None),   # permanent blank placeholder — see note above
+    ("Semis Total",           "DSP", "Saleable Semis"),
+    ("Saleable steel",        "DSP", "Saleable Steel"),
+]
+_RSP_ITEMS = [
+    ("Plate (PM)",            "RSP", "OPM Plate"),
+    ("New Plate Mill",        "RSP", "NPM Plate"),
+    ("HR Plates",             "RSP", None),
+    ("HR Coils",              "RSP", None),
+    ("New HR Plate",          "RSP", "HSM-2 HR Plate"),
+    ("New HR Coils",          "RSP", "HSM-2 HR Coil (Sale)"),
+    ("GP/GC Sheets",          "RSP", None),
+    ("CRNO",                  "RSP", "CRNO Coils"),
+    ("ERW Pipes",             "RSP", "ERW Pipes"),
+    ("SW Pipes",              "RSP", "SW Pipes"),
+    ("Semis",                 "RSP", None),
+    ("Saleable Steel",        "RSP", "Saleable Steel"),
+]
+_BSL_ITEMS = [
+    # The extractor stores chequered plate / chequered coil apart from HSM
+    # HR Plate / HSM HR Coil (Sale); this sheet reports each pair together
+    # (a list = summed).
+    ("HR Plates",             "BSL", ["HSM HR Plate", "Checkered plate"]),
+    ("HR Coils",              "BSL", ["HSM HR Coil (Sale)", "Checkered Coil"]),
+    ("HR Sheets",             "BSL", "HR Sheet"),
+    ("CR Coils (old)",        "BSL", "CR I/II CR(Coil) Sale"),
+    ("CR Coils (new)",        "BSL", "CR III CR(Coil) Sale"),
+    ("CR Sheet (old)",        "BSL", "CR Sheets"),
+    ("CR Sheet (new)",        "BSL", "New CR Sheet"),
+    ("GP/GC (old)",           "BSL", "GP/GC"),
+    ("GP/GC (new)",           "BSL", "GPC3"),
+    ("Thick plate",           "BSL", "Thick Plate"),
+    ("Semis",                 "BSL", "Saleable Semis"),
+    ("Saleable Steel",        "BSL", "Saleable Steel"),
+]
+_ISP_ITEMS = [
+    ("Round & Bars(Bar Mill)","ISP", "BARMILL"),
+    ("Hy Structurals(USM)",   "ISP", "USMILL"),
+    ("Wire Rod TMT Coiles",   "ISP", None),   # DB has only one combined WRM figure
+    ("Wire Rod Coils",        "ISP", "WRMILL"),
+    ("WRM",                   "ISP", "WRMILL"),
+    # Both have real, non-zero figures in Pmix.xlsx's own sample but aren't
+    # sourced from anywhere in this app's DB yet — a genuine data gap, not
+    # touched here (flagged, not fixed — see the chat response this came from).
+    ("CC Blooms (150X150)",   "ISP", None),
+    ("CC Blooms (200x280)",   "ISP", None),
+    ("Semis",                 "ISP", "Saleable Semis"),
+    ("Saleable Steel",        "ISP", "Saleable Steel"),
+]
+_PLANT_BLOCKS = [
+    ("BSP", _BSP_ITEMS), ("DSP", _DSP_ITEMS), ("RSP", _RSP_ITEMS),
+    ("BSL", _BSL_ITEMS), ("ISP", _ISP_ITEMS),
+]
+
+# SAIL-wide rollup — sum of the specific plant/item combos that make up each
+# product category (cross-checked against the sample file's actual numbers;
+# combos not present anywhere in the DB are simply left out of the sum, so
+# these totals may run lower than a manually-compiled report until every
+# plant's mill split is fully extracted).
+_SAIL_ROLLUP = [
+    ("Semis",             [("BSP", "Saleable Semis"), ("DSP", "Saleable Semis"),
+                            ("BSL", "Saleable Semis"), ("ISP", "Saleable Semis")]),
+    ("Wire Rods",         [("BSP", "WIRERODS"), ("ISP", "WRMILL")]),
+    ("Round & Bars",      [("BSP", "TMT BARS(MM)"), ("BSP", "BARS&RODMILL"),
+                            ("DSP", "MM"), ("ISP", "BARMILL")]),
+    ("Lt. Structurals",   [("BSP", "LT STRS(MM)")]),
+    ("Med. Structurals",  [("DSP", "MSM"), ("DSP", "SM")]),
+    ("Hy. Structurals",   [("ISP", "USMILL")]),
+    ("Rail",              [("BSP", "RSM_RAIL"), ("BSP", "URM_RAIL")]),
+    ("Wheel & Axle",      [("DSP", "WAP")]),
+    ("Plate",             [("BSP", "PLATEMILL"), ("RSP", "OPM Plate"), ("RSP", "NPM Plate")]),
+    ("Thick plate",       [("BSL", "Thick Plate")]),
+    ("HR Plates",         [("RSP", "HSM-2 HR Plate"), ("BSL", "HSM HR Plate"),
+                            ("BSL", "Checkered plate")]),
+    ("HR Sheets",         [("BSL", "HR Sheet")]),
+    ("HR Coils/Skelp",    [("RSP", "HSM-2 HR Coil (Sale)"), ("BSL", "HSM HR Coil (Sale)"),
+                            ("BSL", "Checkered Coil")]),
+    ("CR Coils/Sheets",   [("BSL", "CR I/II CR(Coil) Sale"), ("BSL", "CR III CR(Coil) Sale"),
+                            ("BSL", "CR Sheets"), ("BSL", "New CR Sheet")]),
+    ("GP/GC",             [("BSL", "GP/GC"), ("BSL", "GPC3")]),
+    ("CRNO",              [("RSP", "CRNO Coils")]),
+    ("ERW pipes",         [("RSP", "ERW Pipes")]),
+    ("SW Pipes",          [("RSP", "SW Pipes")]),
+]
+
+_FS_PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP"]
+
+
+def compute_pmix_fy_rows(cur, month):
+    """One month's worth of rows for this report's "Pmix'yy-yy ACT" sheet,
+    in display order (called once per FY month, then grouped into
+    quarters/cumulative). Mapped here, independently of the JPC report's
+    Pmix sheet, though the rows currently match it. Each row:
+        {"kind": "header"|"data", "label": str, "value": float|None, "bold": bool}
+    """
+    rows = []
+
+    def header(label):
+        rows.append({"kind": "header", "label": label, "value": None, "bold": False})
+
+    def data(label, value, bold=False):
+        rows.append({"kind": "data", "label": label, "value": value, "bold": bold})
+
+    for plant, items in _PLANT_BLOCKS:
+        header(plant)
+        for label, plant_code, item in items:
+            if isinstance(item, list):
+                value = _sum(cur, [(plant_code, i) for i in item], month)
+            elif isinstance(item, tuple):
+                value = _one_of(cur, plant_code, item, month)
+            else:
+                value = _one(cur, plant_code, item, month)
+            data(label, value, bold=label.lower().startswith("saleable"))
+
+    header("SAIL")
+    for label, combos in _SAIL_ROLLUP:
+        data(label, _sum(cur, combos, month))
+    sail_5pl_combo = [(p, "Saleable Steel") for p in _FS_PLANTS]
+    data("Saleable steel 5 PL", _sum(cur, sail_5pl_combo, month), bold=True)
+
+    header("Finished Steel")
+    fs_vals = {}
+    for plant in _FS_PLANTS:
+        fs_vals[plant] = _one(cur, plant, "Finished Steel", month)
+        data(plant, fs_vals[plant])
+    fs5 = _sum(cur, [(p, "Finished Steel") for p in _FS_PLANTS], month)
+    data("Finished Steel 5PL", fs5, bold=True)
+
+    # ASP
+    asp_sal = _one(cur, "ASP", "Saleable Steel", month)
+    asp_fin = _fs(cur, "ASP", month)
+    data("ASP (Total)", asp_sal, bold=True)
+    data("ASP (Finished)", asp_fin)
+    data("ASP (Semis)", _sub(asp_sal, asp_fin))
+
+    # SSP — HRCS = Carbon Steel Production; Stainless = Saleable - Carbon
+    ssp_sal = _one(cur, "SSP", "Saleable Steel", month)
+    ssp_carb = _one(cur, "SSP", "Carbon Steel Production", month)
+    data("SSP (Finished Carbon Steel)", ssp_carb)
+    data("SSP (Finished Stainless Steel)", _sub(ssp_sal, ssp_carb))
+
+    # VISL
+    visl = _fs(cur, "VISL", month)
+    data("VISL(Finished)", visl)
+
+    sail_set = _FS_PLANTS + ["ASP", "SSP", "VISL"]
+    fst = _sum(cur, [(p, "Finished Steel") for p in _FS_PLANTS], month)
+    fst = (fst or 0) + (asp_fin or 0) + (ssp_sal or 0) + (visl or 0)
+    data("Finished Steel (Total)", fst, bold=True)
+
+    sal = _sum(cur, [(p, "Saleable Steel") for p in sail_set], month)
+    data("Semis Total", _sub(sal, fst))
+    data("Saleable Steel (Total)", sal, bold=True)
+
+    return rows
 
 
 # ── Sheet 1: "ACT <FY>" — plant-wise monthwise production summary,
@@ -228,7 +430,7 @@ def build_pmix_fy_workbook(fy_start: int):
     conn = db.connect()
     cur = conn.cursor()
     try:
-        rows_by_month = {m: compute_pmix_rows(cur, m) for m in months}
+        rows_by_month = {m: compute_pmix_fy_rows(cur, m) for m in months}
         conversion = {m: _one(cur, "SAIL", "Conversion", m) for m in months}
         rsp_hsm2 = {m: _one(cur, "RSP", "HSM-2 Total HR Coil", m) for m in months}
         bsl_hsm = {m: _one(cur, "BSL", "HSM Total HR Coil", m) for m in months}

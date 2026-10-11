@@ -4992,9 +4992,9 @@ async def steel_sector_performance_confirm(payload: dict):
 @app.get("/api/pmix-fy-report")
 async def pmix_fy_report(fy_start: int = Query(...)):
     """Download the year-wise, month-wise Pmix report (.xlsx) for a
-    financial year — Report_format/pmix.xlsx format. Reuses
-    page_jpc_report.compute_pmix_rows() per FY month, so it stays in sync
-    with the JPC report's Pmix sheet."""
+    financial year — Report_format/pmix.xlsx format. Rows come from
+    page_pmix_fy_report.compute_pmix_fy_rows() per FY month — this report's
+    own mapping, independent of the JPC report's Pmix sheet."""
     try:
         content = build_pmix_fy_report_bytes(fy_start)
     except Exception as e:

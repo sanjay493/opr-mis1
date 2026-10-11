@@ -221,9 +221,10 @@ _RSP_ITEMS = [
     ("Saleable Steel",        "RSP", "Saleable Steel"),
 ]
 _BSL_ITEMS = [
-    ("HR Plates",             "BSL", "HSM HR Plate"),
-    # Chequered coil is split out of HSM HR Coil (Sale) by the extractor;
-    # this sheet keeps reporting the two together (a list = summed).
+    # The extractor stores chequered plate / chequered coil apart from HSM
+    # HR Plate / HSM HR Coil (Sale); this sheet reports each pair together
+    # (a list = summed).
+    ("HR Plates",             "BSL", ["HSM HR Plate", "Checkered plate"]),
     ("HR Coils",              "BSL", ["HSM HR Coil (Sale)", "Checkered Coil"]),
     ("HR Sheets",             "BSL", "HR Sheet"),
     ("CR Coils (old)",        "BSL", "CR I/II CR(Coil) Sale"),
@@ -273,7 +274,8 @@ _SAIL_ROLLUP = [
     ("Wheel & Axle",      [("DSP", "WAP")]),
     ("Plate",             [("BSP", "PLATEMILL"), ("RSP", "OPM Plate"), ("RSP", "NPM Plate")]),
     ("Thick plate",       [("BSL", "Thick Plate")]),
-    ("HR Plates",         [("RSP", "HSM-2 HR Plate"), ("BSL", "HSM HR Plate")]),
+    ("HR Plates",         [("RSP", "HSM-2 HR Plate"), ("BSL", "HSM HR Plate"),
+                            ("BSL", "Checkered plate")]),
     ("HR Sheets",         [("BSL", "HR Sheet")]),
     ("HR Coils/Skelp",    [("RSP", "HSM-2 HR Coil (Sale)"), ("BSL", "HSM HR Coil (Sale)"),
                             ("BSL", "Checkered Coil")]),
@@ -291,8 +293,8 @@ _FS_PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP"]
 def compute_pmix_rows(cur, month):
     """One month's worth of Pmix report rows, in display order — shared by
     the single-month JPC sheet (called once per month + once per CPLY month,
-    then zipped) and the FY-wide Pmix report (called once per FY month, then
-    grouped into quarters/cumulative). Each row:
+    then zipped). The FY-wide Pmix report keeps its own mapping
+    (page_pmix_fy_report.compute_pmix_fy_rows). Each row:
         {"kind": "header"|"data", "label": str, "value": float|None, "bold": bool}
     """
     rows = []
