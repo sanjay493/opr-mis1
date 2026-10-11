@@ -233,6 +233,13 @@ def _dpr_config():
         # report vintage with no "- CHQ PLATE" row at all (nothing to
         # subtract — see the "subtract" op's single-operand branch).
         {"item": "HSM HR Plate", "op": "subtract", "a_item": "HSM HR Plate", "b_item": "Checkered plate"},
+        # Same for "- CHQ COIL" under H R COIL (first seen 30/09/2026): H R
+        # COIL counts it in -- that report's sales-side lines, less the two
+        # CHQ sub-lines and Pig Iron, add up to SAL.STEEL(P) exactly -- so
+        # it is taken back out of "HSM HR Coil (Sale)" and shown as its own
+        # "Checkered Coil" item. No-op on vintages without the sub-line.
+        {"item": "HSM HR Coil (Sale)", "op": "subtract", "a_item": "HSM HR Coil (Sale)",
+         "b_item": "Checkered Coil"},
     ])
     return cells, no_convert, derived
 
@@ -282,6 +289,9 @@ _DPR_LABELS = {
     # spellings (Checkered plate: May-Jul'26 manual; CHQ Plate: Aug'26,
     # this extractor's first month writing it at all).
     "Checkered plate":       ("W", ["CHQ PLATE"]),
+    # "- CHQ COIL", the matching sub-line of H R COIL (30/09/2026 onwards);
+    # subtracted back out of "HSM HR Coil (Sale)" like CHQ PLATE above.
+    "Checkered Coil":        ("W", ["CHQ COIL"]),
     "HR Sheet":              ("W", ["H R SHEET"]),
     "CR I/II CR(Coil) Sale": ("W", ["C R CL/SL"]),
     "CR Sheets":             ("W", ["C R SHEET"]),

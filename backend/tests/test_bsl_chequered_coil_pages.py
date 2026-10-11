@@ -1,0 +1,81 @@
+"""Category-wise Saleable and Segment-wise pages: BSL "Chequered Coils" row
+right after "HR Coils", read from item "Checkered Coil"; Category-wise
+Total Flat still adds every displayed flat row (so splitting the coil out
+of HR Coils leaves the total unchanged)."""
+import sqlite3
+
+import pytest
+
+import page_catwise_saleable as pcs
+import page_segment_wise as psw
+
+ACT = {"HSM HR Coil (Sale)": 160.0, "Checkered Coil": 24.0, "HSM HR Plate": 32.0,
+       "Checkered plate": 3.0, "HR Sheet": 10.0, "Saleable Steel": 355.0}
+
+
+@pytest.fixture
+def fake_db(tmp_path, monkeypatch):
+    path = tmp_path / "p.db"
+    c = sqlite3.connect(path)
+    for t in ("production_table", "production_plan_table"):
+        c.execute(f"CREATE TABLE {t} (report_month TEXT, plant_name TEXT, item_name TEXT, month_actual REAL)")
+    c.executemany("INSERT INTO production_table VALUES ('2026-09','BSL',?,?)", ACT.items())
+    c.commit()
+    c.close()
+
+    class _Conn:
+        def __init__(self):
+            self._c = sqlite3.connect(path)
+
+        def cursor(self):
+            return self._c.cursor()
+
+        def close(self):
+            self._c.close()
+
+        def __getattr__(self, name):
+            return getattr(self._c, name)
+
+    for mod in (pcs, psw):
+        monkeypatch.setattr(mod.db, "connect", _Conn)
+
+
+def _labels_after(rows, label, n=2):
+    labels = [r.get("label") for r in rows]
+    i = labels.index(label)
+    return labels[i:i + n]
+
+
+def _row(rows, label):
+    return next(r for r in rows if r.get("label") == label)
+
+
+def _bsl_rows(result):
+    """The BSL block's rows, whatever the generator's container shape."""
+    if isinstance(result, dict):
+        result = result.get("rows") or result.get("sections") or []
+    flat = []
+    for r in result:
+        if isinstance(r, dict) and isinstance(r.get("rows"), list):
+            flat.extend(r["rows"])
+        else:
+            flat.append(r)
+    return flat
+
+
+def test_catwise_chequered_coils_after_hr_coils(fake_db):
+    rows = _bsl_rows(pcs.generate_catwise_saleable("2026-09", ["BSL"]))
+    assert _labels_after(rows, "HR Coils") == ["HR Coils", "Chequered Coils"]
+    assert "24" in str(_row(rows, "Chequered Coils"))
+
+
+def test_catwise_total_flat_includes_chequered_coil(fake_db):
+    rows = _bsl_rows(pcs.generate_catwise_saleable("2026-09", ["BSL"]))
+    total = next(r for r in rows if "Total Flat" in str(r.get("label")))
+    assert "229" in str(total)  # 160 + 24 + 32 + 3 + 10
+
+
+def test_segment_chequered_coils_after_hr_coils(fake_db):
+    rows = [r for r in _bsl_rows(psw.generate_segment_wise("2026-09")) if r.get("plant") == "BSL"]
+    assert _labels_after(rows, "HR Coils") == ["HR Coils", "Chequered Coils"]
+    assert "24" in str(_row(rows, "Chequered Coils"))

@@ -3925,6 +3925,7 @@ PRODUCTION_ITEM_ORDER = [
     'HRM',
     'HSM Total HR Coil',
     'HSM HR Coil (Sale)',
+    'Checkered Coil',
     'HSM HR Plate',
     'Checkered plate',
     'Thick Plate',

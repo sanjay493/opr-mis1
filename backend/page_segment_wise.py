@@ -194,6 +194,7 @@ def generate_segment_wise(report_month: str) -> dict:
         hr_rows = []
         for label, item in [
             ("HR Coils",        "HSM HR Coil (Sale)"),
+            ("Chequered Coils", "Checkered Coil"),
             ("HR Plates",       "HSM HR Plate"),
             ("Chequered Plate", "Checkered plate"),
             ("HR Sheets",       "HR Sheet"),

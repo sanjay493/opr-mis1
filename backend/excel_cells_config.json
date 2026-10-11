@@ -59,6 +59,12 @@
         "op": "subtract",
         "a_item": "HSM HR Plate",
         "b_item": "Checkered plate"
+      },
+      {
+        "item": "HSM HR Coil (Sale)",
+        "op": "subtract",
+        "a_item": "HSM HR Coil (Sale)",
+        "b_item": "Checkered Coil"
       }
     ]
   },

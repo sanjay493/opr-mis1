@@ -222,7 +222,9 @@ _RSP_ITEMS = [
 ]
 _BSL_ITEMS = [
     ("HR Plates",             "BSL", "HSM HR Plate"),
-    ("HR Coils",              "BSL", "HSM HR Coil (Sale)"),
+    # Chequered coil is split out of HSM HR Coil (Sale) by the extractor;
+    # this sheet keeps reporting the two together (a list = summed).
+    ("HR Coils",              "BSL", ["HSM HR Coil (Sale)", "Checkered Coil"]),
     ("HR Sheets",             "BSL", "HR Sheet"),
     ("CR Coils (old)",        "BSL", "CR I/II CR(Coil) Sale"),
     ("CR Coils (new)",        "BSL", "CR III CR(Coil) Sale"),
@@ -273,7 +275,8 @@ _SAIL_ROLLUP = [
     ("Thick plate",       [("BSL", "Thick Plate")]),
     ("HR Plates",         [("RSP", "HSM-2 HR Plate"), ("BSL", "HSM HR Plate")]),
     ("HR Sheets",         [("BSL", "HR Sheet")]),
-    ("HR Coils/Skelp",    [("RSP", "HSM-2 HR Coil (Sale)"), ("BSL", "HSM HR Coil (Sale)")]),
+    ("HR Coils/Skelp",    [("RSP", "HSM-2 HR Coil (Sale)"), ("BSL", "HSM HR Coil (Sale)"),
+                            ("BSL", "Checkered Coil")]),
     ("CR Coils/Sheets",   [("BSL", "CR I/II CR(Coil) Sale"), ("BSL", "CR III CR(Coil) Sale"),
                             ("BSL", "CR Sheets"), ("BSL", "New CR Sheet")]),
     ("GP/GC",             [("BSL", "GP/GC"), ("BSL", "GPC3")]),
@@ -303,7 +306,9 @@ def compute_pmix_rows(cur, month):
     for plant, items in _PLANT_BLOCKS:
         header(plant)
         for label, plant_code, item in items:
-            if isinstance(item, tuple):
+            if isinstance(item, list):
+                value = _sum(cur, [(plant_code, i) for i in item], month)
+            elif isinstance(item, tuple):
                 value = _one_of(cur, plant_code, item, month)
             else:
                 value = _one(cur, plant_code, item, month)

@@ -409,7 +409,7 @@ def _bsl(cur, rm, pm, fy, ytd, cply_ytd):
     # entirely (see excel_extractor_bsl.py) in favour of "CR(1&2) Total
     # Saleable" — CR-I/II-Coil-Sale + CR-Sheets + GP/GC, the same three
     # rows this sum already used, so no further change needed here.
-    flat_items_bsl = ["HSM HR Coil (Sale)", "HSM HR Plate", "Checkered plate", "HR Sheet",
+    flat_items_bsl = ["HSM HR Coil (Sale)", "Checkered Coil", "HSM HR Plate", "Checkered plate", "HR Sheet",
                       "CR I/II CR(Coil) Sale", "CR III CR(Coil) Sale", "CR Sheets", "New CR Sheet",
                       "Thick Plate", "GP/GC", "GPC3"]
 
@@ -431,6 +431,9 @@ def _bsl(cur, rm, pm, fy, ytd, cply_ytd):
     hr_rows = []
     for label, item in [
         ("HR Coils",               "HSM HR Coil (Sale)"),
+        # "- CHQ COIL", split out of H R COIL by excel_extractor_bsl
+        # (30/09/2026 onwards), like Chequered Plate below.
+        ("Chequered Coils",        "Checkered Coil"),
         ("HR Plates",              "HSM HR Plate"),
         ("Chequered Plate",        "Checkered plate"),
         ("HR Sheets",              "HR Sheet"),
