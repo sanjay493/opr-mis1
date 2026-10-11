@@ -64,7 +64,9 @@ def test_pdf_uses_only_config_colours():
     sec = {"labels": app_mod._labels("2026-08", "app"), "pct_idx": sorted(app_mod.PCT_IDX),
            "rows": [dict(ROW)], "has_plan": True}
     colors = {k: "#123456" for k in ("perf_app_bg", "perf_app_text", "perf_act_bg", "perf_act_text", "perf_gr_bg",
-                                     "perf_cap_bg", "perf_cap_text", "border_medium", "text_primary")}
+                                     "perf_cap_bg", "perf_cap_text", "perf_app_border", "border_medium",
+                                     "border_light", "border_black", "text_primary", "text_black",
+                                     "table_header_bg")}
     html = ppdf.build_html([sec], 3, colors)
     assert set(re.findall(r"#[0-9a-fA-F]{6}\b", html)) == {"#123456"}
 
@@ -72,3 +74,38 @@ def test_pdf_uses_only_config_colours():
 def test_pdf_endpoint_runs_off_the_event_loop():
     import inspect
     assert not inspect.iscoroutinefunction(app_mod.plant_performance_pdf_download)
+
+
+def _sec(basis="app"):
+    return {"labels": app_mod._labels("2026-08", basis), "pct_idx": sorted(app_mod.PCT_IDX),
+            "rows": [dict(ROW)], "has_plan": True}
+
+
+def test_pdf_matches_report_page4_portrait_layout():
+    # Same sheet as the monthly report's page 4: A4 portrait with page 4's
+    # margins, its 18 fixed column widths and blue heading.
+    import plant_performance_pdf as ppdf
+    html = ppdf.build_html([_sec()], 2, {})
+    assert "size: A4 portrait" in html and "margin: 7mm 10mm 5mm 10mm" in html
+    assert html.count("<col ") == 18
+    assert "rgb(0,0,255)" in html
+
+
+def test_pdf_numbers_have_no_thousands_separator():
+    # Page 4 prints 6688, not 6,688.
+    import plant_performance_pdf as ppdf
+    html = ppdf.build_html([_sec()], 2, {})
+    assert ">6688.15<" in html and "6,688" not in html
+
+
+def test_pdf_rounded_negative_zero_prints_zero():
+    import plant_performance_pdf as ppdf
+    assert ppdf._q(-0.246, 0) == "0" and ppdf._q(-0.0004, 3) == "0.000" and ppdf._q(-0.6, 0) == "-1"
+
+
+def test_pdf_decimals_use_auto_width_table():
+    # 0 decimals: page 4's fixed column widths. With decimals the widths
+    # become minimums so the longer numbers aren't clipped.
+    import plant_performance_pdf as ppdf
+    assert '<table class="auto">' not in ppdf.build_html([_sec()], 0, {})
+    assert '<table class="auto">' in ppdf.build_html([_sec()], 3, {})
