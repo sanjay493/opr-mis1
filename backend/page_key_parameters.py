@@ -91,6 +91,13 @@ _SP_UNIT_MAP = {
     "RSP": ["SP-1", "SP-2", "SP-3"],
 }
 
+# Single sinter-plant units and the key names their extractors use for
+# Sinter Fe: BSL's techno file gives "fe%_in_sinter" under "Sinter", ISP's
+# under "SP"; DSP's "Sinter" unit carries "tfe_in_sinter". Read when the BF
+# unit has no tfe_in_sinter (only manual entry fills that for BSL/ISP).
+_SINTER_UNITS = ["Sinter", "SP"]
+_SINTER_FE_KEYS = ["tfe_in_sinter", "fe%_in_sinter"]
+
 _GENERAL_UNIT = "General"
 
 # Row-type markers (kind values that short-circuit per-plant computation)
@@ -205,10 +212,14 @@ def _sinter_fe_val(plant, techno, dp):
     slash-joined as 3 separate readings, per direct instruction changed to
     a plain average; same averaging page_bf_large_annexure.py's Sinter Fe
     row already does for RSP). Other plants fall back to the older single
-    BF-sourced ("bf" unit) figure, unchanged."""
+    BF-sourced ("bf" unit) figure, falling back to the sinter-plant unit's
+    extracted figure (_SINTER_UNITS / _SINTER_FE_KEYS) when that is empty."""
     units = _SP_UNIT_MAP.get(plant)
     if not units:
-        return _bf_val(plant, "tfe_in_sinter", techno, dp)
+        v = _bf_val(plant, "tfe_in_sinter", techno, dp)
+        if v is None:
+            v = _first_present_val(plant, _SINTER_UNITS, _SINTER_FE_KEYS, techno, dp)
+        return v
     vals = [
         v for u in units
         for v in [techno.get((plant, u), {}).get("tfe_in_sinter")]
