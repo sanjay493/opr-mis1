@@ -104,13 +104,14 @@ def _item_sankey_svg(item, routes_for_item, cum_map):
     unit_disp = "Rake" if (unit_label or "").strip().lower() == "rake" else "T"
     # Drawn at ~its printed width (the card renders ~313px wide in the
     # 2-column grid), so SVG units ~= px and the side labels (plant name +
-    # value, e.g. "BSL" / "400 T") print at 11.5pt (15.33px / 0.978 scale
-    # ~= 15.7 units), per direct instruction 2026-09-25. _sankey_svg sizes
-    # side-label margins from the label text itself, so the ribbons keep
-    # most of the width; vh gives each node's 2-line label room.
-    return _sankey_svg(nodes, links, vw=320, vh=160, side_labels=True,
+    # value, e.g. "BSL" / "400 T") print at ~8pt (11 units), reduced from
+    # 11.5pt per direct instruction 2026-10-13 so the table and all four
+    # charts fit on one sheet. _sankey_svg sizes side-label margins from
+    # the label text itself, so the ribbons keep most of the width; vh
+    # gives each node's 2-line label room.
+    return _sankey_svg(nodes, links, vw=320, vh=125, side_labels=True,
                         value_fmt=lambda v: f'{v:,.0f} {unit_disp}',
-                        label_font_size=15.7, value_font_size=15.7)
+                        label_font_size=11, value_font_size=11)
 
 
 def _month_label(ym):
