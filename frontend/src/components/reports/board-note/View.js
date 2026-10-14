@@ -28,6 +28,14 @@ const QUARTERS = [
 
 const FY_RE = /^\d{4}-\d{2}$/;
 
+// Annexures of the note, generated as PDF from the DB (board_note_annexures.py).
+const ANNEXURES = [
+  { id: 'I', label: 'Annexure-I', what: 'Production performance — months, quarter and FY-to-date (APP / Actual / CPLY)' },
+  { id: 'II', label: 'Annexure-II', what: 'SAIL & plant techno-economic parameters (best ever, target, months, quarter, FY-to-date)' },
+  { id: 'III', label: 'Annexure-III', what: 'Techno-economic parameters of the new blast furnaces' },
+  { id: 'IV', label: 'Annexure-IV', what: 'Product mix performance by mill (ABP / Actual / CPLY)' },
+];
+
 // FY is named by its starting year: April of `start` to March of `start+1`.
 function fyOf(date) {
   const start = date.getMonth() >= 3 ? date.getFullYear() : date.getFullYear() - 1;
@@ -61,6 +69,7 @@ export default function BoardNotePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [annexBusy, setAnnexBusy] = useState(null);
   const [error, setError] = useState(null);
   const [saveMsg, setSaveMsg] = useState(null);
 
@@ -159,6 +168,31 @@ export default function BoardNotePage() {
     }
   };
 
+  const handleAnnexure = async (annex, fmt) => {
+    setAnnexBusy(`${annex}-${fmt}`);
+    setError(null);
+    try {
+      const res = await fetch(`${API}/api/board-note/annexures?fy=${encodeURIComponent(fy)}&quarter=${quarter}&annex=${annex}&fmt=${fmt}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.detail || `HTTP ${res.status}`);
+      }
+      const blob = await res.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = `BoardNote_${annex === 'all' ? 'Annexures' : `Annexure-${annex}`}_${fy}_Q${quarter}.${fmt}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (e) {
+      setError(`Annexure download failed: ${e.message}`);
+    } finally {
+      setAnnexBusy(null);
+    }
+  };
+
   const inputStyle = {
     padding: '9px 14px', fontSize: '11pt', border: '1px solid #dadce0',
     borderRadius: '6px', backgroundColor: '#ffffff', color: '#202124', minWidth: '120px',
@@ -180,7 +214,7 @@ export default function BoardNotePage() {
     <ReportPage
       maxWidth={900}
       title={<>Quarterly Board Note</>}
-      description={<>Production performance Board Note (.docx) for any financial year and quarter, generated from data already in this app. Narrative typed below is saved per period and merged into the note when it is generated: <strong>extra highlights</strong> go into the quarter&apos;s highlights list, and <strong>why narrative</strong> replaces the production-shortfall text for each plant. Extra highlights only appear where the quarter&apos;s template has a highlights block for that plant.</>}
+      description={<>Production performance Board Note (.docx) for any financial year and quarter, generated from data already in this app. Narrative typed below is saved per period and merged into the note when it is generated: <strong>extra highlights</strong> go into the quarter&apos;s highlights list, and <strong>why narrative</strong> replaces the production-shortfall text for each plant. Extra highlights only appear where the quarter&apos;s template has a highlights block for that plant. The note&apos;s Annexures I to IV can be downloaded as PDF or Excel below.</>}
     >
       <div style={{
         padding: '20px 24px', border: '1px solid #dadce0', borderRadius: '8px',
@@ -221,6 +255,44 @@ export default function BoardNotePage() {
           {error}
         </div>
       )}
+
+      <div style={{ padding: '20px 24px', border: '1px solid #dadce0', borderRadius: '8px', marginBottom: '24px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', flexWrap: 'wrap', gap: '12px' }}>
+          <div style={{ fontSize: '12pt', fontWeight: 700, color: '#202124' }}>
+            Annexures — {QUARTERS[quarter - 1].label} {validFy ? fy : ''}
+          </div>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <button onClick={() => handleAnnexure('all', 'pdf')} disabled={!validFy || !!annexBusy} style={btnStyle(!validFy || !!annexBusy)}>
+              {annexBusy === 'all-pdf' ? 'Generating…' : '⬇ All annexures (PDF)'}
+            </button>
+            <button onClick={() => handleAnnexure('all', 'xlsx')} disabled={!validFy || !!annexBusy} style={btnStyle(!validFy || !!annexBusy, '#0f9d58')}>
+              {annexBusy === 'all-xlsx' ? 'Generating…' : '⬇ All annexures (Excel)'}
+            </button>
+          </div>
+        </div>
+        <p style={{ fontSize: '9.5pt', color: '#9aa0a6', marginTop: 0, marginBottom: '14px' }}>
+          Built from the production, ABP, techno and techno-target data in the database for the selected quarter. PDF takes a few seconds each; the Excel workbook has one sheet per annexure page.
+        </p>
+        {ANNEXURES.map((a) => (
+          <div key={a.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '8px 0', borderTop: '1px solid #f1f3f4' }}>
+            <div style={{ fontSize: '10.5pt' }}>
+              <strong>{a.label}</strong> <span style={{ color: '#5f6368' }}>— {a.what}</span>
+            </div>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              {[['pdf', 'PDF', '#5f6368'], ['xlsx', 'Excel', '#0f9d58']].map(([fmt, text, color]) => (
+                <button
+                  key={fmt}
+                  onClick={() => handleAnnexure(a.id, fmt)}
+                  disabled={!validFy || !!annexBusy}
+                  style={{ ...btnStyle(!validFy || !!annexBusy, color), padding: '6px 16px', fontSize: '10pt', whiteSpace: 'nowrap' }}
+                >
+                  {annexBusy === `${a.id}-${fmt}` ? 'Generating…' : `⬇ ${text}`}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
 
       <div style={{ padding: '20px 24px', border: '1px solid #dadce0', borderRadius: '8px', marginBottom: '24px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '12px' }}>

@@ -36,7 +36,7 @@ _FS_ALIAS = frozenset({"SSP", "VISL"})   # no dedicated "Finished Steel" row
 
 # table: production_table (actuals) or mou_plan_table (MoU targets) --
 # both keyed by report_month / plant_name / item_name, in '000 T.
-_TABLES = ("production_table", "mou_plan_table")
+_TABLES = ("production_table", "mou_plan_table", "production_plan_table")
 
 
 def _one(cur, plant, item, month, table="production_table"):
@@ -51,12 +51,12 @@ def _one(cur, plant, item, month, table="production_table"):
     return r[0] if r and r[0] is not None else None
 
 
-def _one_of(cur, plant, items, month):
+def _one_of(cur, plant, items, month, table="production_table"):
     """First matching item_name that has a value — for concepts stored under
     different item_names depending which extractor version wrote them (e.g.
     ASP's Plates: 'PLATES' vs 'Plate Mill')."""
     for item in items:
-        v = _one(cur, plant, item, month)
+        v = _one(cur, plant, item, month, table)
         if v is not None:
             return v
     return None

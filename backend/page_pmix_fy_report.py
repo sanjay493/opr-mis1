@@ -226,11 +226,13 @@ _SAIL_ROLLUP = [
 _FS_PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP"]
 
 
-def compute_pmix_fy_rows(cur, month):
+def compute_pmix_fy_rows(cur, month, table="production_table"):
     """One month's worth of rows for this report's "Pmix'yy-yy ACT" sheet,
     in display order (called once per FY month, then grouped into
     quarters/cumulative). Mapped here, independently of the JPC report's
-    Pmix sheet, though the rows currently match it. Each row:
+    Pmix sheet, though the rows currently match it. table=
+    "production_plan_table" gives the same rows from the ABP (the Board
+    Note's Annexure-V uses both). Each row:
         {"kind": "header"|"data", "label": str, "value": float|None, "bold": bool}
     """
     rows = []
@@ -245,50 +247,50 @@ def compute_pmix_fy_rows(cur, month):
         header(plant)
         for label, plant_code, item in items:
             if isinstance(item, list):
-                value = _sum(cur, [(plant_code, i) for i in item], month)
+                value = _sum(cur, [(plant_code, i) for i in item], month, table)
             elif isinstance(item, tuple):
-                value = _one_of(cur, plant_code, item, month)
+                value = _one_of(cur, plant_code, item, month, table)
             else:
-                value = _one(cur, plant_code, item, month)
+                value = _one(cur, plant_code, item, month, table)
             data(label, value, bold=label.lower().startswith("saleable"))
 
     header("SAIL")
     for label, combos in _SAIL_ROLLUP:
-        data(label, _sum(cur, combos, month))
+        data(label, _sum(cur, combos, month, table))
     sail_5pl_combo = [(p, "Saleable Steel") for p in _FS_PLANTS]
-    data("Saleable steel 5 PL", _sum(cur, sail_5pl_combo, month), bold=True)
+    data("Saleable steel 5 PL", _sum(cur, sail_5pl_combo, month, table), bold=True)
 
     header("Finished Steel")
     fs_vals = {}
     for plant in _FS_PLANTS:
-        fs_vals[plant] = _one(cur, plant, "Finished Steel", month)
+        fs_vals[plant] = _one(cur, plant, "Finished Steel", month, table)
         data(plant, fs_vals[plant])
-    fs5 = _sum(cur, [(p, "Finished Steel") for p in _FS_PLANTS], month)
+    fs5 = _sum(cur, [(p, "Finished Steel") for p in _FS_PLANTS], month, table)
     data("Finished Steel 5PL", fs5, bold=True)
 
     # ASP
-    asp_sal = _one(cur, "ASP", "Saleable Steel", month)
-    asp_fin = _fs(cur, "ASP", month)
+    asp_sal = _one(cur, "ASP", "Saleable Steel", month, table)
+    asp_fin = _fs(cur, "ASP", month, table)
     data("ASP (Total)", asp_sal, bold=True)
     data("ASP (Finished)", asp_fin)
     data("ASP (Semis)", _sub(asp_sal, asp_fin))
 
     # SSP — HRCS = Carbon Steel Production; Stainless = Saleable - Carbon
-    ssp_sal = _one(cur, "SSP", "Saleable Steel", month)
-    ssp_carb = _one(cur, "SSP", "Carbon Steel Production", month)
+    ssp_sal = _one(cur, "SSP", "Saleable Steel", month, table)
+    ssp_carb = _one(cur, "SSP", "Carbon Steel Production", month, table)
     data("SSP (Finished Carbon Steel)", ssp_carb)
     data("SSP (Finished Stainless Steel)", _sub(ssp_sal, ssp_carb))
 
     # VISL
-    visl = _fs(cur, "VISL", month)
+    visl = _fs(cur, "VISL", month, table)
     data("VISL(Finished)", visl)
 
     sail_set = _FS_PLANTS + ["ASP", "SSP", "VISL"]
-    fst = _sum(cur, [(p, "Finished Steel") for p in _FS_PLANTS], month)
+    fst = _sum(cur, [(p, "Finished Steel") for p in _FS_PLANTS], month, table)
     fst = (fst or 0) + (asp_fin or 0) + (ssp_sal or 0) + (visl or 0)
     data("Finished Steel (Total)", fst, bold=True)
 
-    sal = _sum(cur, [(p, "Saleable Steel") for p in sail_set], month)
+    sal = _sum(cur, [(p, "Saleable Steel") for p in sail_set], month, table)
     data("Semis Total", _sub(sal, fst))
     data("Saleable Steel (Total)", sal, bold=True)
 
