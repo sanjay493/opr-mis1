@@ -1,9 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useApi } from '@/hooks/useApi';
 import { ReportPage } from '../ReportUI';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -43,38 +42,17 @@ const HEAD = {
 };
 
 export default function IptFYPage() {
-  const [fys, setFys] = useState([]);
-  const [fyStart, setFyStart] = useState(null);
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [fySel, setFyStart] = useState(null);           // null = latest FY
 
-  useEffect(() => {
-    fetch(`${API_BASE}/api/ipt-fys`)
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
-      .then((d) => {
-        setFys(d.fys || []);
-        if (d.fys && d.fys.length > 0) setFyStart(d.fys[0].fy_start);
-      })
-      .catch((e) => setError(`Failed to load financial years: ${e.message}`));
-  }, []);
-
-  useEffect(() => {
-    if (fyStart == null) return;
-    setLoading(true);
-    setError(null);
-    fetch(`${API_BASE}/api/ipt-fy?fy_start=${fyStart}`)
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
-      .then((d) => setData(d))
-      .catch((e) => setError(`Failed to load IPT data: ${e.message}`))
-      .finally(() => setLoading(false));
-  }, [fyStart]);
+  const fysQ = useApi('/api/ipt-fys');
+  const fys = fysQ.data?.fys || [];
+  const fyStart = fySel ?? fys[0]?.fy_start ?? null;
+  const dataQ = useApi(fyStart != null && `/api/ipt-fy?fy_start=${fyStart}`);
+  const data = dataQ.data ?? null;
+  const loading = dataQ.isFetching;
+  const error = (fysQ.error && `Failed to load financial years: ${fysQ.error.message}`)
+    || (dataQ.error && `Failed to load IPT data: ${dataQ.error.message}`)
+    || null;
 
   const months = data?.months || [];
   const sections = data?.sections || [];

@@ -1,13 +1,12 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useApi } from '@/hooks/useApi';
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts';
 import { ReportPage, FilterBar, Field, Status, Toggle, Empty, entryStyles as es } from '../ReportUI';
 import pa from '../pa.module.css';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
 const COLORS = { hot_metal: '#1a73e8', crude_steel: '#e8710a', finished_steel: '#188038', saleable_steel: '#a142f4' };
 const SHORT = { hot_metal: 'Hot Metal', crude_steel: 'Crude Steel', finished_steel: 'Finished Steel', saleable_steel: 'Saleable Steel' };
@@ -33,34 +32,16 @@ function Delta({ value }) {
 
 export default function ProductionTrendPage() {
   const [basis, setBasis] = useState('fy'); // 'fy' | 'cy'
-  const [groups, setGroups] = useState([]);
   const [group, setGroup] = useState('sail5');
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
 
-  useEffect(() => {
-    fetch(`${API_BASE}/api/production-trend/groups`)
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
-      .then((d) => setGroups(d.groups || []))
-      .catch((e) => setError(`Failed to load plant groups: ${e.message}`));
-  }, []);
-
-  useEffect(() => {
-    setLoading(true);
-    setError(null);
-    fetch(`${API_BASE}/api/production-trend?basis=${basis}&group=${group}`)
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
-      .then((d) => setData(d))
-      .catch((e) => setError(`Failed to load production trend: ${e.message}`))
-      .finally(() => setLoading(false));
-  }, [basis, group]);
+  const groupsQ = useApi('/api/production-trend/groups');
+  const groups = groupsQ.data?.groups || [];
+  const dataQ = useApi(`/api/production-trend?basis=${basis}&group=${group}`);
+  const data = dataQ.data ?? null;
+  const loading = dataQ.isFetching;
+  const error = (groupsQ.error && `Failed to load plant groups: ${groupsQ.error.message}`)
+    || (dataQ.error && `Failed to load production trend: ${dataQ.error.message}`)
+    || null;
 
   const items = data?.items || [];
   const years = data?.years || [];   // newest first
