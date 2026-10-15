@@ -108,7 +108,14 @@ def _item_sankey_svg(item, routes_for_item, cum_map):
     # ~= 15.7 units), per direct instruction 2026-09-25. _sankey_svg sizes
     # side-label margins from the label text itself, so the ribbons keep
     # most of the width; vh gives each node's 2-line label room.
-    return _sankey_svg(nodes, links, vw=320, vh=160, side_labels=True,
+    # vh=130 (was 160, 2026-10-15): the table + heading + full 2x2 grid at
+    # vh=160 was a few mm taller than one sheet - Chromium's print layout
+    # doesn't fragment a CSS grid across a page break, so instead of
+    # trimming a few rows it moved the WHOLE grid to page 2, leaving most
+    # of page 1 blank. Shrinking the card height (width/font size, driven
+    # by vw and label_font_size, are unchanged) keeps the whole status
+    # report on a single sheet with margin to spare.
+    return _sankey_svg(nodes, links, vw=320, vh=130, side_labels=True,
                         value_fmt=lambda v: f'{v:,.0f} {unit_disp}',
                         label_font_size=15.7, value_font_size=15.7)
 
