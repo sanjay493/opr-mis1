@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef } from 'react';
+import { useApi } from '@/hooks/useApi';
 import { ReportPage, FilterBar, Field, Status, Toggle, Empty, entryStyles as es, reportStyles as rs, wb } from '../ReportUI';
 import pa from '../pa.module.css';
 
@@ -54,12 +55,9 @@ function PctOfPlan({ actual, plan }) {
 }
 
 export default function ProductionFYPage() {
-  const [fys, setFys] = useState([]);
-  const [fyStart, setFyStart] = useState(null);
+  const [fySel, setFyStart] = useState(null);           // null = latest FY
   const [mode, setMode] = useState('actual'); // 'actual' | 'plan'
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [actionError, setError] = useState(null);       // download failures
   const [downloading, setDownloading] = useState(null); // 'excel' | 'pdf' | null
   const [showPct, setShowPct] = useState(false);         // "% of plan" under actuals
   const [collapsed, setCollapsed] = useState(() => new Set()); // collapsed plant sections
@@ -81,32 +79,16 @@ export default function ProductionFYPage() {
     }, 0);
   };
 
-  useEffect(() => {
-    fetch(`${API_BASE}/api/production-fys`)
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
-      .then((d) => {
-        setFys(d.fys || []);
-        if (d.fys && d.fys.length > 0) setFyStart(d.fys[0].fy_start);
-      })
-      .catch((e) => setError(`Failed to load financial years: ${e.message}`));
-  }, []);
-
-  useEffect(() => {
-    if (fyStart == null) return;
-    setLoading(true);
-    setError(null);
-    fetch(`${API_BASE}/api/production-fy?fy_start=${fyStart}`)
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
-      .then((d) => setData(d))
-      .catch((e) => setError(`Failed to load production data: ${e.message}`))
-      .finally(() => setLoading(false));
-  }, [fyStart]);
+  const fysQ = useApi('/api/production-fys');
+  const fys = fysQ.data?.fys || [];
+  const fyStart = fySel ?? fys[0]?.fy_start ?? null;
+  const dataQ = useApi(fyStart != null && `/api/production-fy?fy_start=${fyStart}`);
+  const data = dataQ.data ?? null;
+  const loading = dataQ.isFetching;
+  const error = actionError
+    || (fysQ.error && `Failed to load financial years: ${fysQ.error.message}`)
+    || (dataQ.error && `Failed to load production data: ${dataQ.error.message}`)
+    || null;
 
   const handleDownload = async (kind) => {
     if (!fyStart) return;

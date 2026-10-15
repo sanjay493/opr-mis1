@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useApi } from '@/hooks/useApi';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import { ReportPage, FilterBar, Field, Status, Empty, entryStyles as es, wb } from '../ReportUI';
 import pa from '../pa.module.css';
@@ -48,44 +49,22 @@ async function downloadCsv(url, fallbackName) {
 
 export default function ProductionItemsReportPage() {
   const [item, setItem] = useState('Finished Steel');
-  const [fys, setFys] = useState([]);
-  const [fyStart, setFyStart] = useState(null);
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [fySel, setFyStart] = useState(null);           // null = latest FY
   const [downloadingAll, setDownloadingAll] = useState(false);
   const [downloadingFy, setDownloadingFy] = useState(false);
-  const [error, setError] = useState(null);
+  const [actionError, setError] = useState(null);       // download failures
 
-  useEffect(() => {
-    fetch(`${API}/api/finished-steel-fys?item=${encodeURIComponent(item)}`)
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
-      .then((d) => {
-        const list = d.fys || [];
-        setFys(list);
-        setFyStart((prev) => {
-          if (prev != null && list.some((fy) => fy.fy_start === prev)) return prev;
-          return list.length > 0 ? list[0].fy_start : null;
-        });
-      })
-      .catch((e) => setError(`Failed to load financial years: ${e.message}`));
-  }, [item]);
-
-  useEffect(() => {
-    if (fyStart == null) return;
-    setLoading(true);
-    setError(null);
-    fetch(`${API}/api/finished-steel-report/fy?fy_start=${fyStart}&item=${encodeURIComponent(item)}`)
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
-      .then((d) => setData(d))
-      .catch((e) => setError(`Failed to load ${item} data: ${e.message}`))
-      .finally(() => setLoading(false));
-  }, [fyStart, item]);
+  const fysQ = useApi(`/api/finished-steel-fys?item=${encodeURIComponent(item)}`);
+  const fys = fysQ.data?.fys || [];
+  // Keep the chosen FY across an item switch if the new item has it too.
+  const fyStart = fys.some((fy) => fy.fy_start === fySel) ? fySel : (fys[0]?.fy_start ?? null);
+  const dataQ = useApi(fyStart != null && `/api/finished-steel-report/fy?fy_start=${fyStart}&item=${encodeURIComponent(item)}`);
+  const data = dataQ.data ?? null;
+  const loading = dataQ.isFetching;
+  const error = actionError
+    || (fysQ.error && `Failed to load financial years: ${fysQ.error.message}`)
+    || (dataQ.error && `Failed to load ${item} data: ${dataQ.error.message}`)
+    || null;
 
   const handleDownloadAll = async () => {
     setDownloadingAll(true);

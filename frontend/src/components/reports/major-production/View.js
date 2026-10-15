@@ -1,9 +1,8 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
+import { useApi } from '@/hooks/useApi';
 import { ReportPage } from '../ReportUI';
-
-const API = process.env.NEXT_PUBLIC_API_URL || '';
 
 // Display label → item_name in production_table
 const ITEMS = [
@@ -44,45 +43,20 @@ const TD = {
 };
 
 export default function MajorProductionPage() {
-  const [fys, setFys]       = useState([]);
-  const [fyStart, setFyStart] = useState(null);
+  const [fySel, setFyStart] = useState(null);   // null = latest FY
   const [plant, setPlant]   = useState(SAIL_TOTAL);
-  const [data, setData]     = useState(null);   // /api/production-fy response
-  const [loading, setLoading] = useState(false);
-  const [error, setError]   = useState(null);
   const [inTonnes, setInTonnes] = useState(false); // false = '000 T (3 dp), true = ×1000
 
-  // ── FY list ────────────────────────────────────────────────────────────────
-  useEffect(() => {
-    (async () => {
-      try {
-        const r = await fetch(`${API}/api/production-fys`);
-        const d = await r.json();
-        setFys(d.fys || []);
-        if (d.fys?.length) setFyStart(d.fys[0].fy_start);
-      } catch (e) {
-        setError(`Could not load financial years: ${e.message}`);
-      }
-    })();
-  }, []);
-
-  // ── FY data ────────────────────────────────────────────────────────────────
-  const loadData = useCallback(async () => {
-    if (fyStart == null) return;
-    setLoading(true); setError(null);
-    try {
-      const r = await fetch(`${API}/api/production-fy?fy_start=${fyStart}`);
-      if (!r.ok) throw new Error(await r.text());
-      setData(await r.json());
-    } catch (e) {
-      setError(`Load failed: ${e.message}`);
-      setData(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [fyStart]);
-
-  useEffect(() => { loadData(); }, [loadData]);
+  // ── FY list + FY data (shared cache with the Production FY tab) ────────────
+  const fysQ = useApi('/api/production-fys');
+  const fys = fysQ.data?.fys || [];
+  const fyStart = fySel ?? fys[0]?.fy_start ?? null;
+  const dataQ = useApi(fyStart != null && `/api/production-fy?fy_start=${fyStart}`);
+  const data = dataQ.data ?? null;   // /api/production-fy response
+  const loading = dataQ.isFetching;
+  const error = (fysQ.error && `Could not load financial years: ${fysQ.error.message}`)
+    || (dataQ.error && `Load failed: ${dataQ.error.message}`)
+    || null;
 
   // ── Derived table ──────────────────────────────────────────────────────────
   const months = data?.months || [];

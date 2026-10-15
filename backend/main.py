@@ -95,6 +95,7 @@ from page_finished_steel_report import (
 from page_do_letter import build_do_letter_docx_bytes, build_do_annexure_xlsx_bytes
 from page_board_note import generate_board_note_docx_bytes
 import board_note_manual_text
+import board_note_annexures
 import page_production_fy_export
 import page_production_trend
 import page_special_steel_fy_export
@@ -5395,6 +5396,33 @@ async def board_note_docx(fy: str = Query(...), quarter: str = Query(...)):
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         headers={"Content-Disposition": f'attachment; filename="BoardNote_{fy}_Q{q}.docx"'},
     )
+
+
+@app.get("/api/board-note/annexures")
+def board_note_annexures_download(fy: str = Query(...), quarter: str = Query(...),
+                                  annex: str = Query("all"), fmt: str = Query("pdf")):
+    """The Board Note's annexures for `fy`/`quarter`, from the DB:
+    annex = all | I | II | III | IV, fmt = pdf | xlsx. See
+    board_note_annexures.py. A plain def, so FastAPI runs the DB work and
+    the Playwright render in its threadpool."""
+    q = _parse_board_note_period(fy, quarter)
+    which = board_note_annexures.ANNEXURES if annex == "all" else (annex,)
+    if any(a not in board_note_annexures.ANNEXURES for a in which):
+        raise HTTPException(status_code=400, detail="annex must be all, I, II, III or IV")
+    if fmt not in ("pdf", "xlsx"):
+        raise HTTPException(status_code=400, detail="fmt must be pdf or xlsx")
+    try:
+        if fmt == "xlsx":
+            content = board_note_annexures.build_xlsx(fy, q, which)
+            media = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        else:
+            content = board_note_annexures.render(board_note_annexures.build(fy, q, which))
+            media = "application/pdf"
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Annexure generation failed: {e}")
+    name = "Annexures" if annex == "all" else f"Annexure-{annex}"
+    return Response(content=content, media_type=media,
+                    headers={"Content-Disposition": f'attachment; filename="BoardNote_{name}_{fy}_Q{q}.{fmt}"'})
 
 
 @app.get("/api/board-note/manual-text")

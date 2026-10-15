@@ -124,15 +124,21 @@ def _direct_or_live(item: str, month: str, data: dict, sail_direct: dict):
 
 
 def _finished_steel_value(month: str, data: dict, sail_direct: dict):
+    """SAIL Finished Steel incl. Conversion -- the SAIL-level 'Conversion'
+    item is added on top, same as db.get_sail_production_actual / page5_6.py
+    (per direct instruction 2026-10-13). Only reaches the current FY: closed
+    FYs come from _REFERENCE_VALUES."""
     pv = []
     for p in _SAIL_8:
         v = data.get("Finished Steel", {}).get(p, {}).get(month)
         if v is None and p in _FS_ALIAS_PLANTS:
             v = data.get("Saleable Steel", {}).get(p, {}).get(month)
         pv.append(v)
-    if all(v is not None for v in pv):
-        return sum(pv)
-    return sail_direct.get("Finished Steel", {}).get(month)
+    fs = sum(pv) if all(v is not None for v in pv) else sail_direct.get("Finished Steel", {}).get(month)
+    conv = sail_direct.get("Conversion", {}).get(month)
+    if fs is None and conv is None:
+        return None
+    return (fs or 0.0) + (conv or 0.0)
 
 
 def _semi_finished_value(month: str, data: dict):
@@ -222,7 +228,7 @@ def generate_sail8_trend_annexure(report_month: str) -> dict:
 
     item_names = ["Hot Metal", "Total Crude Steel", "Pig Iron", "Saleable Steel",
                   "Finished Steel", "Saleable Semis"]
-    direct_items = ["Hot Metal", "Total Crude Steel", "Pig Iron", "Saleable Steel", "Finished Steel"]
+    direct_items = ["Hot Metal", "Total Crude Steel", "Pig Iron", "Saleable Steel", "Finished Steel", "Conversion"]
 
     conn = db.connect()
     cur = conn.cursor()
