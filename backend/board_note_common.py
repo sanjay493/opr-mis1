@@ -319,12 +319,12 @@ def best_ever_bullets(cur, plant: str, period_months_fn, cur_fy_start: int, styl
         if style in ("q1", "q2", "q3", "q4"):
             zz = str(prev_fy + 1)[2:]
             q = style[1]
-            bullets.append(f"{label} production of {cur_mt} MT (Previous best : {prev_mt} MT in Q-{q}'{yy}-{zz})")
+            bullets.append(f"{label} : {cur_mt} MT (Previous best : {prev_mt} MT in Q-{q}'{yy}-{zz})")
         elif style == "9m":
-            bullets.append(f"{label} production of {cur_mt} MT (Prev. best : {prev_mt} MT in Apr-Dec'{yy})")
+            bullets.append(f"{label} : {cur_mt} MT (Prev. best : {prev_mt} MT in Apr-Dec'{yy})")
         elif style == "fy":
             zz = str(prev_fy + 1)[2:]
-            bullets.append(f"{label} production of {cur_mt} MT (Prev. best : {prev_mt} MT in FY'{yy}-{zz})")
+            bullets.append(f"{label} : {cur_mt} MT (Prev. best : {prev_mt} MT in FY'{yy}-{zz})")
         else:
-            bullets.append(f"{label} production of {cur_mt} MT (Prev. best : {prev_mt} MT in Apr-Sep'{yy})")
+            bullets.append(f"{label} : {cur_mt} MT (Prev. best : {prev_mt} MT in Apr-Sep'{yy})")
     return bullets
