@@ -27,7 +27,7 @@ _PIG_IRON_CFG = {
 }
 
 _FINISHED_STEEL_CFG = {
-    "display": "Finished Steel (5 ISPs & 3 SSPs)",
+    "display": "Finished Steel (SAIL 8 Plants incl. Conversion from FY 25-26)",
     "unit": "'000 T",
     "db_item": "Finished Steel",
     "is_nos": False,
@@ -40,6 +40,12 @@ _FINISHED_STEEL_CFG = {
     # historically) undercount badly instead of falling back to the
     # historically-recorded SAIL total.
     "show_all_rows": True,
+    # From FY 2025-26 SAIL Finished Steel includes the SAIL-level
+    # 'Conversion' figure (per direct instruction 2026-10-16) -- same rule
+    # as Page 3/4's "incl. Conv." row and Annexure-4's FY2025-26 figure.
+    # Earlier FYs have no Conversion data and stay as before. Actual rows
+    # only: there is no Conversion plan.
+    "sail_conversion_from": "2025-04",
 }
 
 TREND_PAGES = {
@@ -421,6 +427,17 @@ def _generate_rows_for_config(report_month: str, config: dict) -> list:
         )
         sail_plan_direct = {rm: val for rm, val in cur.fetchall() if val is not None}
 
+    conv_from = config.get("sail_conversion_from")
+    sail_conv = {}
+    if conv_from:
+        cur.execute(
+            "SELECT report_month, month_actual FROM production_table "
+            "WHERE item_name='Conversion' AND plant_name='SAIL' "
+            "AND report_month>=? AND report_month<=?",
+            [max(conv_from, min_act), max_act],
+        )
+        sail_conv = {rm: val for rm, val in cur.fetchall() if val is not None}
+
     conn.close()
 
     fy_months_cur = _fy_months(cur_fy)
@@ -436,9 +453,17 @@ def _generate_rows_for_config(report_month: str, config: dict) -> list:
     # falls back to the stored value per-month when the live sum would be
     # partial (some plant hasn't reported that month), so older months with
     # incomplete per-plant tracking keep their historically recorded total
-    # instead of silently showing a partial sum. No Conversion adjustment
-    # added here, unlike Page 3/4's "incl. Conv." row.
+    # instead of silently showing a partial sum. From conv_from (FY 2025-26)
+    # onward the SAIL actual also adds Conversion -- see _with_conversion.
     prefer_live_sum = (db_item == "Finished Steel")
+
+    def _with_conversion(vals, months):
+        """Add SAIL Conversion to each month on/after conv_from."""
+        out = []
+        for v, mo in zip(vals, months):
+            conv = sail_conv.get(mo) if mo >= conv_from else None
+            out.append(v if conv is None or v is None else v + conv)
+        return out
 
     label_overrides = config.get("plant_label_overrides", {})
 
@@ -447,12 +472,16 @@ def _generate_rows_for_config(report_month: str, config: dict) -> list:
         disp_label = label_overrides.get(label, label)
         use_sail_direct = show_all and label == "SAIL"
 
-        def _resolve(direct, data, months, cap=None):
+        def _resolve(direct, data, months, cap=None, add_conv=False):
             if not use_sail_direct:
                 return _agg_months(data, plant_list, months, cap=cap)
             if prefer_live_sum:
-                return _live_sum_or_sail_fallback(direct, data, plant_list, months, cap=cap)
-            return _sail_or_sum(direct, data, plant_list, months, cap=cap)
+                vals = _live_sum_or_sail_fallback(direct, data, plant_list, months, cap=cap)
+            else:
+                vals = _sail_or_sum(direct, data, plant_list, months, cap=cap)
+            if add_conv and conv_from:
+                vals = _with_conversion(vals, months)
+            return vals
 
         # Plan row
         plan_vals = _resolve(sail_plan_direct, plan_data, fy_months_cur)
@@ -464,7 +493,7 @@ def _generate_rows_for_config(report_month: str, config: dict) -> list:
             })
 
         # Actual current FY
-        act_cur = _resolve(sail_act_direct, act_data, fy_months_cur, cap=report_month)
+        act_cur = _resolve(sail_act_direct, act_data, fy_months_cur, cap=report_month, add_conv=True)
         act_cur_values = _compute_row(act_cur, is_nos)
         if show_all or not _is_blank(act_cur_values):
             group_rows.append({
@@ -476,7 +505,7 @@ def _generate_rows_for_config(report_month: str, config: dict) -> list:
         for fy_start in hist_fys:
             fy_mo  = _fy_months(fy_start)
             fy_lbl = f"{fy_start % 100:02d}-{(fy_start + 1) % 100:02d}"
-            act_vals = _resolve(sail_act_direct, act_data, fy_mo)
+            act_vals = _resolve(sail_act_direct, act_data, fy_mo, add_conv=True)
             values = _compute_row(act_vals, is_nos)
             if not show_all and _is_blank(values):
                 continue
