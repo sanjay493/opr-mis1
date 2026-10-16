@@ -171,7 +171,7 @@ _AGG_MONTHS = {
 # (absent here) show every month of the FY so far. Keeps the table at no more
 # than 6 such columns in any month, per direct instruction.
 _COLUMN_PLAN = {
-    9:  ["Q1", 7, 8, 9, "Q2"],
+    9:  ["Q1", 7, 8, 9],
     10: ["Q1", "Q2", "H1", 10],
     11: ["Q1", "Q2", "H1", 10, 11],
     12: ["Q1", "Q2", "H1", 12, "Q3"],
