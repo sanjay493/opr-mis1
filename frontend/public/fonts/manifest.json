@@ -89,5 +89,33 @@
     "weight": "800",
     "url": "https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa1ZL7.woff2",
     "local_path": "frontend/public/fonts/inter/inter-800-normal.woff2"
+  },
+  {
+    "family": "IBM Plex Sans",
+    "style": "normal",
+    "weight": "400",
+    "url": "https://fonts.gstatic.com/s/ibmplexsans/v23/zYXzKVElMYYaJe8bpLHnCwDKr932-G7dytD-Dmu1syxeKYY.woff2",
+    "local_path": "frontend/public/fonts/ibm-plex-sans/ibm-plex-sans-400-normal.woff2"
+  },
+  {
+    "family": "IBM Plex Sans",
+    "style": "normal",
+    "weight": "500",
+    "url": "https://fonts.gstatic.com/s/ibmplexsans/v23/zYXzKVElMYYaJe8bpLHnCwDKr932-G7dytD-Dmu1syxeKYY.woff2",
+    "local_path": "frontend/public/fonts/ibm-plex-sans/ibm-plex-sans-500-normal.woff2"
+  },
+  {
+    "family": "IBM Plex Sans",
+    "style": "normal",
+    "weight": "600",
+    "url": "https://fonts.gstatic.com/s/ibmplexsans/v23/zYXzKVElMYYaJe8bpLHnCwDKr932-G7dytD-Dmu1syxeKYY.woff2",
+    "local_path": "frontend/public/fonts/ibm-plex-sans/ibm-plex-sans-600-normal.woff2"
+  },
+  {
+    "family": "IBM Plex Sans",
+    "style": "normal",
+    "weight": "700",
+    "url": "https://fonts.gstatic.com/s/ibmplexsans/v23/zYXzKVElMYYaJe8bpLHnCwDKr932-G7dytD-Dmu1syxeKYY.woff2",
+    "local_path": "frontend/public/fonts/ibm-plex-sans/ibm-plex-sans-700-normal.woff2"
   }
 ]

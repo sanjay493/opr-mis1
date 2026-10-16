@@ -32,12 +32,30 @@ function fmtPct(v) {
   return s === '-0' ? '0' : s;
 }
 
+// Type matches the PDF's page 4 (page4_table.html + main.html's .page4-*
+// rules): IBM Plex Sans 8.5pt body, Arial Narrow Bold 8.2pt headers (6.8pt
+// for the narrow CPLY / %Gr. / CU% headers), Arial Narrow Bold 8pt items.
+const FONT = "'IBM Plex Sans', sans-serif";
+const NARROW = "'Arial Narrow', Arial, sans-serif";
+const LINE = '1px solid #cbd5e1';
+const RULE = '1px solid #000';
+
+// Separate (not collapsed) borders: the table's own border is the black
+// outer frame, and each cell draws only its right edge (light column line)
+// plus a black top rule where a new item group or total row starts — no
+// light line between the plant rows of an item.
 const TH = {
-  padding: '5px 6px', border: '1px solid #94a3b8', background: '#dbeafe',
-  fontSize: '9pt', fontWeight: 700, textAlign: 'center', whiteSpace: 'pre-line',
+  padding: '3px 4px', borderRight: LINE, background: '#dbeafe',
+  fontFamily: NARROW, fontSize: '8.2pt', fontWeight: 700, lineHeight: 1.05,
+  textTransform: 'uppercase', textAlign: 'center', whiteSpace: 'pre-line', verticalAlign: 'middle',
 };
-const TD = { padding: '3px 6px', border: '1px solid #cbd5e1', fontSize: '9pt', textAlign: 'right', whiteSpace: 'nowrap' };
+const TH_SMALL = { ...TH, fontSize: '6.8pt', lineHeight: 0.95 };
+const TD = {
+  padding: '2px 5px', borderRight: LINE, fontFamily: FONT, fontSize: '8.5pt',
+  lineHeight: 1.15, textAlign: 'right', whiteSpace: 'nowrap',
+};
 const ACT_COLS = new Set([2, 9]);
+const LAST_COL = 14;
 
 const btn = (disabled, primary) => ({
   padding: '8px 18px', fontSize: '10.5pt', fontWeight: 700, borderRadius: 6,
@@ -64,11 +82,11 @@ function PerfTable({ section, decimals }) {
 
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: '1.5px solid #0f172a', paddingBottom: 3, marginBottom: 4 }}>
-        <h2 style={{ fontSize: '12pt', fontWeight: 800, color: '#1e3a8a', margin: 0 }}>{L.title}</h2>
-        <h2 style={{ fontSize: '12pt', fontWeight: 800, margin: 0 }}>w.r.t {B}</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: '1.5px solid #0f172a', paddingBottom: 3, marginBottom: 4, fontFamily: FONT }}>
+        <h2 style={{ fontSize: '10pt', fontWeight: 700, color: '#1e3a8a', margin: 0 }}>{L.title}</h2>
+        <h2 style={{ fontSize: '10pt', fontWeight: 700, margin: 0 }}>w.r.t {B}</h2>
       </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9pt', fontStyle: 'italic', color: '#475569', marginBottom: 4 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: FONT, fontSize: '8.5pt', fontWeight: 500, color: '#475569', marginBottom: 4 }}>
         <span>Tentative</span><span>Unit: &apos;000 T</span>
       </div>
       {!section.has_plan && (
@@ -78,25 +96,25 @@ function PerfTable({ section, decimals }) {
         </div>
       )}
       <div style={{ overflowX: 'auto' }}>
-        <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 1250 }}>
+        <table style={{ borderCollapse: 'separate', borderSpacing: 0, border: RULE, width: '100%', minWidth: 1250 }}>
           <thead>
             <tr>
-              <th rowSpan={2} style={{ ...TH, textAlign: 'left' }}>Items</th>
-              <th rowSpan={2} style={TH}>Plant</th>
-              <th rowSpan={2} style={TH}>{'Ann.\nCap.'}</th>
-              <th rowSpan={2} style={TH}>{`${B}\n${L.fy}`}</th>
-              <th colSpan={4} style={TH}>{L.month}</th>
-              <th rowSpan={2} style={TH}>{`${L.cply}\nAct.`}</th>
-              <th rowSpan={2} style={TH}>{`%Gr.\n${L.cply}`}</th>
-              <th rowSpan={2} style={TH}>CU%</th>
-              <th colSpan={4} style={TH}>{L.ytd}</th>
-              <th rowSpan={2} style={TH}>{`${L.ytd_cply}\nAct.`}</th>
-              <th rowSpan={2} style={TH}>{`%Gr.\n${L.ytd_cply}`}</th>
-              <th rowSpan={2} style={TH}>CU%</th>
+              <th rowSpan={2} style={{ ...TH, textAlign: 'left', borderBottom: RULE }}>Items</th>
+              <th rowSpan={2} style={{ ...TH, borderBottom: RULE }}>Plant</th>
+              <th rowSpan={2} style={{ ...TH, borderBottom: RULE }}>{'Ann.\nCap.'}</th>
+              <th rowSpan={2} style={{ ...TH, borderBottom: RULE }}>{`${B}\n${L.fy}`}</th>
+              <th colSpan={4} style={{ ...TH, borderBottom: LINE }}>{L.month}</th>
+              <th rowSpan={2} style={{ ...TH_SMALL, borderBottom: RULE }}>{`${L.cply}\nAct.`}</th>
+              <th rowSpan={2} style={{ ...TH_SMALL, borderBottom: RULE }}>{`%Gr.\n${L.cply}`}</th>
+              <th rowSpan={2} style={{ ...TH_SMALL, borderBottom: RULE }}>CU%</th>
+              <th colSpan={4} style={{ ...TH, borderBottom: LINE }}>{L.ytd}</th>
+              <th rowSpan={2} style={{ ...TH_SMALL, borderBottom: RULE }}>{`${L.ytd_cply}\nAct.`}</th>
+              <th rowSpan={2} style={{ ...TH_SMALL, borderBottom: RULE }}>{`%Gr.\n${L.ytd_cply}`}</th>
+              <th rowSpan={2} style={{ ...TH_SMALL, borderBottom: RULE, borderRight: 'none' }}>CU%</th>
             </tr>
             <tr>
               {[B, 'Act.', 'Var', '%Ful.', B, 'Act.', 'Var', '%Ful.'].map((h, i) => (
-                <th key={i} style={TH}>{h}</th>
+                <th key={i} style={{ ...TH, borderBottom: RULE }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -104,19 +122,28 @@ function PerfTable({ section, decimals }) {
             {rows.map((r, i) => {
               const isSail = r.plant === 'SAIL' || r.plant === '5 Plants' || r.is_conversion || r.is_sail_incl_conv;
               const rowStyle = isSail ? { background: '#fef3c7', fontWeight: 700 } : {};
+              // Black rule above each item group and each total row, as in
+              // the PDF; none on the first row (the header's rule is there).
+              const top = i > 0 && (spans[i] > 0 || isSail) ? { borderTop: RULE } : {};
+              const cell = { ...TD, ...top };
+              const label = { ...cell, textAlign: 'left', fontFamily: NARROW, fontSize: '8pt', fontWeight: 700 };
               return (
                 <tr key={i} style={rowStyle}>
-                  {r.is_conversion && <td colSpan={3} style={{ ...TD, textAlign: 'left', fontWeight: 700 }}>Conversion</td>}
-                  {r.is_sail_incl_conv && <td colSpan={2} style={{ ...TD, textAlign: 'left', fontWeight: 700 }}>SAIL incl. conversion</td>}
+                  {r.is_conversion && <td colSpan={3} style={label}>Conversion</td>}
+                  {r.is_sail_incl_conv && <td colSpan={2} style={label}>SAIL incl. conversion</td>}
                   {spans[i] > 0 && (
-                    <td rowSpan={spans[i]} style={{ ...TD, textAlign: 'left', fontWeight: 700, whiteSpace: 'normal', background: '#fff', verticalAlign: 'middle' }}>
+                    <td rowSpan={spans[i]} style={{ ...label, borderRight: RULE, whiteSpace: 'normal', background: '#fff', fontWeight: 700, verticalAlign: 'middle' }}>
                       {r.item}
                     </td>
                   )}
-                  {!r.is_conversion && !r.is_sail_incl_conv && <td style={{ ...TD, textAlign: 'center', fontWeight: 600 }}>{r.plant}</td>}
-                  {!r.is_conversion && <td style={TD}>{fmtQty(r.capacity, decimals)}</td>}
+                  {!r.is_conversion && !r.is_sail_incl_conv && <td style={{ ...cell, textAlign: 'center', fontWeight: 600 }}>{r.plant}</td>}
+                  {!r.is_conversion && <td style={{ ...cell, ...(isSail ? {} : { fontWeight: 500 }) }}>{fmtQty(r.capacity, decimals)}</td>}
                   {r.values.map((v, vi) => (
-                    <td key={vi} style={{ ...TD, ...(ACT_COLS.has(vi) && !isSail ? { background: '#ecfdf5', fontWeight: 700 } : {}) }}>
+                    <td key={vi} style={{
+                      ...cell,
+                      ...(ACT_COLS.has(vi) && !isSail ? { background: '#ecfdf5' } : {}),
+                      ...(vi === LAST_COL ? { borderRight: 'none' } : {}),
+                    }}>
                       {pctIdx.has(vi) ? fmtPct(v) : fmtQty(v, decimals)}
                     </td>
                   ))}

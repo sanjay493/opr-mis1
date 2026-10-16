@@ -117,36 +117,44 @@ def build_html(sections, decimals, colors):
   h2.basis {{ color: {txt}; }}
   .meta {{ display: flex; justify-content: space-between; font-size: 8.5pt; font-weight: 500; margin-bottom: 2px; }}
   .note {{ font-size: 9pt; font-weight: 700; margin: 2px 0 4px; }}
-  table {{ table-layout: fixed; width: 100%; border-collapse: collapse; margin-top: 10px;
-           box-shadow: 0 0 0 1px {blk}; }}
+  /* Separate (not collapsed) borders: the table's own border is the black
+     outer frame (a box-shadow frame did not print), and each cell draws
+     only its right edge (column line) plus a black top rule where an item
+     group or total row starts -- no light line between the plant rows of
+     an item, matching the /reports/excel view. */
+  table {{ table-layout: fixed; width: 100%; border-collapse: separate; border-spacing: 0;
+           border: 1px solid {blk}; margin-top: 10px; }}
   table.auto {{ table-layout: auto; }}
   col.c-items {{ width: 50px; }} col.c-plant {{ width: 28px; }} col.c-cap {{ width: 32px; }}
   col.c-ann {{ width: 32px; }} col.c-num {{ width: 35px; }} col.c-num-sm {{ width: 22px; }}
   th, td {{ color: {txt}; line-height: 1.05; white-space: nowrap; overflow: hidden; }}
   th {{ font-family: 'Arial Narrow', Arial, sans-serif; font-size: 8.2pt; font-weight: 700; text-transform: uppercase;
-        text-align: center; padding: 1.8px 1px; border: 1px solid {c("border_medium", "#94a3b8")};
+        text-align: center; padding: 1.8px 1px; border: none;
+        border-right: 1px solid {c("border_medium", "#94a3b8")};
         background: {c("table_header_bg", "transparent")}; }}
+  th[colspan] {{ border-bottom: 1px solid {c("border_medium", "#94a3b8")}; }}
   th.l {{ text-align: left; padding-left: 1px; }}
   th.sm {{ font-size: 6.8pt; line-height: 0.95; padding: 1px 0; white-space: normal; }}
-  td {{ font-size: 8.5pt; padding: 1.8px 1px; text-align: right; border: 1px solid {c("border_light", "#cbd5e1")}; }}
+  td {{ font-size: 8.5pt; padding: 1.8px 1px; text-align: right; border: none;
+        border-right: 1px solid {c("border_light", "#cbd5e1")}; }}
   td.lbl {{ font-family: 'Arial Narrow', Arial, sans-serif; font-size: 8pt; font-weight: 700; text-align: left;
             vertical-align: middle; padding: 1.8px 2px 1.8px 4px; }}
-  td.item {{ white-space: normal; border-right: 1px solid {blk}; border-bottom: 1px solid {blk}; }}
+  td.item {{ white-space: normal; border-right: 1px solid {blk}; }}
   td.plant {{ font-weight: 600; text-align: center; padding: 1.8px 2px; }}
-  thead tr:first-child th {{ border-top: none; }}
-  tr > :first-child {{ border-left: none; }}
-  tr > :last-child {{ border-right: none; }}
-  tbody tr:last-child td {{ border-bottom: none; }}
+  thead tr:first-child > :last-child, tbody tr > :last-child {{ border-right: none; }}
   thead tr:last-child th, thead tr:first-child th[rowspan] {{ border-bottom: 1px solid {blk}; }}
-  tr.group-first td {{ border-top: 1px solid {blk}; }}
   .col-cap {{ background: {c("perf_cap_bg", "#F8CBAD")}; color: {c("perf_cap_text", "#843C0C")}; }}
   .col-ann {{ background: {c("perf_app_bg", "#FFF2CC")}; color: {c("perf_app_text", "#7F6000")};
-              border-left: 1px solid {blk}; border-right: 1px solid {c("perf_app_border", "#BF9000")}; }}
+              border-right: 1px solid {c("perf_app_border", "#BF9000")}; }}
   .col-act {{ background: {c("perf_act_bg", "#C6EFCE")}; color: {c("perf_act_text", "#006100")}; }}
-  .col-ytd {{ border-left: 1px solid {blk}; }}
+  /* black walls left of the APP column and the cumulative block, drawn as
+     the neighbour's right edge (separate borders would double them) */
   :has(+ .col-ann), :has(+ .col-ytd) {{ border-right: 1px solid {blk}; }}
-  tr.tot td {{ font-weight: 700; border-top: 1px solid {blk}; border-bottom: 1px solid {blk}; }}
-  tr:has(+ tr.tot) td {{ border-bottom: 1px solid {blk}; }}
+  tr.tot td {{ font-weight: 700; }}
+  /* black rule above each item group and total row, and under a total row
+     that is followed by more rows of its item (5 Plants -> ASP) */
+  tr.group-first td, tr.tot td, tr.tot + tr td {{ border-top: 1px solid {blk}; }}
+  tbody tr:first-child td {{ border-top: none; }}
 """
     pages = "".join(_sheet(s, decimals) for s in sections)
     return f'<!doctype html><html><head><meta charset="utf-8"><style>{css}</style></head><body>{pages}</body></html>'
