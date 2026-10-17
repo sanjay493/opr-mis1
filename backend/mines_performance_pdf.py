@@ -12,9 +12,9 @@ not split the tall vertical-name cell (a rowspan) across pages, so the
 pagination is done here instead -- render_pdf measures every row in
 Chromium, paginate() decides where each page ends (at least 3 of a mine's
 rows on each side of a break, never a part ending on a heading), and each
-part becomes its own <tbody> with its own name cell, the short name
-(KBR, MBR, ...) on every part of a split mine. The SAIL block starts a new
-page."""
+part becomes its own <tbody> with its own name cell -- the short name
+(KBR, MBR, ...) only on a part too short for the full name
+(choose_names). The SAIL block follows on the same page, like any other."""
 from html import escape
 
 from plant_performance_pdf import _fonts, _p, _q
@@ -108,8 +108,8 @@ def choose_names(segments: list, heights: list, name_lengths: list) -> list:
 
 
 def _default_segments(data: dict) -> list:
-    """One part per block; only SAIL starts a new page."""
-    return [{"b": i, "start": 0, "end": len(b["rows"]), "new_page": b["kind"] == "sail" and i > 0}
+    """One part per block, no forced page breaks."""
+    return [{"b": i, "start": 0, "end": len(b["rows"]), "new_page": False}
             for i, b in enumerate(data["blocks"])]
 
 
@@ -258,9 +258,8 @@ def render_pdf(data: dict, decimals: int, colors: dict) -> bytes:
             _load(page, build_html(data, decimals, colors))
             m = page.evaluate(_MEASURE_JS)
             kinds = [[r["kind"] for r in b["rows"]] for b in data["blocks"]]
-            sail = {i for i, b in enumerate(data["blocks"]) if b["kind"] == "sail"}
             segments = paginate(m["rows"], kinds, _PAGE_H - m["top"] - m["thead"] - _SPARE,
-                                _PAGE_H - m["thead"] - _SPARE, sail)
+                                _PAGE_H - m["thead"] - _SPARE, set())
             segments = choose_names(segments, m["rows"], m["names"])
         _load(page, build_html(data, decimals, colors, segments))
         pdf = page.pdf(format="A4", landscape=False, print_background=True, margin=_MARGIN)

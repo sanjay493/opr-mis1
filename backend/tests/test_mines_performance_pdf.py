@@ -90,7 +90,7 @@ def test_one_table_one_header_tbody_per_block():
     html = mpp.build_html(DATA, 0, COLORS)
     assert html.count("<table") == 1 and html.count("<thead>") == 1
     assert html.count('<tbody class="blk') == 2
-    assert '<tbody class="blk sail" style="break-before: page">' in html
+    assert '<tbody class="blk sail">' in html                # SAIL continues on the same page
     assert "Coal and flux note." in html
     assert LABELS["title"] in html
 
@@ -98,8 +98,8 @@ def test_one_table_one_header_tbody_per_block():
 def test_pdf_fills_pages_and_splits_mines_with_three_rows_each_side():
     """A real render: pages are filled to the printable height (a mine
     continues onto the next page), a split mine keeps at least 3 rows on
-    each page, the column header repeats on every page, and SAIL starts a
-    new page."""
+    each page, the column header repeats on every page, and SAIL continues
+    on the page the last mine ends on."""
     import io
 
     import pdfplumber
@@ -116,9 +116,9 @@ def test_pdf_fills_pages_and_splits_mines_with_three_rows_each_side():
     pages = [set(w["text"] for w in ws) for ws in words]
     assert all("ITEM" in p for p in pages)
     sail_page = next(n for n, p in enumerate(pages) if "sailrow" in p)
-    assert sail_page == len(pages) - 1 and not any(f"r{i}x0" in pages[sail_page] for i in range(14))
+    assert sail_page == len(pages) - 1 and "r13x8" in pages[sail_page]   # right after the last mine
     bottom_room = height - 7 / 25.4 * 72                    # page bottom less the 7 mm margin
-    for n in range(sail_page - 1):                          # every full page before the last mine page
+    for n in range(len(pages) - 1):                         # every page but the last is full
         assert max(w["bottom"] for w in words[n]) > bottom_room - 50, f"page {n + 1} not filled"
     assert any(len({n for n, p in enumerate(pages) if any(f"r{i}x{j}" in p for j in range(9))}) > 1
                for i in range(14)), "no mine was split -- pages are not being filled"
