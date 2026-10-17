@@ -142,7 +142,7 @@ def test_block_order_and_kinds(gen):
     assert [(b["name"], b["kind"]) for b in d["blocks"]] == [
         ("Alpha", "mine"), ("Beta", "mine"), ("J Group", "group"),
         ("Gamma", "mine"), ("Delta", "mine"), ("O Group", "group"), ("SAIL", "sail")]
-    assert _block(d, "SAIL")["note"] == mp.SAIL_NOTE
+    assert _block(d, "SAIL")["note"] is None
     assert d["pct_idx"] == [3, 5, 8, 10] and d["labels"]["month"] == "Sep'26"
 
 

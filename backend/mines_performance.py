@@ -104,8 +104,6 @@ REPORTED_PARTS = (
     ("Tailings Despatch", "TAILINGS", ("SALES", "UNALLOCATED")),
 )
 
-SAIL_NOTE = "Coal and flux are shown at SAIL level; mine-level figures will be added."
-
 # Short names (per direct instruction, 2026-10-17) shown in the PDF's
 # vertical name column on each part of a mine split across pages. A mine
 # not listed falls back to the first three letters of its name; a group
@@ -228,19 +226,32 @@ def iron_ore_rows(data: dict, mines: list, P: dict) -> list:
         rows.append(_row("I/ORE FRESH PRODUCTION", "heading"))
         rows += _with_total(fresh_items, "Total Fresh Production", V)
 
-    desp_rows, subtotals = [], []
+    desp_rows, subtotals, displayed_groups = [], [], 0
     for eu, eu_label in END_USES:
         items = _visible([(name, s, V(s)) for code, name in data["materials"]
                           for s in [_pick(data["desp"], mines, code, eu)]])
         if not items:
             continue
         subtotals.append(combine([s for _, s, _ in items]))
+        if eu == "UNALLOCATED":
+            # Folded into Grand Total Despatch only, never its own row
+            # group -- per direct instruction, 2026-10-17: Unallocated is
+            # despatch plan with no destination yet, not a destination of
+            # its own, so showing it as a peer of Captive/Sales/Conversion
+            # Agent made the despatch group harder to read, not easier.
+            continue
+        displayed_groups += 1
         desp_rows.append(_row(eu_label, "subheading"))
         desp_rows += _with_total(items, f"Total {eu_label}", V, total_kind="subtotal")
-    if desp_rows:
+    # A Grand Total that just repeats the one displayed group is skipped,
+    # same rule as _with_total's own total-of-one-row check -- except when
+    # the only contributor is the hidden Unallocated group, where Grand
+    # Total Despatch is the sole place that figure appears at all.
+    show_grand_total = bool(subtotals) and not (len(subtotals) == 1 and displayed_groups == 1)
+    if desp_rows or show_grand_total:
         rows.append(_row("I/ORE DESPATCH", "heading"))
         rows += desp_rows
-        if len(subtotals) >= 2:
+        if show_grand_total:
             rows.append(_row("Grand Total Despatch", "total", V(combine(subtotals))))
 
     parts = [("Fresh Production (Lump+Fines)", fresh, V(fresh))]
@@ -339,7 +350,7 @@ def generate(month: str) -> dict:
         if gmines:
             add(gname, gcode, "group", gcode, iron_ore_rows(data, gmines, P))
     all_mines = [code for code, _, _, _ in data["mines"]]
-    add("SAIL", "SAIL", "sail", None, iron_ore_rows(data, all_mines, P) + coal_flux_rows(data, P), SAIL_NOTE)
+    add("SAIL", "SAIL", "sail", None, iron_ore_rows(data, all_mines, P) + coal_flux_rows(data, P))
     return {"labels": labels(month), "pct_idx": list(PCT_IDX), "blocks": blocks}
 
 
