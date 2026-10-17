@@ -50,6 +50,17 @@ _DEPT_BADGE_GROUPS = [
 #     2026-09-17.
 #   4.5 — "SAIL Mines Production & Despatch Performance", right after
 #     fixed page 4 — same group (1) as its 3.5/3.6 neighbors.
+#   6.1 — "Mines Production Performance" (mine/group/SAIL detail, see
+#     mines_performance.py), right after fixed page 6 (end of "Plant Wise
+#     Item Wise Production"), right before fixed page 7 (start of the 10
+#     Years Month Wise Production trend section) — per direct instruction,
+#     2026-10-17. Same group (1) as its SAIL_MINES_PAGE_ID (4.5) neighbor,
+#     not a new group, since it's the same mine-production subject matter.
+#     One physical page in a typical month, but the content can overflow
+#     onto more (see pdf.py's _plan_mines_performance_layout, same
+#     tbody-break-before mechanism as the trend section) — the Index/footer
+#     correct for however many it actually takes (main._INDEX_SECTIONS /
+#     pdf.py's _correct_dynamic_index_pagination), not hand-maintained here.
 #   18.5 — "Rail Production & Dispatch from BSP" — per direct instruction,
 #     2026-09-17, moved from right after page 18 (Segment Wise Production,
 #     group 4) to right after 1024 (Trend/performance-analysis sentinel),
@@ -79,7 +90,7 @@ _DEPT_BADGE_GROUPS = [
 #     2026-09-22. Same group (11) as the rest of the section either way.
 _DEPT_BADGE_EXPLICIT_GROUP = {
     2.1: 1, 2.2: 1, 2.3: 1, 2.41: 1, 2.42: 1,
-    2.5: 1, 3: 1, 3.05: 1, 3.2: 1, 3.3: 1, 3.5: 1, 3.6: 1, 3.61: 1, 3.62: 1, 3.63: 1, 4.5: 1,
+    2.5: 1, 3: 1, 3.05: 1, 3.2: 1, 3.3: 1, 3.5: 1, 3.6: 1, 3.61: 1, 3.62: 1, 3.63: 1, 4.5: 1, 6.1: 1,
     18.5: 5,
     1024: 5, 1025: 5,
     29.5: 7,
@@ -139,7 +150,7 @@ _CANONICAL_PAGE_ORDER = [
     # 2.41/2.42 here.
     2.1, 2.2, 2.3, 2.41, 2.42,
     2.5, 3, 3.05, 3.2, 3.3, 3.5, 3.6, 3.61, 3.62, 3.63,
-    *range(4, 19), *range(19, 25), 1024, 18.5, 1025,
+    *range(4, 7), 6.1, *range(7, 19), *range(19, 25), 1024, 18.5, 1025,
     25, 26,
     27, 28, 29, 29.5, 30,
     31, 32, 33, 34, 35, 35.4, 35.5, 35.6, 35.7,

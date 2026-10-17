@@ -89,15 +89,19 @@ def values(series: dict, P: dict) -> list:
 
 
 # Despatch sub-groups, in report order (not mine_end_uses_master's order).
-END_USES = (("CAPTIVE", "Captive"), ("PELLET_CONV", "Conversion Agent"), ("SALES", "Sales"))
+# UNALLOCATED is Plan-only (no Rail/Road Actual ever entered for it, see
+# mine_end_uses_master.tracks_actual) -- a despatch-plan quantity with no
+# destination yet; it still gets its own block here and folds into Grand
+# Total Despatch like the other three, just never shows an Actual figure.
+END_USES = (("CAPTIVE", "Captive"), ("PELLET_CONV", "Conversion Agent"), ("SALES", "Sales"), ("UNALLOCATED", "Unallocated"))
 
 # Reported Production = fresh Lump + Fines + these despatches (None = any
 # end use) -- the rule in db.get_iron_ore_group_rollup_monthly, applied per
 # mine here so a group/SAIL block's figure equals the SAIL Mines page's.
 REPORTED_PARTS = (
     ("Pellets Despatch", "PELLETS", None),
-    ("Dump Fines Despatch", "DUMP_FINES", ("CAPTIVE", "SALES")),
-    ("Tailings Despatch", "TAILINGS", ("SALES",)),
+    ("Dump Fines Despatch", "DUMP_FINES", ("CAPTIVE", "SALES", "UNALLOCATED")),
+    ("Tailings Despatch", "TAILINGS", ("SALES", "UNALLOCATED")),
 )
 
 SAIL_NOTE = "Coal and flux are shown at SAIL level; mine-level figures will be added."
@@ -331,3 +335,55 @@ def generate(month: str) -> dict:
     all_mines = [code for code, _, _, _ in data["mines"]]
     add("SAIL", "SAIL", "sail", None, iron_ore_rows(data, all_mines, P) + coal_flux_rows(data, P), SAIL_NOTE)
     return {"labels": labels(month), "pct_idx": list(PCT_IDX), "blocks": blocks}
+
+
+def _fmt_q(v, d):
+    """Quantity at d decimals, avoiding a "-0.00" -- same rule as
+    plant_performance_pdf.py's _q (mines_performance_pdf.py's own
+    formatter), duplicated here rather than imported so this module has no
+    dependency on a PDF-rendering module."""
+    if v is None:
+        return ""
+    s = f"{v:.{d}f}"
+    return s[1:] if s.startswith("-") and not s.strip("-0.") else s
+
+
+def _fmt_p(v):
+    """Whole-number percent, avoiding a "-0" -- same rule as
+    plant_performance_pdf.py's _p."""
+    if v is None:
+        return ""
+    s = f"{v:.0f}"
+    return "0" if s == "-0" else s
+
+
+def generate_page(month: str) -> dict:
+    """generate()'s data, shaped as a main-report page dict (main.py's
+    MINES_PERF_PAGE_ID = 6.1) -- see page_templates/mines_performance.html
+    and pdf.py's _plan_mines_performance_layout, which paginates these
+    blocks across physical pages the same way the trend section does.
+
+    Each row gets a "display" list alongside its "values" (unrounded
+    floats, for the JSON API) -- formatted once here, in Python, rather
+    than in the Jinja template, matching how every other main-report page
+    formats its own figures before handing them to main.html. 0 decimals
+    by default (quantity columns are '000 T, same whole-number convention
+    as pages 4/5-6), overridden per row by row["decimals"] where set (the
+    SAIL block's washery rows)."""
+    data = generate(month)
+    pct = set(data["pct_idx"])
+    for block in data["blocks"]:
+        for row in block["rows"]:
+            d = row["decimals"] if row["decimals"] is not None else 0
+            row["display"] = [_fmt_p(v) if vi in pct else _fmt_q(v, d) for vi, v in enumerate(row["values"])]
+    # Value-index -> CSS class (page_templates/mines_performance.html's
+    # .mpp-plan/.mpp-act/.mpp-gr column tints), precomputed once here rather
+    # than re-derived in Jinja: index 0 = FY Plan, 2/7 = Actual, 5/10 =
+    # %Gr -- matches mines_performance_pdf.py's own _PLAN/_ACT/_GR (same 11
+    # columns, see values() in this module).
+    data["val_classes"] = ["plan", "", "act", "", "", "gr", "", "act", "", "", "gr"]
+    # PageData (models.py) requires a top-level "title" -- same convention
+    # as generate_sail_mines's own return shape; data["labels"]["title"]
+    # already carries the full "Mines Production Performance :Mon'YY and
+    # Apr-Mon'YY" label the template itself prints.
+    return {"type": "mines_performance", "title": "Mines Production Performance", **data}

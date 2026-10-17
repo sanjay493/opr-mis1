@@ -1,0 +1,103 @@
+<style>
+    /* "mpp-" prefix on every class (see PDF_LAYOUT_GUARDRAILS.md's "Page
+       templates & per-page <style> blocks" rule) -- this page is rendered
+       into the same single HTML document as every other page, so an
+       unprefixed class here would restyle any other page using the same
+       name. Fonts/borders/column tints mirror mines_performance_pdf.py's
+       own standalone PDF (plant_performance_pdf.py's convention): separate
+       borders, each cell drawing only its right edge, black rules above
+       section headings/totals. */
+    .mpp-hd { display: flex; justify-content: space-between; align-items: flex-end;
+              border-bottom: 1.5px solid {{ colors.text_primary|default('#0f172a') }};
+              padding-bottom: 3px; margin-bottom: 4px; }
+    .mpp-hd h2 { font-size: 10pt; font-weight: 700; color: rgb(0,0,255); margin: 0; }
+    .mpp-unit { font-size: 8.5pt; font-weight: 500; }
+    .mpp-empty { font-size: 10pt; font-weight: 700; margin-top: 12px; }
+    .mpp-note { font-size: 8pt; font-style: italic; margin: 2px 0 0; }
+    table.mpp-table { table-layout: fixed; width: 100%; border-collapse: separate; border-spacing: 0; }
+    table.mpp-table tbody.mpp-blk { break-inside: avoid; }
+    table.mpp-table thead tr:first-child th { border-top: 1px solid {{ colors.border_black|default('#000000') }}; }
+    table.mpp-table thead tr:first-child > :first-child,
+    table.mpp-table td.mpp-ent { border-left: 1px solid {{ colors.border_black|default('#000000') }}; }
+    table.mpp-table tbody.mpp-blk tr:last-child td,
+    table.mpp-table td.mpp-ent { border-bottom: 1px solid {{ colors.border_black|default('#000000') }}; }
+    table.mpp-table col.mpp-c-ent { width: 3.5%; } table.mpp-table col.mpp-c-lbl { width: 21%; }
+    table.mpp-table col.mpp-c-num { width: 6.86%; }
+    table.mpp-table th, table.mpp-table td { color: {{ colors.text_black|default('#000000') }};
+        line-height: 1.1; white-space: nowrap; overflow: hidden; }
+    table.mpp-table th { font-family: 'Arial Narrow', Arial, sans-serif; font-size: 8.2pt; font-weight: 700;
+        text-transform: uppercase; text-align: center; padding: 1.8px 1px; border: none;
+        border-right: 1px solid {{ colors.border_medium|default('#94a3b8') }};
+        background: {{ colors.table_header_bg|default('transparent') }}; }
+    table.mpp-table th.mpp-l { text-align: left; padding-left: 3px; }
+    table.mpp-table th.mpp-sm { font-size: 6.8pt; line-height: 0.95; padding: 1px 0; white-space: normal; }
+    table.mpp-table th[colspan] { border-bottom: 1px solid {{ colors.border_medium|default('#94a3b8') }}; }
+    table.mpp-table thead tr:last-child th,
+    table.mpp-table thead tr:first-child th[rowspan] { border-bottom: 1px solid {{ colors.border_black|default('#000000') }}; }
+    table.mpp-table td { font-size: 8.5pt; padding: 1.8px 2px; text-align: right; border: none;
+        border-right: 1px solid {{ colors.border_light|default('#cbd5e1') }}; }
+    table.mpp-table thead tr:first-child > :last-child,
+    table.mpp-table tbody tr > :last-child { border-right: 1px solid {{ colors.border_black|default('#000000') }}; }
+    table.mpp-table td.mpp-ent { text-align: center; vertical-align: middle; padding: 2px 0; }
+    table.mpp-table td.mpp-ent div { writing-mode: vertical-rl; transform: rotate(180deg); margin: 0 auto;
+        font-family: 'Arial Narrow', Arial, sans-serif; font-size: 8.5pt; font-weight: 700; }
+    table.mpp-table td.mpp-lbl { text-align: left; white-space: normal; }
+    table.mpp-table tr.mpp-heading td.mpp-lbl { font-family: 'Arial Narrow', Arial, sans-serif; font-weight: 700;
+        text-transform: uppercase; padding-left: 3px; }
+    table.mpp-table tr.mpp-subheading td.mpp-lbl { font-weight: 700; font-style: italic; padding-left: 8px; }
+    table.mpp-table tr.mpp-item td.mpp-lbl { padding-left: 14px; }
+    table.mpp-table tr.mpp-total td { font-weight: 700; }
+    table.mpp-table tr.mpp-total td.mpp-lbl { padding-left: 8px; }
+    table.mpp-table tr.mpp-total td:not(.mpp-ent) { background: {{ colors.mines_perf_total_bg|default('#FEF3C7') }}; }
+    table.mpp-table td.mpp-plan, table.mpp-table th.mpp-plan { background: {{ colors.perf_app_bg|default('#FFF2CC') }}; }
+    table.mpp-table td.mpp-act, table.mpp-table th.mpp-act { background: {{ colors.perf_act_bg|default('#C6EFCE') }}; }
+    table.mpp-table td.mpp-gr, table.mpp-table th.mpp-gr { background: {{ colors.perf_gr_bg|default('#e2e8f0') }}; }
+    table.mpp-table tr.mpp-heading td:not(.mpp-ent),
+    table.mpp-table tr.mpp-total td:not(.mpp-ent) { border-top: 1px solid {{ colors.border_black|default('#000000') }}; }
+    table.mpp-table tbody.mpp-blk tr:first-child td { border-top: none; }
+</style>
+
+<div class="mpp-hd"><h2>{{ page["labels"]["title"] }}</h2><span class="mpp-unit">Unit: '000 T</span></div>
+
+{% if not page["blocks"] %}
+<p class="mpp-empty">No mines data for {{ page["labels"]["month"] }}.</p>
+{% else %}
+<table class="mpp-table">
+    <colgroup>
+        <col class="mpp-c-ent"><col class="mpp-c-lbl">
+        {% for _ in range(11) %}<col class="mpp-c-num">{% endfor %}
+    </colgroup>
+    <thead>
+        <tr>
+            <th rowspan="2" class="mpp-ent"></th>
+            <th rowspan="2" class="mpp-l">Item</th>
+            <th rowspan="2" class="mpp-plan">{{ page["labels"]["fy"] }}<br>Plan</th>
+            <th colspan="3">{{ page["labels"]["month"] }}</th>
+            <th rowspan="2" class="mpp-sm">{{ page["labels"]["cply"] }}<br>Act.</th>
+            <th rowspan="2" class="mpp-gr mpp-sm">%Gr.<br>{{ page["labels"]["cply"] }}</th>
+            <th colspan="3">{{ page["labels"]["ytd"] }}</th>
+            <th rowspan="2" class="mpp-sm">{{ page["labels"]["ytd_cply"] }}<br>Act.</th>
+            <th rowspan="2" class="mpp-gr mpp-sm">%Gr.<br>{{ page["labels"]["ytd_cply"] }}</th>
+        </tr>
+        <tr>
+            <th>Plan</th><th class="mpp-act">Actual</th><th>%Ful</th>
+            <th>Plan</th><th class="mpp-act">Actual</th><th>%Ful</th>
+        </tr>
+    </thead>
+    {% for seg in page["segments"] %}
+    {% set block = page["blocks"][seg["b"]] %}
+    {% set seg_rows = block["rows"][seg["start"]:seg["end"]] %}
+    {% set name = block["short"] if seg["short"] else block["name"] %}
+    <tbody class="mpp-blk{% if block['kind'] == 'sail' %} mpp-sail{% endif %}"{% if seg["new_page"] %} style="break-before: page"{% endif %}>
+        {% for row in seg_rows %}
+        <tr class="mpp-{{ row['kind'] }}">
+            {% if loop.first %}<td rowspan="{{ seg_rows|length }}" class="mpp-ent"><div>{{ name }}</div></td>{% endif %}
+            <td class="mpp-lbl">{{ row["label"] }}</td>
+            {% for v in row["display"] %}<td class="mpp-{{ page['val_classes'][loop.index0] }}">{{ v }}</td>{% endfor %}
+        </tr>
+        {% endfor %}
+    </tbody>
+    {% endfor %}
+</table>
+{% for block in page["blocks"] %}{% if block["note"] %}<p class="mpp-note">{{ block["note"] }}</p>{% endif %}{% endfor %}
+{% endif %}

@@ -41,6 +41,7 @@ from page_key_parameters import generate_key_parameters
 from page_bf_large_annexure import generate_bf_large_annexure
 from page_cost_trend import generate_cost_trend
 from page_sail_mines import generate_sail_mines
+from mines_performance import generate_page as generate_mines_performance_page
 import page_rail_report
 from page_rail_report import generate_rail_report
 import page_market_prices
@@ -276,6 +277,13 @@ _INDEX_SECTIONS = [
     ("Plant Wise Performance of Main Items (w.r.t. ABP)", 1),
     ("SAIL Mines Production & Despatch Performance", 1),
     ("Plant Wise Item Wise Production & CS to HM Ratio", 2),
+    # "Mines Production Performance" (MINES_PERF_PAGE_ID = 6.1 sentinel,
+    # mine/group/SAIL blocks, see mines_performance.py): right after fixed
+    # page 6, right before fixed page 7 (Trend) — per direct instruction,
+    # 2026-10-17. Nominal 1 page; same auto-correction as the trend row
+    # below if a month's data ever pushes it onto a 2nd physical page (see
+    # pdf.py's _correct_dynamic_index_pagination) — never hand-maintained.
+    ("Mines Production Performance", 1),
     # Trend pages (6 items: Oven Pushing/Sinter/Hot Metal/Crude Steel/
     # Pig Iron & Finished Steel/Saleable Steel) flow as one continuous
     # section rather than one physical page each (see pdf.py's trend_section
@@ -409,6 +417,7 @@ from layout_loader import load_layout_config
 from api_rsp_techno import router as rsp_techno_router
 from api_plant_performance import router as plant_performance_router
 from api_mines_performance import router as mines_performance_router
+from api_mines_group_wise import router as mines_group_wise_router
 from api_rsp_bf_glance import router as rsp_bf_glance_router
 from api_bsp_techno import router as bsp_techno_router
 from api_bsp_bf_techno import router as bsp_bf_techno_router
@@ -596,6 +605,20 @@ COST_TREND_SS_PAGE_ID = 3.63
 # BF_LARGE_ANNEXURE_PAGE_ID above (numbered main flow, group-1 dept-badge).
 SAIL_MINES_PAGE_ID = 4.5
 
+# "Mines Production Performance" page (mines_performance.py / the
+# /reports/mines?tab=mines-performance standalone report): mine, group and
+# SAIL block of Production/Despatch/Reported Production/Booked Quantity
+# plan vs actual vs CPLY, pages 5-6 layout. Sits right after fixed page 6
+# (end of "Plant Wise Item Wise Production"), right before fixed page 7
+# (start of the 10 Years Month Wise Production trend section) — per direct
+# instruction, 2026-10-17. Same sentinel-float treatment as SAIL_MINES_
+# PAGE_ID above; group-1 dept-badge (report_utils.py's
+# _DEPT_BADGE_EXPLICIT_GROUP) to match it. One page dict, same as the trend
+# section — content can overflow onto more than one physical page (see
+# pdf.py's _plan_mines_performance_layout), never a fixed/reserved range of
+# sentinel ids.
+MINES_PERF_PAGE_ID = 6.1
+
 # "Rail Production & Dispatch from BSP" page (Report_format/"Rail Prod &
 # Despatch Report for OMI.pdf"): sits right after TREND_PAGE_ID (1024),
 # before SS_PHYSICAL_PAGE_ID (1025) — per direct instruction, 2026-09-17,
@@ -709,6 +732,7 @@ _INDEX_SECTION_ANCHORS = [
     4,                                 # Plant Wise Performance of Main Items (w.r.t. ABP)
     SAIL_MINES_PAGE_ID,                # SAIL Mines Production & Despatch Performance
     5,                                 # Plant Wise Item Wise Production & CS to HM Ratio
+    MINES_PERF_PAGE_ID,                # Mines Production Performance
     min(TREND_PAGES),                  # 10 Years Month Wise Production (Main Item Plant Wise)
     13,                                # Crude Steel Production Details - Concast & Process Type
     15,                                # Plant Wise Category Wise Production of Saleable Steel
@@ -892,6 +916,7 @@ app.add_middleware(
 app.include_router(rsp_techno_router)
 app.include_router(plant_performance_router)
 app.include_router(mines_performance_router)
+app.include_router(mines_group_wise_router)
 app.include_router(rsp_bf_glance_router)
 app.include_router(bsp_techno_router)
 app.include_router(bsp_bf_techno_router)
@@ -990,7 +1015,7 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                                 BEST_EVER_PAGE_ID, BEST_CAL_MONTH_PAGE_ID, KEY_PARAMS_PAGE_ID,
                                 BF_LARGE_ANNEXURE_PAGE_ID,
                                 COST_TREND_HM_PAGE_ID, COST_TREND_CS_PAGE_ID, COST_TREND_SS_PAGE_ID,
-                                SAIL_MINES_PAGE_ID, RAIL_REPORT_PAGE_ID,
+                                SAIL_MINES_PAGE_ID, MINES_PERF_PAGE_ID, RAIL_REPORT_PAGE_ID,
                                 MARKET_PRICES_PAGE_ID, MACRO_INDICATORS_PAGE_ID,
                                 IRON_MAKING_PAGE_2_ID, EPI_PAGE_ID, COAL_RECEIPTS_PAGE_ID, COAL_RECEIPTS_PAGE_2_ID,
                                 POWER_DATA_PAGE_ID, RAKE_DETENTION_SUMMARY_PAGE_ID, RAKE_DETENTION_TREND_PAGE_ID,
@@ -1138,7 +1163,7 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                                                       BEST_EVER_PAGE_ID, BEST_CAL_MONTH_PAGE_ID,
                                                       KEY_PARAMS_PAGE_ID, BF_LARGE_ANNEXURE_PAGE_ID,
                                                       COST_TREND_HM_PAGE_ID, COST_TREND_CS_PAGE_ID, COST_TREND_SS_PAGE_ID,
-                                                      SAIL_MINES_PAGE_ID, RAIL_REPORT_PAGE_ID,
+                                                      SAIL_MINES_PAGE_ID, MINES_PERF_PAGE_ID, RAIL_REPORT_PAGE_ID,
                                                       MARKET_PRICES_PAGE_ID, MACRO_INDICATORS_PAGE_ID,
                                                       IRON_MAKING_PAGE_2_ID, EPI_PAGE_ID, COAL_RECEIPTS_PAGE_ID, COAL_RECEIPTS_PAGE_2_ID,
                                                       POWER_DATA_PAGE_ID, RAKE_DETENTION_SUMMARY_PAGE_ID, RAKE_DETENTION_TREND_PAGE_ID,
@@ -1210,6 +1235,11 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             _idx4 = next((i for i, p in enumerate(pages_config) if p.get("page") == 4), None)
             if _idx4 is not None:
                 pages_config.insert(_idx4 + 1, {"page": SAIL_MINES_PAGE_ID})
+            # "Mines Production Performance" sentinel page: always inserted
+            # right after fixed page 6, right before fixed page 7 (Trend).
+            _idx6 = next((i for i, p in enumerate(pages_config) if p.get("page") == 6), None)
+            if _idx6 is not None:
+                pages_config.insert(_idx6 + 1, {"page": MINES_PERF_PAGE_ID})
             _idx29 = next((i for i, p in enumerate(pages_config) if p.get("page") == 29), None)
             if _idx29 is not None:
                 pages_config.insert(_idx29 + 1, {"page": IRON_MAKING_PAGE_2_ID})
@@ -1314,6 +1344,8 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             if pg == SAIL_MINES_PAGE_ID:
                 page.update(generate_sail_mines(month))
                 page["type"] = "sail_mines"
+            if pg == MINES_PERF_PAGE_ID:
+                page.update(generate_mines_performance_page(month))
             if pg == RAIL_REPORT_PAGE_ID:
                 page.update(generate_rail_report(month))
                 page["type"] = "rail_report"
@@ -1571,6 +1603,12 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
         _idx4 = next((i for i, p in enumerate(_pages_list) if p.get("page") == 4), None)
         if _idx4 is not None:
             _pages_list.insert(_idx4 + 1, {"page": SAIL_MINES_PAGE_ID})
+    # "Mines Production Performance" sentinel page: always inserted right
+    # after fixed page 6, right before fixed page 7 (Trend).
+    if _is_full_export and not any(p.get("page") == MINES_PERF_PAGE_ID for p in _pages_list):
+        _idx6 = next((i for i, p in enumerate(_pages_list) if p.get("page") == 6), None)
+        if _idx6 is not None:
+            _pages_list.insert(_idx6 + 1, {"page": MINES_PERF_PAGE_ID})
     # "Iron Making (contd.)" sentinel page: always inserted right after
     # page 29, same unconditional-insert pattern as above.
     if _is_full_export and not any(p.get("page") == IRON_MAKING_PAGE_2_ID for p in _pages_list):
@@ -1737,6 +1775,8 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
         if pg == SAIL_MINES_PAGE_ID:
             p.update(generate_sail_mines(request.month))
             p["type"] = "sail_mines"
+        if pg == MINES_PERF_PAGE_ID:
+            p.update(generate_mines_performance_page(request.month))
         if pg == RAIL_REPORT_PAGE_ID:
             p.update(generate_rail_report(request.month))
             p["type"] = "rail_report"

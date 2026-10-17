@@ -1194,6 +1194,64 @@ def _check_trend_pieces(items: list, page_of: list) -> None:
                                  f"one page (minimum {_TREND_MIN_SPLIT_ROWS})")
 
 
+_MINES_PERF_MEASURE_JS = """() => {
+    const t = document.querySelector('table.mpp-table');
+    return {top: t.getBoundingClientRect().top, thead: t.tHead.getBoundingClientRect().height,
+            rows: [...t.tBodies].map(tb => [...tb.rows].map(r => r.getBoundingClientRect().height)),
+            // each block's full name as printed (vertical): the text's own
+            // extent, not the div's, which can stretch to the cell -- same
+            // technique as mines_performance_pdf.py's own _MEASURE_JS.
+            names: [...t.tBodies].map(tb => {
+                const el = tb.querySelector('td.mpp-ent div');
+                if (!el) return 0;
+                const r = document.createRange();
+                r.selectNodeContents(el);
+                return r.getBoundingClientRect().height;
+            })};
+}"""
+
+_MINES_PERF_SPARE = 6  # px kept spare so a rounding difference never pushes a part to the next page
+
+
+def _plan_mines_performance_layout(browser, page: dict, template, render_kwargs: dict) -> None:
+    """Decides where mine/group/SAIL blocks on the Mines Production
+    Performance page (MINES_PERF_PAGE_ID = 6.1, main.py) split across a
+    physical page. Same two-pass measure-then-paginate technique as the
+    standalone mines_performance_pdf.py (whose paginate()/choose_names()
+    are reused here as-is -- pure functions of row heights, no HTML/CSS
+    coupling, so none of the class-name clash risk that reusing its
+    HTML-building functions would carry): Chromium won't split a block's
+    tall rowspan'd name cell across a page break, so each block is first
+    measured as one unsplit piece, paginate() decides where to cut it, and
+    the page is re-rendered with each page-piece as its own <tbody> with
+    its own, correctly-sized name cell (page_templates/mines_performance.
+    html's loop over page["segments"], set here). Mutates `page` in place;
+    must run before main_html is rendered, same as _plan_trend_layout."""
+    from mines_performance_pdf import paginate, choose_names
+
+    blocks = page.get("blocks") or []
+    if not blocks:
+        return
+
+    def _unsegmented():
+        return [{"b": i, "start": 0, "end": len(b["rows"]), "new_page": False} for i, b in enumerate(blocks)]
+
+    pg = browser.new_page()
+    try:
+        page["segments"] = _unsegmented()
+        html = template.render(pages=[page], **render_kwargs)
+        _load_for_print(pg, html, _PRINTABLE_PORTRAIT_MM)
+        m = pg.evaluate(_MINES_PERF_MEASURE_JS)
+        kinds = [[r["kind"] for r in b["rows"]] for b in blocks]
+        page_h_px = _PRINTABLE_PORTRAIT_MM[1] * _PX_PER_MM
+        first_avail = page_h_px - m["top"] - m["thead"] - _MINES_PERF_SPARE
+        avail = page_h_px - m["thead"] - _MINES_PERF_SPARE
+        segments = paginate(m["rows"], kinds, first_avail, avail, set())
+        page["segments"] = choose_names(segments, m["rows"], m["names"])
+    finally:
+        pg.close()
+
+
 def _plan_trend_layout(browser, trend_pages: list, template, render_kwargs: dict) -> None:
     """Decides where plant/SAIL groups in the trend section (pages 7-13) may
     split across a page, and picks the section's top/bottom margins. Mutates
@@ -1643,6 +1701,14 @@ def _generate_pdf_sync(front_pages: list, main_pages: list, template, render_kwa
     if _trend_pages:
         with _time_phase("trend layout plan"):
             _plan_trend_layout(browser, _trend_pages, template, render_kwargs)
+
+    # Mines Production Performance: must run before main_html is rendered
+    # below, same reason as the trend section above — it sets the page's
+    # block segments (mine/group/SAIL split across physical pages).
+    _mines_perf_page = next((p for p in main_pages if p.get("type") == "mines_performance"), None)
+    if _mines_perf_page is not None:
+        with _time_phase("mines performance layout plan"):
+            _plan_mines_performance_layout(browser, _mines_perf_page, template, render_kwargs)
 
     # Page 1 (Cover) is rendered as its own document with a zero page
     # margin (see _render_pdf's docstring — page.pdf()'s margin option
