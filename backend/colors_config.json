@@ -37,6 +37,7 @@
   "perf_act_bg":     "#C6EFCE",
   "perf_act_text":   "#006100",
   "perf_gr_bg":      "#e2e8f0",
+  "mines_perf_total_bg": "#FEF3C7",
 
   "_doc_plant_colors": "Pages 7-13 (10 Years Month Wise Production Trend): one fixed background per individual plant's stacked-letter label column, kept the same everywhere that plant appears across every trend page (SAIL/'5 Plants' aggregates keep their own highlight_agg_* colors above instead).",
 
