@@ -2,7 +2,7 @@
   "_doc": "SINGLE SOURCE OF TRUTH for report figures that are NOT yet sourced from the database — hand-transcribed values and stopgaps pending a real extractor or data-entry wiring. Edit this file to update those numbers; changes apply on the next PDF/preview generation, no restart needed. Do NOT re-scatter these back into the page_*.py generators. Each top-level section names the page generator that consumes it. '_doc' keys (at any level) are ignored by the loader.",
 
   "sail_mines": {
-    "_doc": "page_sail_mines.py — 'SAIL Mines Production & Despatch Performance'. Charts are in million tonnes; the iron-ore group table is in '000 T. Stopgap per direct instruction 2026-08-27, a placeholder until real series / mine-level actuals exist. Chart colours stay in the page module (presentation, not data).",
+    "_doc": "page_sail_mines.py — 'SAIL Mines Production & Despatch Performance'. Charts are in million tonnes. The 3-year trend bars (trend_fys/*_mt below) are a stopgap per direct instruction 2026-08-27, a placeholder until a real multi-year series exists. Chart colours stay in the page module (presentation, not data). iron_ore_group_kt is kept as an empty stopgap mechanism -- see its own '_doc'.",
 
     "trend_fys": ["FY 23-24", "FY 24-25", "FY 25-26"],
     "iron_ore_prod_mt": [35.423, 34.8, 38.1],
@@ -11,9 +11,7 @@
     "sales_booking_mt": [1.16, 0.754, 3.01],
 
     "iron_ore_group_kt": {
-      "_doc": "Sales of Iron Ore (Booked Qty / Despatch) only, delinked from the mine-level rollups per direct instruction 2026-08-27 (mine-level Booked Quantity actuals were never entered). iron_ore_prod/iron_ore_despatch were restored to the live mine-level rollup (db.get_iron_ore_group_rollup_monthly) on 2026-09-12, once real mine-level despatch actuals existed, so they no longer live here. Each item -> [APP, YTD Actual, YTD CPLY] in '000 T. The 'SAIL' rows stay derived (CGoM + OGoM + JGoM) and are NOT listed here.",
-      "iron_ore_sales":          {"CGoM": [20, 20, 0],        "OGoM": [2008, 1619, 524],  "JGoM": [0, 0, 0]},
-      "iron_ore_sales_despatch": {"CGoM": [0, 0, 0],          "OGoM": [2008, 1598, 465],  "JGoM": [443, 0, 0]}
+      "_doc": "Empty since 2026-10-17: Sales of Iron Ore (Booked Qty / Despatch) was restored to the live mine-level rollup (db.get_iron_ore_sales_group_rollup_monthly, see page_sail_mines.py's generate_sail_mines()), now that real mine-level Booked Quantity actuals exist -- same as iron_ore_prod/iron_ore_despatch (restored 2026-09-12). Add an item back here (group -> [APP, YTD Actual, YTD CPLY] in '000 T) only as a stopgap for a group/section with no usable DB source; the 'SAIL' rows stay derived (CGoM + OGoM + JGoM) and are never listed here."
     }
   },
 

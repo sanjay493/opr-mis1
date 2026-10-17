@@ -16,21 +16,22 @@ too, so every section here is currently 'production'-kind; 'flow' stays
 supported (not deleted) in case a future section genuinely has no plan
 figure.
 
-Every section except Iron Ore Production/Despatch is entered via the SAIL
-Mines Entry data-entry page (db.sail_mines_monthly). Iron Ore Production
-and Iron Ore Despatch are the odd ones out (per direct instruction,
-2026-08-26): they're rolled up at read time from the mine-level tables
-(11 mines' worth of Lump/Fines production and all-materials despatch,
-entered via the separate Iron Ore Mines Production & Despatch form) via
-db.get_iron_ore_group_rollup_monthly, NOT from sail_mines_monthly — see
-that function's docstring for exactly what Production vs Despatch mean at
-this rolled-up group level (per direct instruction, 2026-09-12, revised
-2026-09-17: Production is not just fresh Lump+Fines — it also folds in
-Dump Fines despatch to SALES or CAPTIVE (GUA), Tailings despatch to SALES,
-and Pellets despatch of any end_use (DALLI), since none of those has a
-production entry of its own). The SAIL Mines Entry form no longer has
-"Iron Ore Mines Performance" or "Sales of Iron Ore" inputs — both moved
-to the mine-level form above
+Every section except Iron Ore Production/Despatch and Sales of Iron Ore is
+entered via the SAIL Mines Entry data-entry page (db.sail_mines_monthly).
+Those four (Iron Ore Production, Iron Ore Despatch, Sales' Booked Quantity,
+Sales' Despatch) are the odd ones out (per direct instruction, 2026-08-26):
+they're rolled up at read time from the mine-level tables (11 mines' worth
+of Lump/Fines production and all-materials despatch, entered via the
+separate Iron Ore Mines Production & Despatch form) via
+db.get_iron_ore_group_rollup_monthly and db.get_iron_ore_sales_group_
+rollup_monthly, NOT from sail_mines_monthly — see those functions'
+docstrings for exactly what each column means at this rolled-up group
+level (per direct instruction, 2026-09-12, revised 2026-09-17: Production
+is not just fresh Lump+Fines — it also folds in Dump Fines despatch to
+SALES or CAPTIVE (GUA), Tailings despatch to SALES, and Pellets despatch
+of any end_use (DALLI), since none of those has a production entry of its
+own). The SAIL Mines Entry form no longer has "Iron Ore Mines Performance"
+or "Sales of Iron Ore" inputs — both moved to the mine-level form above
 (Iron Ore Production/Despatch AND Sales' Booked Quantity/Despatch are now
 entered there, then rolled up to group level here; only Sales' old
 "Auction" item, renamed "Booked Quantity", needed a brand new mine-level
@@ -85,11 +86,14 @@ _C_SALES = "#eda100"       # yellow
 _C_SALES_DARK = "#a66900"  # darker shade of _C_SALES, for the waterfall's own YTD-total bar
 _C_BALANCE = "#cbd5e1"     # neutral gray, for the waterfall's remaining-gap-to-target bar
 
-# The 3-year trend bars and the iron-ore group (Sales of Iron Ore) table
-# still have no DB source and are hand-maintained in hardcoded_config.json's
-# "sail_mines" section — a stopgap per direct instruction (2026-08-27) until
-# real series / mine-level actuals exist. Read via hardcoded_loader inside
-# the functions below so edits need no restart.
+# The 3-year trend bars (_mines_charts_html) still have no DB source and are
+# hand-maintained in hardcoded_config.json's "sail_mines" section — a
+# stopgap per direct instruction (2026-08-27) until a real multi-year
+# series exists. Read via hardcoded_loader inside the functions below so
+# edits need no restart. The iron-ore group Sales of Iron Ore table used to
+# be hardcoded here too (same section, "iron_ore_group_kt") but was
+# restored to the live mine-level rollup on 2026-10-17 — see
+# generate_sail_mines().
 #
 # The despatch-mix donuts USED to be hardcoded here too, but are now live
 # (per direct instruction, 2026-09-17) — db.get_iron_ore_despatch_mix,
@@ -160,16 +164,12 @@ SAIL_MINES_SECTIONS = [
     },
 ]
 
-# Sales of Iron Ore (Booked Qty / Despatch) — CGoM/OGoM/JGoM — is still
-# hard-coded, delinked from db.get_iron_ore_sales_group_rollup_monthly per
-# direct instruction (2026-08-27): mine-level Booked Quantity actuals were
-# never entered, so the rollup's Booked Qty side would render blank. The
-# figures live in hardcoded_config.json ("sail_mines" -> "iron_ore_group_kt"),
-# each item -> [APP, YTD Actual, YTD CPLY] in '000 T. "SAIL" rows stay derived
-# (sum of the three groups). Update that file — or restore the rollup call in
-# generate_sail_mines() — once real Booked Quantity figures are available.
-# (Iron Ore Production/Despatch itself was restored to the live mine-level
-# rollup on 2026-09-12 — see generate_sail_mines().)
+# Sales of Iron Ore (Booked Qty / Despatch) — CGoM/OGoM/JGoM — is rolled up
+# live from db.get_iron_ore_sales_group_rollup_monthly (restored 2026-10-17,
+# now that real mine-level Booked Quantity actuals exist — see
+# generate_sail_mines()). "SAIL" rows stay derived (sum of the three
+# groups). (Iron Ore Production/Despatch itself was restored to the live
+# mine-level rollup on 2026-09-12 — see generate_sail_mines().)
 
 _MON_ABBR = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
              "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -478,14 +478,13 @@ def _mon_label(report_month: str) -> str:
 def _sales_waterfall_data(report_month: str) -> dict:
     """SAIL-wide (all 3 mine groups summed) Annual Plan target, the report
     month's own Actual, and the April-report_month cumulative Actual for
-    Iron Ore 'Despatch — Sales to 3rd Party' — unlike the Sales of Iron Ore
-    table above (still hard-coded per the module docstring), this reads the
-    real, live-entered data on /data-entry/mines-production-despatch:
+    Iron Ore 'Despatch — Sales to 3rd Party' — reads the real, live-entered
+    data on /data-entry/mines-production-despatch:
     mines_despatch_actual_monthly/mines_despatch_plan_monthly filtered to
     end_use_code='SALES', via db.get_iron_ore_sales_group_rollup_monthly's
-    own "iron_ore_sales_despatch" section (per direct instruction — reusing
-    that function's query rather than a new one keeps this chart from ever
-    drifting off that table's own figures once it's un-hardcoded too). Plan
+    own "iron_ore_sales_despatch" section (the same call generate_sail_mines()
+    uses for the Sales of Iron Ore table itself, so this chart can never
+    drift off that table's own figures). Plan
     already has no Rail/Road split at entry time ("Plan (Rail+Road)" is a
     single combined figure — see mines_despatch_plan_monthly's own schema),
     so summing it across groups/months for the FY total needs no further
@@ -535,11 +534,25 @@ def generate_sail_mines(report_month: str) -> dict:
         cply_monthly.setdefault(mo, {})["iron_ore_prod"] = iron_ore_cply_monthly[mo]["iron_ore_prod"]
         cply_monthly[mo]["iron_ore_despatch"] = iron_ore_cply_monthly[mo]["iron_ore_despatch"]
 
-    # Sales of Iron Ore (Booked Qty / Despatch) is still hard-coded group-wise
-    # in hardcoded_config.json ("sail_mines" -> "iron_ore_group_kt") and
-    # injected directly into section_rows in Pass 1 below (per direct
-    # instruction, 2026-08-27 — mine-level Booked Quantity actuals were never
-    # entered).
+    # Sales of Iron Ore (iron_ore_sales / iron_ore_sales_despatch) is rolled
+    # up live the same way, via db.get_iron_ore_sales_group_rollup_monthly
+    # (restored 2026-10-17 now that real mine-level Booked Quantity actuals
+    # exist — mines_booked_qty_actual_monthly/_plan_monthly, and despatch to
+    # end_use_code='SALES' specifically, NOT every end-use like iron_ore_
+    # despatch above). Same merge pattern as iron_ore_prod/iron_ore_despatch.
+    iron_ore_sales_monthly = db.get_iron_ore_sales_group_rollup_monthly(ytd_months)
+    iron_ore_sales_cply_monthly = db.get_iron_ore_sales_group_rollup_monthly(cply_months)
+    for mo in ytd_months:
+        monthly[mo]["iron_ore_sales"] = iron_ore_sales_monthly[mo]["iron_ore_sales"]
+        monthly[mo]["iron_ore_sales_despatch"] = iron_ore_sales_monthly[mo]["iron_ore_sales_despatch"]
+    for mo in cply_months:
+        cply_monthly[mo]["iron_ore_sales"] = iron_ore_sales_cply_monthly[mo]["iron_ore_sales"]
+        cply_monthly[mo]["iron_ore_sales_despatch"] = iron_ore_sales_cply_monthly[mo]["iron_ore_sales_despatch"]
+
+    # hardcoded_config.json's "sail_mines" -> "iron_ore_group_kt" is now empty
+    # (both sections above were live-rolled-up live as of 2026-10-17) but
+    # stays wired in as a generic stopgap mechanism for Pass 1 below, same as
+    # special_steel_physical/key_parameters elsewhere in this codebase.
     iron_ore_group = hardcoded_loader.section("sail_mines")["iron_ore_group_kt"]
 
     y, m = int(report_month[:4]), int(report_month[5:7])
