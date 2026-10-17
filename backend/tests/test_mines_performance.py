@@ -95,8 +95,10 @@ _ROWS = {
         ("2026-09", "A", "DUMP_FINES", "RAIL", "PELLET_CONV", 4), ("2026-09", "A", "DUMP_FINES", "RAIL", "SALES", 2),
         ("2026-09", "A", "TAILINGS", "RAIL", "CAPTIVE", 1), ("2026-09", "A", "TAILINGS", "RAIL", "SALES", 6),
         ("2025-09", "C", "TAILINGS", "RAIL", "SALES", 5),   # C: last year only
+        ("2026-09", "A", "LUMP", "ROAD", "SALES", 0),       # zero plan and actual: hidden
     ],
-    "mines_despatch_plan_monthly": [("2026-09", "A", "LUMP", "CAPTIVE", 70)],
+    "mines_despatch_plan_monthly": [("2026-09", "A", "LUMP", "CAPTIVE", 70),
+                                    ("2026-09", "A", "LUMP", "SALES", 0)],
     "mines_booked_qty_actual_monthly": [("2026-09", "A", "FINES", "RAIL", 12), ("2026-09", "A", "FINES", "ROAD", 3)],
     "mines_booked_qty_plan_monthly": [("2026-09", "A", "FINES", 20)],
     "sail_mines_monthly": [],
@@ -151,14 +153,14 @@ def test_mine_rows_structure(gen):
         ("heading", "I/ORE DESPATCH"),
         ("subheading", "Captive"), ("item", "Lump"), ("item", "Pellets"), ("item", "Tailings"),
         ("total", "Total Captive"),
-        ("subheading", "Conversion Agent"), ("item", "Dump Fines"), ("total", "Total Conversion Agent"),
+        ("subheading", "Conversion Agent"), ("item", "Dump Fines"),     # one item: no total row
         ("subheading", "Sales"), ("item", "Fines"), ("item", "Dump Fines"), ("item", "Pellets"),
-        ("item", "Tailings"), ("total", "Total Sales"),
+        ("item", "Tailings"), ("total", "Total Sales"),                 # zero Lump row hidden
         ("total", "Grand Total Despatch"),
         ("heading", "REPORTED PRODUCTION"), ("item", "Fresh Production (Lump+Fines)"),
         ("item", "Pellets Despatch"), ("item", "Dump Fines Despatch"), ("item", "Tailings Despatch"),
         ("total", "Reported Production"),
-        ("heading", "BOOKED QUANTITY (SALES)"), ("item", "Fines"), ("total", "Total Booked"),
+        ("heading", "BOOKED QUANTITY (SALES)"), ("item", "Fines"),       # one item: no total row
     ]
     assert all(r["values"] == [None] * 11 for r in a["rows"] if r["kind"] in ("heading", "subheading"))
 
@@ -169,25 +171,32 @@ def test_mine_values(gen):
     assert _val(a, "Lump", 4) == 80 and _val(a, "Lump", 7) == 190 and _val(a, "Lump", 6) == 210
     assert _val(a, "Total Fresh Production") == 150
     assert _val(a, "Total Captive") == 69 and _val(a, "Total Captive", 1) == 70    # 65 + 3 + 1, plan 70
-    assert _val(a, "Total Conversion Agent") == 4
     assert _val(a, "Total Sales") == 45                                            # 30 + 2 + 7 + 6
     assert _val(a, "Grand Total Despatch") == 118
     assert _val(a, "Pellets Despatch") == 10                                       # any end use
     assert _val(a, "Dump Fines Despatch") == 2                                     # not PELLET_CONV
     assert _val(a, "Tailings Despatch") == 6                                       # SALES only
     assert _val(a, "Reported Production") == 168                                   # 150 + 10 + 2 + 6
-    assert _val(a, "Total Booked") == 15 and _val(a, "Total Booked", 3) == 75
+    booked = a["rows"][-1]
+    assert booked["label"] == "Fines" and booked["values"][2] == 15 and booked["values"][3] == 75
 
 
-def test_hidden_sections_and_always_shown_rows(gen):
+def test_single_row_sections_drop_their_total(gen):
     b = _block(mp.generate("2026-09"), "Beta")
+    # Fines has no data (hidden), so Lump is the only fresh row: no total.
+    # Reported Production is fresh production alone: one row, kept under its
+    # own name (the component row is dropped instead of the total).
     assert _rows(b) == [
-        ("heading", "I/ORE FRESH PRODUCTION"), ("item", "Lump"), ("item", "Fines"),
-        ("total", "Total Fresh Production"),
-        ("heading", "REPORTED PRODUCTION"), ("item", "Fresh Production (Lump+Fines)"),
-        ("total", "Reported Production"),
+        ("heading", "I/ORE FRESH PRODUCTION"), ("item", "Lump"),
+        ("heading", "REPORTED PRODUCTION"), ("total", "Reported Production"),
     ]
-    assert _val(b, "Fines") is None
+    assert _val(b, "Reported Production") == 10
+
+
+def test_single_subgroup_drops_grand_total(gen):
+    c = _block(mp.generate("2026-09"), "Gamma")
+    labels = [r["label"] for r in c["rows"]]
+    assert "Sales" in labels and "Grand Total Despatch" not in labels and "Total Sales" not in labels
 
 
 def test_cply_only_row_is_shown(gen):
@@ -221,7 +230,7 @@ _SAIL_ROWS = [
     ("2025-09", "washery", "Input Raw Coal", 100, None), ("2025-09", "washery", "Clean Coal", 40, None),
     ("2026-09", "coal_despatch", "Clean Coal", 80, 85), ("2026-09", "coal_despatch", "Thermal", 30, 35),
     ("2026-09", "flux_prod", "Limestone", 60, 70), ("2026-09", "flux_prod", "Dolomite", 25, 30),
-    ("2026-09", "flux_despatch", "Limestone", 55, 65), ("2026-09", "flux_despatch", "Dolomite", 20, 28),
+    ("2026-09", "flux_despatch", "Limestone", 55, 65), ("2026-09", "flux_despatch", "Dolomite", 0, 0),
 ]
 
 
@@ -247,7 +256,7 @@ def test_coal_flux_structure(gen_sail):
         ("heading", "WASHERY"), ("item", "Input Raw Coal"), ("item", "Clean Coal"), ("item", "Yield (%)"),
         ("heading", "COAL DESPATCH"), ("item", "Clean Coal"), ("item", "Thermal"), ("total", "Total"),
         ("heading", "FLUX PRODUCTION"), ("item", "Limestone"), ("item", "Dolomite"), ("total", "Total"),
-        ("heading", "FLUX DESPATCH"), ("item", "Limestone"), ("item", "Dolomite"), ("total", "Total"),
+        ("heading", "FLUX DESPATCH"), ("item", "Limestone"),           # zero Dolomite hidden, no total
     ]
     assert all(r["values"] == [None] * 11 for r in tail if r["kind"] == "heading")
 
@@ -268,3 +277,8 @@ def test_coal_flux_only_in_sail_block(gen_sail):
     for b in d["blocks"]:
         if b["kind"] != "sail":
             assert "COAL MINES PRODUCTION" not in [r["label"] for r in b["rows"]]
+
+
+def test_coal_flux_hidden_without_data(gen):
+    labels = [r["label"] for r in _block(mp.generate("2026-09"), "SAIL")["rows"]]
+    assert "COAL MINES PRODUCTION" not in labels and "WASHERY" not in labels and "FLUX DESPATCH" not in labels

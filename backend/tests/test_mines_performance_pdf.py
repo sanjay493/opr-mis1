@@ -28,13 +28,56 @@ DATA = {
 }
 
 
-def test_blocks_and_sail_break():
+def test_one_table_one_header_tbody_per_block():
     html = mpp.build_html(DATA, 0, COLORS)
-    assert html.count('<section class="blk') == 2
-    assert '<section class="blk sail">' in html
-    assert "break-before: page" in html
+    assert html.count("<table") == 1 and html.count("<thead>") == 1
+    assert html.count('<tbody class="blk') == 2
+    assert '<tbody class="blk sail">' in html
     assert "Coal and flux note." in html
     assert LABELS["title"] in html
+
+
+def test_pdf_header_on_every_page_blocks_never_split():
+    """A real render: the column header repeats at the top of every page
+    (once, not per block), no block is split across pages, and the SAIL
+    block starts a new page."""
+    import io
+
+    import pdfplumber
+    blocks = [{"name": f"M{i}", "kind": "mine", "group": "G", "note": None,
+               "rows": [_row("I/ORE FRESH PRODUCTION", "heading")]
+               + [_row(f"r{i}x{j}", "item", [float(j)] * 11) for j in range(9)]}
+              for i in range(14)]
+    blocks.append({"name": "SAIL", "kind": "sail", "group": None, "note": None,
+                   "rows": [_row("sailrow", "item", [1.0] * 11)]})
+    pdf = mpp.render(mpp.build_html({"labels": LABELS, "pct_idx": [3, 5, 8, 10], "blocks": blocks}, 0, COLORS))
+    with pdfplumber.open(io.BytesIO(pdf)) as d:
+        pages = [set(w["text"] for w in p.extract_words()) for p in d.pages]
+    assert len(pages) >= 3
+    assert all("ITEM" in words for words in pages)
+    for i in range(14):
+        on = [n for n, words in enumerate(pages) if f"r{i}x0" in words or f"r{i}x8" in words]
+        assert len(set(on)) == 1, f"block M{i} split across pages {on}"
+    sail_page = next(n for n, words in enumerate(pages) if "sailrow" in words)
+    assert not any(f"r{i}x0" in pages[sail_page] for i in range(14))
+
+
+def test_frame_closes_at_each_page_end():
+    """The black frame stops at the last row on each page -- it must not run
+    on down the empty bottom of a page the table continues from."""
+    import io
+
+    import pdfplumber
+    blocks = [{"name": f"M{i}", "kind": "mine", "group": "G", "note": None,
+               "rows": [_row(f"r{i}x{j}", "item", [float(j)] * 11) for j in range(12)]}
+              for i in range(8)]
+    pdf = mpp.render(mpp.build_html({"labels": LABELS, "pct_idx": [3, 5, 8, 10], "blocks": blocks}, 0, COLORS))
+    with pdfplumber.open(io.BytesIO(pdf)) as d:
+        assert len(d.pages) >= 2
+        for p in d.pages:
+            black = [r for r in p.rects if tuple(r["non_stroking_color"] or ()) in ((0, 0, 0), (0,))]
+            text_bottom = max(w["bottom"] for w in p.extract_words())
+            assert max(r["bottom"] for r in black) - text_bottom < 8
 
 
 def test_number_formatting():

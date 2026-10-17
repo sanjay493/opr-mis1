@@ -113,7 +113,23 @@ def _row(label, kind, vals=None, decimals=None):
 
 
 def _empty(vals) -> bool:
-    return all(v is None for v in vals)
+    """No figure worth a row: every value blank or 0 (e.g. a plan entered as 0
+    with no actual)."""
+    return all(v is None or v == 0 for v in vals)
+
+
+def _visible(items):
+    """[(label, series, values)] -> only the rows with data."""
+    return [it for it in items if not _empty(it[2])]
+
+
+def _with_total(items, total_label, V):
+    """Item rows plus a total -- the total only when it adds up two or more
+    rows (a total of one row just repeats it)."""
+    rows = [_row(label, "item", v) for label, _, v in items]
+    if len(items) >= 2:
+        rows.append(_row(total_label, "total", V(combine([s for _, s, _ in items]))))
+    return rows
 
 
 def _load(months: list) -> dict:
@@ -179,54 +195,53 @@ def iron_ore_rows(data: dict, mines: list, P: dict) -> list:
     def V(s):
         return values(s, P)
 
-    rows = [_row("I/ORE FRESH PRODUCTION", "heading")]
+    # Rows with no data (blank or 0) are hidden, a section with none left is
+    # hidden with its heading, and a total is shown only when it adds up two
+    # or more rows.
+    rows = []
     lump, fines = _pick(data["prod"], mines, "LUMP"), _pick(data["prod"], mines, "FINES")
     fresh = combine([lump, fines])
-    rows += [_row("Lump", "item", V(lump)), _row("Fines", "item", V(fines)),
-             _row("Total Fresh Production", "total", V(fresh))]
+    fresh_items = _visible([("Lump", lump, V(lump)), ("Fines", fines, V(fines))])
+    if fresh_items:
+        rows.append(_row("I/ORE FRESH PRODUCTION", "heading"))
+        rows += _with_total(fresh_items, "Total Fresh Production", V)
 
     desp_rows, subtotals = [], []
     for eu, eu_label in END_USES:
-        items = []
-        for code, name in data["materials"]:
-            s = _pick(data["desp"], mines, code, eu)
-            v = V(s)
-            if not _empty(v):
-                items.append((name, s, v))
+        items = _visible([(name, s, V(s)) for code, name in data["materials"]
+                          for s in [_pick(data["desp"], mines, code, eu)]])
         if not items:
             continue
-        sub = combine([s for _, s, _ in items])
-        subtotals.append(sub)
+        subtotals.append(combine([s for _, s, _ in items]))
         desp_rows.append(_row(eu_label, "subheading"))
-        desp_rows += [_row(n, "item", v) for n, _, v in items]
-        desp_rows.append(_row(f"Total {eu_label}", "total", V(sub)))
+        desp_rows += _with_total(items, f"Total {eu_label}", V)
     if desp_rows:
         rows.append(_row("I/ORE DESPATCH", "heading"))
         rows += desp_rows
-        rows.append(_row("Grand Total Despatch", "total", V(combine(subtotals))))
+        if len(subtotals) >= 2:
+            rows.append(_row("Grand Total Despatch", "total", V(combine(subtotals))))
 
-    parts = []
+    parts = [("Fresh Production (Lump+Fines)", fresh, V(fresh))]
     for label, material, eus in REPORTED_PARTS:
         if eus is None:
             s = _pick_any_end_use(data["desp"], mines, material)
         else:
             s = combine([_pick(data["desp"], mines, material, eu) for eu in eus])
         parts.append((label, s, V(s)))
-    rows.append(_row("REPORTED PRODUCTION", "heading"))
-    rows.append(_row("Fresh Production (Lump+Fines)", "item", V(fresh)))
-    rows += [_row(label, "item", v) for label, _, v in parts if not _empty(v)]
-    rows.append(_row("Reported Production", "total", V(combine([fresh] + [s for _, s, _ in parts]))))
+    parts = _visible(parts)
+    if parts:
+        rows.append(_row("REPORTED PRODUCTION", "heading"))
+        if len(parts) == 1:
+            # One component: show it once, under the section's own name.
+            rows.append(_row("Reported Production", "total", parts[0][2]))
+        else:
+            rows += _with_total(parts, "Reported Production", V)
 
-    booked = []
-    for code, name in data["materials"]:
-        s = _pick(data["booked"], mines, code)
-        v = V(s)
-        if not _empty(v):
-            booked.append((name, s, v))
+    booked = _visible([(name, s, V(s)) for code, name in data["materials"]
+                       for s in [_pick(data["booked"], mines, code)]])
     if booked:
         rows.append(_row("BOOKED QUANTITY (SALES)", "heading"))
-        rows += [_row(n, "item", v) for n, _, v in booked]
-        rows.append(_row("Total Booked", "total", V(combine([s for _, s, _ in booked]))))
+        rows += _with_total(booked, "Total Booked", V)
     return rows
 
 
@@ -256,22 +271,25 @@ def _yield_values(clean: list, raw: list) -> list:
 def coal_flux_rows(data: dict, P: dict) -> list:
     """SAIL-only sections from sail_mines_monthly (coal and flux are not
     kept per mine yet): Coal Mines Production, Washery, Coal Despatch, Flux
-    Production, Flux Despatch. Always shown."""
+    Production, Flux Despatch. Same hiding rules as the iron-ore rows."""
     def S(section, item):
         return data["sail"].get((section, item), {})
 
+    def V(s):
+        return values(s, P)
+
     def simple(section):
         heading, items = _SAIL_SIMPLE[section]
-        series = [S(section, item) for item in items]
-        return ([_row(heading, "heading")]
-                + [_row(item, "item", values(s, P)) for item, s in zip(items, series)]
-                + [_row("Total", "total", values(combine(series), P))])
+        visible = _visible([(item, s, V(s)) for item in items for s in [S(section, item)]])
+        return [_row(heading, "heading")] + _with_total(visible, "Total", V) if visible else []
 
-    raw = values(S("washery", "Input Raw Coal"), P)
-    clean = values(S("washery", "Clean Coal"), P)
-    washery = [_row("WASHERY", "heading"), _row("Input Raw Coal", "item", raw),
-               _row("Clean Coal", "item", clean),
-               _row("Yield (%)", "item", _yield_values(clean, raw), decimals=1)]
+    raw = V(S("washery", "Input Raw Coal"))
+    clean = V(S("washery", "Clean Coal"))
+    washery = [_row(label, "item", v, decimals=d) for label, v, d in
+               (("Input Raw Coal", raw, None), ("Clean Coal", clean, None),
+                ("Yield (%)", _yield_values(clean, raw), 1)) if not _empty(v)]
+    if washery:
+        washery.insert(0, _row("WASHERY", "heading"))
     return (simple("coal_prod") + washery + simple("coal_despatch")
             + simple("flux_prod") + simple("flux_despatch"))
 

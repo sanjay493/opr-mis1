@@ -35,7 +35,10 @@ def _head(L: dict) -> str:
 _COLS = '<colgroup><col class="c-ent"><col class="c-lbl">' + '<col class="c-num">' * 11 + "</colgroup>"
 
 
-def _block(b: dict, L: dict, pct: set, d: int) -> str:
+def _block(b: dict, pct: set, d: int) -> str:
+    """One block as its own <tbody> of the single report table: Chromium
+    keeps a tbody with break-inside: avoid on one page and repeats the
+    table's one <thead> at the top of every page."""
     trs = []
     for i, r in enumerate(b["rows"]):
         cells = []
@@ -47,10 +50,8 @@ def _block(b: dict, L: dict, pct: set, d: int) -> str:
             text = _p(v) if vi in pct else _q(v, qd)
             cells.append(f'<td class="{_cls(vi)}">{text}</td>')
         trs.append(f'<tr class="{r["kind"]}">{"".join(cells)}</tr>')
-    note = f'<p class="note">{escape(b["note"], quote=False)}</p>' if b.get("note") else ""
     cls = "blk sail" if b["kind"] == "sail" else "blk"
-    return (f'<section class="{cls}"><table class="d{d}">{_COLS}{_head(L)}<tbody>{"".join(trs)}</tbody></table>'
-            f"{note}</section>")
+    return f'<tbody class="{cls}">{"".join(trs)}</tbody>'
 
 
 def build_html(data: dict, decimals: int, colors: dict) -> str:
@@ -72,11 +73,17 @@ def build_html(data: dict, decimals: int, colors: dict) -> str:
   h2 {{ font-size: 10pt; font-weight: 700; color: rgb(0,0,255); margin: 0; }}
   .unit {{ font-size: 8.5pt; font-weight: 500; }}
   .empty {{ font-size: 10pt; font-weight: 700; margin-top: 12px; }}
-  .blk {{ break-inside: avoid; margin-top: 6px; }}
-  .blk.sail {{ break-before: page; }}
+  tbody.blk {{ break-inside: avoid; }}
+  tbody.blk.sail {{ break-before: page; }}
   .note {{ font-size: 8pt; font-style: italic; margin: 2px 0 0; }}
-  table {{ table-layout: fixed; width: 100%; border-collapse: separate; border-spacing: 0;
-           border: 1px solid {blk}; }}
+  /* The black frame is drawn by the cells, not the table: a table border
+     runs on down the empty bottom of a page the table continues from.
+     Header row 1: top; outer cells: left/right; each block: bottom (which is
+     also the line between blocks). */
+  table {{ table-layout: fixed; width: 100%; border-collapse: separate; border-spacing: 0; }}
+  thead tr:first-child th {{ border-top: 1px solid {blk}; }}
+  thead tr:first-child > :first-child, td.ent {{ border-left: 1px solid {blk}; }}
+  tbody.blk tr:last-child td, td.ent {{ border-bottom: 1px solid {blk}; }}
   col.c-ent {{ width: 3.5%; }} col.c-lbl {{ width: 21%; }} col.c-num {{ width: 6.86%; }}
   th, td {{ color: {txt}; line-height: 1.1; white-space: nowrap; overflow: hidden; }}
   th {{ font-family: 'Arial Narrow', Arial, sans-serif; font-size: 8.2pt; font-weight: 700;
@@ -89,6 +96,8 @@ def build_html(data: dict, decimals: int, colors: dict) -> str:
      hdr-small / plant_performance_pdf.py's th.sm */
   th.sm {{ font-size: 6.8pt; line-height: 0.95; padding: 1px 0; white-space: normal; }}
   th[colspan] {{ border-bottom: 1px solid {c("border_medium", "#94a3b8")}; }}
+  /* header/body rule -- Chromium repeats the thead, rule included, at the
+     top of every page */
   thead tr:last-child th, thead tr:first-child th[rowspan] {{ border-bottom: 1px solid {blk}; }}
   td {{ font-size: 8.5pt; padding: 1.8px 2px; text-align: right; border: none; border-right: 1px solid {line}; }}
   /* value columns are 13 mm wide: a 5-digit SAIL figure needs a smaller font
@@ -96,7 +105,7 @@ def build_html(data: dict, decimals: int, colors: dict) -> str:
   table.d1 td:not(.lbl):not(.ent) {{ font-size: 8pt; }}
   table.d2 td:not(.lbl):not(.ent) {{ font-size: 7.4pt; padding: 1.8px 1px; }}
   table.d3 td:not(.lbl):not(.ent) {{ font-size: 6.8pt; padding: 1.8px 1px; }}
-  thead tr:first-child > :last-child, tbody tr > :last-child {{ border-right: none; }}
+  thead tr:first-child > :last-child, tbody tr > :last-child {{ border-right: 1px solid {blk}; }}
   td.ent {{ border-right: 1px solid {blk}; text-align: center; vertical-align: middle; padding: 2px 0; }}
   td.ent div {{ writing-mode: vertical-rl; transform: rotate(180deg); margin: 0 auto;
                 font-family: 'Arial Narrow', Arial, sans-serif; font-size: 8.5pt; font-weight: 700; }}
@@ -112,11 +121,15 @@ def build_html(data: dict, decimals: int, colors: dict) -> str:
   td.act, th.act {{ background: {c("perf_act_bg", "#C6EFCE")}; }}
   td.gr, th.gr {{ background: {c("perf_gr_bg", "#e2e8f0")}; }}
   tr.heading td:not(.ent), tr.total td:not(.ent) {{ border-top: 1px solid {blk}; }}
-  tbody tr:first-child td {{ border-top: none; }}
+  tbody.blk tr:first-child td {{ border-top: none; }}
 """
     head = f'<div class="hd"><h2>{escape(L["title"], quote=False)}</h2><span class="unit">Unit: \'000 T</span></div>'
     if data["blocks"]:
-        body = "".join(_block(b, L, pct, decimals) for b in data["blocks"])
+        notes = "".join(f'<p class="note">{escape(b["note"], quote=False)}</p>'
+                        for b in data["blocks"] if b.get("note"))
+        body = (f'<table class="d{decimals}">{_COLS}{_head(L)}'
+                + "".join(_block(b, pct, decimals) for b in data["blocks"])
+                + f"</table>{notes}")
     else:
         body = f'<p class="empty">No mines data for {escape(L["month"], quote=False)}.</p>'
     return f'<!doctype html><html><head><meta charset="utf-8"><style>{css}</style></head><body>{head}{body}</body></html>'
