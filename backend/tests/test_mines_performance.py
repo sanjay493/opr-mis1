@@ -54,3 +54,162 @@ def test_labels():
     L = mp.labels("2026-09")
     assert L == {"title": "Mines Production Performance :Sep'26 and Apr-Sep'26", "fy": "26-27",
                  "month": "Sep'26", "cply": "Sep'25", "ytd": "Apr-Sep'26", "ytd_cply": "Apr-Sep'25"}
+
+
+import sqlite3
+from decimal import Decimal
+
+import pytest
+
+_SCHEMA = [
+    "CREATE TABLE mine_groups_master (group_code TEXT, group_name TEXT, sort_order INTEGER)",
+    "CREATE TABLE mines_master (mine_code TEXT, mine_name TEXT, group_code TEXT, is_active INTEGER, sort_order INTEGER)",
+    "CREATE TABLE mine_materials_master (material_code TEXT, material_name TEXT, material_category TEXT, "
+    "has_production INTEGER, counts_in_total_production INTEGER, sort_order INTEGER)",
+    "CREATE TABLE mines_production_monthly (report_month TEXT, mine_code TEXT, material_code TEXT, qty_actual REAL, qty_plan REAL)",
+    "CREATE TABLE mines_despatch_actual_monthly (report_month TEXT, mine_code TEXT, material_code TEXT, "
+    "transport_mode TEXT, end_use_code TEXT, qty_actual REAL)",
+    "CREATE TABLE mines_despatch_plan_monthly (report_month TEXT, mine_code TEXT, material_code TEXT, end_use_code TEXT, qty_plan REAL)",
+    "CREATE TABLE mines_booked_qty_actual_monthly (report_month TEXT, mine_code TEXT, material_code TEXT, transport_mode TEXT, qty_actual REAL)",
+    "CREATE TABLE mines_booked_qty_plan_monthly (report_month TEXT, mine_code TEXT, material_code TEXT, qty_plan REAL)",
+    "CREATE TABLE sail_mines_monthly (report_month TEXT, section TEXT, item TEXT, month_actual REAL, month_plan REAL)",
+]
+
+_ROWS = {
+    "mine_groups_master": [("JG", "J Group", 1), ("OG", "O Group", 2)],
+    "mines_master": [("A", "Alpha", "JG", 1, 1), ("B", "Beta", "JG", 1, 2),
+                     ("C", "Gamma", "OG", 1, 3), ("D", "Delta", "OG", 0, 4)],
+    "mine_materials_master": [("LUMP", "Lump", "FRESH", 1, 1, 1), ("FINES", "Fines", "FRESH", 1, 1, 2),
+                              ("DUMP_FINES", "Dump Fines", "LEGACY", 0, 1, 3), ("PELLETS", "Pellets", "LEGACY", 0, 1, 4),
+                              ("TAILINGS", "Tailings", "LEGACY", 0, 1, 5)],
+    "mines_production_monthly": [
+        ("2026-09", "A", "LUMP", 100, 110), ("2026-09", "A", "FINES", 50, 40),
+        ("2026-04", "A", "LUMP", 90, 100), ("2025-09", "A", "LUMP", 80, None),
+        ("2026-09", "B", "LUMP", 10, 10), ("2026-09", "C", "FINES", 20, 0),
+        ("2026-09", "D", "LUMP", 999, 999),          # inactive mine: never counted
+    ],
+    "mines_despatch_actual_monthly": [
+        ("2026-09", "A", "LUMP", "RAIL", "CAPTIVE", 60), ("2026-09", "A", "LUMP", "ROAD", "CAPTIVE", 5),
+        ("2026-09", "A", "FINES", "RAIL", "SALES", 30),
+        ("2026-09", "A", "PELLETS", "ROAD", "SALES", 7), ("2026-09", "A", "PELLETS", "RAIL", "CAPTIVE", 3),
+        ("2026-09", "A", "DUMP_FINES", "RAIL", "PELLET_CONV", 4), ("2026-09", "A", "DUMP_FINES", "RAIL", "SALES", 2),
+        ("2026-09", "A", "TAILINGS", "RAIL", "CAPTIVE", 1), ("2026-09", "A", "TAILINGS", "RAIL", "SALES", 6),
+        ("2025-09", "C", "TAILINGS", "RAIL", "SALES", 5),   # C: last year only
+    ],
+    "mines_despatch_plan_monthly": [("2026-09", "A", "LUMP", "CAPTIVE", 70)],
+    "mines_booked_qty_actual_monthly": [("2026-09", "A", "FINES", "RAIL", 12), ("2026-09", "A", "FINES", "ROAD", 3)],
+    "mines_booked_qty_plan_monthly": [("2026-09", "A", "FINES", 20)],
+    "sail_mines_monthly": [],
+}
+
+
+@pytest.fixture
+def gen(tmp_path, monkeypatch):
+    dbfile = tmp_path / "mines.db"
+    c = sqlite3.connect(dbfile)
+    for sql in _SCHEMA:
+        c.execute(sql)
+    for table, rows in _ROWS.items():
+        for r in rows:
+            c.execute(f"INSERT INTO {table} VALUES ({','.join('?' * len(r))})", r)
+    c.commit()
+    c.close()
+    monkeypatch.setattr(mp.db, "connect", lambda: sqlite3.connect(dbfile))
+    return dbfile
+
+
+def _block(data, name):
+    return next(b for b in data["blocks"] if b["name"] == name)
+
+
+def _rows(block):
+    return [(r["kind"], r["label"]) for r in block["rows"]]
+
+
+def _val(block, label, i=2):
+    return next(r for r in block["rows"] if r["label"] == label)["values"][i]
+
+
+def test_f_converts_decimal():
+    assert mp._f(Decimal("1.5")) == 1.5 and mp._f(None) is None
+
+
+def test_block_order_and_kinds(gen):
+    d = mp.generate("2026-09")
+    assert [(b["name"], b["kind"]) for b in d["blocks"]] == [
+        ("Alpha", "mine"), ("Beta", "mine"), ("J Group", "group"),
+        ("Gamma", "mine"), ("O Group", "group"), ("SAIL", "sail")]
+    assert _block(d, "SAIL")["note"] == mp.SAIL_NOTE
+    assert d["pct_idx"] == [3, 5, 8, 10] and d["labels"]["month"] == "Sep'26"
+
+
+def test_mine_rows_structure(gen):
+    a = _block(mp.generate("2026-09"), "Alpha")
+    assert _rows(a) == [
+        ("heading", "I/ORE FRESH PRODUCTION"), ("item", "Lump"), ("item", "Fines"),
+        ("total", "Total Fresh Production"),
+        ("heading", "I/ORE DESPATCH"),
+        ("subheading", "Captive"), ("item", "Lump"), ("item", "Pellets"), ("item", "Tailings"),
+        ("total", "Total Captive"),
+        ("subheading", "Conversion Agent"), ("item", "Dump Fines"), ("total", "Total Conversion Agent"),
+        ("subheading", "Sales"), ("item", "Fines"), ("item", "Dump Fines"), ("item", "Pellets"),
+        ("item", "Tailings"), ("total", "Total Sales"),
+        ("total", "Grand Total Despatch"),
+        ("heading", "REPORTED PRODUCTION"), ("item", "Fresh Production (Lump+Fines)"),
+        ("item", "Pellets Despatch"), ("item", "Dump Fines Despatch"), ("item", "Tailings Despatch"),
+        ("total", "Reported Production"),
+        ("heading", "BOOKED QUANTITY (SALES)"), ("item", "Fines"), ("total", "Total Booked"),
+    ]
+    assert all(r["values"] == [None] * 11 for r in a["rows"] if r["kind"] in ("heading", "subheading"))
+
+
+def test_mine_values(gen):
+    a = _block(mp.generate("2026-09"), "Alpha")
+    assert _val(a, "Lump", 2) == 100 and _val(a, "Lump", 1) == 110
+    assert _val(a, "Lump", 4) == 80 and _val(a, "Lump", 7) == 190 and _val(a, "Lump", 6) == 210
+    assert _val(a, "Total Fresh Production") == 150
+    assert _val(a, "Total Captive") == 69 and _val(a, "Total Captive", 1) == 70    # 65 + 3 + 1, plan 70
+    assert _val(a, "Total Conversion Agent") == 4
+    assert _val(a, "Total Sales") == 45                                            # 30 + 2 + 7 + 6
+    assert _val(a, "Grand Total Despatch") == 118
+    assert _val(a, "Pellets Despatch") == 10                                       # any end use
+    assert _val(a, "Dump Fines Despatch") == 2                                     # not PELLET_CONV
+    assert _val(a, "Tailings Despatch") == 6                                       # SALES only
+    assert _val(a, "Reported Production") == 168                                   # 150 + 10 + 2 + 6
+    assert _val(a, "Total Booked") == 15 and _val(a, "Total Booked", 3) == 75
+
+
+def test_hidden_sections_and_always_shown_rows(gen):
+    b = _block(mp.generate("2026-09"), "Beta")
+    assert _rows(b) == [
+        ("heading", "I/ORE FRESH PRODUCTION"), ("item", "Lump"), ("item", "Fines"),
+        ("total", "Total Fresh Production"),
+        ("heading", "REPORTED PRODUCTION"), ("item", "Fresh Production (Lump+Fines)"),
+        ("total", "Reported Production"),
+    ]
+    assert _val(b, "Fines") is None
+
+
+def test_cply_only_row_is_shown(gen):
+    c = _block(mp.generate("2026-09"), "Gamma")
+    assert ("item", "Tailings") in _rows(c)
+    assert _val(c, "Tailings", 4) == 5 and _val(c, "Tailings", 2) is None
+
+
+def test_plan_zero_gives_blank_percent(gen):
+    c = _block(mp.generate("2026-09"), "Gamma")
+    assert _val(c, "Fines", 2) == 20 and _val(c, "Fines", 3) is None
+
+
+def test_group_and_sail_are_sums(gen):
+    d = mp.generate("2026-09")
+    assert _val(_block(d, "J Group"), "Lump") == 110
+    assert _val(_block(d, "J Group"), "Total Fresh Production") == 160
+    sail = _block(d, "SAIL")
+    assert _val(sail, "Total Fresh Production") == 180          # inactive D excluded
+    assert _val(sail, "Grand Total Despatch") == 118
+    assert _val(sail, "Reported Production") == 198              # 180 + 10 + 2 + 6
+
+
+def test_empty_month_has_no_blocks(gen):
+    assert mp.generate("2030-05")["blocks"] == []

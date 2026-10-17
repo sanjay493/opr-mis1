@@ -86,3 +86,170 @@ def values(series: dict, P: dict) -> list:
     return [_sum(plan(mo) for mo in P["fy"]),
             m_plan, m_act, _ratio(m_act, m_plan), m_cply, _growth(m_act, m_cply),
             y_plan, y_act, _ratio(y_act, y_plan), y_cply, _growth(y_act, y_cply)]
+
+
+# Despatch sub-groups, in report order (not mine_end_uses_master's order).
+END_USES = (("CAPTIVE", "Captive"), ("PELLET_CONV", "Conversion Agent"), ("SALES", "Sales"))
+
+# Reported Production = fresh Lump + Fines + these despatches (None = any
+# end use) -- the rule in db.get_iron_ore_group_rollup_monthly, applied per
+# mine here so a group/SAIL block's figure equals the SAIL Mines page's.
+REPORTED_PARTS = (
+    ("Pellets Despatch", "PELLETS", None),
+    ("Dump Fines Despatch", "DUMP_FINES", ("CAPTIVE", "SALES")),
+    ("Tailings Despatch", "TAILINGS", ("SALES",)),
+)
+
+SAIL_NOTE = "Coal and flux are shown at SAIL level; mine-level figures will be added."
+
+
+def _f(v):
+    """MySQL can hand back Decimal; arithmetic here is all float."""
+    return None if v is None else float(v)
+
+
+def _row(label, kind, vals=None, decimals=None):
+    return {"label": label, "kind": kind, "values": vals or [None] * 11, "decimals": decimals}
+
+
+def _empty(vals) -> bool:
+    return all(v is None for v in vals)
+
+
+def _load(months: list) -> dict:
+    """Masters plus every series needed, read once for the given months:
+    prod[(mine, material)], desp[(mine, material, end_use)] (Rail + Road
+    summed), booked[(mine, material)] (Rail + Road summed),
+    sail[(section, item)]."""
+    conn = db.connect()
+    cur = conn.cursor()
+    ph = ",".join("?" * len(months))
+    stores = {"prod": {}, "desp": {}, "booked": {}, "sail": {}}
+
+    def put(store, key, mo, a=None, p=None):
+        s = stores[store].setdefault(key, {})
+        oa, op = s.get(mo, (None, None))
+        s[mo] = (_sum([oa, _f(a)]), _sum([op, _f(p)]))
+
+    cur.execute("SELECT group_code, group_name FROM mine_groups_master ORDER BY sort_order")
+    groups = cur.fetchall()
+    cur.execute("SELECT mine_code, mine_name, group_code FROM mines_master "
+                "WHERE is_active = 1 ORDER BY sort_order")
+    mines = cur.fetchall()
+    cur.execute("SELECT material_code, material_name FROM mine_materials_master ORDER BY sort_order")
+    materials = cur.fetchall()
+
+    cur.execute(f"SELECT mine_code, material_code, report_month, qty_actual, qty_plan "
+                f"FROM mines_production_monthly WHERE report_month IN ({ph})", months)
+    for mine, mat, mo, a, p in cur.fetchall():
+        put("prod", (mine, mat), mo, a, p)
+    cur.execute(f"SELECT mine_code, material_code, end_use_code, report_month, qty_actual "
+                f"FROM mines_despatch_actual_monthly WHERE report_month IN ({ph})", months)
+    for mine, mat, eu, mo, a in cur.fetchall():
+        put("desp", (mine, mat, eu), mo, a=a)
+    cur.execute(f"SELECT mine_code, material_code, end_use_code, report_month, qty_plan "
+                f"FROM mines_despatch_plan_monthly WHERE report_month IN ({ph})", months)
+    for mine, mat, eu, mo, p in cur.fetchall():
+        put("desp", (mine, mat, eu), mo, p=p)
+    cur.execute(f"SELECT mine_code, material_code, report_month, qty_actual "
+                f"FROM mines_booked_qty_actual_monthly WHERE report_month IN ({ph})", months)
+    for mine, mat, mo, a in cur.fetchall():
+        put("booked", (mine, mat), mo, a=a)
+    cur.execute(f"SELECT mine_code, material_code, report_month, qty_plan "
+                f"FROM mines_booked_qty_plan_monthly WHERE report_month IN ({ph})", months)
+    for mine, mat, mo, p in cur.fetchall():
+        put("booked", (mine, mat), mo, p=p)
+    cur.execute(f"SELECT section, item, report_month, month_actual, month_plan "
+                f"FROM sail_mines_monthly WHERE report_month IN ({ph})", months)
+    for section, item, mo, a, p in cur.fetchall():
+        put("sail", (section, item), mo, a, p)
+    conn.close()
+    return {"groups": groups, "mines": mines, "materials": materials, **stores}
+
+
+def _pick(store: dict, mines, *key) -> dict:
+    return combine([store.get((m, *key), {}) for m in mines])
+
+
+def _pick_any_end_use(store: dict, mines, material) -> dict:
+    return combine([s for k, s in store.items() if k[0] in mines and k[1] == material])
+
+
+def iron_ore_rows(data: dict, mines: list, P: dict) -> list:
+    def V(s):
+        return values(s, P)
+
+    rows = [_row("I/ORE FRESH PRODUCTION", "heading")]
+    lump, fines = _pick(data["prod"], mines, "LUMP"), _pick(data["prod"], mines, "FINES")
+    fresh = combine([lump, fines])
+    rows += [_row("Lump", "item", V(lump)), _row("Fines", "item", V(fines)),
+             _row("Total Fresh Production", "total", V(fresh))]
+
+    desp_rows, subtotals = [], []
+    for eu, eu_label in END_USES:
+        items = []
+        for code, name in data["materials"]:
+            s = _pick(data["desp"], mines, code, eu)
+            v = V(s)
+            if not _empty(v):
+                items.append((name, s, v))
+        if not items:
+            continue
+        sub = combine([s for _, s, _ in items])
+        subtotals.append(sub)
+        desp_rows.append(_row(eu_label, "subheading"))
+        desp_rows += [_row(n, "item", v) for n, _, v in items]
+        desp_rows.append(_row(f"Total {eu_label}", "total", V(sub)))
+    if desp_rows:
+        rows.append(_row("I/ORE DESPATCH", "heading"))
+        rows += desp_rows
+        rows.append(_row("Grand Total Despatch", "total", V(combine(subtotals))))
+
+    parts = []
+    for label, material, eus in REPORTED_PARTS:
+        if eus is None:
+            s = _pick_any_end_use(data["desp"], mines, material)
+        else:
+            s = combine([_pick(data["desp"], mines, material, eu) for eu in eus])
+        parts.append((label, s, V(s)))
+    rows.append(_row("REPORTED PRODUCTION", "heading"))
+    rows.append(_row("Fresh Production (Lump+Fines)", "item", V(fresh)))
+    rows += [_row(label, "item", v) for label, _, v in parts if not _empty(v)]
+    rows.append(_row("Reported Production", "total", V(combine([fresh] + [s for _, s, _ in parts]))))
+
+    booked = []
+    for code, name in data["materials"]:
+        s = _pick(data["booked"], mines, code)
+        v = V(s)
+        if not _empty(v):
+            booked.append((name, s, v))
+    if booked:
+        rows.append(_row("BOOKED QUANTITY (SALES)", "heading"))
+        rows += [_row(n, "item", v) for n, _, v in booked]
+        rows.append(_row("Total Booked", "total", V(combine([s for _, s, _ in booked]))))
+    return rows
+
+
+def coal_flux_rows(data: dict, P: dict) -> list:
+    """SAIL-only coal/washery/flux sections -- implemented in Task 3."""
+    return []
+
+
+def generate(month: str) -> dict:
+    P = periods(month)
+    data = _load(sorted(set(P["fy"] + P["cply_ytd"] + [P["cply"]])))
+    blocks = []
+    for gcode, gname in data["groups"]:
+        gmines = [(code, name) for code, name, g in data["mines"] if g == gcode]
+        for code, name in gmines:
+            blocks.append({"name": name, "kind": "mine", "group": gcode, "note": None,
+                           "rows": iron_ore_rows(data, [code], P)})
+        if gmines:
+            blocks.append({"name": gname, "kind": "group", "group": gcode, "note": None,
+                           "rows": iron_ore_rows(data, [c for c, _ in gmines], P)})
+    all_mines = [code for code, _, _ in data["mines"]]
+    blocks.append({"name": "SAIL", "kind": "sail", "group": None, "note": SAIL_NOTE,
+                   "rows": iron_ore_rows(data, all_mines, P) + coal_flux_rows(data, P)})
+    has_data = any(r["kind"] in ("item", "total") and not _empty(r["values"])
+                   for b in blocks for r in b["rows"])
+    return {"labels": labels(month), "pct_idx": list(PCT_IDX), "blocks": blocks if has_data else []}
