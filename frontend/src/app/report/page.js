@@ -31,6 +31,7 @@ const PAGE_LABELS = {
    4.5: 'SAIL Mines Production & Despatch Performance',
    5: 'Plant-Wise Production Performance',
    6: 'Plant-Wise Production (Month & YTD)',
+  6.1: 'Mines Production Performance',
    7: 'Month-Wise Production Trend – Oven Pushing',
    8: 'Month-Wise Production Trend – Sinter',
    9: 'Month-Wise Production Trend – Hot Metal',
@@ -253,6 +254,11 @@ function replaceTimeStrings(text, newMonth, newYear, oldMonth, oldYear) {
   return result;
 }
 
+const SERVER_DATED_TYPES = new Set([
+  'power_data', 'steel_sales_performance', 'mines_performance', 'special_steel_donut',
+  'special_steel_trend', 'rake_detention_detail', 'rake_detention_summary', 'rake_detention_trend',
+]);
+
 function getFormattedPagesData(pages, newMonth, newYear, oldMonth, oldYear) {
   return pages.map((page) => {
     if (page.page === 1) {
@@ -275,7 +281,9 @@ function getFormattedPagesData(pages, newMonth, newYear, oldMonth, oldYear) {
     // report month — running them through the generic date-shift regex on
     // top of that double-applies the shift and corrupts the year (and can
     // mangle schedule/period text like "7-15").
-    if ((page.page >= 36 && page.page <= 40) || page.type === 'power_data') {
+    // Same for the page types below, whose titles/subtitles are built from
+    // the report month server-side (e.g. Rake Detention's "During 2026-27").
+    if ((page.page >= 36 && page.page <= 40) || SERVER_DATED_TYPES.has(page.type)) {
       return page;
     }
 
