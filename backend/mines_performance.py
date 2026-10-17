@@ -149,8 +149,10 @@ def _load(months: list) -> dict:
 
     cur.execute("SELECT group_code, group_name FROM mine_groups_master ORDER BY sort_order")
     groups = cur.fetchall()
-    cur.execute("SELECT mine_code, mine_name, group_code FROM mines_master "
-                "WHERE is_active = 1 ORDER BY sort_order")
+    # Every mine, active or not: a closed mine's history still counts in its
+    # group and SAIL (as db.get_iron_ore_group_rollup_monthly counts it).
+    cur.execute("SELECT mine_code, mine_name, group_code, is_active FROM mines_master "
+                "ORDER BY sort_order")
     mines = cur.fetchall()
     cur.execute("SELECT material_code, material_name FROM mine_materials_master ORDER BY sort_order")
     materials = cur.fetchall()
@@ -297,18 +299,23 @@ def coal_flux_rows(data: dict, P: dict) -> list:
 def generate(month: str) -> dict:
     P = periods(month)
     data = _load(sorted(set(P["fy"] + P["cply_ytd"] + [P["cply"]])))
+    # A block is shown only when it has rows left after hiding the empty ones
+    # -- so an inactive mine shows while it still has data in the window, and
+    # a mine (active or not) with none is left out. Group and SAIL totals sum
+    # every mine either way.
     blocks = []
+
+    def add(name, kind, group, rows, note=None):
+        if rows:
+            blocks.append({"name": name, "kind": kind, "group": group, "note": note, "rows": rows})
+
     for gcode, gname in data["groups"]:
-        gmines = [(code, name) for code, name, g in data["mines"] if g == gcode]
-        for code, name in gmines:
-            blocks.append({"name": name, "kind": "mine", "group": gcode, "note": None,
-                           "rows": iron_ore_rows(data, [code], P)})
+        gmines = [code for code, _, g, _ in data["mines"] if g == gcode]
+        for code, name, g, _ in data["mines"]:
+            if g == gcode:
+                add(name, "mine", gcode, iron_ore_rows(data, [code], P))
         if gmines:
-            blocks.append({"name": gname, "kind": "group", "group": gcode, "note": None,
-                           "rows": iron_ore_rows(data, [c for c, _ in gmines], P)})
-    all_mines = [code for code, _, _ in data["mines"]]
-    blocks.append({"name": "SAIL", "kind": "sail", "group": None, "note": SAIL_NOTE,
-                   "rows": iron_ore_rows(data, all_mines, P) + coal_flux_rows(data, P)})
-    has_data = any(r["kind"] in ("item", "total") and not _empty(r["values"])
-                   for b in blocks for r in b["rows"])
-    return {"labels": labels(month), "pct_idx": list(PCT_IDX), "blocks": blocks if has_data else []}
+            add(gname, "group", gcode, iron_ore_rows(data, gmines, P))
+    all_mines = [code for code, _, _, _ in data["mines"]]
+    add("SAIL", "sail", None, iron_ore_rows(data, all_mines, P) + coal_flux_rows(data, P), SAIL_NOTE)
+    return {"labels": labels(month), "pct_idx": list(PCT_IDX), "blocks": blocks}

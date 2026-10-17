@@ -78,7 +78,8 @@ _SCHEMA = [
 _ROWS = {
     "mine_groups_master": [("JG", "J Group", 1), ("OG", "O Group", 2)],
     "mines_master": [("A", "Alpha", "JG", 1, 1), ("B", "Beta", "JG", 1, 2),
-                     ("C", "Gamma", "OG", 1, 3), ("D", "Delta", "OG", 0, 4)],
+                     ("C", "Gamma", "OG", 1, 3), ("D", "Delta", "OG", 0, 4),
+                     ("E", "Epsilon", "OG", 0, 5)],
     "mine_materials_master": [("LUMP", "Lump", "FRESH", 1, 1, 1), ("FINES", "Fines", "FRESH", 1, 1, 2),
                               ("DUMP_FINES", "Dump Fines", "LEGACY", 0, 1, 3), ("PELLETS", "Pellets", "LEGACY", 0, 1, 4),
                               ("TAILINGS", "Tailings", "LEGACY", 0, 1, 5)],
@@ -86,7 +87,7 @@ _ROWS = {
         ("2026-09", "A", "LUMP", 100, 110), ("2026-09", "A", "FINES", 50, 40),
         ("2026-04", "A", "LUMP", 90, 100), ("2025-09", "A", "LUMP", 80, None),
         ("2026-09", "B", "LUMP", 10, 10), ("2026-09", "C", "FINES", 20, 0),
-        ("2026-09", "D", "LUMP", 999, 999),          # inactive mine: never counted
+        ("2025-09", "D", "LUMP", 999, None),         # inactive (closed) mine: last year only
     ],
     "mines_despatch_actual_monthly": [
         ("2026-09", "A", "LUMP", "RAIL", "CAPTIVE", 60), ("2026-09", "A", "LUMP", "ROAD", "CAPTIVE", 5),
@@ -140,7 +141,7 @@ def test_block_order_and_kinds(gen):
     d = mp.generate("2026-09")
     assert [(b["name"], b["kind"]) for b in d["blocks"]] == [
         ("Alpha", "mine"), ("Beta", "mine"), ("J Group", "group"),
-        ("Gamma", "mine"), ("O Group", "group"), ("SAIL", "sail")]
+        ("Gamma", "mine"), ("Delta", "mine"), ("O Group", "group"), ("SAIL", "sail")]
     assert _block(d, "SAIL")["note"] == mp.SAIL_NOTE
     assert d["pct_idx"] == [3, 5, 8, 10] and d["labels"]["month"] == "Sep'26"
 
@@ -215,7 +216,7 @@ def test_group_and_sail_are_sums(gen):
     assert _val(_block(d, "J Group"), "Lump") == 110
     assert _val(_block(d, "J Group"), "Total Fresh Production") == 160
     sail = _block(d, "SAIL")
-    assert _val(sail, "Total Fresh Production") == 180          # inactive D excluded
+    assert _val(sail, "Total Fresh Production") == 180          # D has no Sep'26 data
     assert _val(sail, "Grand Total Despatch") == 118
     assert _val(sail, "Reported Production") == 198              # 180 + 10 + 2 + 6
 
@@ -282,3 +283,14 @@ def test_coal_flux_only_in_sail_block(gen_sail):
 def test_coal_flux_hidden_without_data(gen):
     labels = [r["label"] for r in _block(mp.generate("2026-09"), "SAIL")["rows"]]
     assert "COAL MINES PRODUCTION" not in labels and "WASHERY" not in labels and "FLUX DESPATCH" not in labels
+
+
+def test_inactive_mine_history_counted(gen):
+    """A closed (inactive) mine's history still counts in its group and SAIL
+    (as on the SAIL Mines page) and its block shows while it has data in the
+    window; an inactive mine with no data is not shown."""
+    d = mp.generate("2026-09")
+    names = [b["name"] for b in d["blocks"]]
+    assert "Delta" in names and "Epsilon" not in names
+    assert _val(_block(d, "O Group"), "Lump", 4) == 999
+    assert _val(_block(d, "SAIL"), "Lump", 4) == 1079           # 80 (A) + 999 (D)
