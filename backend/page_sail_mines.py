@@ -112,6 +112,12 @@ _DESPATCH_MIX_END_USE_CODES = ["CAPTIVE", "PELLET_CONV", "SALES"]
 # show just Act./CPLY/%Grth. A section with "merge_into" set is never its
 # own table — its rows fold into the named section's table as an extra
 # DESPATCH column group instead (see _merge_despatch_columns).
+# Flux is entered per mine (KTR / Nandani limestone, Hirri dolomite — see
+# mines_performance.py, which shows them separately) but this page keeps
+# its two Limestone / Dolomite rows: a section's "sources" maps a row to
+# the entered items it sums (default: the row's own item).
+_FLUX_SOURCES = {"Limestone": ["KTR Limestone", "Nandani Limestone"], "Dolomite": ["Hirri Dolomite"]}
+
 SAIL_MINES_SECTIONS = [
     {
         "key": "iron_ore_prod", "title": "Iron Ore Mines Performance", "kind": "production",
@@ -154,11 +160,13 @@ SAIL_MINES_SECTIONS = [
     {
         "key": "flux_prod", "title": "Flux Production & Despatch (Limestone & Dolomite)", "kind": "production",
         "items": ["Limestone", "Dolomite"],
+        "sources": _FLUX_SOURCES,
         "derived": [{"label": "Total", "kind": "sum", "of": ["Limestone", "Dolomite"]}],
     },
     {
         "key": "flux_despatch", "kind": "production",
         "items": ["Limestone", "Dolomite"],
+        "sources": _FLUX_SOURCES,
         "derived": [{"label": "Total", "kind": "sum", "of": ["Limestone", "Dolomite"]}],
         "merge_into": "flux_prod",
     },
@@ -569,9 +577,9 @@ def generate_sail_mines(report_month: str) -> dict:
             if hardcoded is not None:
                 app, actual, cply = hardcoded[item]
             else:
-                app, actual, cply = _leaf_values(
-                    monthly, cply_monthly, section["key"], item, ytd_months, cply_months, section["kind"]
-                )
+                leaves = [_leaf_values(monthly, cply_monthly, section["key"], src, ytd_months, cply_months, section["kind"])
+                          for src in section.get("sources", {}).get(item, [item])]
+                app, actual, cply = (_sum_or_none(leaf[i] for leaf in leaves) for i in range(3))
             raw[item] = (app, actual, cply)
             rows[item] = _row(item, app, actual, cply, section["kind"], bold=(item == "SAIL"))
 

@@ -25,12 +25,17 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 // will keep showing whatever was already saved in sail_mines_monthly but
 // can no longer be updated for new months until a replacement entry point
 // is built.
+// Flux is entered per mine. The SAIL Mines report sums KTR + Nandani into
+// its Limestone row and shows Hirri as Dolomite (page_sail_mines.py's
+// _FLUX_SOURCES); Mines Production Performance shows all three.
+const FLUX_ITEMS = ['KTR Limestone', 'Nandani Limestone', 'Hirri Dolomite'];
+
 const SECTIONS = [
   { key: 'coal_prod', title: 'Coal Mines Production', kind: 'production', items: ['Raw Coking Coal', 'Thermal Coal'] },
   { key: 'washery', title: 'Washery Performance', kind: 'production', items: ['Input Raw Coal', 'Clean Coal'] },
   { key: 'coal_despatch', title: 'Despatch of Clean Coal & Thermal Coal (incl. Middlings)', kind: 'production', items: ['Clean Coal', 'Thermal'] },
-  { key: 'flux_prod', title: 'Flux Production (Limestone & Dolomite)', kind: 'production', items: ['Limestone', 'Dolomite'] },
-  { key: 'flux_despatch', title: 'Flux Despatch (Limestone & Dolomite)', kind: 'production', items: ['Limestone', 'Dolomite'] },
+  { key: 'flux_prod', title: 'Flux Production (Limestone & Dolomite)', kind: 'production', items: FLUX_ITEMS },
+  { key: 'flux_despatch', title: 'Flux Despatch (Limestone & Dolomite)', kind: 'production', items: FLUX_ITEMS },
 ];
 
 const keyOf = (section, item) => `${section}|${item}`;

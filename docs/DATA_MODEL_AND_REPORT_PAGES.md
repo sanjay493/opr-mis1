@@ -286,7 +286,7 @@ and `frontend/.../cost-trend/page.js:PRODUCTS` list all five.
 
 | Table | Holds | Populated by | Read by |
 |---|---|---|---|
-| `sail_mines_monthly` | `(report_month, section, item)` → `month_actual`, `month_plan`. Sections/items registry in `page_sail_mines.py:SAIL_MINES_SECTIONS` (Coal, Washery, Coal Despatch, Flux). Derived rows (Total, Yield) computed at read time. | `frontend/src/components/entry/sail-mines/Form.js` → `/api/sail-mines/monthly` | `page_sail_mines.py` |
+| `sail_mines_monthly` | `(report_month, section, item)` → `month_actual`, `month_plan`. Sections/items registry in `page_sail_mines.py:SAIL_MINES_SECTIONS` (Coal, Washery, Coal Despatch, Flux). Derived rows (Total, Yield) computed at read time. Flux is entered per mine (KTR Limestone, Nandani Limestone, Hirri Dolomite); SAIL Mines sums them back into Limestone / Dolomite rows (`_FLUX_SOURCES`), Mines Production Performance (`mines_performance.py`) shows them separately. | `frontend/src/components/entry/sail-mines/Form.js` → `/api/sail-mines/monthly` | `page_sail_mines.py` |
 | `mine_groups_master`, `mines_master`, `mine_materials_master`, `mine_end_uses_master` | Reference data (11 mines under JGoM/OGoM/CGoM, materials, end-uses) | Seeded in `db.init_db()`; editable as data | `page_sail_mines.py` (labels/grouping) |
 | `mines_production_monthly` | `(report_month, mine_code, material_code)` → `qty_actual`, `qty_plan` (Lump/Fines) | `frontend/src/components/entry/mines-production-despatch/Form.js`; `scripts/backfill_iron_ore_mines_production.py` | `page_sail_mines.py` (mine-level → group rollup) |
 | `mines_despatch_actual_monthly` | `(report_month, mine_code, material_code, transport_mode, end_use_code)` → `qty_actual` | same data-entry page | `page_sail_mines.py` |

@@ -282,8 +282,8 @@ def iron_ore_rows(data: dict, mines: list, P: dict) -> list:
 _SAIL_SIMPLE = {
     "coal_prod": ("COAL MINES PRODUCTION", ("Raw Coking Coal", "Thermal Coal")),
     "coal_despatch": ("COAL DESPATCH", ("Clean Coal", "Thermal")),
-    "flux_prod": ("FLUX PRODUCTION", ("Limestone", "Dolomite")),
-    "flux_despatch": ("FLUX DESPATCH", ("Limestone", "Dolomite")),
+    "flux_prod": ("FLUX PRODUCTION", ("KTR Limestone", "Nandani Limestone", "Hirri Dolomite")),
+    "flux_despatch": ("FLUX DESPATCH", ("KTR Limestone", "Nandani Limestone", "Hirri Dolomite")),
 }
 
 # Quantity indices of the 11 values (the rest are %Ful / %Gr).
