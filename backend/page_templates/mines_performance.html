@@ -46,12 +46,19 @@
         text-transform: uppercase; padding-left: 3px; }
     table.mpp-table tr.mpp-subheading td.mpp-lbl { font-weight: 700; font-style: italic; padding-left: 8px; }
     table.mpp-table tr.mpp-item td.mpp-lbl { padding-left: 14px; }
-    table.mpp-table tr.mpp-total td { font-weight: 700; }
-    table.mpp-table tr.mpp-total td.mpp-lbl { padding-left: 8px; }
-    table.mpp-table tr.mpp-total td:not(.mpp-ent) { background: {{ colors.mines_perf_total_bg|default('#FEF3C7') }}; }
+    table.mpp-table tr.mpp-total td, table.mpp-table tr.mpp-subtotal td { font-weight: 700; }
+    table.mpp-table tr.mpp-total td.mpp-lbl, table.mpp-table tr.mpp-subtotal td.mpp-lbl { padding-left: 8px; }
+    table.mpp-table tr.mpp-total td:not(.mpp-ent),
+    table.mpp-table tr.mpp-subtotal td:not(.mpp-ent) { background: {{ colors.mines_perf_total_bg|default('#FEF3C7') }}; }
     table.mpp-table td.mpp-plan, table.mpp-table th.mpp-plan { background: {{ colors.perf_app_bg|default('#FFF2CC') }}; }
     table.mpp-table td.mpp-act, table.mpp-table th.mpp-act { background: {{ colors.perf_act_bg|default('#C6EFCE') }}; }
     table.mpp-table td.mpp-gr, table.mpp-table th.mpp-gr { background: {{ colors.perf_gr_bg|default('#e2e8f0') }}; }
+    {# .mpp-subtotal (the despatch section's per-destination totals -- Total
+       Captive/Sales/Conversion Agent/Unallocated) deliberately gets NO
+       top border, unlike .mpp-heading/.mpp-total: those sit inside one
+       continuous I/ORE DESPATCH block, so only Grand Total Despatch
+       (kind="total") should read as a hard stop -- see mines_performance.py's
+       _with_total(total_kind=). #}
     table.mpp-table tr.mpp-heading td:not(.mpp-ent),
     table.mpp-table tr.mpp-total td:not(.mpp-ent) { border-top: 1px solid {{ colors.border_black|default('#000000') }}; }
     table.mpp-table tbody.mpp-blk tr:first-child td { border-top: none; }

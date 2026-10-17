@@ -153,10 +153,10 @@ def test_mine_rows_structure(gen):
         ("total", "Total Fresh Production"),
         ("heading", "I/ORE DESPATCH"),
         ("subheading", "Captive"), ("item", "Lump"), ("item", "Pellets"), ("item", "Tailings"),
-        ("total", "Total Captive"),
+        ("subtotal", "Total Captive"),
         ("subheading", "Conversion Agent"), ("item", "Dump Fines"),     # one item: no total row
         ("subheading", "Sales"), ("item", "Fines"), ("item", "Dump Fines"), ("item", "Pellets"),
-        ("item", "Tailings"), ("total", "Total Sales"),                 # zero Lump row hidden
+        ("item", "Tailings"), ("subtotal", "Total Sales"),              # zero Lump row hidden
         ("total", "Grand Total Despatch"),
         ("heading", "REPORTED PRODUCTION"), ("item", "Fresh Production (Lump+Fines)"),
         ("item", "Pellets Despatch"), ("item", "Dump Fines Despatch"), ("item", "Tailings Despatch"),

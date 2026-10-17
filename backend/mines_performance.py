@@ -137,12 +137,18 @@ def _visible(items):
     return [it for it in items if not _empty(it[2])]
 
 
-def _with_total(items, total_label, V):
+def _with_total(items, total_label, V, total_kind="total"):
     """Item rows plus a total -- the total only when it adds up two or more
-    rows (a total of one row just repeats it)."""
+    rows (a total of one row just repeats it). total_kind="subtotal" (used
+    for the despatch section's per-destination totals -- Total Captive/
+    Sales/Conversion Agent/Unallocated) keeps the same bold+fill styling as
+    "total" but drops its top border, per direct instruction (2026-10-17):
+    those sit inside one continuous I/ORE DESPATCH block, so a heavy rule
+    above each one chopped it into disconnected-looking mini-tables; only
+    Grand Total Despatch (still kind="total") should read as a hard stop."""
     rows = [_row(label, "item", v) for label, _, v in items]
     if len(items) >= 2:
-        rows.append(_row(total_label, "total", V(combine([s for _, s, _ in items]))))
+        rows.append(_row(total_label, total_kind, V(combine([s for _, s, _ in items]))))
     return rows
 
 
@@ -230,7 +236,7 @@ def iron_ore_rows(data: dict, mines: list, P: dict) -> list:
             continue
         subtotals.append(combine([s for _, s, _ in items]))
         desp_rows.append(_row(eu_label, "subheading"))
-        desp_rows += _with_total(items, f"Total {eu_label}", V)
+        desp_rows += _with_total(items, f"Total {eu_label}", V, total_kind="subtotal")
     if desp_rows:
         rows.append(_row("I/ORE DESPATCH", "heading"))
         rows += desp_rows
