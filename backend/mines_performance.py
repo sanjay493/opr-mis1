@@ -230,9 +230,50 @@ def iron_ore_rows(data: dict, mines: list, P: dict) -> list:
     return rows
 
 
+# (heading, sail_mines_monthly section, items) -- summed into a "Total" row.
+_SAIL_SIMPLE = {
+    "coal_prod": ("COAL MINES PRODUCTION", ("Raw Coking Coal", "Thermal Coal")),
+    "coal_despatch": ("COAL DESPATCH", ("Clean Coal", "Thermal")),
+    "flux_prod": ("FLUX PRODUCTION", ("Limestone", "Dolomite")),
+    "flux_despatch": ("FLUX DESPATCH", ("Limestone", "Dolomite")),
+}
+
+# Quantity indices of the 11 values (the rest are %Ful / %Gr).
+_QTY_IDX = (0, 1, 2, 4, 6, 7, 9)
+
+
+def _yield_values(clean: list, raw: list) -> list:
+    """Washery Yield (%) = Clean Coal / Input Raw Coal x 100 for each
+    quantity column, then %Ful / %Gr from those yields."""
+    y = [None] * 11
+    for i in _QTY_IDX:
+        y[i] = _ratio(clean[i], raw[i])
+    y[3], y[5] = _ratio(y[2], y[1]), _growth(y[2], y[4])
+    y[8], y[10] = _ratio(y[7], y[6]), _growth(y[7], y[9])
+    return y
+
+
 def coal_flux_rows(data: dict, P: dict) -> list:
-    """SAIL-only coal/washery/flux sections -- implemented in Task 3."""
-    return []
+    """SAIL-only sections from sail_mines_monthly (coal and flux are not
+    kept per mine yet): Coal Mines Production, Washery, Coal Despatch, Flux
+    Production, Flux Despatch. Always shown."""
+    def S(section, item):
+        return data["sail"].get((section, item), {})
+
+    def simple(section):
+        heading, items = _SAIL_SIMPLE[section]
+        series = [S(section, item) for item in items]
+        return ([_row(heading, "heading")]
+                + [_row(item, "item", values(s, P)) for item, s in zip(items, series)]
+                + [_row("Total", "total", values(combine(series), P))])
+
+    raw = values(S("washery", "Input Raw Coal"), P)
+    clean = values(S("washery", "Clean Coal"), P)
+    washery = [_row("WASHERY", "heading"), _row("Input Raw Coal", "item", raw),
+               _row("Clean Coal", "item", clean),
+               _row("Yield (%)", "item", _yield_values(clean, raw), decimals=1)]
+    return (simple("coal_prod") + washery + simple("coal_despatch")
+            + simple("flux_prod") + simple("flux_despatch"))
 
 
 def generate(month: str) -> dict:

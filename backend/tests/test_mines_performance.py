@@ -213,3 +213,58 @@ def test_group_and_sail_are_sums(gen):
 
 def test_empty_month_has_no_blocks(gen):
     assert mp.generate("2030-05")["blocks"] == []
+
+
+_SAIL_ROWS = [
+    ("2026-09", "coal_prod", "Raw Coking Coal", 100, 120), ("2026-09", "coal_prod", "Thermal Coal", 50, 0),
+    ("2026-09", "washery", "Input Raw Coal", 200, 250), ("2026-09", "washery", "Clean Coal", 90, 100),
+    ("2025-09", "washery", "Input Raw Coal", 100, None), ("2025-09", "washery", "Clean Coal", 40, None),
+    ("2026-09", "coal_despatch", "Clean Coal", 80, 85), ("2026-09", "coal_despatch", "Thermal", 30, 35),
+    ("2026-09", "flux_prod", "Limestone", 60, 70), ("2026-09", "flux_prod", "Dolomite", 25, 30),
+    ("2026-09", "flux_despatch", "Limestone", 55, 65), ("2026-09", "flux_despatch", "Dolomite", 20, 28),
+]
+
+
+@pytest.fixture
+def gen_sail(gen):
+    c = sqlite3.connect(gen)
+    c.executemany("INSERT INTO sail_mines_monthly VALUES (?,?,?,?,?)", _SAIL_ROWS)
+    c.commit()
+    c.close()
+    return gen
+
+
+def _sail_tail(d):
+    rows = _block(d, "SAIL")["rows"]
+    start = next(i for i, r in enumerate(rows) if r["label"] == "COAL MINES PRODUCTION")
+    return rows[start:]
+
+
+def test_coal_flux_structure(gen_sail):
+    tail = _sail_tail(mp.generate("2026-09"))
+    assert [(r["kind"], r["label"]) for r in tail] == [
+        ("heading", "COAL MINES PRODUCTION"), ("item", "Raw Coking Coal"), ("item", "Thermal Coal"), ("total", "Total"),
+        ("heading", "WASHERY"), ("item", "Input Raw Coal"), ("item", "Clean Coal"), ("item", "Yield (%)"),
+        ("heading", "COAL DESPATCH"), ("item", "Clean Coal"), ("item", "Thermal"), ("total", "Total"),
+        ("heading", "FLUX PRODUCTION"), ("item", "Limestone"), ("item", "Dolomite"), ("total", "Total"),
+        ("heading", "FLUX DESPATCH"), ("item", "Limestone"), ("item", "Dolomite"), ("total", "Total"),
+    ]
+    assert all(r["values"] == [None] * 11 for r in tail if r["kind"] == "heading")
+
+
+def test_coal_total_and_yield(gen_sail):
+    tail = _sail_tail(mp.generate("2026-09"))
+    coal_total = tail[3]["values"]
+    assert coal_total[2] == 150 and coal_total[1] == 120
+    y = next(r for r in tail if r["label"] == "Yield (%)")
+    assert y["decimals"] == 1
+    assert y["values"][2] == 45.0 and y["values"][1] == 40.0          # 90/200, 100/250
+    assert y["values"][3] == 112.5                                     # 45 / 40
+    assert y["values"][4] == 40.0 and y["values"][5] == 12.5           # CPLY 40/100; (45-40)/40
+
+
+def test_coal_flux_only_in_sail_block(gen_sail):
+    d = mp.generate("2026-09")
+    for b in d["blocks"]:
+        if b["kind"] != "sail":
+            assert "COAL MINES PRODUCTION" not in [r["label"] for r in b["rows"]]
