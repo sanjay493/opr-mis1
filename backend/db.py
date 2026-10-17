@@ -918,11 +918,19 @@ def init_db():
     """)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS mine_end_uses_master (
-            end_use_code  TEXT PRIMARY KEY,
-            end_use_name  TEXT NOT NULL,
-            sort_order    INTEGER NOT NULL
+            end_use_code   TEXT PRIMARY KEY,
+            end_use_name   TEXT NOT NULL,
+            sort_order     INTEGER NOT NULL,
+            tracks_actual  INTEGER NOT NULL DEFAULT 1
         )
     """)
+    cursor.execute("PRAGMA table_info(mine_end_uses_master)")
+    if "tracks_actual" not in [r[1] for r in cursor.fetchall()]:
+        cursor.execute("ALTER TABLE mine_end_uses_master ADD COLUMN tracks_actual INTEGER NOT NULL DEFAULT 1")
+    cursor.execute(
+        "INSERT OR IGNORE INTO mine_end_uses_master (end_use_code, end_use_name, sort_order, tracks_actual) "
+        "VALUES ('UNALLOCATED', 'Unallocated', 4, 0)"
+    )
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS mines_production_monthly (
             report_month  TEXT,
@@ -1022,11 +1030,11 @@ def init_db():
             ],
         )
         cursor.executemany(
-            "INSERT INTO mine_end_uses_master (end_use_code, end_use_name, sort_order) VALUES (?, ?, ?)",
+            "INSERT INTO mine_end_uses_master (end_use_code, end_use_name, sort_order, tracks_actual) VALUES (?, ?, ?, ?)",
             [
-                ("CAPTIVE", "Captive Plants", 1),
-                ("SALES", "Sales to 3rd Party", 2),
-                ("PELLET_CONV", "Pellet Conversion Agents", 3),
+                ("CAPTIVE", "Captive Plants", 1, 1),
+                ("SALES", "Sales to 3rd Party", 2, 1),
+                ("PELLET_CONV", "Pellet Conversion Agents", 3, 1),
             ],
         )
 
@@ -3527,8 +3535,8 @@ def get_mines_masters() -> Dict[str, Any]:
         }
         for r in cur.fetchall()
     ]
-    cur.execute("SELECT end_use_code, end_use_name FROM mine_end_uses_master ORDER BY sort_order")
-    end_uses = [{"end_use_code": r[0], "end_use_name": r[1]} for r in cur.fetchall()]
+    cur.execute("SELECT end_use_code, end_use_name, tracks_actual FROM mine_end_uses_master ORDER BY sort_order")
+    end_uses = [{"end_use_code": r[0], "end_use_name": r[1], "tracks_actual": bool(r[2])} for r in cur.fetchall()]
     conn.close()
     return {
         "groups": groups, "mines": mines, "materials": materials, "end_uses": end_uses,
@@ -3697,15 +3705,19 @@ def get_iron_ore_group_rollup_monthly(report_months: List[str]) -> Dict[str, Any
     mine_materials_master flags has_production=1 for) PLUS despatch-only
     components that have no production entry of their own, so they're
     counted at the point they leave the mine instead: Dump Fines despatched
-    to SALES or CAPTIVE end_use (currently only GUA sends Dump Fines
-    CAPTIVE — per direct instruction, 2026-09-17, that tonnage is now
+    to SALES, CAPTIVE or UNALLOCATED end_use (currently only GUA sends Dump
+    Fines CAPTIVE — per direct instruction, 2026-09-17, that tonnage is now
     counted as production too, reversing the 2026-09-12 exclusion), Tailings
-    despatched to end_use SALES only (legacy recovered material sold off,
-    not part of planned Lump/Fines output — no CAPTIVE flow exists for
-    Tailings), and Pellets despatch of any end_use (SAIL's pellet plants,
-    currently only DALLI, have no separate "production" entry at all —
-    their despatch figure, to SALES or CAPTIVE alike, IS their
-    production)."""
+    despatched to end_use SALES or UNALLOCATED (legacy recovered material
+    sold off, not part of planned Lump/Fines output — no CAPTIVE flow
+    exists for Tailings), and Pellets despatch of any end_use (SAIL's
+    pellet plants, currently only DALLI, have no separate "production"
+    entry at all — their despatch figure, to SALES or CAPTIVE alike, IS
+    their production). UNALLOCATED (a despatch-PLAN quantity with no
+    destination yet, per direct instruction 2026-10-17) counts toward Dump
+    Fines/Tailings here the same as a real destination would — it's
+    despatch that hasn't been attributed to Captive/Sales yet, not
+    despatch that didn't happen."""
     init_db()
     conn = connect()
     cur = conn.cursor()
@@ -3733,8 +3745,8 @@ def get_iron_ore_group_rollup_monthly(report_months: List[str]) -> Dict[str, Any
         JOIN mines_master mm ON mm.mine_code = d.mine_code
         WHERE d.report_month IN ({ph})
           AND (d.material_code = 'PELLETS'
-               OR (d.material_code = 'DUMP_FINES' AND d.end_use_code IN ('SALES', 'CAPTIVE'))
-               OR (d.material_code = 'TAILINGS' AND d.end_use_code = 'SALES'))
+               OR (d.material_code = 'DUMP_FINES' AND d.end_use_code IN ('SALES', 'CAPTIVE', 'UNALLOCATED'))
+               OR (d.material_code = 'TAILINGS' AND d.end_use_code IN ('SALES', 'UNALLOCATED')))
         GROUP BY d.report_month, mm.group_code
     """, report_months)
     for rm, group_code, actual in cur.fetchall():
@@ -3746,8 +3758,8 @@ def get_iron_ore_group_rollup_monthly(report_months: List[str]) -> Dict[str, Any
         JOIN mines_master mm ON mm.mine_code = pl.mine_code
         WHERE pl.report_month IN ({ph})
           AND (pl.material_code = 'PELLETS'
-               OR (pl.material_code = 'DUMP_FINES' AND pl.end_use_code IN ('SALES', 'CAPTIVE'))
-               OR (pl.material_code = 'TAILINGS' AND pl.end_use_code = 'SALES'))
+               OR (pl.material_code = 'DUMP_FINES' AND pl.end_use_code IN ('SALES', 'CAPTIVE', 'UNALLOCATED'))
+               OR (pl.material_code = 'TAILINGS' AND pl.end_use_code IN ('SALES', 'UNALLOCATED')))
         GROUP BY pl.report_month, mm.group_code
     """, report_months)
     for rm, group_code, plan in cur.fetchall():

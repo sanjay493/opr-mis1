@@ -42,6 +42,7 @@ export const REPORT_GROUPS = [
     icon: '⛏️',
     tabs: [
       { id: 'iron-ore-mines', label: 'Iron Ore Mines (Month-wise)', description: 'Mine-level production, despatch and sales, month-wise.' },
+      { id: 'mines-group-wise', label: 'Iron Ore Mines (Mine & Group-wise)', description: 'Mine-wise and group-wise Plan vs Actual, month-wise, for Production, Despatch (by Captive/Sales/Pellet Conversion) and Reported Production; Excel download.' },
       { id: 'mines-performance', label: 'Mines Production Performance', description: 'Mine, group and SAIL production, despatch, reported production and booked quantity against plan and last year (pages 5-6 layout); Excel and PDF download.' },
     ],
   },

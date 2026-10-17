@@ -341,7 +341,8 @@ function MinesProductionDespatchPageInner() {
       description={<>
         Monthly fresh Lump/Fines production, and despatch of every material (fresh + legacy Dump Fines/Pellets/Tailings) by
         Rail/Road to Captive Plants, Sales, or Pellet Conversion Agents — per mine. Despatch Plan is one target per
-        material/end-use (no Rail/Road split); only Actual despatch is tracked by mode.
+        material/end-use (no Rail/Road split); only Actual despatch is tracked by mode. Unallocated is a Plan-only
+        despatch quantity with no destination yet — it still counts toward a mine&apos;s Total Despatch Plan.
       </>}
     >
       <ContextBar actions={<SaveButton dirty={!!masters && dirty} saving={saving} onClick={handleSave}>Save All</SaveButton>}>
@@ -398,17 +399,22 @@ function MinesProductionDespatchPageInner() {
           </Section>
 
           {/* Despatch, one table per end-use. Actual is per Rail/Road;
-              Plan is a single column (no mode split) per direct instruction. */}
+              Plan is a single column (no mode split) per direct instruction.
+              An end-use with tracks_actual=false (e.g. UNALLOCATED — a
+              despatch-plan quantity with no destination yet) shows only the
+              Plan column: it still counts toward a mine's Total Despatch
+              Plan, just without being attributed to a Captive/Sales/Pellet
+              Conversion actual. */}
           {(masters.end_uses || []).map((eu) => (
             <Section key={eu.end_use_code} title={`Despatch — ${eu.end_use_name}`}>
               <table className={es.table}>
                 <thead>
                   <tr>
                     <th>Material</th>
-                    {(masters.transport_modes || []).map((mode) => (
+                    {eu.tracks_actual && (masters.transport_modes || []).map((mode) => (
                       <th key={mode.mode_code} className={es.c}>{mode.mode_name} Actual</th>
                     ))}
-                    <th className={es.c}>Plan (Rail+Road)</th>
+                    <th className={es.c}>{eu.tracks_actual ? 'Plan (Rail+Road)' : 'Plan'}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -418,7 +424,7 @@ function MinesProductionDespatchPageInner() {
                     return (
                       <tr key={material_code}>
                         <td className={es.itemCell}>{material_name}</td>
-                        {(masters.transport_modes || []).map((mode) => {
+                        {eu.tracks_actual && (masters.transport_modes || []).map((mode) => {
                           const changed = isDespChanged(material_code, mode.mode_code, eu.end_use_code);
                           const e = editsDesp[despatchActualKey(material_code, mode.mode_code, eu.end_use_code)] || {};
                           return (

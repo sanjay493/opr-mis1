@@ -638,10 +638,15 @@ CREATE TABLE IF NOT EXISTS mine_materials_master (
     sort_order                    INT         NOT NULL
 ) ENGINE=InnoDB;
 
+-- tracks_actual = 0 means the end-use is Plan-only (no Rail/Road Actual
+-- entered for it) -- e.g. UNALLOCATED, a despatch-plan quantity with no
+-- destination yet, entered so it still counts toward a mine's Total
+-- Despatch Plan without being attributed to Captive/Sales/Pellet Conversion.
 CREATE TABLE IF NOT EXISTS mine_end_uses_master (
-    end_use_code  VARCHAR(16) PRIMARY KEY,
-    end_use_name  VARCHAR(48) NOT NULL,
-    sort_order    INT         NOT NULL
+    end_use_code   VARCHAR(16) PRIMARY KEY,
+    end_use_name   VARCHAR(48) NOT NULL,
+    sort_order     INT         NOT NULL,
+    tracks_actual  TINYINT(1)  NOT NULL DEFAULT 1
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS mines_production_monthly (
@@ -731,8 +736,9 @@ INSERT IGNORE INTO mine_materials_master
  ('LUMP','Lump','FRESH',1,1,1), ('FINES','Fines','FRESH',1,1,2),
  ('DUMP_FINES','Dump Fines','LEGACY',0,1,3), ('PELLETS','Pellets','LEGACY',0,1,4), ('TAILINGS','Tailings','LEGACY',0,1,5);
 
-INSERT IGNORE INTO mine_end_uses_master (end_use_code, end_use_name, sort_order) VALUES
- ('CAPTIVE','Captive Plants',1), ('SALES','Sales to 3rd Party',2), ('PELLET_CONV','Pellet Conversion Agents',3);
+INSERT IGNORE INTO mine_end_uses_master (end_use_code, end_use_name, sort_order, tracks_actual) VALUES
+ ('CAPTIVE','Captive Plants',1,1), ('SALES','Sales to 3rd Party',2,1), ('PELLET_CONV','Pellet Conversion Agents',3,1),
+ ('UNALLOCATED','Unallocated',4,0);
 
 -- "Details of Rakes Detention Plant Wise" (RAKE_DETENTION_* sentinel pages)
 -- — SAIL Rail Movement Cell's "Average Plant Detention Report". Pure
