@@ -20,6 +20,7 @@ const VIEWS = {
   'special-steel-physical': dynamic(() => import('./special-steel-physical/View'), { loading }),
   'ipt-fy': dynamic(() => import('./ipt-fy/View'), { loading }),
   'iron-ore-mines': dynamic(() => import('./iron-ore-mines/View'), { loading }),
+  'mines-performance': dynamic(() => import('./mines-performance/View'), { loading }),
   'bf-benchmark': dynamic(() => import('./bf-benchmark/View'), { loading }),
   'production-loss-analysis': dynamic(() => import('./production-loss-analysis/View'), { loading }),
   'breakdown-analysis': dynamic(() => import('./breakdown-analysis/View'), { loading }),
