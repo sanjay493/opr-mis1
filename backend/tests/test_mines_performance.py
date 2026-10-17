@@ -294,3 +294,12 @@ def test_inactive_mine_history_counted(gen):
     assert "Delta" in names and "Epsilon" not in names
     assert _val(_block(d, "O Group"), "Lump", 4) == 999
     assert _val(_block(d, "SAIL"), "Lump", 4) == 1079           # 80 (A) + 999 (D)
+
+
+def test_block_short_names(gen):
+    d = mp.generate("2026-09")
+    shorts = {b["name"]: b["short"] for b in d["blocks"]}
+    assert shorts["Alpha"] == "ALP"                 # no listed short name: first 3 letters
+    assert shorts["J Group"] == "JG" and shorts["SAIL"] == "SAIL"
+    assert mp.SHORT_NAMES["KIRIBURU"] == "KBR" and mp.SHORT_NAMES["MEGHAHATUBURU"] == "MBR"
+    assert len(mp.SHORT_NAMES) == 11

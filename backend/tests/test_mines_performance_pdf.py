@@ -28,38 +28,106 @@ DATA = {
 }
 
 
+def _segs(segments):
+    return [(s["b"], s["start"], s["end"], s["new_page"]) for s in segments]
+
+
+def test_paginate_all_fit():
+    assert _segs(mpp.paginate([[10] * 3, [10] * 4], [["item"] * 3, ["item"] * 4], 100, 120, set())) == [
+        (0, 0, 3, False), (1, 0, 4, False)]
+
+
+def test_paginate_splits_to_fill_page():
+    # 6 rows fit in the 65 left on page 1; the other 4 continue on page 2
+    assert _segs(mpp.paginate([[10] * 10], [["item"] * 10], 65, 200, set())) == [
+        (0, 0, 6, False), (0, 6, 10, True)]
+
+
+def test_paginate_keeps_three_rows_on_each_side():
+    # 9 rows would fit, but that leaves 1 for the next page: split after 7
+    assert _segs(mpp.paginate([[10] * 10], [["item"] * 10], 95, 200, set())) == [
+        (0, 0, 7, False), (0, 7, 10, True)]
+
+
+def test_paginate_moves_block_when_fewer_than_three_rows_fit():
+    assert _segs(mpp.paginate([[10] * 2, [10] * 8], [["item"] * 2, ["item"] * 8], 45, 200, set())) == [
+        (0, 0, 2, False), (1, 0, 8, True)]
+
+
+def test_paginate_does_not_end_a_part_on_a_heading():
+    kinds = [["item", "item", "item", "item", "item", "heading", "item", "item", "item", "item"]]
+    assert _segs(mpp.paginate([[10] * 10], kinds, 65, 200, set())) == [
+        (0, 0, 5, False), (0, 5, 10, True)]
+
+
+def test_paginate_forced_new_page_for_sail():
+    assert _segs(mpp.paginate([[10] * 3, [10] * 3], [["item"] * 3, ["item"] * 3], 500, 500, {1})) == [
+        (0, 0, 3, False), (1, 0, 3, True)]
+
+
+def test_paginate_block_longer_than_a_page():
+    assert _segs(mpp.paginate([[10] * 25], [["item"] * 25], 100, 100, set())) == [
+        (0, 0, 10, False), (0, 10, 20, True), (0, 20, 25, True)]
+
+
+def test_split_block_uses_short_name_on_each_part():
+    data = {"labels": LABELS, "pct_idx": [3, 5, 8, 10], "blocks": [
+        {"name": "Kiriburu", "short": "KBR", "kind": "mine", "group": "JGoM", "note": None,
+         "rows": [_row(f"r{j}", "item", [1.0] * 11) for j in range(8)]},
+        {"name": "Gua", "short": "GUA", "kind": "mine", "group": "JGoM", "note": None,
+         "rows": [_row("g", "item", [1.0] * 11)]}]}
+    segments = [{"b": 0, "start": 0, "end": 4, "new_page": False},
+                {"b": 0, "start": 4, "end": 8, "new_page": True},
+                {"b": 1, "start": 0, "end": 1, "new_page": False}]
+    html = mpp.build_html(data, 0, COLORS, segments)
+    assert html.count("<div>KBR</div>") == 2 and "Kiriburu" not in html
+    assert "<div>Gua</div>" in html                       # not split: full name
+    assert html.count('rowspan="4"') == 2
+    assert html.count('<tbody class="blk" style="break-before: page">') == 1
+
+
 def test_one_table_one_header_tbody_per_block():
     html = mpp.build_html(DATA, 0, COLORS)
     assert html.count("<table") == 1 and html.count("<thead>") == 1
     assert html.count('<tbody class="blk') == 2
-    assert '<tbody class="blk sail">' in html
+    assert '<tbody class="blk sail" style="break-before: page">' in html
     assert "Coal and flux note." in html
     assert LABELS["title"] in html
 
 
-def test_pdf_header_on_every_page_blocks_never_split():
-    """A real render: the column header repeats at the top of every page
-    (once, not per block), no block is split across pages, and the SAIL
-    block starts a new page."""
+def test_pdf_fills_pages_and_splits_mines_with_three_rows_each_side():
+    """A real render: pages are filled to the printable height (a mine
+    continues onto the next page), a split mine keeps at least 3 rows on
+    each page, the column header repeats on every page, and SAIL starts a
+    new page."""
     import io
 
     import pdfplumber
-    blocks = [{"name": f"M{i}", "kind": "mine", "group": "G", "note": None,
+    blocks = [{"name": f"M{i}", "short": f"S{i}", "kind": "mine", "group": "G", "note": None,
                "rows": [_row("I/ORE FRESH PRODUCTION", "heading")]
                + [_row(f"r{i}x{j}", "item", [float(j)] * 11) for j in range(9)]}
               for i in range(14)]
-    blocks.append({"name": "SAIL", "kind": "sail", "group": None, "note": None,
+    blocks.append({"name": "SAIL", "short": "SAIL", "kind": "sail", "group": None, "note": None,
                    "rows": [_row("sailrow", "item", [1.0] * 11)]})
-    pdf = mpp.render(mpp.build_html({"labels": LABELS, "pct_idx": [3, 5, 8, 10], "blocks": blocks}, 0, COLORS))
+    pdf = mpp.render_pdf({"labels": LABELS, "pct_idx": [3, 5, 8, 10], "blocks": blocks}, 0, COLORS)
     with pdfplumber.open(io.BytesIO(pdf)) as d:
-        pages = [set(w["text"] for w in p.extract_words()) for p in d.pages]
-    assert len(pages) >= 3
-    assert all("ITEM" in words for words in pages)
+        words = [p.extract_words() for p in d.pages]
+        height = d.pages[0].height
+    pages = [set(w["text"] for w in ws) for ws in words]
+    assert all("ITEM" in p for p in pages)
+    sail_page = next(n for n, p in enumerate(pages) if "sailrow" in p)
+    assert sail_page == len(pages) - 1 and not any(f"r{i}x0" in pages[sail_page] for i in range(14))
+    bottom_room = height - 7 / 25.4 * 72                    # page bottom less the 7 mm margin
+    for n in range(sail_page - 1):                          # every full page before the last mine page
+        assert max(w["bottom"] for w in words[n]) > bottom_room - 50, f"page {n + 1} not filled"
+    assert any(len({n for n, p in enumerate(pages) if any(f"r{i}x{j}" in p for j in range(9))}) > 1
+               for i in range(14)), "no mine was split -- pages are not being filled"
     for i in range(14):
-        on = [n for n, words in enumerate(pages) if f"r{i}x0" in words or f"r{i}x8" in words]
-        assert len(set(on)) == 1, f"block M{i} split across pages {on}"
-    sail_page = next(n for n, words in enumerate(pages) if "sailrow" in words)
-    assert not any(f"r{i}x0" in pages[sail_page] for i in range(14))
+        per_page = [sum(f"r{i}x{j}" in p for j in range(9)) + ("I/ORE" in p and f"r{i}x0" in p)
+                    for p in pages]
+        parts = [c for c in per_page if c]
+        if len(parts) > 1:
+            assert min(parts) >= 3, f"mine M{i} split {parts}"
 
 
 def test_frame_closes_at_each_page_end():
@@ -71,7 +139,7 @@ def test_frame_closes_at_each_page_end():
     blocks = [{"name": f"M{i}", "kind": "mine", "group": "G", "note": None,
                "rows": [_row(f"r{i}x{j}", "item", [float(j)] * 11) for j in range(12)]}
               for i in range(8)]
-    pdf = mpp.render(mpp.build_html({"labels": LABELS, "pct_idx": [3, 5, 8, 10], "blocks": blocks}, 0, COLORS))
+    pdf = mpp.render_pdf({"labels": LABELS, "pct_idx": [3, 5, 8, 10], "blocks": blocks}, 0, COLORS)
     with pdfplumber.open(io.BytesIO(pdf)) as d:
         assert len(d.pages) >= 2
         for p in d.pages:

@@ -64,9 +64,9 @@ def test_xlsx_layout(tc):
 
 def test_pdf(tc, monkeypatch):
     seen = {}
-    monkeypatch.setattr(app_mod.mines_performance_pdf, "render",
-                        lambda html: seen.setdefault("html", html) and b"%PDF-fake")
+    monkeypatch.setattr(app_mod.mines_performance_pdf, "render_pdf",
+                        lambda data, decimals, colors: seen.update(data=data, decimals=decimals) or b"%PDF-fake")
     r = tc.get("/api/mines-performance/pdf?month=2026-09&decimals=1")
     assert r.status_code == 200 and r.content == b"%PDF-fake"
     assert r.headers["content-type"] == "application/pdf"
-    assert "Kiriburu" in seen["html"]
+    assert seen["data"] is DATA and seen["decimals"] == 1

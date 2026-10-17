@@ -1,11 +1,20 @@
 """A4 PDF of the Mines Production Performance report
 (mines_performance.generate) for /reports/mines. Pages 5-6 columns, with the
-fonts and border rules of plant_performance_pdf.py: separate borders, so the
-table's own border is the black frame and each cell draws only its right
-edge -- no light line between rows; black rules above section headings and
-totals. One table per block, so each block carries the column header and is
-never split across pages; the SAIL block starts a new page. Not part of the
-layout-guarded monthly report. Colours come from colors_config.json."""
+fonts and border rules of plant_performance_pdf.py: separate borders, each
+cell drawing only its right edge -- no light line between rows; black rules
+above section headings and totals. One table, its header repeated at the top
+of every page. Not part of the layout-guarded monthly report. Colours come
+from colors_config.json.
+
+Pages are filled to the printable height (per direct instruction): a mine
+continues onto the next page rather than starting a new one. Chromium will
+not split the tall vertical-name cell (a rowspan) across pages, so the
+pagination is done here instead -- render_pdf measures every row in
+Chromium, paginate() decides where each page ends (at least 3 of a mine's
+rows on each side of a break, never a part ending on a heading), and each
+part becomes its own <tbody> with its own name cell, the short name
+(KBR, MBR, ...) on every part of a split mine. The SAIL block starts a new
+page."""
 from html import escape
 
 from plant_performance_pdf import _fonts, _p, _q
@@ -35,15 +44,68 @@ def _head(L: dict) -> str:
 _COLS = '<colgroup><col class="c-ent"><col class="c-lbl">' + '<col class="c-num">' * 11 + "</colgroup>"
 
 
-def _block(b: dict, pct: set, d: int) -> str:
-    """One block as its own <tbody> of the single report table: Chromium
-    keeps a tbody with break-inside: avoid on one page and repeats the
-    table's one <thead> at the top of every page."""
+_MIN_ROWS = 3   # rows of a mine kept on each side of a page break
+
+
+def paginate(heights: list, kinds: list, first_avail: float, avail: float, new_page_blocks: set) -> list:
+    """Split blocks into page parts. heights/kinds: per block, each row's
+    height and kind; first_avail / avail: room for body rows on the first /
+    any later page; new_page_blocks: block indices that start a new page.
+    Returns [{"b", "start", "end", "new_page"}] -- rows start..end-1 of
+    block b, new_page when the part starts a new page."""
+    segs = []
+    remaining, fresh = first_avail, True       # fresh: nothing on this page yet
+
+    def put(b, start, end, new_page):
+        segs.append({"b": b, "start": start, "end": end, "new_page": new_page})
+
+    for b, (hs, ks) in enumerate(zip(heights, kinds)):
+        new_page = False
+        if b in new_page_blocks and not fresh:
+            remaining, new_page, fresh = avail, True, True
+        start, n = 0, len(hs)
+        while start < n:
+            rest = sum(hs[start:])
+            if rest <= remaining:
+                put(b, start, n, new_page)
+                remaining -= rest
+                fresh = False
+                break
+            k, acc = 0, 0.0
+            while start + k < n and acc + hs[start + k] <= remaining:
+                acc += hs[start + k]
+                k += 1
+            fit = k
+            k = min(k, n - start - _MIN_ROWS)
+            while k >= _MIN_ROWS and ks[start + k - 1] in ("heading", "subheading"):
+                k -= 1
+            if k < _MIN_ROWS:
+                if not fresh:                       # not enough room here: next page
+                    remaining, new_page, fresh = avail, True, True
+                    continue
+                k = max(fit, 1)                     # a page can't hold 3 rows: place what fits
+            put(b, start, start + k, new_page)
+            start += k
+            remaining, new_page, fresh = avail, True, True
+    return segs
+
+
+def _default_segments(data: dict) -> list:
+    """One part per block; only SAIL starts a new page."""
+    return [{"b": i, "start": 0, "end": len(b["rows"]), "new_page": b["kind"] == "sail" and i > 0}
+            for i, b in enumerate(data["blocks"])]
+
+
+def _segment(b: dict, seg: dict, split: bool, pct: set, d: int) -> str:
+    """One page part of a block as its own <tbody>, with its own name cell
+    (the short name when the block is split across pages)."""
+    rows = b["rows"][seg["start"]:seg["end"]]
+    name = b.get("short", b["name"]) if split else b["name"]
     trs = []
-    for i, r in enumerate(b["rows"]):
+    for i, r in enumerate(rows):
         cells = []
         if i == 0:
-            cells.append(f'<td rowspan="{len(b["rows"])}" class="ent"><div>{escape(b["name"], quote=False)}</div></td>')
+            cells.append(f'<td rowspan="{len(rows)}" class="ent"><div>{escape(name, quote=False)}</div></td>')
         cells.append(f'<td class="lbl">{escape(r["label"], quote=False)}</td>')
         qd = r["decimals"] if r["decimals"] is not None else d
         for vi, v in enumerate(r["values"]):
@@ -51,11 +113,13 @@ def _block(b: dict, pct: set, d: int) -> str:
             cells.append(f'<td class="{_cls(vi)}">{text}</td>')
         trs.append(f'<tr class="{r["kind"]}">{"".join(cells)}</tr>')
     cls = "blk sail" if b["kind"] == "sail" else "blk"
-    return f'<tbody class="{cls}">{"".join(trs)}</tbody>'
+    style = ' style="break-before: page"' if seg["new_page"] else ""
+    return f'<tbody class="{cls}"{style}>{"".join(trs)}</tbody>'
 
 
-def build_html(data: dict, decimals: int, colors: dict) -> str:
-    """data: mines_performance.generate(); colors: colors_loader.load_colors_config()."""
+def build_html(data: dict, decimals: int, colors: dict, segments: list = None) -> str:
+    """data: mines_performance.generate(); colors: colors_loader.load_colors_config();
+    segments: paginate()'s page parts (default: one part per block)."""
     def c(k, dflt):  # defaults mirror colors_loader._DEFAULTS
         return colors.get(k, dflt)
     blk = c("border_black", "#000000")
@@ -74,7 +138,6 @@ def build_html(data: dict, decimals: int, colors: dict) -> str:
   .unit {{ font-size: 8.5pt; font-weight: 500; }}
   .empty {{ font-size: 10pt; font-weight: 700; margin-top: 12px; }}
   tbody.blk {{ break-inside: avoid; }}
-  tbody.blk.sail {{ break-before: page; }}
   .note {{ font-size: 8pt; font-style: italic; margin: 2px 0 0; }}
   /* The black frame is drawn by the cells, not the table: a table border
      runs on down the empty bottom of a page the table continues from.
@@ -127,23 +190,53 @@ def build_html(data: dict, decimals: int, colors: dict) -> str:
     if data["blocks"]:
         notes = "".join(f'<p class="note">{escape(b["note"], quote=False)}</p>'
                         for b in data["blocks"] if b.get("note"))
+        segments = segments if segments is not None else _default_segments(data)
+        split = {s["b"] for s in segments} - {s["b"] for s in segments if s["start"] == 0 and
+                                                s["end"] == len(data["blocks"][s["b"]]["rows"])}
         body = (f'<table class="d{decimals}">{_COLS}{_head(L)}'
-                + "".join(_block(b, pct, decimals) for b in data["blocks"])
+                + "".join(_segment(data["blocks"][s["b"]], s, s["b"] in split, pct, decimals)
+                          for s in segments)
                 + f"</table>{notes}")
     else:
         body = f'<p class="empty">No mines data for {escape(L["month"], quote=False)}.</p>'
     return f'<!doctype html><html><head><meta charset="utf-8"><style>{css}</style></head><body>{head}{body}</body></html>'
 
 
-def render(html: str) -> bytes:
-    """Synchronous -- call from a plain `def` route (FastAPI threadpool)."""
+# A4 height less the 7 mm top and bottom margins, in CSS px (96 dpi); a few
+# px kept spare so a rounding difference never pushes a part to the next page.
+_PAGE_H = (297 - 7 - 7) / 25.4 * 96
+_SPARE = 6
+_PRINT_W = round((210 - 10 - 10) / 25.4 * 96)
+
+_MEASURE_JS = """() => {
+    const t = document.querySelector('table');
+    return {top: t.getBoundingClientRect().top, thead: t.tHead.getBoundingClientRect().height,
+            rows: [...t.tBodies].map(tb => [...tb.rows].map(r => r.getBoundingClientRect().height))};
+}"""
+
+
+def _load(page, html: str):
+    page.set_content(html, wait_until="load")
+    page.evaluate("document.fonts.ready.then(() => true)")
+
+
+def render_pdf(data: dict, decimals: int, colors: dict) -> bytes:
+    """Measure every row at the printable width, paginate, and print.
+    Synchronous -- call from a plain `def` route (FastAPI threadpool)."""
     from playwright.sync_api import sync_playwright
     with sync_playwright() as pw:
         browser = pw.chromium.launch()
-        page = browser.new_page()
+        page = browser.new_page(viewport={"width": _PRINT_W, "height": 1000})
         page.emulate_media(media="print")
-        page.set_content(html, wait_until="load")
-        page.evaluate("document.fonts.ready.then(() => true)")
+        segments = None
+        if data["blocks"]:
+            _load(page, build_html(data, decimals, colors))
+            m = page.evaluate(_MEASURE_JS)
+            kinds = [[r["kind"] for r in b["rows"]] for b in data["blocks"]]
+            sail = {i for i, b in enumerate(data["blocks"]) if b["kind"] == "sail"}
+            segments = paginate(m["rows"], kinds, _PAGE_H - m["top"] - m["thead"] - _SPARE,
+                                _PAGE_H - m["thead"] - _SPARE, sail)
+        _load(page, build_html(data, decimals, colors, segments))
         pdf = page.pdf(format="A4", landscape=False, print_background=True, margin=_MARGIN)
         browser.close()
     return pdf

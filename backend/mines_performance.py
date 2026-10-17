@@ -102,6 +102,16 @@ REPORTED_PARTS = (
 
 SAIL_NOTE = "Coal and flux are shown at SAIL level; mine-level figures will be added."
 
+# Short names (per direct instruction, 2026-10-17) shown in the PDF's
+# vertical name column on each part of a mine split across pages. A mine
+# not listed falls back to the first three letters of its name; a group
+# uses its group code.
+SHORT_NAMES = {
+    "KIRIBURU": "KBR", "MEGHAHATUBURU": "MBR", "GUA": "GUA", "MANOHARPUR": "MPR",
+    "BOLANI": "BOL", "BARSUA": "BAR", "TALDIH": "TAL", "KALTA": "KAL",
+    "RAJHARA": "RAJ", "DALLI": "DAL", "ROWGHAT": "ROW",
+}
+
 
 def _f(v):
     """MySQL can hand back Decimal; arithmetic here is all float."""
@@ -305,17 +315,19 @@ def generate(month: str) -> dict:
     # every mine either way.
     blocks = []
 
-    def add(name, kind, group, rows, note=None):
+    def add(name, short, kind, group, rows, note=None):
         if rows:
-            blocks.append({"name": name, "kind": kind, "group": group, "note": note, "rows": rows})
+            blocks.append({"name": name, "short": short, "kind": kind, "group": group,
+                           "note": note, "rows": rows})
 
     for gcode, gname in data["groups"]:
         gmines = [code for code, _, g, _ in data["mines"] if g == gcode]
         for code, name, g, _ in data["mines"]:
             if g == gcode:
-                add(name, "mine", gcode, iron_ore_rows(data, [code], P))
+                add(name, SHORT_NAMES.get(code, name[:3].upper()), "mine", gcode,
+                    iron_ore_rows(data, [code], P))
         if gmines:
-            add(gname, "group", gcode, iron_ore_rows(data, gmines, P))
+            add(gname, gcode, "group", gcode, iron_ore_rows(data, gmines, P))
     all_mines = [code for code, _, _, _ in data["mines"]]
-    add("SAIL", "sail", None, iron_ore_rows(data, all_mines, P) + coal_flux_rows(data, P), SAIL_NOTE)
+    add("SAIL", "SAIL", "sail", None, iron_ore_rows(data, all_mines, P) + coal_flux_rows(data, P), SAIL_NOTE)
     return {"labels": labels(month), "pct_idx": list(PCT_IDX), "blocks": blocks}

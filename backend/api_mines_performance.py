@@ -146,8 +146,7 @@ def mines_performance_pdf_download(month: str = Query(...), decimals: int = Quer
     # the synchronous Playwright render must not block the event loop.
     _check_month(month)
     _check_decimals(decimals)
-    html = mines_performance_pdf.build_html(_data(month), decimals, load_colors_config())
-    content = mines_performance_pdf.render(html)
+    content = mines_performance_pdf.render_pdf(_data(month), decimals, load_colors_config())
     fname = f"Mines_Performance_{month}.pdf"
     return Response(content, media_type="application/pdf",
                     headers={"Content-Disposition": f'attachment; filename="{fname}"'})
