@@ -216,3 +216,24 @@ def test_only_fy_plan_column_is_tinted():
     assert classes[0] == "plan" and classes[1] == "" and classes[6] == ""
     head = html[html.index("<thead>"):html.index("</thead>")]
     assert head.count('class="plan"') == 1                    # only the FY Plan header
+
+
+def test_choose_names_short_only_on_parts_too_short_for_the_full_name():
+    segments = [{"b": 0, "start": 0, "end": 7, "new_page": False},
+                {"b": 0, "start": 7, "end": 10, "new_page": True},
+                {"b": 1, "start": 0, "end": 2, "new_page": False}]
+    heights = [[15] * 10, [15] * 2]
+    out = mpp.choose_names(segments, heights, [80, 80])
+    # part 1: 105 px of rows holds the 80 px name; part 2: 45 px does not;
+    # block 1 is not split, so it keeps its full name even though it is short
+    assert [s["short"] for s in out] == [False, True, False]
+
+
+def test_build_html_follows_each_segments_name_choice():
+    data = {"labels": LABELS, "pct_idx": [3, 5, 8, 10], "blocks": [
+        {"name": "Kiriburu", "short": "KBR", "kind": "mine", "group": "JGoM", "note": None,
+         "rows": [_row(f"r{j}", "item", [1.0] * 11) for j in range(8)]}]}
+    segments = [{"b": 0, "start": 0, "end": 5, "new_page": False, "short": False},
+                {"b": 0, "start": 5, "end": 8, "new_page": True, "short": True}]
+    html = mpp.build_html(data, 0, COLORS, segments)
+    assert html.count("<div>Kiriburu</div>") == 1 and html.count("<div>KBR</div>") == 1

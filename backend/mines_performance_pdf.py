@@ -91,6 +91,22 @@ def paginate(heights: list, kinds: list, first_avail: float, avail: float, new_p
     return segs
 
 
+_NAME_PAD = 6   # px of breathing room around a vertical name
+
+
+def choose_names(segments: list, heights: list, name_lengths: list) -> list:
+    """Per part of a split block: the short name only when that part's rows
+    are too short for the full vertical name (per direct instruction); a
+    block that is not split always keeps its full name. name_lengths: each
+    block's full name, printed vertically, in px."""
+    parts = {}
+    for s in segments:
+        parts[s["b"]] = parts.get(s["b"], 0) + 1
+    return [{**s, "short": parts[s["b"]] > 1 and
+             sum(heights[s["b"]][s["start"]:s["end"]]) < name_lengths[s["b"]] + _NAME_PAD}
+            for s in segments]
+
+
 def _default_segments(data: dict) -> list:
     """One part per block; only SAIL starts a new page."""
     return [{"b": i, "start": 0, "end": len(b["rows"]), "new_page": b["kind"] == "sail" and i > 0}
@@ -101,7 +117,8 @@ def _segment(b: dict, seg: dict, split: bool, pct: set, d: int) -> str:
     """One page part of a block as its own <tbody>, with its own name cell
     (the short name when the block is split across pages)."""
     rows = b["rows"][seg["start"]:seg["end"]]
-    name = b.get("short", b["name"]) if split else b["name"]
+    use_short = seg.get("short", split)          # choose_names' choice, else: split -> short
+    name = b.get("short", b["name"]) if use_short else b["name"]
     trs = []
     for i, r in enumerate(rows):
         cells = []
@@ -212,7 +229,14 @@ _PRINT_W = round((210 - 10 - 10) / 25.4 * 96)
 _MEASURE_JS = """() => {
     const t = document.querySelector('table');
     return {top: t.getBoundingClientRect().top, thead: t.tHead.getBoundingClientRect().height,
-            rows: [...t.tBodies].map(tb => [...tb.rows].map(r => r.getBoundingClientRect().height))};
+            rows: [...t.tBodies].map(tb => [...tb.rows].map(r => r.getBoundingClientRect().height)),
+            // each block's full name as printed (vertical): the text's own
+            // extent, not the div's, which can stretch to the cell
+            names: [...t.tBodies].map(tb => {
+                const r = document.createRange();
+                r.selectNodeContents(tb.querySelector('td.ent div'));
+                return r.getBoundingClientRect().height;
+            })};
 }"""
 
 
@@ -237,6 +261,7 @@ def render_pdf(data: dict, decimals: int, colors: dict) -> bytes:
             sail = {i for i, b in enumerate(data["blocks"]) if b["kind"] == "sail"}
             segments = paginate(m["rows"], kinds, _PAGE_H - m["top"] - m["thead"] - _SPARE,
                                 _PAGE_H - m["thead"] - _SPARE, sail)
+            segments = choose_names(segments, m["rows"], m["names"])
         _load(page, build_html(data, decimals, colors, segments))
         pdf = page.pdf(format="A4", landscape=False, print_background=True, margin=_MARGIN)
         browser.close()
