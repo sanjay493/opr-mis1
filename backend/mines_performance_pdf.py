@@ -24,9 +24,9 @@ def _head(L: dict) -> str:
     return (
         '<thead><tr><th rowspan="2" class="ent"></th><th rowspan="2" class="l">Item</th>'
         f'<th rowspan="2" class="plan">{L["fy"]}<br>Plan</th><th colspan="3">{L["month"]}</th>'
-        f'<th rowspan="2">{L["cply"]}<br>Act.</th><th rowspan="2" class="gr">%Gr.<br>{L["cply"]}</th>'
-        f'<th colspan="3">{L["ytd"]}</th><th rowspan="2">{L["ytd_cply"]}<br>Act.</th>'
-        f'<th rowspan="2" class="gr">%Gr.<br>{L["ytd_cply"]}</th></tr>'
+        f'<th rowspan="2" class="sm">{L["cply"]}<br>Act.</th><th rowspan="2" class="gr sm">%Gr.<br>{L["cply"]}</th>'
+        f'<th colspan="3">{L["ytd"]}</th><th rowspan="2" class="sm">{L["ytd_cply"]}<br>Act.</th>'
+        f'<th rowspan="2" class="gr sm">%Gr.<br>{L["ytd_cply"]}</th></tr>'
         '<tr><th class="plan">Plan</th><th class="act">Actual</th><th>%Ful</th>'
         '<th class="plan">Plan</th><th class="act">Actual</th><th>%Ful</th></tr></thead>'
     )
@@ -49,7 +49,7 @@ def _block(b: dict, L: dict, pct: set, d: int) -> str:
         trs.append(f'<tr class="{r["kind"]}">{"".join(cells)}</tr>')
     note = f'<p class="note">{escape(b["note"], quote=False)}</p>' if b.get("note") else ""
     cls = "blk sail" if b["kind"] == "sail" else "blk"
-    return (f'<section class="{cls}"><table>{_COLS}{_head(L)}<tbody>{"".join(trs)}</tbody></table>'
+    return (f'<section class="{cls}"><table class="d{d}">{_COLS}{_head(L)}<tbody>{"".join(trs)}</tbody></table>'
             f"{note}</section>")
 
 
@@ -84,9 +84,18 @@ def build_html(data: dict, decimals: int, colors: dict) -> str:
         border-right: 1px solid {c("border_medium", "#94a3b8")};
         background: {c("table_header_bg", "transparent")}; }}
   th.l {{ text-align: left; padding-left: 3px; }}
+  /* last-year headers ("Apr-Sep'25 Act.", "%Gr. Apr-Sep'25") are too wide for
+     a value column at 8.2pt -- smaller and allowed to wrap, as page 4's
+     hdr-small / plant_performance_pdf.py's th.sm */
+  th.sm {{ font-size: 6.8pt; line-height: 0.95; padding: 1px 0; white-space: normal; }}
   th[colspan] {{ border-bottom: 1px solid {c("border_medium", "#94a3b8")}; }}
   thead tr:last-child th, thead tr:first-child th[rowspan] {{ border-bottom: 1px solid {blk}; }}
   td {{ font-size: 8.5pt; padding: 1.8px 2px; text-align: right; border: none; border-right: 1px solid {line}; }}
+  /* value columns are 13 mm wide: a 5-digit SAIL figure needs a smaller font
+     the more decimals are shown (d0..d3 = decimals chosen) */
+  table.d1 td:not(.lbl):not(.ent) {{ font-size: 8pt; }}
+  table.d2 td:not(.lbl):not(.ent) {{ font-size: 7.4pt; padding: 1.8px 1px; }}
+  table.d3 td:not(.lbl):not(.ent) {{ font-size: 6.8pt; padding: 1.8px 1px; }}
   thead tr:first-child > :last-child, tbody tr > :last-child {{ border-right: none; }}
   td.ent {{ border-right: 1px solid {blk}; text-align: center; vertical-align: middle; padding: 2px 0; }}
   td.ent div {{ writing-mode: vertical-rl; transform: rotate(180deg); margin: 0 auto;

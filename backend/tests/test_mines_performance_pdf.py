@@ -50,6 +50,46 @@ def test_colours_from_config():
     assert "#ABCDEF" in html
 
 
+def test_header_cells_fit_their_columns():
+    """Laid out at the A4 printable width (190 mm = 718 px), no header cell's
+    text overflows its column -- 'APR-SEP'25 ACT.' / '%GR. APR-SEP'25' were
+    being cropped in the narrow value columns."""
+    from playwright.sync_api import sync_playwright
+    html = mpp.build_html(DATA, 0, COLORS)
+    with sync_playwright() as pw:
+        b = pw.chromium.launch()
+        p = b.new_page(viewport={"width": 718, "height": 1077})
+        p.emulate_media(media="print")
+        p.set_content(html, wait_until="load")
+        clipped = p.evaluate("""() => [...document.querySelectorAll('th')]
+            .filter(th => th.scrollWidth > th.clientWidth + 0.5).map(th => th.textContent)""")
+        b.close()
+    assert clipped == []
+
+
+def _clipped_cells(html):
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as pw:
+        b = pw.chromium.launch()
+        p = b.new_page(viewport={"width": 718, "height": 1077})
+        p.emulate_media(media="print")
+        p.set_content(html, wait_until="load")
+        clipped = p.evaluate("""() => [...document.querySelectorAll('td:not(.lbl):not(.ent)')]
+            .filter(td => td.scrollWidth > td.clientWidth + 0.5).map(td => td.textContent)""")
+        b.close()
+    return clipped
+
+
+def test_large_values_fit_at_three_decimals():
+    """SAIL-sized figures (5 digits) at the maximum 3 decimals still fit."""
+    big = [54772.123, 54772.123, 54772.123, 101.0, 54772.123, -12.0,
+           54772.123, 54772.123, 101.0, 54772.123, 13.0]
+    data = {"labels": LABELS, "pct_idx": [3, 5, 8, 10], "blocks": [
+        {"name": "SAIL", "kind": "sail", "group": None, "note": None, "rows": [
+            _row("Total", "total", big), _row("Lump", "item", big)]}]}
+    assert _clipped_cells(mpp.build_html(data, 3, COLORS)) == []
+
+
 def test_pdf_html_empty():
     html = mpp.build_html({"labels": LABELS, "pct_idx": [3, 5, 8, 10], "blocks": []}, 0, COLORS)
     assert "No mines data for Sep'26" in html
