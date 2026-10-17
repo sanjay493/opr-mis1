@@ -22,7 +22,7 @@ const PLAN_BG = '#FFF2CC';
 const ACT_BG = '#C6EFCE';
 const GR_BG = '#e2e8f0';
 const TOTAL_BG = '#FEF3C7';
-const PLAN_IDX = new Set([0, 1, 6]);
+const PLAN_IDX = new Set([0]); // FY Plan only: month and Apr-to-month Plan are left plain
 const ACT_IDX = new Set([2, 7]);
 const GR_IDX = new Set([5, 10]);
 const LAST_COL = 10;
@@ -96,7 +96,7 @@ function MinesTable({ data, decimals }) {
           </tr>
           <tr>
             {['Plan', 'Actual', '%Ful', 'Plan', 'Actual', '%Ful'].map((h, i) => (
-              <th key={i} style={{ ...TH, borderBottom: RULE, background: h === 'Plan' ? PLAN_BG : h === 'Actual' ? ACT_BG : TH.background }}>{h}</th>
+              <th key={i} style={{ ...TH, borderBottom: RULE, background: h === 'Actual' ? ACT_BG : TH.background }}>{h}</th>
             ))}
           </tr>
         </thead>

@@ -21,8 +21,9 @@ from plant_performance_pdf import _fonts, _p, _q
 
 _MARGIN = {"top": "7mm", "right": "10mm", "bottom": "7mm", "left": "10mm"}
 
-# value index -> column tint (pages 5-6: Plan gold, Actual green, %Gr grey)
-_PLAN, _ACT, _GR = {0, 1, 6}, {2, 7}, {5, 10}
+# value index -> column tint: FY Plan gold, Actual green, %Gr grey (the
+# month and Apr-to-month Plan columns are left plain, per direct instruction)
+_PLAN, _ACT, _GR = {0}, {2, 7}, {5, 10}
 
 
 def _cls(vi: int) -> str:
@@ -36,8 +37,8 @@ def _head(L: dict) -> str:
         f'<th rowspan="2" class="sm">{L["cply"]}<br>Act.</th><th rowspan="2" class="gr sm">%Gr.<br>{L["cply"]}</th>'
         f'<th colspan="3">{L["ytd"]}</th><th rowspan="2" class="sm">{L["ytd_cply"]}<br>Act.</th>'
         f'<th rowspan="2" class="gr sm">%Gr.<br>{L["ytd_cply"]}</th></tr>'
-        '<tr><th class="plan">Plan</th><th class="act">Actual</th><th>%Ful</th>'
-        '<th class="plan">Plan</th><th class="act">Actual</th><th>%Ful</th></tr></thead>'
+        '<tr><th>Plan</th><th class="act">Actual</th><th>%Ful</th>'
+        '<th>Plan</th><th class="act">Actual</th><th>%Ful</th></tr></thead>'
     )
 
 

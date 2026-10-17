@@ -205,3 +205,14 @@ def test_pdf_html_empty():
     html = mpp.build_html({"labels": LABELS, "pct_idx": [3, 5, 8, 10], "blocks": []}, 0, COLORS)
     assert "No mines data for Sep'26" in html
     assert "<section" not in html
+
+
+def test_only_fy_plan_column_is_tinted():
+    """Month and Apr-to-month Plan columns have no background; FY Plan keeps it."""
+    import re
+    html = mpp.build_html(DATA, 0, COLORS)
+    row = re.search(r'<tr class="item">(.*?)</tr>', html).group(1)
+    classes = re.findall(r'<td class="([^"]*)">', row)[1:]     # the 11 value cells
+    assert classes[0] == "plan" and classes[1] == "" and classes[6] == ""
+    head = html[html.index("<thead>"):html.index("</thead>")]
+    assert head.count('class="plan"') == 1                    # only the FY Plan header
