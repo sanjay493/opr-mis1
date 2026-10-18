@@ -95,6 +95,7 @@ export default function CoalReceiptStockTemplate({ data }) {
         </div>
       </div>
 
+      <div style={{ fontWeight: 700, fontSize: '9.5pt', marginTop: 10 }}>(C) Stocks at Plants</div>
       {stockHistoryTables.map((t) => (
         <div key={t.key} style={{ marginTop: 10 }}>
           <div style={{ fontWeight: 700, fontSize: '9.5pt', margin: '6px 0 4px' }}>
