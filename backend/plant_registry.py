@@ -51,12 +51,15 @@ PLANT_UNITS = [
     ("BSP", "MILL", "BRM",       0, 120),
     ("BSP", "MILL", "WRM",       0, 130),
     ("BSP", "MILL", "Plate Mill",0, 140),
-    # Sinter Plant / Coke Ovens / Plant-Level General — no individual units
-    # registered for ANY plant (single "Shop" = whole sinter plant / whole
-    # coke oven battery / plant-wide, same "one unit == the shop" pattern as
-    # ISP's single BF below). All three are deliberately Shop-only across
-    # every plant — data-entry/breakdown's form locks their Unit selector to
-    # this one value (inactive, no real choice) rather than a real dropdown.
+    # Sinter Plants — each plant's own sinter units (named as the capital
+    # repair entries name them, so the BD/CR log puts a unit's breakdowns and
+    # repairs in one table), plus "Shop" = whole sinter plant.
+    # Coke Ovens / Plant-Level General — no individual units registered for
+    # ANY plant (single "Shop" = whole coke oven battery / plant-wide, same
+    # "one unit == the shop" pattern as ISP's single BF below); data-entry/
+    # breakdown's form locks their Unit selector to this one value.
+    ("BSP", "SINTER",  "SP-2",    0, 145),
+    ("BSP", "SINTER",  "SP-3",    0, 146),
     ("BSP", "SINTER",  "Shop",    1, 150),
     ("BSP", "COKE",    "Shop",    1, 160),
     ("BSP", "GENERAL", "Shop",    1, 170),
@@ -71,6 +74,8 @@ PLANT_UNITS = [
     ("DSP", "MILL", "WAP",       0,  70),
     ("DSP", "MILL", "MM",        0,  80),
     ("DSP", "MILL", "MSM",       0,  90),
+    ("DSP", "SINTER",  "SP-1",   0,  95),
+    ("DSP", "SINTER",  "SP-2",   0,  96),
     ("DSP", "SINTER",  "Shop",   1, 100),
     ("DSP", "COKE",    "Shop",   1, 110),
     ("DSP", "GENERAL", "Shop",   1, 120),
@@ -86,6 +91,9 @@ PLANT_UNITS = [
     ("RSP", "MILL", "PM",        0,  80),
     ("RSP", "MILL", "NPM",       0,  90),
     ("RSP", "MILL", "HSM-2",     0, 100),
+    ("RSP", "SINTER",  "SP-1",   0, 105),
+    ("RSP", "SINTER",  "SP-2",   0, 106),
+    ("RSP", "SINTER",  "SP-3",   0, 107),
     ("RSP", "SINTER",  "Shop",   1, 110),
     ("RSP", "COKE",    "Shop",   1, 120),
     ("RSP", "GENERAL", "Shop",   1, 130),
@@ -103,6 +111,10 @@ PLANT_UNITS = [
     ("BSL", "MILL", "HSM",       0, 100),
     ("BSL", "MILL", "CRM-1&2",   0, 110),
     ("BSL", "MILL", "CRM-3",     0, 120),
+    # BSL: one sinter plant with three machines (bands)
+    ("BSL", "SINTER",  "BAND-1", 0, 125),
+    ("BSL", "SINTER",  "BAND-2", 0, 126),
+    ("BSL", "SINTER",  "BAND-3", 0, 127),
     ("BSL", "SINTER",  "Shop",   1, 130),
     ("BSL", "COKE",    "Shop",   1, 140),
     ("BSL", "GENERAL", "Shop",   1, 150),
@@ -115,6 +127,8 @@ PLANT_UNITS = [
     ("ISP", "MILL", "USM",       0,  50),
     ("ISP", "MILL", "BRM",       0,  60),
     ("ISP", "MILL", "WRM",       0,  70),
+    ("ISP", "SINTER",  "SP M/c-1", 0, 75),
+    ("ISP", "SINTER",  "SP M/c-2", 0, 76),
     ("ISP", "SINTER",  "Shop",   1,  80),
     ("ISP", "COKE",    "Shop",   1,  90),
     ("ISP", "GENERAL", "Shop",   1, 100),

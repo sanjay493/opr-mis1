@@ -58,6 +58,7 @@ from page_opening_stock import generate_opening_stock
 from page_ipt import generate_ipt, _ITEM_ORDER as _IPT_ITEM_ORDER, _ITEM_RANK as _IPT_ITEM_RANK
 from page_capital_repair import CR_PAGES, generate_capital_repair, generate_capital_repair_calendar, fy_from_month, format_cr_actual
 import page_capital_repair_calendar_export
+import page_bd_cr_log_export
 from page_rake_detention import (
     DETAIL_PAGES as RAKE_DETENTION_DETAIL_PAGES,
     SUMMARY_PAGE_ID as RAKE_DETENTION_SUMMARY_PAGE_ID,
@@ -6781,6 +6782,31 @@ async def capital_repair_calendar_pdf(plant: str = Query(...), fy: str = Query(.
         content=content,
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
+
+
+@app.post("/api/bd-cr-log/excel")
+def bd_cr_log_excel(payload: dict):
+    # The frontend posts the log as built on screen (see page_bd_cr_log_export).
+    content = page_bd_cr_log_export.build_excel_bytes(payload)
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{page_bd_cr_log_export._filename(payload, "xlsx")}"'},
+    )
+
+
+@app.post("/api/bd-cr-log/pdf")
+async def bd_cr_log_pdf(payload: dict):
+    import asyncio, concurrent.futures
+    html = page_bd_cr_log_export.build_pdf_html(payload)
+    loop = asyncio.get_event_loop()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        content = await loop.run_in_executor(pool, page_bd_cr_log_export.render_pdf_bytes, html)
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{page_bd_cr_log_export._filename(payload, "pdf")}"'},
     )
 
 

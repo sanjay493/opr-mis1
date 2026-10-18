@@ -154,13 +154,14 @@ function SegBtns({ options, value, onChange, allowClear }) {
 const isShopUnit = (name) => (name || '').trim().toLowerCase() === 'shop';
 const smsNeedsSubtag = (d) => d.unit_type === 'SMS' && !isShopUnit(d.unit_name);
 
-// These three unit types have no individually-named units at any plant —
+// These two unit types have no individually-named units at any plant —
 // plant_registry.PLANT_UNITS registers only a single "Shop" row for each
-// (whole sinter plant / whole coke oven battery / plant-wide), so there's
-// nothing for a user to actually choose. The Unit control auto-fills that
-// one value and goes inactive (disabled) instead of offering a dropdown
-// with one option, rather than requiring a pointless click.
-const NO_UNIT_CHOICE_TYPES = ['SINTER', 'COKE', 'GENERAL'];
+// (whole coke oven battery / plant-wide), so there's nothing for a user to
+// actually choose. The Unit control auto-fills that one value and goes
+// inactive (disabled) instead of offering a dropdown with one option,
+// rather than requiring a pointless click. Sinter Plant lists the selected
+// plant's own sinter units (plus the whole sinter plant) like BF/SMS/Mill.
+const NO_UNIT_CHOICE_TYPES = ['COKE', 'GENERAL'];
 const hasNoUnitChoice = (unitType) => NO_UNIT_CHOICE_TYPES.includes(unitType);
 
 function emptyDraft(plant) {

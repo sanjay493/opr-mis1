@@ -12,7 +12,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ReportPage } from '../ReportUI';
 import {
-  API_BASE, CURRENT_FY_END_YEAR, selStyle, pillStyle, ErrorBox, TabIntro,
+  API_BASE, CURRENT_FY_END_YEAR, selStyle, pillStyle, ErrorBox, TabIntro, ExportButtons, downloadFile,
 } from '@/components/techno/shared';
 
 const PLANTS = ['BSP', 'DSP', 'RSP', 'BSL', 'ISP'];
@@ -20,8 +20,9 @@ const PLANT_LABEL = {
   BSP: 'Bhilai Steel Plant', DSP: 'Durgapur Steel Plant', RSP: 'Rourkela Steel Plant',
   BSL: 'Bokaro Steel Plant', ISP: 'IISCO Steel Plant',
 };
-// Unit tables are ordered by unit type in this order, then by unit name.
-const TYPE_ORDER = ['BF', 'SMS', 'SINTER', 'COKE', 'MILL', 'GENERAL', 'OTHER'];
+// Unit tables follow the process order (coke → sinter → iron → steel →
+// rolling), then plant-level / other units; within a type, by unit name.
+const TYPE_ORDER = ['COKE', 'SINTER', 'BF', 'SMS', 'MILL', 'GENERAL', 'OTHER'];
 const TYPE_LABEL = {
   BF: 'Blast Furnace', SMS: 'SMS', SINTER: 'Sinter Plant', COKE: 'Coke Oven',
   MILL: 'Rolling Mill', GENERAL: 'Plant-Level General', OTHER: 'Other',
@@ -105,7 +106,12 @@ function crUnit(r) {
     const n = m ? (ROMAN[m[1].toUpperCase()] || Number(m[1])) : null;
     return { type: 'SMS', name: n ? `SMS-${n}` : 'SMS', sub: equip };
   }
-  if (!shop || GENERIC_SHOP.test(shop)) return { type: typeOf(shop || equip), name: equip || shop || 'Unspecified', sub: '' };
+  if (!shop || GENERIC_SHOP.test(shop)) {
+    // RSP enters its sinter plants as SP-I/II/III; the breakdown log's units are SP-1/2/3.
+    const sp = equip.match(/^SP[\s-]*([IVX]+)$/i);
+    const name = sp && ROMAN[sp[1].toUpperCase()] ? `SP-${ROMAN[sp[1].toUpperCase()]}` : equip;
+    return { type: typeOf(shop || equip), name: name || shop || 'Unspecified', sub: '' };
+  }
   return { type: typeOf(shop), name: shop, sub: equip };
 }
 
@@ -187,6 +193,7 @@ function buildUnits(breakdowns, repairs) {
   const list = [...units.values()].filter((u) => u.events.length);
   for (const u of list) u.events.sort((a, b) => String(a.start).localeCompare(String(b.start)));
   list.sort((a, b) => TYPE_ORDER.indexOf(a.type) - TYPE_ORDER.indexOf(b.type)
+    || (a.name === 'Shop') - (b.name === 'Shop')                   // whole shop after its units
     || a.name.localeCompare(b.name, undefined, { numeric: true }));
   return list;
 }
@@ -197,6 +204,7 @@ export default function BdCrLogView() {
   const [data, setData] = useState({});        // { [plant]: { breakdowns, repairs } } for the chosen FY
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [downloading, setDownloading] = useState(null);
 
   // All five plants for the FY at once, so every plant tab can show its count.
   useEffect(() => {
@@ -229,6 +237,33 @@ export default function BdCrLogView() {
   const units = unitsByPlant[plant] || [];
   const countOf = (p) => (unitsByPlant[p] || []).reduce((n, u) => n + u.events.length, 0);
 
+  // The backend only lays out what is on screen (page_bd_cr_log_export.py),
+  // so post the selected plant's tables exactly as built here.
+  const handleDownload = async (kind) => {
+    setDownloading(kind);
+    try {
+      const payload = {
+        plant, plant_title: PLANT_LABEL[plant], fy,
+        units: units.map((u) => {
+          const bd = u.events.filter((e) => e.kind === 'BD').length;
+          return {
+            title: unitTitle(u), type_label: TYPE_LABEL[u.type], bd, cr: u.events.length - bd,
+            events: u.events.map((ev) => ({
+              month: monthLabel(monthKey(ev.start)), kind: ev.kind, linked: !!ev.linked,
+              dates: ev.dates, sub: ev.sub, details: ev.details, duration: ev.duration, ongoing: ev.ongoing,
+            })),
+          };
+        }),
+      };
+      await downloadFile(`${API_BASE}/api/bd-cr-log/${kind}`, payload,
+        `BD_CR_Log_${plant}_${fy}.${kind === 'excel' ? 'xlsx' : 'pdf'}`);
+    } catch (e) {
+      setError(`Download failed: ${e.message}`);
+    } finally {
+      setDownloading(null);
+    }
+  };
+
   return (
     <ReportPage title="Breakdown & Capital Repair Log"
       description="Each plant's breakdowns (BD) and actual capital repairs (CR), unit by unit, month by month in date order.">
@@ -256,6 +291,9 @@ export default function BdCrLogView() {
           ))}
         </div>
         {loading && <span style={{ fontSize: '9pt', color: '#5f6368' }}>Loading…</span>}
+        <div style={{ marginLeft: 'auto' }}>
+          <ExportButtons onDownload={handleDownload} downloading={downloading} disabled={loading || units.length === 0} />
+        </div>
       </div>
 
       {error && <ErrorBox>{error}</ErrorBox>}
