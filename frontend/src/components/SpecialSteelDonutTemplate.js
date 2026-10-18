@@ -95,7 +95,7 @@ export default function SpecialSteelDonutTemplate({ data }) {
           <div style={{ textAlign: 'center', fontSize: '9.5pt', fontStyle: 'italic', color: C.rust, marginBottom: 1 }}>
             Bubble size &#8733; Saleable Steel Despatch (Tonnes)
           </div>
-          <div style={{ width: '90%' }} dangerouslySetInnerHTML={{ __html: bubble_svg }} />
+          <div style={{ width: '90%', margin: '0 auto' }} dangerouslySetInnerHTML={{ __html: bubble_svg }} />
         </div>
       )}
     </div>
