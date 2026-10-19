@@ -642,9 +642,8 @@ def extract_and_save_excel(file_path: str, report_month: str = None,
 
             cursor.execute("""
                 INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
-                VALUES (?, ?, ?, ?)
-                ON CONFLICT(report_month, plant_name, item_name)
-                DO UPDATE SET month_actual = excluded.month_actual
+                VALUES (%s, %s, %s, %s)
+                AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
             """, (db_report_month, "BSP", item_name, val))
 
         if vals_extracted == 0:
@@ -1681,7 +1680,7 @@ def _extract_mis2_furnace_preview(wb, report_month: str) -> dict:
             _cur = _conn.cursor()
             _cur.execute(
                 "SELECT month_actual FROM production_table "
-                "WHERE report_month=? AND plant_name='BSP' AND item_name='SP-3'",
+                "WHERE report_month=%s AND plant_name='BSP' AND item_name='SP-3'",
                 (db_month,),
             )
             _row = _cur.fetchone()

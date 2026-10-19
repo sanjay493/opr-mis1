@@ -120,9 +120,8 @@ def extract_and_save_excel_plan(file_path: str, financial_year: str) -> bool:
                 # Insert or replace in production_plan_table (using column 'month_actual' as per DB schema)
                 cursor.execute("""
                     INSERT INTO production_plan_table (report_month, plant_name, item_name, month_actual)
-                    VALUES (?, ?, ?, ?)
-                    ON CONFLICT(report_month, plant_name, item_name) 
-                    DO UPDATE SET month_actual = excluded.month_actual
+                    VALUES (%s, %s, %s, %s)
+                    AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
                 """, (db_report_month, "ISP", db_item, val))
                 
         # Validation: Verify that we extracted some numeric values

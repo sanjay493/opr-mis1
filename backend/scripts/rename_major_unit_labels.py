@@ -47,14 +47,14 @@ def main():
         for plant_code, old_label, new_label in RENAMES:
             cur.execute(
                 "SELECT value, record_date, updated_by, updated_at "
-                "FROM major_unit_daily_record WHERE plant_code = ? AND unit_label = ?",
+                "FROM major_unit_daily_record WHERE plant_code = %s AND unit_label = %s",
                 (plant_code, new_label),
             )
             existing_new = cur.fetchone()
             if existing_new is not None:
                 cur.execute(
                     "SELECT value, record_date, updated_by, updated_at "
-                    "FROM major_unit_daily_record WHERE plant_code = ? AND unit_label = ?",
+                    "FROM major_unit_daily_record WHERE plant_code = %s AND unit_label = %s",
                     (plant_code, old_label),
                 )
                 existing_old = cur.fetchone()
@@ -66,8 +66,8 @@ def main():
                           f"and '{new_label}' {existing_new} exist. Skipped; resolve by hand.")
                 continue
             cur.execute(
-                "UPDATE major_unit_daily_record SET unit_label = ? "
-                "WHERE plant_code = ? AND unit_label = ?",
+                "UPDATE major_unit_daily_record SET unit_label = %s "
+                "WHERE plant_code = %s AND unit_label = %s",
                 (new_label, plant_code, old_label),
             )
             conn.commit()

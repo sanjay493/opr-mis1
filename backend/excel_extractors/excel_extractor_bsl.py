@@ -528,9 +528,8 @@ def _extract_dpr_report(wb, source_file_name: str) -> bool:
         resolved_vals[item_name] = val
         cursor.execute("""
             INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(report_month, plant_name, item_name)
-            DO UPDATE SET month_actual = excluded.month_actual
+            VALUES (%s, %s, %s, %s)
+            AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
         """, (db_report_month, "BSL", item_name, val))
 
     for item_name, cell in production_cells.items():

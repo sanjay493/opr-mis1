@@ -13,7 +13,7 @@ Usage:
   python scripts/backfill_asp_ingot.py --apply     # actually writes to production_table /
                                                     # production_plan_table (live DB)
 
-Dry-run is the default on purpose — this touches the live MySQL DB (DB_ENGINE=mysql), so the
+Dry-run is the default on purpose — this touches the live MySQL DB, so the
 diff should be reviewed before anything is written.
 """
 import sys
@@ -128,7 +128,7 @@ def extract_plan_preview():
 def current_db_values(table):
     conn = db.connect()
     cur = conn.cursor()
-    cur.execute(f"SELECT item_name, report_month, month_actual FROM {table} WHERE plant_name=?",
+    cur.execute(f"SELECT item_name, report_month, month_actual FROM {table} WHERE plant_name=%s",
                 (PLANT,))
     out = {(item, month): value for item, month, value in cur.fetchall()}
     conn.close()
@@ -139,9 +139,8 @@ def upsert(table, report_month, item_name, value):
     conn = db.connect()
     conn.execute(f"""
         INSERT INTO {table} (report_month, plant_name, item_name, month_actual)
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT(report_month, plant_name, item_name)
-        DO UPDATE SET month_actual = excluded.month_actual
+        VALUES (%s, %s, %s, %s)
+        AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
     """, (report_month, PLANT, item_name, value))
     conn.commit()
     conn.close()

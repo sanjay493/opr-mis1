@@ -35,7 +35,7 @@ Usage:
   python scripts/backfill_asp_fy2425_from_fy2526_fl.py --apply     # actually writes to production_table (live DB)
 
 Dry-run is the default on purpose — this touches the live MySQL DB
-(DB_ENGINE=mysql), and the user asked to see every value (new AND any that
+and the user asked to see every value (new AND any that
 disagrees with what's already stored) before anything is written.
 """
 import sys
@@ -91,10 +91,10 @@ def _collect_source_files():
 def current_db_values(months):
     conn = db.connect()
     cur = conn.cursor()
-    ph = ",".join("?" * len(months))
+    ph = ",".join(["%s"] * len(months))
     cur.execute(
         f"SELECT report_month, item_name, month_actual FROM production_table "
-        f"WHERE plant_name=? AND report_month IN ({ph})",
+        f"WHERE plant_name=%s AND report_month IN ({ph})",
         (PLANT, *months),
     )
     out = {(m, item): val for m, item, val in cur.fetchall()}
@@ -106,9 +106,8 @@ def upsert(report_month, item_name, value):
     conn = db.connect()
     conn.execute("""
         INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT(report_month, plant_name, item_name)
-        DO UPDATE SET month_actual = excluded.month_actual
+        VALUES (%s, %s, %s, %s)
+        AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
     """, (report_month, PLANT, item_name, value))
     conn.commit()
     conn.close()

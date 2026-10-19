@@ -55,9 +55,9 @@ ANNUAL_2526_IDX = 20
 def get_production(plant: str, item: str, months: list) -> float:
     conn = db.connect()
     cur = conn.cursor()
-    ph = ",".join("?" * len(months))
+    ph = ",".join(["%s"] * len(months))
     cur.execute(
-        f"SELECT SUM(month_actual) FROM production_table WHERE plant_name=? AND item_name=? AND report_month IN ({ph})",
+        f"SELECT SUM(month_actual) FROM production_table WHERE plant_name=%s AND item_name=%s AND report_month IN ({ph})",
         (plant, item, *months),
     )
     row = cur.fetchone()

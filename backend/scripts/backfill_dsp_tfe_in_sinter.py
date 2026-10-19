@@ -25,8 +25,8 @@ Usage:
   python scripts/backfill_dsp_tfe_in_sinter.py            # dry-run
   python scripts/backfill_dsp_tfe_in_sinter.py --apply     # writes to the live DB
 
-Dry-run is the default on purpose — this touches the live MySQL DB
-(DB_ENGINE=mysql), so the values should be reviewed before anything is
+Dry-run is the default on purpose — this touches the live MySQL DB,
+so the values should be reviewed before anything is
 written.
 """
 import argparse

@@ -40,8 +40,8 @@ Usage:
   python scripts/backfill_asp_despatch_split_history.py            # dry-run
   python scripts/backfill_asp_despatch_split_history.py --apply     # writes to the live DB
 
-Dry-run is the default on purpose — this touches the live MySQL DB
-(DB_ENGINE=mysql), so the values should be reviewed before anything is
+Dry-run is the default on purpose — this touches the live MySQL DB,
+so the values should be reviewed before anything is
 written.
 """
 import sys
@@ -176,9 +176,8 @@ def main():
         for (report_month, item_name), (value, _source) in claimed.items():
             cur.execute("""
                 INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
-                VALUES (?, ?, ?, ?)
-                ON CONFLICT(report_month, plant_name, item_name)
-                DO UPDATE SET month_actual = excluded.month_actual
+                VALUES (%s, %s, %s, %s)
+                AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
             """, (report_month, PLANT, item_name, value))
             saved += 1
         conn.commit()

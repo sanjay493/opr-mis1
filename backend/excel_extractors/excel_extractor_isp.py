@@ -182,9 +182,8 @@ def _extract_morning_report(wb, source_file_name: str) -> bool:
                 val = round(val / 1000.0, 3)
         cursor.execute("""
             INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(report_month, plant_name, item_name)
-            DO UPDATE SET month_actual = excluded.month_actual
+            VALUES (%s, %s, %s, %s)
+            AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
         """, (db_report_month, "ISP", item_name, val))
 
     for item_name, cell in production_cells.items():
@@ -580,9 +579,8 @@ def _extract_monthly_report(wb, report_month: str, source_file_name: str) -> boo
                 val = round(val / 1000.0, 3)
         cursor.execute("""
             INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(report_month, plant_name, item_name)
-            DO UPDATE SET month_actual = excluded.month_actual
+            VALUES (%s, %s, %s, %s)
+            AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
         """, (db_report_month, "ISP", item_name, val))
 
     # Machine-wise sinter production ("SP M/c-1"/"SP M/c-2") lives on the
@@ -603,9 +601,8 @@ def _extract_monthly_report(wb, report_month: str, source_file_name: str) -> boo
                 val = round(val / 1000.0, 3)
             cursor.execute("""
                 INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
-                VALUES (?, ?, ?, ?)
-                ON CONFLICT(report_month, plant_name, item_name)
-                DO UPDATE SET month_actual = excluded.month_actual
+                VALUES (%s, %s, %s, %s)
+                AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
             """, (db_report_month, "ISP", item_name, val))
 
     for item_name, raw_val in _extract_despatch(wb, col, db_report_month).items():
@@ -614,9 +611,8 @@ def _extract_monthly_report(wb, report_month: str, source_file_name: str) -> boo
             vals_extracted += 1
         cursor.execute("""
             INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(report_month, plant_name, item_name)
-            DO UPDATE SET month_actual = excluded.month_actual
+            VALUES (%s, %s, %s, %s)
+            AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
         """, (db_report_month, "ISP", item_name, val))
 
     if vals_extracted == 0:

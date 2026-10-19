@@ -1256,7 +1256,7 @@ def _rsp_ss_grade_case_map(db_month: str) -> dict:
         cur.execute("""
             SELECT product, quality_grade, report_month
             FROM special_steel_orders
-            WHERE plant_name='RSP' AND report_month < ?
+            WHERE plant_name='RSP' AND report_month < %s
             ORDER BY report_month
         """, (db_month,))
         out = {}
@@ -1655,9 +1655,8 @@ def _extract_monthly_report(wb, report_month: str, source_file_name: str,
                 val = round(val / 1000.0, 3)
         cursor.execute("""
             INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(report_month, plant_name, item_name)
-            DO UPDATE SET month_actual = excluded.month_actual
+            VALUES (%s, %s, %s, %s)
+            AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
         """, (db_report_month, "RSP", item_name, val))
 
     # Despatch (Saleable Steel Despatch / Direct Despatch / Road Despatch /
@@ -1676,9 +1675,8 @@ def _extract_monthly_report(wb, report_month: str, source_file_name: str,
                 val = round(val / 1000.0, 3)
             cursor.execute("""
                 INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
-                VALUES (?, ?, ?, ?)
-                ON CONFLICT(report_month, plant_name, item_name)
-                DO UPDATE SET month_actual = excluded.month_actual
+                VALUES (%s, %s, %s, %s)
+                AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
             """, (db_report_month, "RSP", item_name, val))
     else:
         logger.info("RSP Monthly Report: no DESP.PERFORMANCE sheet found — "
@@ -1732,9 +1730,8 @@ def _extract_morning_report(wb, sheet_name: str, source_file_name: str) -> bool:
                 val = round(val, 1)
         cursor.execute("""
             INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(report_month, plant_name, item_name)
-            DO UPDATE SET month_actual = excluded.month_actual
+            VALUES (%s, %s, %s, %s)
+            AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
         """, (db_report_month, "RSP", item_name, val))
 
     if vals_extracted == 0:

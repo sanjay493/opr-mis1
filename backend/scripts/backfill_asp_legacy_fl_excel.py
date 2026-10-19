@@ -56,8 +56,7 @@ Usage:
   python scripts/backfill_asp_legacy_fl_excel.py            # dry-run: prints a diff, writes nothing
   python scripts/backfill_asp_legacy_fl_excel.py --apply     # actually writes to production_table (live DB)
 
-Dry-run is the default on purpose — this touches the live MySQL DB
-(DB_ENGINE=mysql).
+Dry-run is the default on purpose — this touches the live MySQL DB.
 """
 import sys
 import os
@@ -306,10 +305,10 @@ def extract_file(path, fname):
 def current_db_values(months):
     conn = db.connect()
     cur = conn.cursor()
-    ph = ",".join("?" * len(months))
+    ph = ",".join(["%s"] * len(months))
     cur.execute(
         f"SELECT report_month, item_name, month_actual FROM production_table "
-        f"WHERE plant_name=? AND report_month IN ({ph})",
+        f"WHERE plant_name=%s AND report_month IN ({ph})",
         (PLANT, *months),
     )
     out = {(m, item): val for m, item, val in cur.fetchall()}
@@ -321,9 +320,8 @@ def upsert(report_month, item_name, value):
     conn = db.connect()
     conn.execute("""
         INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT(report_month, plant_name, item_name)
-        DO UPDATE SET month_actual = excluded.month_actual
+        VALUES (%s, %s, %s, %s)
+        AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
     """, (report_month, PLANT, item_name, value))
     conn.commit()
     conn.close()

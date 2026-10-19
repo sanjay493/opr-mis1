@@ -213,9 +213,8 @@ def _extract_mcr_report(file_path: str, source_file_name: str, column_shift: int
                 val = round(val / 1000.0, 3)
         cursor.execute("""
             INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(report_month, plant_name, item_name)
-            DO UPDATE SET month_actual = excluded.month_actual
+            VALUES (%s, %s, %s, %s)
+            AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
         """, (db_report_month, "DSP", item_name, val))
 
     for row, col, item_name in production_rows:

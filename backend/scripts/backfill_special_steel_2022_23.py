@@ -52,8 +52,8 @@ Usage:
   python scripts/backfill_special_steel_2022_23.py            # dry-run: prints a diff, writes nothing
   python scripts/backfill_special_steel_2022_23.py --apply     # actually writes to special_steel_orders (live DB)
 
-Dry-run is the default on purpose — this touches the live MySQL DB
-(DB_ENGINE=mysql), so the diff should be reviewed before anything is written.
+Dry-run is the default on purpose — this touches the live MySQL DB,
+so the diff should be reviewed before anything is written.
 """
 import sys
 import os
@@ -180,8 +180,8 @@ def _parse_bsp(wb) -> list:
 def current_db_values(plants, months):
     conn = db.connect()
     cur = conn.cursor()
-    ph_p = ",".join("?" * len(plants))
-    ph_m = ",".join("?" * len(months))
+    ph_p = ",".join(["%s"] * len(plants))
+    ph_m = ",".join(["%s"] * len(months))
     cur.execute(
         f"SELECT plant_name, report_month, product, quality_grade, section, actual_despatch "
         f"FROM special_steel_orders WHERE plant_name IN ({ph_p}) AND report_month IN ({ph_m})",

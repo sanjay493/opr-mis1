@@ -117,7 +117,7 @@ def build_structured():
         conn = db.connect()
         cur = conn.cursor()
         cur.execute(
-            "SELECT capacity_html, product_mix_html FROM ready_reckoner_pages WHERE plant_code = ?",
+            "SELECT capacity_html, product_mix_html FROM ready_reckoner_pages WHERE plant_code = %s",
             (plant,),
         )
         r = cur.fetchone()
@@ -156,8 +156,8 @@ def _ensure_columns():
             conn.commit()
             print(f"added column {col}")
         except Exception as e:
-            # Column already exists (MySQL: 1060 Duplicate column name /
-            # sqlite: "duplicate column name") — fine, already migrated.
+            # Column already exists (MySQL: 1060 Duplicate column name)
+            # — fine, already migrated.
             if "duplicate" not in str(e).lower() and "1060" not in str(e):
                 raise
     conn.close()
