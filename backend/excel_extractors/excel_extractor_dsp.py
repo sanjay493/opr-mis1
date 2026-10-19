@@ -139,6 +139,7 @@ def _extract_mcr_report(file_path: str, source_file_name: str, column_shift: int
     import sys
     sys.path.insert(0, os.path.dirname(__file__))
     import db
+    from repo import production as rp
 
     with open(file_path, encoding='utf-8', errors='replace') as f:
         lines = [line.rstrip('\r\n').split('\t') for line in f.readlines()]
@@ -211,11 +212,7 @@ def _extract_mcr_report(file_path: str, source_file_name: str, column_shift: int
             vals_extracted += 1
             if item_name not in NO_CONVERT:
                 val = round(val / 1000.0, 3)
-        cursor.execute("""
-            INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
-            VALUES (%s, %s, %s, %s)
-            AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
-        """, (db_report_month, "DSP", item_name, val))
+        rp.upsert_row(cursor, "actual", db_report_month, "DSP", item_name, val)
 
     for row, col, item_name in production_rows:
         _save(item_name, get_cell(row, col))

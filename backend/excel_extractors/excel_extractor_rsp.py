@@ -1250,6 +1250,7 @@ def _rsp_ss_grade_case_map(db_month: str) -> dict:
     the spelling already on record instead of letting it read as a new grade —
     see the caller in _extract_rsp_ss_preview for what breaks otherwise."""
     import db as _db
+    from repo import production as rp
     try:
         conn = _db.connect()
         cur = conn.cursor()
@@ -1380,6 +1381,7 @@ def _extract_rsp_ss_preview(wb, report_month: str) -> dict:
 def _save_rsp_special_steel(wb, report_month: str, source_file_name: str) -> bool:
     """Persist RSP special steel rows to special_steel_orders."""
     import db as _db
+    from repo import production as rp
     result  = _extract_rsp_ss_preview(wb, report_month)
     db_month = result["month"]
     saved = 0
@@ -1634,6 +1636,7 @@ def _extract_monthly_report(wb, report_month: str, source_file_name: str,
         raise ValueError("No page-9 production sheet found — nothing to save.")
 
     import db as _db
+    from repo import production as rp
 
     db_report_month, month_num = _parse_report_month(report_month)
     col_p9 = COL_MAP_P9.get(month_num)
@@ -1653,11 +1656,7 @@ def _extract_monthly_report(wb, report_month: str, source_file_name: str,
             vals_extracted += 1
             if item_name not in NO_CONVERT:
                 val = round(val / 1000.0, 3)
-        cursor.execute("""
-            INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
-            VALUES (%s, %s, %s, %s)
-            AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
-        """, (db_report_month, "RSP", item_name, val))
+        rp.upsert_row(cursor, "actual", db_report_month, "RSP", item_name, val)
 
     # Despatch (Saleable Steel Despatch / Direct Despatch / Road Despatch /
     # Finished Export) — located by sheet TITLE, not name (see
@@ -1673,11 +1672,7 @@ def _extract_monthly_report(wb, report_month: str, source_file_name: str,
             if val is not None:
                 vals_extracted += 1
                 val = round(val / 1000.0, 3)
-            cursor.execute("""
-                INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
-                VALUES (%s, %s, %s, %s)
-                AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
-            """, (db_report_month, "RSP", item_name, val))
+            rp.upsert_row(cursor, "actual", db_report_month, "RSP", item_name, val)
     else:
         logger.info("RSP Monthly Report: no DESP.PERFORMANCE sheet found — "
                     "despatch items skipped for %s", db_report_month)
@@ -1705,6 +1700,7 @@ def _extract_monthly_report(wb, report_month: str, source_file_name: str,
 
 def _extract_morning_report(wb, sheet_name: str, source_file_name: str) -> bool:
     import db as _db
+    from repo import production as rp
 
     ws = wb[sheet_name]
     report_day, days_in_month, db_report_month = _morning_report_day(ws)
@@ -1728,11 +1724,7 @@ def _extract_morning_report(wb, sheet_name: str, source_file_name: str) -> bool:
                 val = round(val / 1000.0, 3)
             else:
                 val = round(val, 1)
-        cursor.execute("""
-            INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
-            VALUES (%s, %s, %s, %s)
-            AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
-        """, (db_report_month, "RSP", item_name, val))
+        rp.upsert_row(cursor, "actual", db_report_month, "RSP", item_name, val)
 
     if vals_extracted == 0:
         conn.close()

@@ -461,6 +461,7 @@ def _extract_dpr_report(wb, source_file_name: str) -> bool:
     import sys
     sys.path.insert(0, os.path.dirname(__file__))
     import db
+    from repo import production as rp
 
     ws = wb["DPR"]
 
@@ -526,11 +527,7 @@ def _extract_dpr_report(wb, source_file_name: str) -> bool:
             if not pre_converted and item_name not in NO_CONVERT:
                 val = round(val / 1000.0, 3)
         resolved_vals[item_name] = val
-        cursor.execute("""
-            INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
-            VALUES (%s, %s, %s, %s)
-            AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
-        """, (db_report_month, "BSL", item_name, val))
+        rp.upsert_row(cursor, "actual", db_report_month, "BSL", item_name, val)
 
     for item_name, cell in production_cells.items():
         mrate, cum = _mrate_and_cum(cell)

@@ -3,6 +3,7 @@ import logging
 import os
 from typing import Optional
 import db
+from repo import production as rp
 
 logger = logging.getLogger("excel_extractor_plan")
 
@@ -118,29 +119,13 @@ def extract_and_save_excel_plan(file_path: str, financial_year: str) -> bool:
                 val = clean_val(raw)
                 stored = round(val, 3) if val is not None else None
 
-                cursor.execute(
-                    """
-                    INSERT INTO production_plan_table
-                        (report_month, plant_name, item_name, month_actual)
-                    VALUES (%s, %s, %s, %s)
-                    AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
-                    """,
-                    (report_month, current_plant, item_name, stored),
-                )
+                rp.upsert_row(cursor, "abp", report_month, current_plant, item_name, stored)
                 vals_written += 1
 
                 # For SSP and VISL, Finished Steel = Saleable Steel.
                 # Mirror the value so plan pages that query "Finished Steel" find data.
                 if item_name == "Saleable Steel" and current_plant in ("SSP", "VISL"):
-                    cursor.execute(
-                        """
-                        INSERT INTO production_plan_table
-                            (report_month, plant_name, item_name, month_actual)
-                        VALUES (%s, %s, 'Finished Steel', %s)
-                        AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
-                        """,
-                        (report_month, current_plant, stored),
-                    )
+                    rp.upsert_row(cursor, "abp", report_month, current_plant, "Finished Steel", stored)
                     vals_written += 1
 
         if vals_written == 0:

@@ -3,6 +3,7 @@ import logging
 import os
 from typing import Optional
 import db
+from repo import production as rp
 
 logger = logging.getLogger("excel_extractor_plan")
 
@@ -145,14 +146,7 @@ def extract_and_save_excel_plan(file_path: str, financial_year: str) -> bool:
                 else:
                     stored = None
 
-                cursor.execute(
-                    """
-                    INSERT INTO production_plan_table (report_month, plant_name, item_name, month_actual)
-                    VALUES (%s, %s, %s, %s)
-                    AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
-                    """,
-                    (db_report_month, "BSL", db_item, stored),
-                )
+                rp.upsert_row(cursor, "abp", db_report_month, "BSL", db_item, stored)
 
             # Derived: Finished Steel = Saleable Steel − Saleable Semis
             sal_steel = raw_row.get("Saleable Steel")
@@ -162,14 +156,7 @@ def extract_and_save_excel_plan(file_path: str, financial_year: str) -> bool:
                 if sal_steel is not None and sal_semis is not None
                 else None
             )
-            cursor.execute(
-                """
-                INSERT INTO production_plan_table (report_month, plant_name, item_name, month_actual)
-                VALUES (%s, %s, %s, %s)
-                AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
-                """,
-                (db_report_month, "BSL", "Finished Steel", finished),
-            )
+            rp.upsert_row(cursor, "abp", db_report_month, "BSL", "Finished Steel", finished)
 
             # Derived: CR(1&2) Total Saleable = CR I/II CR(Coil) Sale +
             # CR Sheets + GP/GC (mills 1&2's own saleable components — see
@@ -184,14 +171,7 @@ def extract_and_save_excel_plan(file_path: str, financial_year: str) -> bool:
                 if v is not None
             ]
             cr12_total = round(sum(cr12_parts), 3) if cr12_parts else None
-            cursor.execute(
-                """
-                INSERT INTO production_plan_table (report_month, plant_name, item_name, month_actual)
-                VALUES (%s, %s, %s, %s)
-                AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
-                """,
-                (db_report_month, "BSL", "CR(1&2) Total Saleable", cr12_total),
-            )
+            rp.upsert_row(cursor, "abp", db_report_month, "BSL", "CR(1&2) Total Saleable", cr12_total)
 
             # Derived: CR III Total Saleable = CR III CR(Coil) Sale + GPC3
             # (mill 3's own saleable components — see the module docstring
@@ -205,14 +185,7 @@ def extract_and_save_excel_plan(file_path: str, financial_year: str) -> bool:
                 if v is not None
             ]
             cr3_total = round(sum(cr3_parts), 3) if cr3_parts else None
-            cursor.execute(
-                """
-                INSERT INTO production_plan_table (report_month, plant_name, item_name, month_actual)
-                VALUES (%s, %s, %s, %s)
-                AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
-                """,
-                (db_report_month, "BSL", "CR III Total Saleable", cr3_total),
-            )
+            rp.upsert_row(cursor, "abp", db_report_month, "BSL", "CR III Total Saleable", cr3_total)
 
         if vals_extracted == 0:
             raise ValueError(

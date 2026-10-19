@@ -31,6 +31,7 @@ import openpyxl
 from openpyxl.utils import get_column_letter
 
 import db
+from repo import production as rp
 from extraction_utils import calculate_tmi_consumption
 
 try:
@@ -640,11 +641,7 @@ def extract_and_save_excel(file_path: str, report_month: str = None,
                     val = round(val / 1000.0, 3)
                 vals_extracted += 1
 
-            cursor.execute("""
-                INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
-                VALUES (%s, %s, %s, %s)
-                AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
-            """, (db_report_month, "BSP", item_name, val))
+            rp.upsert_row(cursor, "actual", db_report_month, "BSP", item_name, val)
 
         if vals_extracted == 0:
             raise ValueError(
@@ -658,6 +655,7 @@ def extract_and_save_excel(file_path: str, report_month: str = None,
         import sys
         sys.path.insert(0, os.path.dirname(__file__))
         import db as _db
+        from repo import production as rp
         _db.log_extraction(
             plant="BSP", report_month=db_report_month,
             file_name=source_file_name, sheet_name="S1",
@@ -1678,12 +1676,7 @@ def _extract_mis2_furnace_preview(wb, report_month: str) -> dict:
         try:
             _conn = db.connect()
             _cur = _conn.cursor()
-            _cur.execute(
-                "SELECT month_actual FROM production_table "
-                "WHERE report_month=%s AND plant_name='BSP' AND item_name='SP-3'",
-                (db_month,),
-            )
-            _row = _cur.fetchone()
+            _row = rp.value_row(_cur, "actual", db_month, "BSP", "SP-3")
             _conn.close()
             sp3_total = _row[0] if _row and _row[0] is not None else None
         except Exception:

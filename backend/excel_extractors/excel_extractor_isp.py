@@ -144,6 +144,7 @@ def _extract_morning_report(wb, source_file_name: str) -> bool:
     import sys
     sys.path.insert(0, os.path.dirname(__file__))
     import db
+    from repo import production as rp
 
     ws = wb["DAILYREPORT1"]
 
@@ -180,11 +181,7 @@ def _extract_morning_report(wb, source_file_name: str) -> bool:
             vals_extracted += 1
             if item_name not in NO_CONVERT:
                 val = round(val / 1000.0, 3)
-        cursor.execute("""
-            INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
-            VALUES (%s, %s, %s, %s)
-            AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
-        """, (db_report_month, "ISP", item_name, val))
+        rp.upsert_row(cursor, "actual", db_report_month, "ISP", item_name, val)
 
     for item_name, cell in production_cells.items():
         _save(item_name, clean_val(ws[cell].value))
@@ -523,6 +520,7 @@ def _extract_monthly_report(wb, report_month: str, source_file_name: str) -> boo
     import sys
     sys.path.insert(0, os.path.dirname(__file__))
     import db
+    from repo import production as rp
 
     if not report_month:
         raise ValueError(
@@ -577,11 +575,7 @@ def _extract_monthly_report(wb, report_month: str, source_file_name: str) -> boo
             vals_extracted += 1
             if item_name not in NO_CONVERT:
                 val = round(val / 1000.0, 3)
-        cursor.execute("""
-            INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
-            VALUES (%s, %s, %s, %s)
-            AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
-        """, (db_report_month, "ISP", item_name, val))
+        rp.upsert_row(cursor, "actual", db_report_month, "ISP", item_name, val)
 
     # Machine-wise sinter production ("SP M/c-1"/"SP M/c-2") lives on the
     # separate 'SINTER' tab under "MACHINE WISE SINTER PRODUCTION", not on
@@ -599,21 +593,13 @@ def _extract_monthly_report(wb, report_month: str, source_file_name: str) -> boo
             if val is not None:
                 vals_extracted += 1
                 val = round(val / 1000.0, 3)
-            cursor.execute("""
-                INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
-                VALUES (%s, %s, %s, %s)
-                AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
-            """, (db_report_month, "ISP", item_name, val))
+            rp.upsert_row(cursor, "actual", db_report_month, "ISP", item_name, val)
 
     for item_name, raw_val in _extract_despatch(wb, col, db_report_month).items():
         val = round(raw_val / 1000.0, 3) if raw_val is not None else None
         if val is not None:
             vals_extracted += 1
-        cursor.execute("""
-            INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
-            VALUES (%s, %s, %s, %s)
-            AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
-        """, (db_report_month, "ISP", item_name, val))
+        rp.upsert_row(cursor, "actual", db_report_month, "ISP", item_name, val)
 
     if vals_extracted == 0:
         raise ValueError(

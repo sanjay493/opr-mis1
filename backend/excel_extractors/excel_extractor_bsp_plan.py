@@ -3,6 +3,7 @@ import logging
 import os
 from typing import Optional
 import db
+from repo import production as rp
 
 logger = logging.getLogger("excel_extractor_plan")
 
@@ -161,11 +162,7 @@ def extract_and_save_excel_plan(file_path: str, financial_year: str) -> bool:
                         val = round(val, 3)
 
                 # Insert or replace in production_plan_table (using column 'month_actual' as per DB schema)
-                cursor.execute("""
-                    INSERT INTO production_plan_table (report_month, plant_name, item_name, month_actual)
-                    VALUES (%s, %s, %s, %s)
-                    AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
-                """, (db_report_month, "BSP", db_item, val))
+                rp.upsert_row(cursor, "abp", db_report_month, "BSP", db_item, val)
                 
         # Validation: Verify that we extracted some numeric values
         if vals_extracted == 0:
