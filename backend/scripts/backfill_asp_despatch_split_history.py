@@ -53,6 +53,7 @@ BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BACKEND_DIR)
 
 import db  # noqa: E402
+from repo import production as rp  # noqa: E402
 from excel_extractors.pdf_extractor_asp import (  # noqa: E402
     _load_pdf_word_rows, _detect_fl_report_month, _fl_prev_month,
     _parse_fl_two_month, parse_fl_last_year_column,
@@ -174,11 +175,7 @@ def main():
     saved = 0
     try:
         for (report_month, item_name), (value, _source) in claimed.items():
-            cur.execute("""
-                INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
-                VALUES (%s, %s, %s, %s)
-                AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
-            """, (report_month, PLANT, item_name, value))
+            rp.upsert_row(cur, "actual", report_month, PLANT, item_name, value)
             saved += 1
         conn.commit()
     finally:

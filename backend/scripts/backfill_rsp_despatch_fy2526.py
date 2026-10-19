@@ -39,6 +39,7 @@ sys.path.insert(0, os.path.join(BACKEND_DIR, "excel_extractors"))
 
 import openpyxl  # noqa: E402
 import db  # noqa: E402
+from repo import production as rp  # noqa: E402
 from excel_extractors.excel_extractor_rsp import (  # noqa: E402
     _find_despatch_sheet, _build_despatch_cells, clean_val, COL_MAP_P9,
 )
@@ -103,11 +104,7 @@ def main():
         for report_month, vals in by_month.items():
             for item_name, value_tonnes in vals.items():
                 stored = round(value_tonnes / 1000.0, 3)
-                cur.execute("""
-                    INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
-                    VALUES (%s, %s, %s, %s)
-                    AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
-                """, (report_month, PLANT, item_name, stored))
+                rp.upsert_row(cur, "actual", report_month, PLANT, item_name, stored)
                 saved += 1
         conn.commit()
     finally:

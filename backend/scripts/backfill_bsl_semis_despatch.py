@@ -45,6 +45,7 @@ sys.path.insert(0, os.path.join(BACKEND_DIR, "excel_extractors"))
 import pdfplumber  # noqa: E402
 import openpyxl  # noqa: E402
 import db  # noqa: E402
+from repo import production as rp  # noqa: E402
 from excel_extractors.excel_extractor_bsl import (  # noqa: E402
     extract_preview_main_products_pdf, _dpr_config, _resolve_dpr_cells,
     _dpr_value_and_alert, _dpr_cum_cell, clean_val,
@@ -185,11 +186,7 @@ def main():
     cur = conn.cursor()
     try:
         for report_month, stored in by_month.items():
-            cur.execute("""
-                INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
-                VALUES (%s, %s, %s, %s)
-                AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
-            """, (report_month, PLANT, ITEM, stored))
+            rp.upsert_row(cur, "actual", report_month, PLANT, ITEM, stored)
         conn.commit()
     finally:
         conn.close()

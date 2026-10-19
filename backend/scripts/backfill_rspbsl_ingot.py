@@ -28,6 +28,7 @@ BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BACKEND_DIR)
 
 import db  # noqa: E402
+from repo import production as rp  # noqa: E402
 
 SOURCE_FILE = r"D:\opr-mis1\Report_format\RSPBSL_INGOT.xlsx"
 ITEM_NAME = "SMS-1 Ingot"
@@ -61,24 +62,15 @@ def extract_rows():
 def current_db_values():
     conn = db.connect()
     cur = conn.cursor()
-    placeholders = ",".join("%s" for _ in PLANTS)
-    cur.execute(
-        f"SELECT plant_name, report_month, month_actual FROM production_table "
-        f"WHERE item_name=%s AND plant_name IN ({placeholders})",
-        (ITEM_NAME, *PLANTS.keys()),
-    )
-    out = {(plant, month): value for plant, month, value in cur.fetchall()}
+    out = {(plant, month): value
+           for plant, month, value in rp.item_plants_all_months(cur, ITEM_NAME, list(PLANTS.keys()))}
     conn.close()
     return out
 
 
 def upsert(plant, report_month, value):
     conn = db.connect()
-    conn.execute("""
-        INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
-        VALUES (%s, %s, %s, %s)
-        AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
-    """, (report_month, plant, ITEM_NAME, value))
+    rp.upsert_row(conn, "actual", report_month, plant, ITEM_NAME, value)
     conn.commit()
     conn.close()
 

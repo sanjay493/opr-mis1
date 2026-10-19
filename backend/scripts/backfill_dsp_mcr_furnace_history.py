@@ -41,6 +41,7 @@ sys.path.insert(0, BACKEND_DIR)
 sys.path.insert(0, os.path.join(BACKEND_DIR, "excel_extractors"))
 
 import db  # noqa: E402
+from repo import production as rp  # noqa: E402
 import excel_extractor_dsp as dsp  # noqa: E402
 
 PLANT = "DSP"
@@ -60,11 +61,7 @@ def extract_file(fname: str):
 
 
 def existing_months(cur, item_name):
-    cur.execute(
-        "SELECT report_month FROM production_table WHERE plant_name=%s AND item_name=%s",
-        (PLANT, item_name),
-    )
-    return {row[0] for row in cur.fetchall()}
+    return {row[0] for row in rp.plant_item_months(cur, PLANT, item_name)}
 
 
 def main():
@@ -128,11 +125,7 @@ def main():
     saved = 0
     try:
         for (report_month, item_name), value in to_write.items():
-            cur.execute("""
-                INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
-                VALUES (%s, %s, %s, %s)
-                AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
-            """, (report_month, PLANT, item_name, value))
+            rp.upsert_row(cur, "actual", report_month, PLANT, item_name, value)
             saved += 1
         conn.commit()
     finally:

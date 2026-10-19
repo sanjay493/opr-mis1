@@ -26,6 +26,7 @@ sys.path.insert(0, BACKEND_DIR)
 sys.path.insert(0, os.path.join(BACKEND_DIR, "excel_extractors"))
 
 import db  # noqa: E402
+from repo import production as rp  # noqa: E402
 from main import normalize_item_name  # noqa: E402
 from excel_extractors import pdf_extractor_asp  # noqa: E402
 from excel_extractors import excel_extractor_asp  # noqa: E402
@@ -126,22 +127,18 @@ def extract_plan_preview():
 
 
 def current_db_values(table):
+    """table: repo.production measure ('actual' | 'abp')."""
     conn = db.connect()
     cur = conn.cursor()
-    cur.execute(f"SELECT item_name, report_month, month_actual FROM {table} WHERE plant_name=%s",
-                (PLANT,))
-    out = {(item, month): value for item, month, value in cur.fetchall()}
+    out = {(item, month): value for item, month, value in rp.plant_all_rows(cur, table, PLANT)}
     conn.close()
     return out
 
 
 def upsert(table, report_month, item_name, value):
+    """table: repo.production measure ('actual' | 'abp')."""
     conn = db.connect()
-    conn.execute(f"""
-        INSERT INTO {table} (report_month, plant_name, item_name, month_actual)
-        VALUES (%s, %s, %s, %s)
-        AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
-    """, (report_month, PLANT, item_name, value))
+    rp.upsert_row(conn, table, report_month, PLANT, item_name, value)
     conn.commit()
     conn.close()
 
@@ -222,8 +219,8 @@ def main():
             print(f"  {os.path.basename(f)}: {err}")
         print()
 
-    cur_actual = current_db_values("production_table")
-    cur_plan = current_db_values("production_plan_table")
+    cur_actual = current_db_values("actual")
+    cur_plan = current_db_values("abp")
 
     def print_diff(label, new_vals, cur_vals):
         print(f"--- {label}: {len(new_vals)} (item, month) values from source files ---")
@@ -245,9 +242,9 @@ def main():
         return
 
     for (item, month), (val, _src, _primary) in final.items():
-        upsert("production_table", month, item, val)
+        upsert("actual", month, item, val)
     for (item, month), (val, _src, _primary) in plan_final.items():
-        upsert("production_plan_table", month, item, val)
+        upsert("abp", month, item, val)
     print(f"APPLIED — {n1 + n2} value(s) written to the DB.")
 
 

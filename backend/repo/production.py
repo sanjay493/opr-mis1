@@ -1389,3 +1389,33 @@ def plant_items_month_values(cur, plant, items, months):
         f"WHERE plant_name=%s AND item_name IN ({ph_i}) AND report_month IN ({ph_m})",
         [plant, *items, *months])
     return cur.fetchall()
+
+
+# ── scripts/ (one-off backfills / validators) ──────────────────────────────
+
+def plant_rows_for_months(cur, plant, months):
+    """fetchall() of (report_month, item_name, month_actual) actuals for one
+    plant over months."""
+    ph = ",".join(["%s"] * len(months))
+    cur.execute(
+        f"SELECT report_month, item_name, month_actual FROM production_table "
+        f"WHERE plant_name=%s AND report_month IN ({ph})",
+        (plant, *months),
+    )
+    return cur.fetchall()
+
+
+def plant_item_months(cur, plant, item_name):
+    """fetchall() of (report_month,) actual rows for one plant/item."""
+    cur.execute(
+        "SELECT report_month FROM production_table WHERE plant_name=%s AND item_name=%s",
+        (plant, item_name),
+    )
+    return cur.fetchall()
+
+
+def plant_all_rows(cur, measure: Measure, plant):
+    """fetchall() of (item_name, report_month, month_actual) for one plant."""
+    cur.execute(f"SELECT item_name, report_month, month_actual FROM {_table(measure)} WHERE plant_name=%s",
+                (plant,))
+    return cur.fetchall()

@@ -28,6 +28,7 @@ sys.path.insert(0, BACKEND_DIR)
 sys.path.insert(0, os.path.join(BACKEND_DIR, "excel_extractors"))
 
 import db  # noqa: E402
+from repo import production as rp  # noqa: E402
 from main import normalize_item_name  # noqa: E402
 from excel_extractors.pdf_extractor_ssp import (  # noqa: E402
     _load_pdf_text, _detect_month_from_pdf_text, extract_preview,
@@ -63,20 +64,14 @@ def extract_file(path):
 def current_db_values():
     conn = db.connect()
     cur = conn.cursor()
-    cur.execute("SELECT item_name, report_month, month_actual FROM production_table WHERE plant_name=%s",
-                (PLANT,))
-    out = {(item, month): value for item, month, value in cur.fetchall()}
+    out = {(item, month): value for item, month, value in rp.plant_all_rows(cur, "actual", PLANT)}
     conn.close()
     return out
 
 
 def upsert(report_month, item_name, value):
     conn = db.connect()
-    conn.execute("""
-        INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
-        VALUES (%s, %s, %s, %s)
-        AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
-    """, (report_month, PLANT, item_name, value))
+    rp.upsert_row(conn, "actual", report_month, PLANT, item_name, value)
     conn.commit()
     conn.close()
 

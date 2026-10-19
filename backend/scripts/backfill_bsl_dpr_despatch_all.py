@@ -34,6 +34,7 @@ sys.path.insert(0, BACKEND_DIR)
 sys.path.insert(0, os.path.join(BACKEND_DIR, "excel_extractors"))
 
 import db  # noqa: E402
+from repo import production as rp  # noqa: E402
 import excel_extractor_bsl as bsl  # noqa: E402
 
 PLANT = "BSL"
@@ -116,11 +117,7 @@ def main():
     try:
         for report_month, (vals, _completeness, _fname) in best.items():
             for item_name, value in vals.items():
-                cur.execute("""
-                    INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
-                    VALUES (%s, %s, %s, %s)
-                    AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
-                """, (report_month, PLANT, item_name, value))
+                rp.upsert_row(cur, "actual", report_month, PLANT, item_name, value)
                 saved += 1
         conn.commit()
     finally:

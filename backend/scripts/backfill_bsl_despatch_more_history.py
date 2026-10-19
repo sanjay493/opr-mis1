@@ -55,6 +55,7 @@ sys.path.insert(0, os.path.join(BACKEND_DIR, "excel_extractors"))
 
 import openpyxl  # noqa: E402
 import db  # noqa: E402
+from repo import production as rp  # noqa: E402
 from excel_extractors.excel_extractor_bsl import (  # noqa: E402
     extract_preview_main_products_pdf, _dpr_config, _resolve_dpr_cells,
     _dpr_value_and_alert, _dpr_cum_cell, _dpr_is_mid_month, clean_val,
@@ -210,11 +211,7 @@ def main():
     try:
         for report_month, vals in all_months.items():
             for item_name, value_000t in vals.items():
-                cur.execute("""
-                    INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
-                    VALUES (%s, %s, %s, %s)
-                    AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
-                """, (report_month, PLANT, item_name, value_000t))
+                rp.upsert_row(cur, "actual", report_month, PLANT, item_name, value_000t)
                 saved += 1
         conn.commit()
     finally:

@@ -31,6 +31,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import db
+from repo import production as rp
 from backfill_cost_trend_202608 import DATA, PLANTS
 
 ITEM_NAME = {"HM": "Hot Metal", "CS": "Total Crude Steel", "SS": "Saleable Steel"}
@@ -55,12 +56,7 @@ ANNUAL_2526_IDX = 20
 def get_production(plant: str, item: str, months: list) -> float:
     conn = db.connect()
     cur = conn.cursor()
-    ph = ",".join(["%s"] * len(months))
-    cur.execute(
-        f"SELECT SUM(month_actual) FROM production_table WHERE plant_name=%s AND item_name=%s AND report_month IN ({ph})",
-        (plant, item, *months),
-    )
-    row = cur.fetchone()
+    row = rp.sum_months_row(cur, "actual", plant, item, months)
     conn.close()
     return float(row[0]) if row and row[0] is not None else 0.0
 
