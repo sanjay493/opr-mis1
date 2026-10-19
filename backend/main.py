@@ -3560,7 +3560,7 @@ async def get_item_mapping_suggestions(plant: str):
     # Process-order the dropdown; sort on the normalized form but keep the
     # raw DB name, since aliases must map to what's actually stored.
     items = sorted(
-        (row[0] for row in rp.distinct_actual_items(cursor, plant)),
+        (row[0] for row in rp.distinct_items(cursor, "actual", plant)),
         key=lambda n: production_item_sort_key(normalize_item_name(n, plant)),
     )
 

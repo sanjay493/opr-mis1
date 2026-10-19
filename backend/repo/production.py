@@ -477,18 +477,6 @@ def upsert_row(cur, measure: Measure, month, plant, item, value) -> None:
     cur.execute(_UPSERT_ROW_SQL.format(table=_table(measure)), (month, plant, item, value))
 
 
-def upsert_rows(cur, measure: Measure, rows) -> None:
-    """executemany form of upsert_row on `cur` (rows of (month, plant, item, value))."""
-    cur.executemany(_UPSERT_ROW_SQL.format(table=_table(measure)), rows)
-
-
-def delete_row(cur, measure: Measure, month, plant, item) -> None:
-    """Delete one (month, plant, item) row on `cur`."""
-    cur.execute(f"DELETE FROM {_table(measure)} "
-                "WHERE report_month=%s AND plant_name=%s AND item_name=%s",
-                (month, plant, item))
-
-
 def value_row(cur, measure: Measure, month, plant, item):
     """fetchone() of `SELECT month_actual` for one (month, plant, item)."""
     cur.execute(f"SELECT month_actual FROM {_table(measure)} "
@@ -583,15 +571,6 @@ def upsert_bsl_furnace_production(cur, month, unit, value):
            AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual""",
         (month, unit, value),
     )
-
-
-def distinct_actual_items(cursor, plant):
-    """fetchall() of DISTINCT item_name in production_table for a plant."""
-    cursor.execute(
-        "SELECT DISTINCT item_name FROM production_table WHERE plant_name = %s",
-        (plant,)
-    )
-    return cursor.fetchall()
 
 
 def plant_month_plan_items(cursor, plant, month):
