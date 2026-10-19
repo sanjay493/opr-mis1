@@ -9,6 +9,7 @@ import html
 import math
 import db
 from repo import production as rp
+from repo import ipt as ript
 from page4 import _p4_ytd_sum, _p4_conv_actuals
 from page_at_a_glance import _declutter_1d
 
@@ -240,14 +241,7 @@ def _ipt_transfer_ytd(cur, months: list) -> float:
     route for it). ipt_table stores its actual in plain Tonnes (unlike
     production_table's '000 T everywhere else on this page) — /1000 to
     match."""
-    ph_m = ",".join(["%s"] * len(months))
-    ph_i = ",".join(["%s"] * len(_IPT_SEMIS_ITEMS))
-    cur.execute(
-        f"SELECT COALESCE(SUM(actual),0) FROM ipt_table "
-        f"WHERE report_month IN ({ph_m}) AND item IN ({ph_i})",
-        (*months, *_IPT_SEMIS_ITEMS),
-    )
-    ipt_t = float(cur.fetchone()[0] or 0.0)
+    ipt_t = float(ript.items_actual_sum_row(cur, months, _IPT_SEMIS_ITEMS)[0] or 0.0)
 
     ingot = float(rp.dsp_bottom_pouring_ingot_sum(cur, months)[0] or 0.0)
 

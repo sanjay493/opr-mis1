@@ -64,6 +64,7 @@ BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BACKEND_DIR)
 
 import db  # noqa: E402
+from repo import special_steel as rss  # noqa: E402
 
 SRC_FILE = os.path.join(BACKEND_DIR, "..", "Report_format", "22-23 Special Steel.xlsx")
 
@@ -180,14 +181,8 @@ def _parse_bsp(wb) -> list:
 def current_db_values(plants, months):
     conn = db.connect()
     cur = conn.cursor()
-    ph_p = ",".join(["%s"] * len(plants))
-    ph_m = ",".join(["%s"] * len(months))
-    cur.execute(
-        f"SELECT plant_name, report_month, product, quality_grade, section, actual_despatch "
-        f"FROM special_steel_orders WHERE plant_name IN ({ph_p}) AND report_month IN ({ph_m})",
-        (*plants, *months),
-    )
-    out = {(p, m, prod, grade, sec): val for p, m, prod, grade, sec, val in cur.fetchall()}
+    out = {(p, m, prod, grade, sec): val
+           for p, m, prod, grade, sec, val in rss.despatch_rows(cur, plants, months)}
     conn.close()
     return out
 

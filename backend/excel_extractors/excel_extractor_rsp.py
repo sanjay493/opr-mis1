@@ -1250,17 +1250,12 @@ def _rsp_ss_grade_case_map(db_month: str) -> dict:
     the spelling already on record instead of letting it read as a new grade —
     see the caller in _extract_rsp_ss_preview for what breaks otherwise."""
     import db as _db
+    from repo import special_steel as rss
     try:
         conn = _db.connect()
         cur = conn.cursor()
-        cur.execute("""
-            SELECT product, quality_grade, report_month
-            FROM special_steel_orders
-            WHERE plant_name='RSP' AND report_month < %s
-            ORDER BY report_month
-        """, (db_month,))
         out = {}
-        for product, grade, _month in cur.fetchall():
+        for product, grade, _month in rss.rsp_prior_grade_rows(cur, db_month):
             out[(product, grade.upper())] = grade
         conn.close()
         return out

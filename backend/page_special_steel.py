@@ -25,6 +25,7 @@ import math
 import datetime as _dt
 import db
 from repo import production as rp
+from repo import special_steel as rss
 
 
 # ── grade clubbing ──────────────────────────────────────────────────────────
@@ -114,12 +115,7 @@ def _resolve_clubs(plant: str, product: str) -> tuple:
     special_steel_grade_clubs — see module-level grade-clubbing note."""
     conn = db.connect()
     cur = conn.cursor()
-    cur.execute(
-        "SELECT quality_grade, club_label FROM special_steel_grade_clubs "
-        "WHERE plant_name=%s AND product=%s ORDER BY club_label, quality_grade",
-        (plant, product),
-    )
-    rows = cur.fetchall()
+    rows = rss.ordered_club_rows(cur, plant, product)
     conn.close()
 
     grade_to_club = {}
@@ -211,59 +207,24 @@ def _total(label, orders, actual, cply, row_type="product-total",
 # ── DB helpers ────────────────────────────────────────────────────────────────
 
 def _fetch_group(cur, month, plant, product):
-    cur.execute("""
-        SELECT quality_grade, section, order_qty, actual_despatch
-        FROM special_steel_orders
-        WHERE report_month=%s AND plant_name=%s AND product=%s
-        ORDER BY sort_order, quality_grade, section
-    """, (month, plant, product))
-    return cur.fetchall()
+    return rss.group_rows(cur, month, plant, product)
 
 def _fetch_all_grades(cur, all_months, plant, product):
     """Union of (quality_grade, section) pairs that have any record in the given
     months, ordered by sort_order. Covers current month, YTD, CPLY and CPLY-YTD.
     section is '' for plants without a section breakdown."""
-    ph = ",".join(["%s"] * len(all_months))
-    cur.execute(f"""
-        SELECT quality_grade, section, MIN(sort_order)
-        FROM special_steel_orders
-        WHERE report_month IN ({ph}) AND plant_name=%s AND product=%s
-        GROUP BY quality_grade, section
-        ORDER BY MIN(sort_order), quality_grade, section
-    """, (*all_months, plant, product))
-    return [(r[0], r[1]) for r in cur.fetchall()]
+    return [(r[0], r[1]) for r in rss.all_grade_rows(cur, all_months, plant, product)]
 
 def _fetch_cply(cur, cply_month, plant, product):
-    cur.execute("""
-        SELECT quality_grade, section, actual_despatch
-        FROM special_steel_orders
-        WHERE report_month=%s AND plant_name=%s AND product=%s
-    """, (cply_month, plant, product))
-    return {(r[0], r[1]): r[2] for r in cur.fetchall()}
+    return {(r[0], r[1]): r[2] for r in rss.cply_rows(cur, cply_month, plant, product)}
 
 def _fetch_group_ytd(cur, ytd_months, plant, product):
     """(quality_grade, section) → (sum_order_qty, sum_actual_despatch) across YTD months."""
-    ph = ",".join(["%s"] * len(ytd_months))
-    cur.execute(f"""
-        SELECT quality_grade, section,
-               COALESCE(SUM(order_qty),0),
-               COALESCE(SUM(actual_despatch),0)
-        FROM special_steel_orders
-        WHERE report_month IN ({ph}) AND plant_name=%s AND product=%s
-        GROUP BY quality_grade, section
-    """, (*ytd_months, plant, product))
-    return {(r[0], r[1]): (r[2], r[3]) for r in cur.fetchall()}
+    return {(r[0], r[1]): (r[2], r[3]) for r in rss.group_ytd_rows(cur, ytd_months, plant, product)}
 
 def _fetch_cply_ytd(cur, cply_ytd_months, plant, product):
     """(quality_grade, section) → sum_actual_despatch across CPLY YTD months."""
-    ph = ",".join(["%s"] * len(cply_ytd_months))
-    cur.execute(f"""
-        SELECT quality_grade, section, COALESCE(SUM(actual_despatch),0)
-        FROM special_steel_orders
-        WHERE report_month IN ({ph}) AND plant_name=%s AND product=%s
-        GROUP BY quality_grade, section
-    """, (*cply_ytd_months, plant, product))
-    return {(r[0], r[1]): r[2] for r in cur.fetchall()}
+    return {(r[0], r[1]): r[2] for r in rss.cply_ytd_rows(cur, cply_ytd_months, plant, product)}
 
 def _get_prod(cur, month, plant, item):
     r = rp.value_row(cur, "actual", month, plant, item)
@@ -306,13 +267,7 @@ def _get_abp_sum(cur, months, plant):
     cply, from special_steel_orders) is already in T — so this is scaled
     ×1000 here, same as the Saleable Steel row's own ABP a few lines down
     in generate_special_steel_sail."""
-    ph = ",".join(["%s"] * len(months))
-    cur.execute(f"""
-        SELECT COALESCE(SUM(abp_qty),0)
-        FROM special_steel_abp_table
-        WHERE report_month IN ({ph}) AND plant_name=%s
-    """, (*months, plant))
-    r = cur.fetchone()
+    r = rss.abp_sum_row(cur, months, plant)
     return r[0] * 1000 if r and r[0] else None
 
 
@@ -605,8 +560,6 @@ def _gen_isp(cur, month, cply_month, ytd_months, cply_ytd_months):
         ("Semis",    ["150 BLT", "200 BLM"]),
         ("US Mill",  ["STRUCTURALS"]),
     ]
-    ph_ytd  = ",".join(["%s"] * len(ytd_months))
-    ph_cytd = ",".join(["%s"] * len(cply_ytd_months))
     rows    = []
     tot_o = tot_a = tot_c = tot_co = tot_ca = tot_cc = 0.0
 
@@ -614,37 +567,19 @@ def _gen_isp(cur, month, cply_month, ytd_months, cply_ytd_months):
         o = a = co = ca = 0.0
         c = cc = None
         for mill in mills:
-            cur.execute("""
-                SELECT order_qty, actual_despatch FROM special_steel_orders
-                WHERE report_month=%s AND plant_name='ISP' AND product=%s
-            """, (month, mill))
-            r = cur.fetchone()
+            r = rss.isp_month_row(cur, month, mill)
             o += (r[0] or 0) if r else 0
             a += (r[1] or 0) if r else 0
 
-            cur.execute("""
-                SELECT actual_despatch FROM special_steel_orders
-                WHERE report_month=%s AND plant_name='ISP' AND product=%s
-            """, (cply_month, mill))
-            rc = cur.fetchone()
+            rc = rss.isp_actual_row(cur, cply_month, mill)
             if rc and rc[0] is not None:
                 c = (c or 0) + rc[0]
 
-            cur.execute(f"""
-                SELECT COALESCE(SUM(order_qty),0), COALESCE(SUM(actual_despatch),0)
-                FROM special_steel_orders
-                WHERE report_month IN ({ph_ytd}) AND plant_name='ISP' AND product=%s
-            """, (*ytd_months, mill))
-            ry = cur.fetchone()
+            ry = rss.isp_ytd_sums_row(cur, ytd_months, mill)
             co += (ry[0] or 0) if ry else 0
             ca += (ry[1] or 0) if ry else 0
 
-            cur.execute(f"""
-                SELECT COALESCE(SUM(actual_despatch),0)
-                FROM special_steel_orders
-                WHERE report_month IN ({ph_cytd}) AND plant_name='ISP' AND product=%s
-            """, (*cply_ytd_months, mill))
-            ryc = cur.fetchone()
+            ryc = rss.isp_actual_sum_row(cur, cply_ytd_months, mill)
             if ryc and ryc[0]:
                 cc = (cc or 0) + ryc[0]
 
@@ -836,35 +771,17 @@ def generate_special_steel_sail(report_month: str) -> dict:
     try:
         plants  = ["BSP", "DSP", "RSP", "BSL", "ISP"]
         rows    = []
-        ph_ytd  = ",".join(["%s"] * len(ytd_months))
-        ph_cytd = ",".join(["%s"] * len(cply_ytd_months))
         sail_o = sail_a = sail_c = sail_co = sail_ca = sail_cc = 0.0
         sail_abp_fy = 0.0
 
         for plant in plants:
-            cur.execute("""
-                SELECT COALESCE(SUM(order_qty),0), COALESCE(SUM(actual_despatch),0)
-                FROM special_steel_orders WHERE report_month=%s AND plant_name=%s
-            """, (report_month, plant))
-            o, a = cur.fetchone()
+            o, a = rss.plant_month_sums_row(cur, report_month, plant)
 
-            cur.execute("""
-                SELECT COALESCE(SUM(actual_despatch),0)
-                FROM special_steel_orders WHERE report_month=%s AND plant_name=%s
-            """, (cply_month, plant))
-            c = (cur.fetchone() or [0])[0]
+            c = (rss.plant_month_actual_row(cur, cply_month, plant) or [0])[0]
 
-            cur.execute(f"""
-                SELECT COALESCE(SUM(order_qty),0), COALESCE(SUM(actual_despatch),0)
-                FROM special_steel_orders WHERE report_month IN ({ph_ytd}) AND plant_name=%s
-            """, (*ytd_months, plant))
-            co, ca = cur.fetchone()
+            co, ca = rss.plant_months_sums_row(cur, ytd_months, plant)
 
-            cur.execute(f"""
-                SELECT COALESCE(SUM(actual_despatch),0)
-                FROM special_steel_orders WHERE report_month IN ({ph_cytd}) AND plant_name=%s
-            """, (*cply_ytd_months, plant))
-            cc = (cur.fetchone() or [0])[0]
+            cc = (rss.plant_months_actual_row(cur, cply_ytd_months, plant) or [0])[0]
 
             abp_fy = _get_abp_sum(cur, fy_months, plant)
 
@@ -893,16 +810,8 @@ def generate_special_steel_sail(report_month: str) -> dict:
         # Plant's own figures only, since only SSP among ASP/VISL/SSP
         # actually produces Special Steel; nothing to change there, only
         # the label below.
-        cur.execute("""
-            SELECT COALESCE(SUM(order_qty),0) FROM special_steel_orders
-            WHERE report_month=%s AND plant_name='SSPs'
-        """, (report_month,))
-        ssps_o = (cur.fetchone() or [0])[0]
-        cur.execute(f"""
-            SELECT COALESCE(SUM(order_qty),0) FROM special_steel_orders
-            WHERE report_month IN ({ph_ytd}) AND plant_name='SSPs'
-        """, (*ytd_months,))
-        ssps_co = (cur.fetchone() or [0])[0]
+        ssps_o = (rss.ssps_order_row(cur, report_month) or [0])[0]
+        ssps_co = (rss.ssps_order_months_row(cur, ytd_months) or [0])[0]
 
         ssps_a  = _ssps_special_steel(cur, [report_month])
         ssps_c  = _ssps_special_steel(cur, [cply_month])

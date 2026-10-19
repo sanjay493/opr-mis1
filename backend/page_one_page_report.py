@@ -36,6 +36,7 @@ from openpyxl.utils import get_column_letter
 import db
 from constants import FIVE_PLANTS as _5P
 from repo import production as rp
+from repo import stock as rst
 from page_techno import generate_summary_te_table
 
 _MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -86,8 +87,7 @@ def _sales_data(cur, item, month):
     """Raw data_json for one (report_month, item) — every field exactly as
     the source department reported it, no computation. None if not extracted."""
     import json
-    cur.execute("SELECT data_json FROM sail_sales_table WHERE report_month=%s AND item_name=%s", (month, item))
-    r = cur.fetchone()
+    r = rst.sales_data_row(cur, month, item)
     if not r or not r[0]:
         return {}
     data = r[0] if isinstance(r[0], dict) else json.loads(r[0])
@@ -329,9 +329,7 @@ def _stock_reference_dates(as_on: date):
 
 
 def _stock_value(cur, item, snap_date):
-    cur.execute("SELECT value FROM sail_stock_snapshot_table WHERE snapshot_date=%s AND item_name=%s",
-                (snap_date.isoformat(), item))
-    r = cur.fetchone()
+    r = rst.snapshot_value_row(cur, snap_date.isoformat(), item)
     return r[0] if r and r[0] is not None else None
 
 

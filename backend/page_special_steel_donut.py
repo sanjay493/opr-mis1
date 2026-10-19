@@ -125,6 +125,7 @@ import datetime as _dt
 import db
 from constants import ALL_PLANTS
 from repo import production as rp
+from repo import special_steel as rss
 from page_special_steel import _get_abp_sum, _SSPS_PLANTS
 from page_special_steel_trend import _sum_actual
 
@@ -316,15 +317,8 @@ def _special_fin_semis_split(cur, months: list, entity: str):
         return (qty if has else 0.0), 0.0
 
     semis_products = _SEMIS_PRODUCTS.get(entity, set())
-    ph = ",".join(["%s"] * len(months))
-    cur.execute(f"""
-        SELECT product, COALESCE(SUM(actual_despatch),0)
-        FROM special_steel_orders
-        WHERE report_month IN ({ph}) AND plant_name=%s
-        GROUP BY product
-    """, (*months, entity))
     fin, semis = 0.0, 0.0
-    for product, qty in cur.fetchall():
+    for product, qty in rss.product_actual_sums(cur, months, entity):
         if product in semis_products:
             semis += qty or 0.0
         else:

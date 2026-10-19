@@ -26,6 +26,7 @@ Column selection for a report month:
   • Var. column = (1st of next month) − (1st Apr of same FY)
 """
 import db
+from repo import stock as rst
 
 PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP"]
 TARGET_MONTH_COLS = 6
@@ -55,13 +56,8 @@ def _fmt(v):
 # ── data access ───────────────────────────────────────────────────────────────
 
 def _load_stock(cur, months):
-    ph = ",".join(["%s"] * len(months))
-    cur.execute(f"""
-        SELECT stock_month, plant_name, item_type, stock_type, stock
-        FROM stock_table WHERE stock_month IN ({ph})
-    """, months)
     data = {}
-    for m, p, it, st, v in cur.fetchall():
+    for m, p, it, st, v in rst.month_rows(cur, months):
         data.setdefault(m, {}).setdefault(p, {}).setdefault(it, {})[st or ""] = v
     return data
 

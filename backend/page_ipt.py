@@ -25,6 +25,7 @@ still shows up rather than erroring.
 """
 import db
 from page_prod_by_process import _sankey_svg
+from repo import ipt as ript
 
 _MON = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
         'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -153,34 +154,16 @@ def generate_ipt(report_month: str) -> dict:
     conn = db.connect()
     cur  = conn.cursor()
     try:
-        ph = ",".join(["%s"] * len(ytd_months))
-
         # union of routes seen this FY, keeping entry order
-        cur.execute(f"""
-            SELECT item, from_plant, to_plant, MAX(unit), MIN(sort_order)
-            FROM ipt_table
-            WHERE report_month IN ({ph})
-            GROUP BY item, from_plant, to_plant
-            ORDER BY MIN(sort_order), item, from_plant, to_plant
-        """, ytd_months)
-        routes = cur.fetchall()
+        routes = ript.routes(cur, ytd_months)
 
         # current-month values
-        cur.execute("""
-            SELECT item, from_plant, to_plant, plan, actual, plan_tonnage, actual_tonnage
-            FROM ipt_table WHERE report_month=%s
-        """, (report_month,))
-        cur_map = {(i, f, t): (p, a, pt, at) for i, f, t, p, a, pt, at in cur.fetchall()}
+        cur_map = {(i, f, t): (p, a, pt, at)
+                   for i, f, t, p, a, pt, at in ript.month_value_rows(cur, report_month)}
 
         # cumulative values (SUM skips NULLs; NULL when every value is NULL)
-        cur.execute(f"""
-            SELECT item, from_plant, to_plant,
-                   SUM(plan), SUM(actual), SUM(plan_tonnage), SUM(actual_tonnage)
-            FROM ipt_table
-            WHERE report_month IN ({ph})
-            GROUP BY item, from_plant, to_plant
-        """, ytd_months)
-        cum_map = {(i, f, t): (p, a, pt, at) for i, f, t, p, a, pt, at in cur.fetchall()}
+        cum_map = {(i, f, t): (p, a, pt, at)
+                   for i, f, t, p, a, pt, at in ript.cum_value_rows(cur, ytd_months)}
 
         # group routes by item, preserving order of first appearance
         sections, by_item, routes_by_item = [], {}, {}

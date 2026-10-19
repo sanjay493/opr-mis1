@@ -27,6 +27,7 @@ import datetime as _dt
 import math
 import db
 from repo import production as rp
+from repo import special_steel as rss
 from page_special_steel import _ssps_special_steel
 
 _PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP"]
@@ -112,7 +113,6 @@ def _sum_actual(cur, months: list, entity: str):
     Spl. FS/Spl. SS totals going N/A for the SSP row specifically. Accept
     both spellings here rather than assuming every caller was updated in
     lockstep with this module's own rename."""
-    ph = ",".join(["%s"] * len(months))
     total, has_any = 0.0, False
     for p in _entity_plants(entity):
         if p in (_SSPS, "SSPs"):
@@ -121,11 +121,7 @@ def _sum_actual(cur, months: list, entity: str):
                 has_any = True
                 total += _ssps_special_steel(cur, months)
             continue
-        cur.execute(f"""
-            SELECT COALESCE(SUM(actual_despatch),0), COUNT(*)
-            FROM special_steel_orders WHERE report_month IN ({ph}) AND plant_name=%s
-        """, (*months, p))
-        t, c = cur.fetchone()
+        t, c = rss.actual_sum_count_row(cur, months, p)
         if c > 0:
             has_any = True
             total += (t or 0)

@@ -49,6 +49,9 @@ from pathlib import Path
 import db
 from repo import production as rp
 from repo import techno as rt
+from repo import special_steel as rss
+from repo import stock as rst
+from repo import ipt as ript
 
 _TP_DIR = str(Path(__file__).parent / "techno_project")
 if _TP_DIR not in sys.path:
@@ -129,8 +132,8 @@ def _techno_data_presence(report_month: str) -> dict:
 
 def generate_missing_data(report_month: str) -> dict:
     prod_plants = rp.actual_plants_for_month(report_month)
-    ss_plants = _distinct_plants("special_steel_orders", "report_month", report_month)
-    stock_plants = _distinct_plants("stock_table", "stock_month", report_month)
+    ss_plants = rss.plants_for_month(report_month)
+    stock_plants = rst.plants_for_month(report_month)
     power_plants = _distinct_plants("power_data_table", "report_month", report_month)
     techno = _techno_data_presence(report_month)
 
@@ -234,7 +237,7 @@ def generate_missing_data(report_month: str) -> dict:
             "report_pages": "26",
             "checks": [{
                 "label": "All routes",
-                "present": _any_row("ipt_table", "report_month", report_month),
+                "present": ript.any_row_for_month(report_month),
                 "data_entry": [{"label": "IPT Status", "link": "/data-entry/ipt"}],
                 "note": "No rows can also mean no transfers occurred this month — verify before treating as missing.",
             }],
@@ -255,7 +258,7 @@ def generate_missing_data(report_month: str) -> dict:
             "report_pages": "19–24 (ABP column)",
             "checks": [{
                 "label": "All plants",
-                "present": _any_row("special_steel_abp_table", "report_month", report_month),
+                "present": rss.abp_any_row(report_month),
                 "data_entry": [{"label": "Special Steel ABP", "link": "/data-entry/special-steel-abp"}],
             }],
         },
