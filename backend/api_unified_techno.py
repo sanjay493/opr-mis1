@@ -19,6 +19,7 @@ if _TP_DIR not in sys.path:
     sys.path.insert(0, _TP_DIR)
 
 from db import init_db, merge_upsert_techno_data, get_techno_data, get_techno_months, enrich_techno_records_with_db, connect as db_connect
+from repo import techno as rt
 
 router = APIRouter(prefix="/api/techno", tags=["unified-techno"])
 
@@ -580,8 +581,7 @@ async def get_plants():
         init_db()
         conn = db.connect()
         cursor = conn.cursor()
-        cursor.execute("SELECT DISTINCT plant FROM techno_data ORDER BY plant")
-        plants = [row[0] for row in cursor.fetchall()]
+        plants = [row[0] for row in rt.distinct_plants(cursor)]
         conn.close()
 
         return {"plants": plants, "count": len(plants)}

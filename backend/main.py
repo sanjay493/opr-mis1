@@ -17,6 +17,7 @@ from pathlib import Path
 import db
 import dbengine
 from repo import production as rp
+from repo import techno as rt
 from constants import ALL_PLANTS as _FS_SAIL_8
 from constants import PAGE_MODULES
 from models import PDFRequest, ProductionEntry, ProductionEntryRequest, ProductionRangeSaveRequest, SpecialSteelSaveRequest, SpecialSteelAbpSaveRequest, Page3NarrativeRequest, CostTrendAnnualSaveRequest, CostTrendMonthlySaveRequest, SailMinesSaveRequest, MinesProductionDespatchSaveRequest
@@ -6632,9 +6633,8 @@ async def get_techno_parameters():
     try:
         conn = db.connect()
         cursor = conn.cursor()
-        cursor.execute("SELECT techno_json FROM techno_data")
         keys = set()
-        for (techno_json,) in cursor.fetchall():
+        for (techno_json,) in rt.all_json(cursor):
             try:
                 keys.update(json.loads(techno_json).get('month', {}).keys())
             except (json.JSONDecodeError, TypeError):
@@ -6683,15 +6683,7 @@ async def get_techno_data(plants: str = Query(""), parameters: str = Query("")):
         cursor = conn.cursor()
 
         # Get techno data for selected plants from new techno_data table
-        placeholders = ','.join(['%s'] * len(plant_list))
-        cursor.execute(f"""
-            SELECT plant, report_month, unit, techno_json
-            FROM techno_data
-            WHERE plant IN ({placeholders})
-            ORDER BY plant, report_month
-        """, plant_list)
-
-        rows = cursor.fetchall()
+        rows = rt.rows_for_plants(cursor, plant_list)
 
         # A plant has one techno_data row per unit (BF_Shop, BF-4, SMS-2, ...)
         # and the same key (e.g. coke_rate) can sit in both the shop row and
@@ -6737,13 +6729,7 @@ async def get_techno_data(plants: str = Query(""), parameters: str = Query("")):
         sail_missing = {}
         if set(_SAIL_DASHBOARD_PLANTS) <= set(plant_list) or 'SAIL' in plant_list:
             cursor = conn.cursor()
-            cursor.execute("""
-                SELECT report_month, techno_json
-                FROM techno_data
-                WHERE plant = 'SAIL'
-                ORDER BY report_month
-            """)
-            sail_rows = cursor.fetchall()
+            sail_rows = rt.sail_rows(cursor)
 
             if 'SAIL' not in data:
                 data['SAIL'] = {}
@@ -7220,11 +7206,7 @@ async def get_techno_page_targets(page: float = Query(...), fy: str = Query(...)
             for col in sec["columns"]:
                 key = (col["plant"], col["unit"])
                 if key not in cache:
-                    cur.execute(
-                        "SELECT techno_json FROM techno_plan_fy WHERE plant_name=%s AND unit=%s AND fy=%s",
-                        (*key, fy),
-                    )
-                    row = cur.fetchone()
+                    row = rt.plan_json_row(cur, *key, fy)
                     cache[key] = json.loads(row[0]) if row and row[0] else {}
                 obj = cache[key].get(col["param_key"])
                 col["target"] = obj.get("value") if isinstance(obj, dict) else obj
@@ -7752,11 +7734,7 @@ def _radar_plant_value(cur, plant: str, report_month: str, unit: str, keys: list
     if unit == "BF_Shop" and plant == "ISP":
         units_to_try = ["BF_Shop", "BF-5"]
     for u in units_to_try:
-        cur.execute(
-            "SELECT techno_json FROM techno_data WHERE plant=%s AND report_month=%s AND unit=%s",
-            (plant, report_month, u),
-        )
-        r = cur.fetchone()
+        r = rt.json_row(cur, plant, report_month, u)
         if not r:
             continue
         try:

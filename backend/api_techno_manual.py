@@ -16,6 +16,7 @@ from pydantic import BaseModel
 
 import db as _db
 from repo import production as _rp
+from repo import techno as _rt
 
 router = APIRouter(prefix="/api/techno/manual", tags=["techno-manual"])
 
@@ -121,13 +122,8 @@ def _get_bf_shop_data(report_month: str, period: str = "month") -> Dict[str, dic
     conn = _db.connect()
     cur  = conn.cursor()
     try:
-        cur.execute(
-            "SELECT plant, unit, techno_json FROM techno_data "
-            "WHERE report_month=%s AND unit IN ('BF_Shop', 'BF-5')",
-            [report_month],
-        )
         by_plant_unit: Dict[str, Dict[str, dict]] = {}
-        for plant, unit, tj in cur.fetchall():
+        for plant, unit, tj in _rt.bf_shop_rows(cur, report_month):
             by_plant_unit.setdefault(plant, {})[unit] = json.loads(tj)
         result = {}
         for plant, units in by_plant_unit.items():
@@ -399,11 +395,7 @@ async def list_units(
     conn = _db.connect()
     try:
         cur = conn.cursor()
-        cur.execute(
-            "SELECT DISTINCT unit FROM techno_data WHERE plant=%s AND unit IS NOT NULL AND unit != ''",
-            (plant.upper(),),
-        )
-        units = sorted(r[0] for r in cur.fetchall())
+        units = sorted(r[0] for r in _rt.distinct_units_for_plant(cur, plant.upper()))
     finally:
         conn.close()
     return {"plant": plant.upper(), "units": units}
@@ -430,14 +422,8 @@ async def param_history(
 
     conn = _db.connect()
     cur = conn.cursor()
-    placeholders = ",".join(["%s"] * len(months))
-    cur.execute(
-        f"SELECT report_month, techno_json FROM techno_data "
-        f"WHERE plant=%s AND unit=%s AND report_month IN ({placeholders})",
-        [plant.upper(), unit, *months],
-    )
     by_month = {}
-    for rm, tj in cur.fetchall():
+    for rm, tj in _rt.plant_unit_month_rows(cur, plant.upper(), unit, months):
         d = json.loads(tj)
         by_month[rm] = {
             "month_value":      d.get("month", {}).get(param_key),

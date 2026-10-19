@@ -19,6 +19,7 @@ if _TP_DIR not in sys.path:
 
 from rsp_technopara_extractor import TechnoExtractor  # noqa: E402  (path set above)
 from db import init_db, upsert_techno_data, get_techno_data, get_techno_months
+from repo import techno as rt
 
 router = APIRouter(prefix="/api/rsp-techno", tags=["rsp-techno"])
 
@@ -247,11 +248,7 @@ async def get_units(
         init_db()
         conn = db.connect()
         cursor = conn.cursor()
-        cursor.execute(
-            "SELECT unit FROM techno_data WHERE plant = %s AND report_month = %s ORDER BY unit",
-            [plant, report_month],
-        )
-        units = [row[0] for row in cursor.fetchall()]
+        units = [row[0] for row in rt.units_for_plant_month(cursor, plant, report_month)]
         conn.close()
         return {"plant": plant, "report_month": report_month, "units": units, "count": len(units)}
     except Exception as e:

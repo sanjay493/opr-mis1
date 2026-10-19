@@ -23,6 +23,7 @@ Colours come from colors_config.json.
 from html import escape
 
 import db
+from repo import techno as rt
 import page_techno as pt
 import techno_period as tp
 import techno_bf_period as tbp
@@ -191,7 +192,7 @@ def _fmt(v, d):
 def _techno_months_present():
     conn = db.connect()
     try:
-        return {r[0] for r in conn.execute("SELECT DISTINCT report_month FROM techno_data").fetchall()}
+        return {r[0] for r in rt.distinct_report_months(conn.cursor())}
     finally:
         conn.close()
 

@@ -713,3 +713,245 @@ def list_techno_plan_fys(plant: str = None) -> List[str]:
     fys = [row[0] for row in cursor.fetchall()]
     conn.close()
     return fys
+
+
+# ── Named queries moved from page / api / script modules ────────────────
+# Cursor-level: each runs on the caller's cursor (so the caller's
+# connection, transaction and row type are unchanged) and returns
+# fetchall() / fetchone() exactly as the inline code did.
+
+def _ph(vals):
+    return ",".join(["%s"] * len(vals))
+
+
+def units_for_plant_month(cur, plant, report_month):
+    """fetchall() of (unit,) for one plant/month, ordered by unit."""
+    cur.execute(
+        "SELECT unit FROM techno_data WHERE plant = %s AND report_month = %s ORDER BY unit",
+        [plant, report_month],
+    )
+    return cur.fetchall()
+
+
+def distinct_plants(cur):
+    """fetchall() of (plant,), every plant with a techno_data row."""
+    cur.execute("SELECT DISTINCT plant FROM techno_data ORDER BY plant")
+    return cur.fetchall()
+
+
+def distinct_report_months(cur):
+    """fetchall() of (report_month,), every month with a techno_data row."""
+    cur.execute("SELECT DISTINCT report_month FROM techno_data")
+    return cur.fetchall()
+
+
+def distinct_units_for_plant(cur, plant):
+    """fetchall() of (unit,) stored for a plant (non-empty units only)."""
+    cur.execute(
+        "SELECT DISTINCT unit FROM techno_data WHERE plant=%s AND unit IS NOT NULL AND unit != ''",
+        (plant,),
+    )
+    return cur.fetchall()
+
+
+def bf_shop_rows(cur, report_month):
+    """fetchall() of (plant, unit, techno_json) for the BF_Shop / BF-5 units."""
+    cur.execute(
+        "SELECT plant, unit, techno_json FROM techno_data "
+        "WHERE report_month=%s AND unit IN ('BF_Shop', 'BF-5')",
+        [report_month],
+    )
+    return cur.fetchall()
+
+
+def plant_unit_month_rows(cur, plant, unit, months):
+    """fetchall() of (report_month, techno_json) for one plant/unit over months."""
+    cur.execute(
+        f"SELECT report_month, techno_json FROM techno_data "
+        f"WHERE plant=%s AND unit=%s AND report_month IN ({_ph(months)})",
+        (plant, unit, *months),
+    )
+    return cur.fetchall()
+
+
+def plant_units_month_rows(cur, plant, units, months):
+    """fetchall() of (unit, report_month, techno_json) for one plant over
+    units x months."""
+    cur.execute(
+        f"SELECT unit, report_month, techno_json FROM techno_data "
+        f"WHERE plant=%s AND unit IN ({_ph(units)}) AND report_month IN ({_ph(months)})",
+        (plant, *units, *months),
+    )
+    return cur.fetchall()
+
+
+def json_row(cur, plant, report_month, unit):
+    """fetchone() of (techno_json,) for one plant/month/unit, or None."""
+    cur.execute(
+        "SELECT techno_json FROM techno_data WHERE plant=%s AND report_month=%s AND unit=%s",
+        (plant, report_month, unit),
+    )
+    return cur.fetchone()
+
+
+def all_json(cur):
+    """fetchall() of (techno_json,) for every techno_data row."""
+    cur.execute("SELECT techno_json FROM techno_data")
+    return cur.fetchall()
+
+
+def rows_for_plants(cur, plants):
+    """fetchall() of (plant, report_month, unit, techno_json) for the given
+    plants, ordered by plant, report_month."""
+    cur.execute(f"""
+            SELECT plant, report_month, unit, techno_json
+            FROM techno_data
+            WHERE plant IN ({_ph(plants)})
+            ORDER BY plant, report_month
+        """, plants)
+    return cur.fetchall()
+
+
+def sail_rows(cur):
+    """fetchall() of (report_month, techno_json) for plant='SAIL', by month."""
+    cur.execute("""
+                SELECT report_month, techno_json
+                FROM techno_data
+                WHERE plant = 'SAIL'
+                ORDER BY report_month
+            """)
+    return cur.fetchall()
+
+
+def sail_unit_rows(cur, unit):
+    """fetchall() of (report_month, techno_json) for plant='SAIL' and one
+    unit, oldest month first."""
+    cur.execute(
+        "SELECT report_month, techno_json FROM techno_data "
+        "WHERE plant='SAIL' AND unit=%s ORDER BY report_month ASC",
+        [unit],
+    )
+    return cur.fetchall()
+
+
+def coal_blend_rows(cur, report_month, plants):
+    """fetchall() of (plant, unit, techno_json) for the Coal_Consumption /
+    General units of the given plants in one month."""
+    cur.execute(
+        f"SELECT plant, unit, techno_json FROM techno_data "
+        f"WHERE report_month=%s AND unit IN ('Coal_Consumption','General') AND plant IN ({_ph(plants)})",
+        [report_month, *plants],
+    )
+    return cur.fetchall()
+
+
+def plants_month_rows(cur, report_month, plants):
+    """fetchall() of (plant, unit, techno_json) for the given plants in one month."""
+    cur.execute(
+        f"SELECT plant, unit, techno_json FROM techno_data "
+        f"WHERE report_month=%s AND plant IN ({_ph(plants)})",
+        [report_month, *plants],
+    )
+    return cur.fetchall()
+
+
+def unit_plants_months_rows(cur, unit, plants, months):
+    """fetchall() of (plant, report_month, techno_json) for one unit over
+    plants x months."""
+    cur.execute(
+        f"SELECT plant, report_month, techno_json FROM techno_data "
+        f"WHERE unit=%s AND plant IN ({_ph(plants)}) AND report_month IN ({_ph(months)})",
+        [unit, *plants, *months],
+    )
+    return cur.fetchall()
+
+
+def month_rows(cur, report_month):
+    """fetchall() of (plant, unit, techno_json) for every row of one month."""
+    cur.execute("SELECT plant, unit, techno_json FROM techno_data WHERE report_month = %s", [report_month])
+    return cur.fetchall()
+
+
+def rows_for_months(cur, months):
+    """fetchall() of (plant, report_month, unit, techno_json) for the months."""
+    cur.execute(
+        f"SELECT plant, report_month, unit, techno_json FROM techno_data WHERE report_month IN ({_ph(months)})",
+        months,
+    )
+    return cur.fetchall()
+
+
+def non_sail_rows(cur):
+    """fetchall() of (plant, unit, techno_json) for every non-SAIL row."""
+    cur.execute("SELECT plant, unit, techno_json FROM techno_data WHERE plant != 'SAIL'")
+    return cur.fetchall()
+
+
+def general_rows_with_source(cur):
+    """fetchall() of (plant, report_month, unit, techno_json, source_file)
+    for every unit='General' row."""
+    cur.execute(
+        "SELECT plant, report_month, unit, techno_json, source_file "
+        "FROM techno_data WHERE unit = 'General'"
+    )
+    return cur.fetchall()
+
+
+def months_signature_row(cur, months):
+    """fetchone() of (COUNT(*), MAX(id), MAX(created_at)) over the months."""
+    cur.execute(f"SELECT COUNT(*), MAX(id), MAX(created_at) FROM techno_data WHERE report_month IN ({_ph(months)})",
+                months)
+    return cur.fetchone()
+
+
+def five_plant_unit_rows(cur, units):
+    """fetchall() of (plant, report_month, unit, techno_json) for the 5 ISPs
+    and the given units."""
+    cur.execute(f"SELECT plant, report_month, unit, techno_json FROM techno_data "
+                f"WHERE plant IN ('BSP','DSP','RSP','BSL','ISP') AND unit IN ({_ph(units)})",
+                units)
+    return cur.fetchall()
+
+
+def five_plant_first_month_row(cur):
+    """fetchone() of (MIN(report_month),) over the 5 ISPs."""
+    cur.execute("SELECT MIN(report_month) FROM techno_data WHERE plant IN "
+                "('BSP','DSP','RSP','BSL','ISP')")
+    return cur.fetchone()
+
+
+def five_plant_first_months(cur):
+    """fetchall() of (plant, MIN(report_month)) for each of the 5 ISPs."""
+    cur.execute("SELECT plant, MIN(report_month) FROM techno_data WHERE plant IN "
+                "('BSP','DSP','RSP','BSL','ISP') GROUP BY plant")
+    return cur.fetchall()
+
+
+# techno_plan_fy
+
+def plan_json_row(cur, plant, unit, fy):
+    """fetchone() of (techno_json,) for one plant/unit/FY plan, or None."""
+    cur.execute(
+        "SELECT techno_json FROM techno_plan_fy WHERE plant_name=%s AND unit=%s AND fy=%s",
+        (plant, unit, fy),
+    )
+    return cur.fetchone()
+
+
+def plan_plants_rows(cur, plants, fy, unit):
+    """fetchall() of (plant_name, techno_json) for the plants' plan rows."""
+    cur.execute(
+        f"SELECT plant_name, techno_json FROM techno_plan_fy "
+        f"WHERE plant_name IN ({_ph(plants)}) AND fy=%s AND unit=%s",
+        (*plants, fy, unit),
+    )
+    return cur.fetchall()
+
+
+def plan_rows_for_fy(cur, fy):
+    """fetchall() of (plant_name, unit, techno_json) for every plan row of a FY."""
+    cur.execute(
+        "SELECT plant_name, unit, techno_json FROM techno_plan_fy WHERE fy = %s",
+        (fy,)
+    )
+    return cur.fetchall()
