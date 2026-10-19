@@ -4,12 +4,12 @@ report: the extractor stores "Checkered Coil" / "Checkered plate" apart from
 (HR Coils = HR Coil + Chequered Coil, HR Plates = HR Plate + Chequered
 Plate), in the BSL block and in the SAIL rollup. The Pmix FY report keeps
 its own row mapping rather than reusing the JPC report's."""
-import sqlite3
-
 import pytest
 
+import db
 import page_jpc_report as jpc
 import page_pmix_fy_report as pfy
+from repo.conn import tx
 
 BSL = {"HSM HR Coil (Sale)": 160.138, "Checkered Coil": 24.179,
        "HSM HR Plate": 32.075, "Checkered plate": 2.801}
@@ -17,12 +17,12 @@ RSP = {"HSM-2 HR Coil (Sale)": 100.0, "HSM-2 HR Plate": 20.0}
 
 
 @pytest.fixture
-def cur():
-    c = sqlite3.connect(":memory:")
-    c.execute("CREATE TABLE production_table (report_month TEXT, plant_name TEXT, item_name TEXT, month_actual REAL)")
-    for plant, items in (("BSL", BSL), ("RSP", RSP)):
-        c.executemany("INSERT INTO production_table VALUES ('2026-09', ?, ?, ?)",
-                      [(plant, k, v) for k, v in items.items()])
+def cur(mysql_db):
+    with tx() as seed:
+        for plant, items in (("BSL", BSL), ("RSP", RSP)):
+            seed.executemany("INSERT INTO production_table VALUES ('2026-09', %s, %s, %s)",
+                             [(plant, k, v) for k, v in items.items()])
+    c = db.connect()
     yield c.cursor()
     c.close()
 

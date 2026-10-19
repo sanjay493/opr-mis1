@@ -2,9 +2,9 @@
 right after "HR Coils", read from item "Checkered Coil"; Category-wise
 Total Flat still adds every displayed flat row (so splitting the coil out
 of HR Coils leaves the total unchanged)."""
-import sqlite3
-
 import pytest
+
+from repo.conn import tx
 
 import page_catwise_saleable as pcs
 import page_segment_wise as psw
@@ -14,30 +14,9 @@ ACT = {"HSM HR Coil (Sale)": 160.0, "Checkered Coil": 24.0, "HSM HR Plate": 32.0
 
 
 @pytest.fixture
-def fake_db(tmp_path, monkeypatch):
-    path = tmp_path / "p.db"
-    c = sqlite3.connect(path)
-    for t in ("production_table", "production_plan_table"):
-        c.execute(f"CREATE TABLE {t} (report_month TEXT, plant_name TEXT, item_name TEXT, month_actual REAL)")
-    c.executemany("INSERT INTO production_table VALUES ('2026-09','BSL',?,?)", ACT.items())
-    c.commit()
-    c.close()
-
-    class _Conn:
-        def __init__(self):
-            self._c = sqlite3.connect(path)
-
-        def cursor(self):
-            return self._c.cursor()
-
-        def close(self):
-            self._c.close()
-
-        def __getattr__(self, name):
-            return getattr(self._c, name)
-
-    for mod in (pcs, psw):
-        monkeypatch.setattr(mod.db, "connect", _Conn)
+def fake_db(mysql_db):
+    with tx() as cur:
+        cur.executemany("INSERT INTO production_table VALUES ('2026-09','BSL',%s,%s)", list(ACT.items()))
 
 
 def _labels_after(rows, label, n=2):

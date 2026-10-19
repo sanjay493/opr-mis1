@@ -1,34 +1,10 @@
-import sqlite3
-
 import pytest
 
 import board_note_manual_text as bnm
 
 
 @pytest.fixture
-def store(tmp_path, monkeypatch):
-    dbfile = tmp_path / "board_note.db"
-    conn = sqlite3.connect(dbfile)
-    conn.execute("""
-        CREATE TABLE board_note_manual_text (
-            report_fy TEXT, quarter INTEGER, plant TEXT, field TEXT, text TEXT,
-            PRIMARY KEY (report_fy, quarter, plant, field)
-        )
-    """)
-    conn.commit()
-    conn.close()
-
-    class _Conn:
-        def __init__(self):
-            self._c = sqlite3.connect(dbfile)
-        def cursor(self):
-            return self._c.cursor()
-        def commit(self):
-            self._c.commit()
-        def close(self):
-            self._c.close()
-
-    monkeypatch.setattr(bnm.db, "connect", _Conn)
+def store(mysql_db):
     return bnm
 
 

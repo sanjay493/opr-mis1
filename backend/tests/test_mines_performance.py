@@ -1,5 +1,5 @@
 """mines_performance: period arithmetic, values, and (Task 2/3) the
-block/row generator against a temp SQLite DB."""
+block/row generator against the MySQL test schema."""
 import mines_performance as mp
 
 
@@ -56,26 +56,18 @@ def test_labels():
                  "month": "Sep'26", "cply": "Sep'25", "ytd": "Apr-Sep'26", "ytd_cply": "Apr-Sep'25"}
 
 
-import sqlite3
 from decimal import Decimal
 
 import pytest
 
-_SCHEMA = [
-    "CREATE TABLE mine_groups_master (group_code TEXT, group_name TEXT, sort_order INTEGER)",
-    "CREATE TABLE mines_master (mine_code TEXT, mine_name TEXT, group_code TEXT, is_active INTEGER, sort_order INTEGER)",
-    "CREATE TABLE mine_materials_master (material_code TEXT, material_name TEXT, material_category TEXT, "
-    "has_production INTEGER, counts_in_total_production INTEGER, sort_order INTEGER)",
-    "CREATE TABLE mines_production_monthly (report_month TEXT, mine_code TEXT, material_code TEXT, qty_actual REAL, qty_plan REAL)",
-    "CREATE TABLE mines_despatch_actual_monthly (report_month TEXT, mine_code TEXT, material_code TEXT, "
-    "transport_mode TEXT, end_use_code TEXT, qty_actual REAL)",
-    "CREATE TABLE mines_despatch_plan_monthly (report_month TEXT, mine_code TEXT, material_code TEXT, end_use_code TEXT, qty_plan REAL)",
-    "CREATE TABLE mines_booked_qty_actual_monthly (report_month TEXT, mine_code TEXT, material_code TEXT, transport_mode TEXT, qty_actual REAL)",
-    "CREATE TABLE mines_booked_qty_plan_monthly (report_month TEXT, mine_code TEXT, material_code TEXT, qty_plan REAL)",
-    "CREATE TABLE sail_mines_monthly (report_month TEXT, section TEXT, item TEXT, month_actual REAL, month_plan REAL)",
-]
+from repo.conn import tx
 
+# Tables are the real v1 tables (mysql_db fixture). Insertion order matters:
+# the real schema has foreign keys, so masters come before the facts.
 _ROWS = {
+    # Added for the real schema: despatch rows have an FK to mine_end_uses_master.
+    "mine_end_uses_master": [("CAPTIVE", "Captive", 1, 1), ("SALES", "Sales", 2, 1),
+                             ("PELLET_CONV", "Pellet Conversion", 3, 1)],
     "mine_groups_master": [("JG", "J Group", 1), ("OG", "O Group", 2)],
     "mines_master": [("A", "Alpha", "JG", 1, 1), ("B", "Beta", "JG", 1, 2),
                      ("C", "Gamma", "OG", 1, 3), ("D", "Delta", "OG", 0, 4),
@@ -107,18 +99,12 @@ _ROWS = {
 
 
 @pytest.fixture
-def gen(tmp_path, monkeypatch):
-    dbfile = tmp_path / "mines.db"
-    c = sqlite3.connect(dbfile)
-    for sql in _SCHEMA:
-        c.execute(sql)
-    for table, rows in _ROWS.items():
-        for r in rows:
-            c.execute(f"INSERT INTO {table} VALUES ({','.join('?' * len(r))})", r)
-    c.commit()
-    c.close()
-    monkeypatch.setattr(mp.db, "connect", lambda: sqlite3.connect(dbfile))
-    return dbfile
+def gen(mysql_db):
+    with tx() as c:
+        for table, rows in _ROWS.items():
+            for r in rows:
+                c.execute(f"INSERT INTO {table} VALUES ({','.join(['%s'] * len(r))})", r)
+    return mysql_db
 
 
 def _block(data, name):
@@ -237,10 +223,8 @@ _SAIL_ROWS = [
 
 @pytest.fixture
 def gen_sail(gen):
-    c = sqlite3.connect(gen)
-    c.executemany("INSERT INTO sail_mines_monthly VALUES (?,?,?,?,?)", _SAIL_ROWS)
-    c.commit()
-    c.close()
+    with tx() as c:
+        c.executemany("INSERT INTO sail_mines_monthly VALUES (%s,%s,%s,%s,%s)", _SAIL_ROWS)
     return gen
 
 

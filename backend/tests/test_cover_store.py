@@ -1,12 +1,11 @@
 """Cover-photo library + per-month cover choice (cover_store.py).
 
-Runs against a throwaway SQLite file and photo folder: cover_store._connect
-and cover_store.PHOTO_DIR are monkeypatched, so no MySQL is needed.
+Runs against the throwaway MySQL test schema (mysql_db fixture) and a temp
+photo folder (cover_store.PHOTO_DIR is monkeypatched).
 """
 
 import io
 import os
-import sqlite3
 
 import pytest
 from PIL import Image
@@ -15,18 +14,7 @@ import cover_store
 
 
 @pytest.fixture
-def store(tmp_path, monkeypatch):
-    dbfile = tmp_path / "cover.db"
-
-    def _conn():
-        return sqlite3.connect(dbfile)
-
-    conn = _conn()
-    for ddl in cover_store.SQLITE_DDL:
-        conn.execute(ddl)
-    conn.commit()
-    conn.close()
-    monkeypatch.setattr(cover_store, "_connect", _conn)
+def store(mysql_db, tmp_path, monkeypatch):
     monkeypatch.setattr(cover_store, "PHOTO_DIR", str(tmp_path / "photos"))
     return cover_store
 

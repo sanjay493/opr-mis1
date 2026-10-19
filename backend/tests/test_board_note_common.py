@@ -82,15 +82,11 @@ def test_items_for_plant_visl_is_saleable_and_finished_only():
     assert [label for label, _ in bnc.ITEMS_FOR_PLANT["VISL"]] == ["Saleable Steel", "Finished Steel"]
 
 
-import sqlite3
+from repo.conn import tx
+import db
 
 
 def _seeded_cursor():
-    conn = sqlite3.connect(":memory:")
-    conn.execute("""CREATE TABLE production_table (report_month TEXT, plant_name TEXT,
-        item_name TEXT, month_actual REAL, PRIMARY KEY (report_month, plant_name, item_name))""")
-    conn.execute("""CREATE TABLE production_plan_table (report_month TEXT, plant_name TEXT,
-        item_name TEXT, month_actual REAL, PRIMARY KEY (report_month, plant_name, item_name))""")
     rows_act = [
         ("2026-07", "BSP", "Hot Metal", 500.0), ("2026-08", "BSP", "Hot Metal", 520.0),
         ("2026-09", "BSP", "Hot Metal", 510.0),
@@ -99,25 +95,24 @@ def _seeded_cursor():
     ]
     rows_plan = [("2026-07", "BSP", "Hot Metal", 505.0), ("2026-08", "BSP", "Hot Metal", 505.0),
                  ("2026-09", "BSP", "Hot Metal", 505.0)]
-    for m, p, i, v in rows_act:
-        conn.execute("INSERT INTO production_table VALUES (?,?,?,?)", (m, p, i, v))
-    for m, p, i, v in rows_plan:
-        conn.execute("INSERT INTO production_plan_table VALUES (?,?,?,?)", (m, p, i, v))
-    conn.commit()
-    return conn.cursor()
+    with tx() as c:
+        for m, p, i, v in rows_act:
+            c.execute("INSERT INTO production_table VALUES (%s,%s,%s,%s)", (m, p, i, v))
+        for m, p, i, v in rows_plan:
+            c.execute("INSERT INTO production_plan_table VALUES (%s,%s,%s,%s)", (m, p, i, v))
+    return db.connect().cursor()
 
-
-def test_period_sum_adds_three_months():
+def test_period_sum_adds_three_months(mysql_db):
     cur = _seeded_cursor()
     assert bnc.period_sum(cur, "act", ["2026-07", "2026-08", "2026-09"], "BSP", "Hot Metal") == 1530.0
 
 
-def test_period_sum_returns_none_when_no_data_at_all():
+def test_period_sum_returns_none_when_no_data_at_all(mysql_db):
     cur = _seeded_cursor()
     assert bnc.period_sum(cur, "act", ["2024-07", "2024-08", "2024-09"], "BSP", "Hot Metal") is None
 
 
-def test_row_values_pct_and_growth():
+def test_row_values_pct_and_growth(mysql_db):
     cur = _seeded_cursor()
     ann, abp, act, pct, cply, gr = bnc.row_values(
         cur, "BSP", "Hot Metal", ["2026-07", "2026-08", "2026-09"],
@@ -127,43 +122,37 @@ def test_row_values_pct_and_growth():
     assert gr == 9     # round((1530-1410)/1410*100)
 
 
-def test_best_ever_bullets_skips_items_plant_has_no_data_for():
+def test_best_ever_bullets_skips_items_plant_has_no_data_for(mysql_db):
     cur = _seeded_cursor()
     bullets = bnc.best_ever_bullets(cur, "BSP", lambda fy: [f"{fy}-07", f"{fy}-08", f"{fy}-09"], 2026, style="q2")
     assert any("Hot Metal" in b for b in bullets)
     assert not any("Crude Steel" in b for b in bullets)  # no Crude Steel rows seeded for BSP
 
 
-def test_row_values_rejects_add_conv_for_non_sail_plant():
+def test_row_values_rejects_add_conv_for_non_sail_plant(mysql_db):
     cur = _seeded_cursor()
     with pytest.raises(ValueError):
         bnc.row_values(cur, "BSP", "Finished Steel", ["2026-07", "2026-08", "2026-09"],
                         ["2025-07", "2025-08", "2025-09"], fy_start=2026, add_conv=True)
 
 
-def test_best_ever_rejects_add_conv_for_non_finished_steel_item():
+def test_best_ever_rejects_add_conv_for_non_finished_steel_item(mysql_db):
     cur = _seeded_cursor()
     with pytest.raises(ValueError):
         bnc.best_ever(cur, "SAIL", "Hot Metal", lambda fy: [f"{fy}-07", f"{fy}-08", f"{fy}-09"], 2026, add_conv=True)
 
 
 def _seeded_cursor_finished_steel_no_conversion():
-    conn = sqlite3.connect(":memory:")
-    conn.execute("""CREATE TABLE production_table (report_month TEXT, plant_name TEXT,
-        item_name TEXT, month_actual REAL, PRIMARY KEY (report_month, plant_name, item_name))""")
-    conn.execute("""CREATE TABLE production_plan_table (report_month TEXT, plant_name TEXT,
-        item_name TEXT, month_actual REAL, PRIMARY KEY (report_month, plant_name, item_name))""")
     rows_act = [
         ("2026-07", "BSP", "Finished Steel", 400.0), ("2026-08", "BSP", "Finished Steel", 410.0),
         ("2026-09", "BSP", "Finished Steel", 420.0),
     ]
-    for m, p, i, v in rows_act:
-        conn.execute("INSERT INTO production_table VALUES (?,?,?,?)", (m, p, i, v))
-    conn.commit()
-    return conn.cursor()
+    with tx() as c:
+        for m, p, i, v in rows_act:
+            c.execute("INSERT INTO production_table VALUES (%s,%s,%s,%s)", (m, p, i, v))
+    return db.connect().cursor()
 
-
-def test_row_values_blanks_act_when_conversion_missing_for_sail_finished_steel():
+def test_row_values_blanks_act_when_conversion_missing_for_sail_finished_steel(mysql_db):
     cur = _seeded_cursor_finished_steel_no_conversion()
     ann, abp, act, pct, cply, gr = bnc.row_values(
         cur, "SAIL", "Finished Steel", ["2026-07", "2026-08", "2026-09"],
@@ -184,27 +173,46 @@ def test_imp_phrase_returns_empty_for_none():
 
 
 def _mou_cursor(rows):
-    conn = sqlite3.connect(":memory:")
-    conn.execute("""CREATE TABLE mou_plan_table (report_month TEXT, plant_name TEXT,
-        item_name TEXT, month_actual REAL, PRIMARY KEY (report_month, plant_name, item_name))""")
-    conn.executemany("INSERT INTO mou_plan_table VALUES (?,?,?,?)", rows)
-    return conn.cursor()
+    with tx() as c:
+        c.executemany("INSERT INTO mou_plan_table VALUES (%s,%s,%s,%s)", rows)
+    return db.connect().cursor()
 
-
-def test_fs_mou_sums_plants_and_months():
+def test_fs_mou_sums_plants_and_months(mysql_db):
     cur = _mou_cursor([(m, p, "Finished Steel", v) for m in ("2026-07", "2026-08")
                        for p, v in (("BSP", 100.0), ("ASP", 10.0))] + [("2026-07", "BSP", "Hot Metal", 999.0)])
     assert bnc.fs_mou(cur, ["2026-07", "2026-08"], ["BSP"]) == 200.0
     assert bnc.fs_mou(cur, ["2026-07", "2026-08"], ["BSP", "ASP"]) == 220.0
 
 
-def test_fs_mou_none_when_a_month_is_missing():
+def test_fs_mou_none_when_a_month_is_missing(mysql_db):
     cur = _mou_cursor([("2026-07", "BSP", "Finished Steel", 100.0)])
     assert bnc.fs_mou(cur, ["2026-07", "2026-08"], ["BSP"]) is None
 
 
-def test_fs_mou_none_when_table_missing():
-    cur = sqlite3.connect(":memory:").cursor()
+def _cursor_without_mou_table():
+    # The v1 table always exists; make it "missing" by dropping it, and put it
+    # back (from its own SHOW CREATE TABLE) when the test is done.
+    with tx() as ddl:
+        ddl.execute("SHOW CREATE TABLE mou_plan_table")
+        create_sql = ddl.fetchone()[1]
+        ddl.execute("DROP TABLE mou_plan_table")
+    _RESTORE.append(create_sql)
+    return db.connect().cursor()
+
+
+_RESTORE = []
+
+
+@pytest.fixture(autouse=False)
+def _restore_mou_table():
+    yield
+    while _RESTORE:
+        with tx() as ddl:
+            ddl.execute(_RESTORE.pop())
+
+
+def test_fs_mou_none_when_table_missing(mysql_db, _restore_mou_table):
+    cur = _cursor_without_mou_table()
     assert bnc.fs_mou(cur, ["2026-07"], ["BSP"]) is None
 
 

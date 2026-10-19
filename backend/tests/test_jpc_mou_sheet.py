@@ -2,12 +2,12 @@
 the report month, with the same plant rules as the actuals (5 Plants =
 BSP..ISP; SAIL adds VISL for Hot Metal / Pig Iron, ASP+SSP+VISL otherwise).
 Left blank when the month has no MoU loaded."""
-import sqlite3
-
 import openpyxl
 import pytest
 
+import db
 import page_jpc_report as jpc
+from repo.conn import tx
 
 ACT = {("BSP", "Hot Metal"): 370.0, ("DSP", "Hot Metal"): 205.0, ("VISL", "Hot Metal"): 1.0,
        ("BSP", "Finished Steel"): 374.0, ("SSP", "Saleable Steel"): 13.9}
@@ -16,11 +16,12 @@ MOU = {("BSP", "Hot Metal"): 549.24, ("DSP", "Hot Metal"): 232.06, ("VISL", "Hot
 
 
 @pytest.fixture
-def cur():
-    c = sqlite3.connect(":memory:")
-    for t, data in (("production_table", ACT), ("mou_plan_table", MOU)):
-        c.execute(f"CREATE TABLE {t} (report_month TEXT, plant_name TEXT, item_name TEXT, month_actual REAL)")
-        c.executemany(f"INSERT INTO {t} VALUES ('2026-09', ?, ?, ?)", [(p, i, v) for (p, i), v in data.items()])
+def cur(mysql_db):
+    with tx() as seed:
+        for t, data in (("production_table", ACT), ("mou_plan_table", MOU)):
+            seed.executemany(f"INSERT INTO {t} VALUES ('2026-09', %s, %s, %s)",
+                             [(p, i, v) for (p, i), v in data.items()])
+    c = db.connect()
     yield c.cursor()
     c.close()
 

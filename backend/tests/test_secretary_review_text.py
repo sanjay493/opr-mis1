@@ -1,37 +1,10 @@
-import sqlite3
-
 import pytest
 
 import secretary_review_text as srt
 
 
 @pytest.fixture
-def store(tmp_path, monkeypatch):
-    dbfile = tmp_path / "sr.db"
-    conn = sqlite3.connect(dbfile)
-    conn.execute("""
-        CREATE TABLE secretary_review_text (
-            report_month TEXT, block_key TEXT, text TEXT, updated_at TEXT,
-            PRIMARY KEY (report_month, block_key)
-        )
-    """)
-    conn.commit()
-    conn.close()
-
-    class _Conn:
-        def __init__(self):
-            self._c = sqlite3.connect(dbfile)
-
-        def cursor(self):
-            return self._c.cursor()
-
-        def commit(self):
-            self._c.commit()
-
-        def close(self):
-            self._c.close()
-
-    monkeypatch.setattr(srt.db, "connect", _Conn)
+def store(mysql_db):
     return srt
 
 

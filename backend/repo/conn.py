@@ -1,0 +1,149 @@
+"""Native MySQL connection helper over the pool in dbengine.
+
+    from repo import conn
+    with conn.cursor() as cur:          # read-only; nothing is committed
+        cur.execute("SELECT a, b FROM t WHERE k = %s", (k,))
+        row = cur.fetchone()            # conn.Row or None
+    with conn.tx() as cur:              # commit on success, rollback on error
+        cur.execute("INSERT INTO t (a) VALUES (%s)", (1,))
+
+SQL is native MySQL (``%s`` placeholders). Connections come from
+dbengine's pool, so DB selection and pooling stay in one place.
+"""
+from contextlib import contextmanager
+
+import pymysql
+
+import dbengine
+
+IntegrityError = pymysql.err.IntegrityError
+OperationalError = pymysql.err.OperationalError
+
+
+class Row:
+    """Result row: row[0], row['col'] (case-insensitive fallback), iteration
+    over values, len(), keys() and dict(row)."""
+    __slots__ = ("_keys", "_values", "_lower")
+
+    def __init__(self, keys, values):
+        self._keys = keys
+        self._values = values
+        self._lower = None
+
+    def __getitem__(self, key):
+        if isinstance(key, (int, slice)):
+            return self._values[key]
+        try:
+            return self._values[self._keys.index(key)]
+        except ValueError:
+            if self._lower is None:
+                self._lower = [k.lower() for k in self._keys]
+            return self._values[self._lower.index(key.lower())]
+
+    def keys(self):
+        return list(self._keys)
+
+    def __iter__(self):
+        return iter(self._values)
+
+    def __len__(self):
+        return len(self._values)
+
+    def __repr__(self):
+        return f"Row({dict(zip(self._keys, self._values))!r})"
+
+
+class Cursor:
+    """Thin wrapper over a pymysql cursor that returns Row objects."""
+
+    def __init__(self, raw_cursor):
+        self._cur = raw_cursor
+
+    def execute(self, sql, params=None):
+        self._cur.execute(sql, params)
+        return self
+
+    def executemany(self, sql, seq_of_params):
+        self._cur.executemany(sql, seq_of_params)
+        return self
+
+    def _keys(self):
+        return [d[0] for d in self._cur.description] if self._cur.description else []
+
+    def fetchone(self):
+        row = self._cur.fetchone()
+        return None if row is None else Row(self._keys(), tuple(row))
+
+    def fetchall(self):
+        keys = self._keys()
+        return [Row(keys, tuple(r)) for r in self._cur.fetchall()]
+
+    def fetchmany(self, size=None):
+        rows = self._cur.fetchmany(size) if size else self._cur.fetchmany()
+        keys = self._keys()
+        return [Row(keys, tuple(r)) for r in rows]
+
+    def __iter__(self):
+        while True:
+            row = self.fetchone()
+            if row is None:
+                return
+            yield row
+
+    @property
+    def lastrowid(self):
+        return self._cur.lastrowid
+
+    @property
+    def rowcount(self):
+        return self._cur.rowcount
+
+    @property
+    def description(self):
+        return self._cur.description
+
+
+def _acquire():
+    raw = dbengine._pool_acquire() if dbengine._POOL_ENABLED else None
+    return raw if raw is not None else dbengine._open_raw()
+
+
+@contextmanager
+def cursor():
+    """Read cursor on a pooled connection. Never commits: the pool rolls the
+    connection back when it is released."""
+    raw = _acquire()
+    poolable = True
+    try:
+        cur = raw.cursor()
+        try:
+            yield Cursor(cur)
+        finally:
+            cur.close()
+    except BaseException:
+        poolable = False
+        raise
+    finally:
+        dbengine._pool_release(raw, poolable)
+
+
+@contextmanager
+def tx():
+    """Cursor in a transaction: commit on success, rollback on exception."""
+    raw = _acquire()
+    poolable = True
+    try:
+        cur = raw.cursor()
+        try:
+            yield Cursor(cur)
+            raw.commit()
+        except BaseException:
+            try:
+                raw.rollback()
+            except Exception:  # noqa: BLE001
+                poolable = False
+            raise
+        finally:
+            cur.close()
+    finally:
+        dbengine._pool_release(raw, poolable)

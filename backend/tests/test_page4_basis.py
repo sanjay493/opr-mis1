@@ -1,37 +1,18 @@
 """page4.generate_page4_rows(basis=...): MoU reads mou_plan_table and keeps
 only the 5 MoU items; APP output is unchanged."""
-import sqlite3
-
 import pytest
 
 import page4
+from repo.conn import tx
 
 
 @pytest.fixture
-def p4(tmp_path, monkeypatch):
-    dbfile = tmp_path / "p4.db"
-    c = sqlite3.connect(dbfile)
-    for t in ("production_table", "production_plan_table", "mou_plan_table"):
-        c.execute(f"CREATE TABLE {t} (report_month TEXT, plant_name TEXT, item_name TEXT, month_actual REAL, "
-                  "PRIMARY KEY (report_month, plant_name, item_name))")
-    c.execute("INSERT INTO production_table VALUES ('2026-08','BSP','Hot Metal',500)")
-    c.execute("INSERT INTO production_plan_table VALUES ('2026-08','BSP','Hot Metal',550)")
-    c.execute("INSERT INTO mou_plan_table VALUES ('2026-08','BSP','Hot Metal',570)")
-    c.execute("INSERT INTO production_plan_table VALUES ('2026-08','BSP','Total Sinter',900)")
-    c.commit()
-    c.close()
-
-    class _Conn:
-        def __init__(self):
-            self._c = sqlite3.connect(dbfile)
-
-        def cursor(self):
-            return self._c.cursor()
-
-        def close(self):
-            self._c.close()
-
-    monkeypatch.setattr(page4.db, "connect", _Conn)
+def p4(mysql_db, monkeypatch):
+    with tx() as c:
+        c.execute("INSERT INTO production_table VALUES ('2026-08','BSP','Hot Metal',500)")
+        c.execute("INSERT INTO production_plan_table VALUES ('2026-08','BSP','Hot Metal',550)")
+        c.execute("INSERT INTO mou_plan_table VALUES ('2026-08','BSP','Hot Metal',570)")
+        c.execute("INSERT INTO production_plan_table VALUES ('2026-08','BSP','Total Sinter',900)")
     monkeypatch.setattr(page4.db, "get_effective_capacity", lambda *a, **k: None)
     return page4
 
