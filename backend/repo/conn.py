@@ -12,6 +12,8 @@ dbengine's pool, so DB selection and pooling stay in one place.
 """
 from contextlib import contextmanager
 
+import pymysql
+
 import dbengine
 
 IntegrityError = dbengine.IntegrityError
@@ -28,12 +30,22 @@ class Cursor:
     def __init__(self, raw_cursor):
         self._cur = raw_cursor
 
-    def execute(self, sql, params=None):
-        self._cur.execute(sql, params)
+    # Params are always passed (an empty tuple when there are none), so
+    # pymysql always %-formats and a literal % is always written %%.
+    # ProgrammingError (e.g. a missing table) is raised as OperationalError,
+    # as dbengine does, so `except OperationalError` catches it.
+    def execute(self, sql, params=()):
+        try:
+            self._cur.execute(sql, tuple(params))
+        except pymysql.err.ProgrammingError as e:
+            raise dbengine._wrap_error(e) from e
         return self
 
     def executemany(self, sql, seq_of_params):
-        self._cur.executemany(sql, seq_of_params)
+        try:
+            self._cur.executemany(sql, [tuple(p) for p in seq_of_params])
+        except pymysql.err.ProgrammingError as e:
+            raise dbengine._wrap_error(e) from e
         return self
 
     def _keys(self):

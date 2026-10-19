@@ -56,3 +56,29 @@ def test_error_classes_are_pymysql_classes():
     import pymysql
     assert rc.OperationalError is pymysql.err.OperationalError
     assert rc.IntegrityError is pymysql.err.IntegrityError
+
+
+def test_double_percent_without_params_is_a_literal_percent(mysql_db):
+    # Project rule: a literal % in SQL is always written %%, params or not.
+    with rc.cursor() as cur:
+        cur.execute("SELECT '50%%' AS v")
+        assert cur.fetchone()["v"] == "50%"
+
+
+def test_double_percent_in_executemany(mysql_db):
+    with rc.tx() as cur:
+        cur.executemany(
+            "INSERT INTO mou_plan_table VALUES (%s, CONCAT(%s, '%%'), %s, %s)",
+            [("2026-04", "BSP", "Hot Metal", 1.0), ("2026-04", "DSP", "Hot Metal", 2.0)])
+    with rc.cursor() as cur:
+        cur.execute("SELECT plant_name FROM mou_plan_table ORDER BY plant_name")
+        assert [r[0] for r in cur.fetchall()] == ["BSP%", "DSP%"]
+
+
+def test_missing_table_raises_operational_error(mysql_db):
+    with pytest.raises(rc.OperationalError):
+        with rc.cursor() as cur:
+            cur.execute("SELECT 1 FROM no_such_table_xyz")
+    with pytest.raises(rc.OperationalError):
+        with rc.tx() as cur:
+            cur.executemany("INSERT INTO no_such_table_xyz VALUES (%s)", [(1,)])
