@@ -9,7 +9,6 @@ Endpoints:
 """
 
 import json
-import sqlite3
 from typing import Dict, Optional, Union
 
 from fastapi import APIRouter, HTTPException, Query
@@ -103,7 +102,7 @@ def _get_hm_production(report_month: str, ytd: bool = False) -> Dict[str, float]
             months = _db.get_ytd_months(report_month)
             if not months:
                 return {}
-            ph = ",".join("?" * len(months))
+            ph = ",".join(["%s"] * len(months))
             cur.execute(
                 f"SELECT plant_name, SUM(month_actual) FROM production_table "
                 f"WHERE report_month IN ({ph}) AND item_name='Hot Metal' "
@@ -113,7 +112,7 @@ def _get_hm_production(report_month: str, ytd: bool = False) -> Dict[str, float]
         else:
             cur.execute(
                 "SELECT plant_name, month_actual FROM production_table "
-                "WHERE report_month=? AND item_name='Hot Metal'",
+                "WHERE report_month=%s AND item_name='Hot Metal'",
                 [report_month],
             )
         return {p: v for p, v in cur.fetchall() if v and v > 0}
@@ -133,7 +132,7 @@ def _get_bf_shop_data(report_month: str, period: str = "month") -> Dict[str, dic
     try:
         cur.execute(
             "SELECT plant, unit, techno_json FROM techno_data "
-            "WHERE report_month=? AND unit IN ('BF_Shop', 'BF-5')",
+            "WHERE report_month=%s AND unit IN ('BF_Shop', 'BF-5')",
             [report_month],
         )
         by_plant_unit: Dict[str, Dict[str, dict]] = {}
@@ -410,7 +409,7 @@ async def list_units(
     try:
         cur = conn.cursor()
         cur.execute(
-            "SELECT DISTINCT unit FROM techno_data WHERE plant=? AND unit IS NOT NULL AND unit != ''",
+            "SELECT DISTINCT unit FROM techno_data WHERE plant=%s AND unit IS NOT NULL AND unit != ''",
             (plant.upper(),),
         )
         units = sorted(r[0] for r in cur.fetchall())
@@ -440,10 +439,10 @@ async def param_history(
 
     conn = _db.connect()
     cur = conn.cursor()
-    placeholders = ",".join("?" * len(months))
+    placeholders = ",".join(["%s"] * len(months))
     cur.execute(
         f"SELECT report_month, techno_json FROM techno_data "
-        f"WHERE plant=? AND unit=? AND report_month IN ({placeholders})",
+        f"WHERE plant=%s AND unit=%s AND report_month IN ({placeholders})",
         [plant.upper(), unit, *months],
     )
     by_month = {}

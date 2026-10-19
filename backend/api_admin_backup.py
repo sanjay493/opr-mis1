@@ -29,7 +29,6 @@ from fastapi import APIRouter, Depends, HTTPException
 
 import auth
 import db
-from dbengine import DB_ENGINE
 
 router = APIRouter(prefix="/api/admin/backups", tags=["admin-backup"], dependencies=[Depends(auth.require_admin)])
 
@@ -58,8 +57,8 @@ _MYSQL_CFG = {
 
 
 def _require_mysql():
-    if DB_ENGINE != "mysql":
-        raise HTTPException(status_code=400, detail="Backup/restore is only available when DB_ENGINE=mysql.")
+    """MySQL is the only engine now; kept so call sites stay unchanged."""
+    return None
 
 
 _BIN_DIR_GLOBS = [
@@ -276,7 +275,7 @@ def _acquire_admin_lock():
     RELEASE_LOCK before that)."""
     conn = db.connect()
     cur = conn.cursor()
-    cur.execute("SELECT GET_LOCK(?, 0)", (_LOCK_NAME,))
+    cur.execute("SELECT GET_LOCK(%s, 0)", (_LOCK_NAME,))
     if cur.fetchone()[0] != 1:
         conn.close()
         raise HTTPException(
@@ -289,7 +288,7 @@ def _acquire_admin_lock():
 def _release_admin_lock(conn) -> None:
     try:
         cur = conn.cursor()
-        cur.execute("SELECT RELEASE_LOCK(?)", (_LOCK_NAME,))
+        cur.execute("SELECT RELEASE_LOCK(%s)", (_LOCK_NAME,))
     finally:
         conn.close()
 

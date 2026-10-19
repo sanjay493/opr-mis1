@@ -59,7 +59,7 @@ def _load_row(report_month: str):
     try:
         cur.execute("""
             SELECT report_month, data_json, source_file FROM steel_sector_performance_table
-            WHERE report_month <= ?
+            WHERE report_month <= %s
             ORDER BY report_month DESC LIMIT 1
         """, (report_month,))
         row = cur.fetchone()

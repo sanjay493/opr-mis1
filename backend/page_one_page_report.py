@@ -85,7 +85,7 @@ def _sales_data(cur, item, month):
     """Raw data_json for one (report_month, item) — every field exactly as
     the source department reported it, no computation. None if not extracted."""
     import json
-    cur.execute("SELECT data_json FROM sail_sales_table WHERE report_month=? AND item_name=?", (month, item))
+    cur.execute("SELECT data_json FROM sail_sales_table WHERE report_month=%s AND item_name=%s", (month, item))
     r = cur.fetchone()
     if not r or not r[0]:
         return {}
@@ -125,7 +125,7 @@ def _build_sales_rows(cur, month):
 def _sales_note(cur, month):
     """Asterisked remark extracted alongside Table A (e.g. NSL-inclusion
     caveat on the CPLY figures) — reprinted verbatim under the table."""
-    cur.execute("SELECT note FROM sail_sales_note_table WHERE report_month=?", (month,))
+    cur.execute("SELECT note FROM sail_sales_note_table WHERE report_month=%s", (month,))
     r = cur.fetchone()
     return r[0] if r and r[0] else None
 
@@ -134,7 +134,7 @@ def _sales_note(cur, month):
 
 def _p_one(cur, table, plant, item, month):
     tbl = "production_table" if table == "act" else "production_plan_table"
-    cur.execute(f"SELECT month_actual FROM {tbl} WHERE report_month=? AND plant_name=? AND item_name=?",
+    cur.execute(f"SELECT month_actual FROM {tbl} WHERE report_month=%s AND plant_name=%s AND item_name=%s",
                 (month, plant, item))
     r = cur.fetchone()
     return r[0] if r and r[0] is not None else None
@@ -144,8 +144,8 @@ def _p_sum(cur, table, plants, item, month):
     if not plants:
         return None
     tbl = "production_table" if table == "act" else "production_plan_table"
-    phs = ",".join("?" for _ in plants)
-    cur.execute(f"SELECT SUM(month_actual) FROM {tbl} WHERE report_month=? AND plant_name IN ({phs}) AND item_name=?",
+    phs = ",".join("%s" for _ in plants)
+    cur.execute(f"SELECT SUM(month_actual) FROM {tbl} WHERE report_month=%s AND plant_name IN ({phs}) AND item_name=%s",
                 [month] + list(plants) + [item])
     r = cur.fetchone()
     return r[0] if r and r[0] is not None else None
@@ -333,7 +333,7 @@ def _stock_reference_dates(as_on: date):
 
 
 def _stock_value(cur, item, snap_date):
-    cur.execute("SELECT value FROM sail_stock_snapshot_table WHERE snapshot_date=? AND item_name=?",
+    cur.execute("SELECT value FROM sail_stock_snapshot_table WHERE snapshot_date=%s AND item_name=%s",
                 (snap_date.isoformat(), item))
     r = cur.fetchone()
     return r[0] if r and r[0] is not None else None

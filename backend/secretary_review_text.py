@@ -13,7 +13,7 @@ def get_texts(month: str) -> dict:
     conn = db.connect()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT block_key, text FROM secretary_review_text WHERE report_month=?", (month,))
+        cur.execute("SELECT block_key, text FROM secretary_review_text WHERE report_month=%s", (month,))
         return {k: (t or "") for k, t in cur.fetchall()}
     finally:
         conn.close()
@@ -32,8 +32,8 @@ def save_texts(month: str, texts: dict) -> int:
             text = str(text or "").strip()
             cur.execute("""
                 INSERT INTO secretary_review_text (report_month, block_key, text, updated_at)
-                VALUES (?, ?, ?, ?)
-                ON CONFLICT(report_month, block_key) DO UPDATE SET text = excluded.text, updated_at = excluded.updated_at
+                VALUES (%s, %s, %s, %s)
+                AS new ON DUPLICATE KEY UPDATE text = new.text, updated_at = new.updated_at
             """, (month, key, text, now))
             n += 1
         conn.commit()
@@ -51,8 +51,8 @@ def delete_texts(month: str, keys) -> int:
     conn = db.connect()
     cur = conn.cursor()
     try:
-        phs = ",".join("?" for _ in keys)
-        cur.execute(f"DELETE FROM secretary_review_text WHERE report_month=? AND block_key IN ({phs})",
+        phs = ",".join("%s" for _ in keys)
+        cur.execute(f"DELETE FROM secretary_review_text WHERE report_month=%s AND block_key IN ({phs})",
                     [month] + keys)
         n = cur.rowcount
         conn.commit()
@@ -68,9 +68,9 @@ def latest_saved_before(block_key: str, month: str, window: list):
     conn = db.connect()
     cur = conn.cursor()
     try:
-        phs = ",".join("?" for _ in candidates)
+        phs = ",".join("%s" for _ in candidates)
         cur.execute(
-            f"SELECT text FROM secretary_review_text WHERE block_key=? AND report_month IN ({phs}) "
+            f"SELECT text FROM secretary_review_text WHERE block_key=%s AND report_month IN ({phs}) "
             f"ORDER BY report_month DESC LIMIT 1",
             [block_key] + candidates,
         )

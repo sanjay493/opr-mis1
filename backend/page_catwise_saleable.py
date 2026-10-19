@@ -27,7 +27,7 @@ def _one(cur, table, plant, item, month):
         return None
     tbl = "production_table" if table == "act" else "production_plan_table"
     cur.execute(
-        f"SELECT month_actual FROM {tbl} WHERE plant_name=? AND item_name=? AND report_month=?",
+        f"SELECT month_actual FROM {tbl} WHERE plant_name=%s AND item_name=%s AND report_month=%s",
         (plant, item, month)
     )
     r = cur.fetchone()

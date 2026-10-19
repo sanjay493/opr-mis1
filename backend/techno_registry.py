@@ -207,7 +207,6 @@ def migrate_units(conn) -> int:
 
     Returns the number of rows updated.
     """
-    import sqlite3
     cur = conn.cursor()
     cur.execute("SELECT param_id, group_code, section, unit FROM techno_param_master")
     rows = cur.fetchall()
@@ -217,7 +216,7 @@ def migrate_units(conn) -> int:
         canon = canonical_unit(raw_unit or "", group_code, section)
         if canon != (raw_unit or ""):
             cur.execute(
-                "UPDATE techno_param_master SET unit=? WHERE param_id=?",
+                "UPDATE techno_param_master SET unit=%s WHERE param_id=%s",
                 (canon, param_id),
             )
             updated += 1

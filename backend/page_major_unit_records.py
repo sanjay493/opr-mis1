@@ -231,12 +231,12 @@ def best_for_unit(cur, plant: str, item_names: list, is_rate: bool, upto_month: 
     if not item_names:
         return empty
 
-    ph = ",".join("?" * len(item_names))
+    ph = ",".join(["%s"] * len(item_names))
     cur.execute(f"""
         SELECT report_month, SUM(month_actual)
         FROM production_table
-        WHERE plant_name = ? AND item_name IN ({ph})
-          AND (? IS NULL OR report_month <= ?)
+        WHERE plant_name = %s AND item_name IN ({ph})
+          AND (%s IS NULL OR report_month <= %s)
         GROUP BY report_month
     """, [plant] + item_names + [upto_month, upto_month])
     monthly = {rm: v for rm, v in cur.fetchall() if v is not None}

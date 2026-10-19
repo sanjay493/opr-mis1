@@ -4,7 +4,7 @@ remove / bar emails), manage registered users (assign editor/admin role or
 delete an account), view the activity log, and view the site-visit log.
 """
 import json
-import sqlite3
+from repo.conn import Row
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
@@ -40,7 +40,7 @@ class PermissionsRequest(BaseModel):
 @router.get("/allowed-emails")
 def list_allowed_emails():
     conn = db.connect()
-    conn.row_factory = sqlite3.Row
+    conn.row_factory = Row
     cur = conn.cursor()
     cur.execute("SELECT * FROM allowed_emails ORDER BY added_at DESC")
     rows = [dict(r) for r in cur.fetchall()]
@@ -56,8 +56,8 @@ def add_allowed_email(body: EmailOnly, admin: dict = Depends(auth.require_admin)
     cur = conn.cursor()
     cur.execute(
         """INSERT INTO allowed_emails (email, added_by, added_at, barred)
-           VALUES (?, ?, ?, 0)
-           ON CONFLICT(email) DO UPDATE SET barred=0, added_by=excluded.added_by, added_at=excluded.added_at""",
+           VALUES (%s, %s, %s, 0)
+           AS new ON DUPLICATE KEY UPDATE barred=0, added_by=new.added_by, added_at=new.added_at""",
         (email, admin["email"], now),
     )
     conn.commit()
@@ -71,7 +71,7 @@ def remove_allowed_email(email: str, admin: dict = Depends(auth.require_admin)):
     email = email.lower()
     conn = db.connect()
     cur = conn.cursor()
-    cur.execute("DELETE FROM allowed_emails WHERE email=?", (email,))
+    cur.execute("DELETE FROM allowed_emails WHERE email=%s", (email,))
     conn.commit()
     conn.close()
     auth.log_activity(admin, "delete", "allowed_emails", f"removed {email}")
@@ -84,12 +84,12 @@ def bar_allowed_email(email: str, body: BarRequest, admin: dict = Depends(auth.r
     now = datetime.now(timezone.utc).isoformat()
     conn = db.connect()
     cur = conn.cursor()
-    cur.execute("SELECT 1 FROM allowed_emails WHERE email=?", (email,))
+    cur.execute("SELECT 1 FROM allowed_emails WHERE email=%s", (email,))
     if not cur.fetchone():
         conn.close()
         raise HTTPException(status_code=404, detail="Email is not on the allow-list.")
     cur.execute(
-        "UPDATE allowed_emails SET barred=?, barred_by=?, barred_at=? WHERE email=?",
+        "UPDATE allowed_emails SET barred=%s, barred_by=%s, barred_at=%s WHERE email=%s",
         (1 if body.barred else 0, admin["email"] if body.barred else None,
          now if body.barred else None, email),
     )
@@ -109,7 +109,7 @@ def list_page_modules():
 @router.get("/users")
 def list_users():
     conn = db.connect()
-    conn.row_factory = sqlite3.Row
+    conn.row_factory = Row
     cur = conn.cursor()
     cur.execute(
         "SELECT id, email, name, role, profile_pic, allowed_pages, can_delete, created_at, updated_at "
@@ -131,13 +131,13 @@ def set_user_permissions(user_id: int, body: PermissionsRequest, admin: dict = D
             raise HTTPException(status_code=400, detail=f"Unknown page module(s): {', '.join(sorted(unknown))}")
     conn = db.connect()
     cur = conn.cursor()
-    cur.execute("SELECT email FROM users WHERE id=?", (user_id,))
+    cur.execute("SELECT email FROM users WHERE id=%s", (user_id,))
     row = cur.fetchone()
     if not row:
         conn.close()
         raise HTTPException(status_code=404, detail="User not found.")
     cur.execute(
-        "UPDATE users SET allowed_pages=?, can_delete=?, updated_at=? WHERE id=?",
+        "UPDATE users SET allowed_pages=%s, can_delete=%s, updated_at=%s WHERE id=%s",
         (
             json.dumps(body.allowed_pages) if body.allowed_pages is not None else None,
             1 if body.can_delete else 0,
@@ -161,13 +161,13 @@ def set_user_role(user_id: int, body: RoleRequest, admin: dict = Depends(auth.re
         raise HTTPException(status_code=400, detail="Role must be 'editor', 'admin', or null.")
     conn = db.connect()
     cur = conn.cursor()
-    cur.execute("SELECT email FROM users WHERE id=?", (user_id,))
+    cur.execute("SELECT email FROM users WHERE id=%s", (user_id,))
     row = cur.fetchone()
     if not row:
         conn.close()
         raise HTTPException(status_code=404, detail="User not found.")
     cur.execute(
-        "UPDATE users SET role=?, updated_at=? WHERE id=?",
+        "UPDATE users SET role=%s, updated_at=%s WHERE id=%s",
         (body.role, datetime.now(timezone.utc).isoformat(), user_id),
     )
     conn.commit()
@@ -180,12 +180,12 @@ def set_user_role(user_id: int, body: RoleRequest, admin: dict = Depends(auth.re
 def delete_user(user_id: int, admin: dict = Depends(auth.require_admin)):
     conn = db.connect()
     cur = conn.cursor()
-    cur.execute("SELECT email FROM users WHERE id=?", (user_id,))
+    cur.execute("SELECT email FROM users WHERE id=%s", (user_id,))
     row = cur.fetchone()
     if not row:
         conn.close()
         raise HTTPException(status_code=404, detail="User not found.")
-    cur.execute("DELETE FROM users WHERE id=?", (user_id,))
+    cur.execute("DELETE FROM users WHERE id=%s", (user_id,))
     conn.commit()
     conn.close()
     auth.log_activity(admin, "delete", "users", f"deleted account {row[0]}")
@@ -209,19 +209,19 @@ def get_activity_log_filters():
 @router.get("/activity-log")
 def get_activity_log(limit: int = 200, offset: int = 0, user_email: Optional[str] = None, action: Optional[str] = None):
     conn = db.connect()
-    conn.row_factory = sqlite3.Row
+    conn.row_factory = Row
     cur = conn.cursor()
     where = []
     params = []
     if user_email:
-        where.append("user_email=?")
+        where.append("user_email=%s")
         params.append(user_email.lower())
     if action:
-        where.append("action=?")
+        where.append("action=%s")
         params.append(action)
     clause = f"WHERE {' AND '.join(where)}" if where else ""
     cur.execute(
-        f"SELECT * FROM activity_log {clause} ORDER BY id DESC LIMIT ? OFFSET ?",
+        f"SELECT * FROM activity_log {clause} ORDER BY id DESC LIMIT %s OFFSET %s",
         (*params, limit, offset),
     )
     rows = [dict(r) for r in cur.fetchall()]
@@ -246,14 +246,14 @@ def get_site_visits(days: int = 30):
     """One row per distinct visitor (logged-in users grouped by email,
     anonymous ones by IP) in the last `days` days (days<=0 = all time),
     each with the list of pages they visited and how often. Grouped in
-    Python — portable across sqlite/MySQL, and the row count in any
+    Python — the row count in any
     reasonable window is small for an internal LAN tool."""
     conn = db.connect()
-    conn.row_factory = sqlite3.Row
+    conn.row_factory = Row
     cur = conn.cursor()
     if days > 0:
         since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
-        cur.execute("SELECT * FROM page_visits WHERE timestamp >= ? ORDER BY timestamp ASC", (since,))
+        cur.execute("SELECT * FROM page_visits WHERE timestamp >= %s ORDER BY timestamp ASC", (since,))
     else:
         cur.execute("SELECT * FROM page_visits ORDER BY timestamp ASC")
     rows = [dict(r) for r in cur.fetchall()]

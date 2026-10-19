@@ -44,7 +44,7 @@ def _one(cur, plant, item, month, table="production_table"):
         return None
     assert table in _TABLES
     cur.execute(
-        f"SELECT month_actual FROM {table} WHERE plant_name=? AND item_name=? AND report_month=?",
+        f"SELECT month_actual FROM {table} WHERE plant_name=%s AND item_name=%s AND report_month=%s",
         (plant, item, month),
     )
     r = cur.fetchone()

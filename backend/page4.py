@@ -110,7 +110,7 @@ def _p4_query_one(cur, table, month, plant, db_item):
     """Single plant, single month. SSP/VISL fall back to Saleable Steel for Finished Steel."""
     tbl = _TABLES[table]
     cur.execute(
-        f"SELECT month_actual FROM {tbl} WHERE report_month=? AND plant_name=? AND item_name=?",
+        f"SELECT month_actual FROM {tbl} WHERE report_month=%s AND plant_name=%s AND item_name=%s",
         (month, plant, db_item),
     )
     row = cur.fetchone()
@@ -118,7 +118,7 @@ def _p4_query_one(cur, table, month, plant, db_item):
         return row[0]
     if db_item == "Finished Steel" and plant in _FS_ALIAS:
         cur.execute(
-            f"SELECT month_actual FROM {tbl} WHERE report_month=? AND plant_name=? AND item_name='Saleable Steel'",
+            f"SELECT month_actual FROM {tbl} WHERE report_month=%s AND plant_name=%s AND item_name='Saleable Steel'",
             (month, plant),
         )
         row = cur.fetchone()
@@ -140,9 +140,9 @@ def _p4_query_sum(cur, table, month, plants, db_item):
                 found = True
         return total if found else None
     tbl = _TABLES[table]
-    phs = ",".join("?" for _ in plants)
+    phs = ",".join("%s" for _ in plants)
     cur.execute(
-        f"SELECT SUM(month_actual) FROM {tbl} WHERE report_month=? AND plant_name IN ({phs}) AND item_name=?",
+        f"SELECT SUM(month_actual) FROM {tbl} WHERE report_month=%s AND plant_name IN ({phs}) AND item_name=%s",
         [month] + list(plants) + [db_item],
     )
     row = cur.fetchone()
@@ -339,7 +339,7 @@ def _p4_conv_actuals(cur, month: str):
     def fetch(m):
         cur.execute(
             "SELECT month_actual FROM production_table "
-            "WHERE report_month=? AND plant_name='SAIL' AND item_name='Conversion'",
+            "WHERE report_month=%s AND plant_name='SAIL' AND item_name='Conversion'",
             (m,)
         )
         r = cur.fetchone()

@@ -111,7 +111,7 @@ def _sum_actual(cur, months: list, entity: str):
     Spl. FS/Spl. SS totals going N/A for the SSP row specifically. Accept
     both spellings here rather than assuming every caller was updated in
     lockstep with this module's own rename."""
-    ph = ",".join("?" * len(months))
+    ph = ",".join(["%s"] * len(months))
     total, has_any = 0.0, False
     for p in _entity_plants(entity):
         if p in (_SSPS, "SSPs"):
@@ -127,7 +127,7 @@ def _sum_actual(cur, months: list, entity: str):
             continue
         cur.execute(f"""
             SELECT COALESCE(SUM(actual_despatch),0), COUNT(*)
-            FROM special_steel_orders WHERE report_month IN ({ph}) AND plant_name=?
+            FROM special_steel_orders WHERE report_month IN ({ph}) AND plant_name=%s
         """, (*months, p))
         t, c = cur.fetchone()
         if c > 0:
@@ -139,7 +139,7 @@ def _sum_actual(cur, months: list, entity: str):
 def _saleable_item(cur, month, plant, item_name):
     cur.execute("""
         SELECT month_actual FROM production_table
-        WHERE report_month=? AND plant_name=? AND item_name=?
+        WHERE report_month=%s AND plant_name=%s AND item_name=%s
     """, (month, plant, item_name))
     r = cur.fetchone()
     return r[0] if r and r[0] is not None else None  # '000T

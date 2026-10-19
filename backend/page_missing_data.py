@@ -75,11 +75,11 @@ def _rows(sql: str, params: list) -> list:
 
 
 def _distinct_plants(table: str, month_col: str, report_month: str) -> set:
-    return {r[0] for r in _rows(f"SELECT DISTINCT plant_name FROM {table} WHERE {month_col} = ?", [report_month])}
+    return {r[0] for r in _rows(f"SELECT DISTINCT plant_name FROM {table} WHERE {month_col} = %s", [report_month])}
 
 
 def _any_row(table: str, month_col: str, report_month: str) -> bool:
-    return bool(_rows(f"SELECT 1 FROM {table} WHERE {month_col} = ? LIMIT 1", [report_month]))
+    return bool(_rows(f"SELECT 1 FROM {table} WHERE {month_col} = %s LIMIT 1", [report_month]))
 
 
 def _plant_check(label: str, present_set: set, data_entry: list) -> list:
@@ -93,7 +93,7 @@ def _techno_data_presence(report_month: str) -> dict:
     """One pass over techno_data for report_month -> presence sets for the
     4 things it feeds that this checklist tracks (see module docstring for
     why unit-level detail beyond this split isn't attempted)."""
-    rows = _rows("SELECT plant, unit, techno_json FROM techno_data WHERE report_month = ?", [report_month])
+    rows = _rows("SELECT plant, unit, techno_json FROM techno_data WHERE report_month = %s", [report_month])
     other_unit_plants, epi_plants, coal_plants, coal_stock_sail = set(), set(), set(), False
     for plant, unit, tj in rows:
         if unit == "Coal_Receipt_Stock":
@@ -259,7 +259,7 @@ def generate_missing_data(report_month: str) -> dict:
             "checks": [{
                 "label": "SAIL",
                 "present": bool(_rows(
-                    "SELECT 1 FROM page3_narrative WHERE report_month = ? "
+                    "SELECT 1 FROM page3_narrative WHERE report_month = %s "
                     "AND (COALESCE(production_narrative,'') != '' OR COALESCE(highlights,'') != '')",
                     [report_month])),
                 "data_entry": [{"label": "Report page 3 (inline edit)", "link": "/report"}],

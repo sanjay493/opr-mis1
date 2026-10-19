@@ -232,7 +232,7 @@ PARAM_TYPES = [
 def seed_plant_registry(conn):
     """
     Seed plant_units and techno_param_types tables from the definitions above.
-    Safe to call multiple times — uses INSERT OR IGNORE.
+    Safe to call multiple times — uses INSERT IGNORE.
     Returns (units_added, param_types_added).
     """
     cur = conn.cursor()
@@ -244,18 +244,18 @@ def seed_plant_registry(conn):
         else:
             display_label = f"{plant_code} {unit_name}"
         cur.execute("""
-            INSERT OR IGNORE INTO plant_units
+            INSERT IGNORE INTO plant_units
                 (plant_code, unit_type, unit_name, display_label, is_shop, is_active, sort_order)
-            VALUES (?, ?, ?, ?, ?, 1, ?)
+            VALUES (%s, %s, %s, %s, %s, 1, %s)
         """, (plant_code, unit_type, unit_name, display_label, is_shop, sort_order))
         units_added += cur.rowcount
 
     param_types_added = 0
     for unit_type, param_name, unit_of_meas, agg_method, sort_order in PARAM_TYPES:
         cur.execute("""
-            INSERT OR IGNORE INTO techno_param_types
+            INSERT IGNORE INTO techno_param_types
                 (unit_type, param_name, unit_of_meas, agg_method, sort_order)
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s)
         """, (unit_type, param_name, unit_of_meas, agg_method, sort_order))
         param_types_added += cur.rowcount
 

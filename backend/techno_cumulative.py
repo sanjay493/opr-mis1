@@ -152,10 +152,10 @@ def _plant_production(plant: str, item: str, months) -> Dict[str, float]:
     """{month: production} for a plant-level item from production_table."""
     conn = _db.connect()
     cur = conn.cursor()
-    ph = ",".join("?" * len(months))
+    ph = ",".join(["%s"] * len(months))
     cur.execute(
         f"SELECT report_month, month_actual FROM production_table "
-        f"WHERE plant_name=? AND item_name=? AND report_month IN ({ph})",
+        f"WHERE plant_name=%s AND item_name=%s AND report_month IN ({ph})",
         [plant, item, *months])
     weights = {m: v for m, v in cur.fetchall() if v is not None and v > 0}
     conn.close()
@@ -188,11 +188,11 @@ def _unit_production(plant: str, unit: str, months,
 
     conn = _db.connect()
     cur = conn.cursor()
-    ph_m = ",".join("?" * len(months))
-    ph_i = ",".join("?" * len(candidates))
+    ph_m = ",".join(["%s"] * len(months))
+    ph_i = ",".join(["%s"] * len(candidates))
     cur.execute(
         f"SELECT report_month, month_actual FROM production_table "
-        f"WHERE plant_name=? AND item_name IN ({ph_i}) AND report_month IN ({ph_m})",
+        f"WHERE plant_name=%s AND item_name IN ({ph_i}) AND report_month IN ({ph_m})",
         [plant, *candidates, *months])
     # A month recorded as 0 is kept as weight 0 (the furnace was down), not
     # treated as missing: a weighted average then leaves that month out
@@ -259,7 +259,7 @@ def compute_cumulative_preview(
             values[m] = float(v)
         except (TypeError, ValueError):
             # Non-numeric stored value (e.g. a 'HH:MM' time) — cannot average
-            warnings.append(f"{m}: non-numeric value {v!r} — excluded.")
+            warnings.append(f"{m}: non-numeric value {v!r} — new.")
 
     return compute_cumulative_from_values(
         plant, unit, param_key, report_month, values,
@@ -304,7 +304,7 @@ def compute_cumulative_from_values(
             f"No Month Value for {report_month} — cumulative covers earlier months only.")
     skipped = [m for m in months if m not in values and m != report_month]
     if skipped:
-        warnings.append(f"No monthly value in DB for: {', '.join(skipped)} — excluded.")
+        warnings.append(f"No monthly value in DB for: {', '.join(skipped)} — new.")
 
     if not values:
         raise ValueError(
@@ -435,7 +435,7 @@ def aggregate_values(
             w = weights[m]
             if w == 0:
                 rows.append({"month": m, "value": v, "weight": w, "product": None})
-                steps.append(f"{m}: zero production — excluded.")
+                steps.append(f"{m}: zero production — new.")
                 continue
             usable.append((m, v, w))
             term = round(v * w, 4) if method == "weighted" else round(w / v, 4)

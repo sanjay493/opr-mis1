@@ -214,11 +214,11 @@ def _shop_period_weights(plant: str, shop: str, months: List[str]) -> Dict[str, 
     if items:
         conn = _db.connect()
         cur = conn.cursor()
-        ph_m = ",".join("?" * len(months))
-        ph_i = ",".join("?" * len(items))
+        ph_m = ",".join(["%s"] * len(months))
+        ph_i = ",".join(["%s"] * len(items))
         cur.execute(
             f"SELECT report_month, month_actual FROM production_table "
-            f"WHERE plant_name=? AND item_name IN ({ph_i}) AND report_month IN ({ph_m})",
+            f"WHERE plant_name=%s AND item_name IN ({ph_i}) AND report_month IN ({ph_m})",
             [plant, *items, *months])
         for rm, v in cur.fetchall():
             if v is not None:
@@ -444,11 +444,11 @@ def _shop_period_own_cs(plant: str, shop: str, months: List[str]) -> Dict[str, f
     conn = _db.connect()
     try:
         cur = conn.cursor()
-        ph_m = ",".join("?" * len(months))
-        ph_i = ",".join("?" * len(items))
+        ph_m = ",".join(["%s"] * len(months))
+        ph_i = ",".join(["%s"] * len(items))
         cur.execute(
             f"SELECT report_month, month_actual FROM production_table "
-            f"WHERE plant_name=? AND item_name IN ({ph_i}) AND report_month IN ({ph_m})",
+            f"WHERE plant_name=%s AND item_name IN ({ph_i}) AND report_month IN ({ph_m})",
             [plant, *items, *months])
         out: Dict[str, float] = {}
         for rm, v in cur.fetchall():

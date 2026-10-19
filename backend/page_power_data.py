@@ -74,7 +74,7 @@ def generate_power_data(report_month: str) -> dict:
     conn = db.connect()
     cur = conn.cursor()
     try:
-        ph = ",".join("?" * len(fy_months))
+        ph = ",".join(["%s"] * len(fy_months))
         cur.execute(
             f"SELECT report_month, plant_name, item_name, value FROM {_UNIT_TABLE} "
             f"WHERE report_month IN ({ph})",

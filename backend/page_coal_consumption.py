@@ -81,10 +81,10 @@ def _batched_techno_rows(conn, plant: str, unit: str, months: list) -> dict:
     added — confirmed by tracing dbengine.connect()'s per-call
     pymysql.connect(), which has no pooling."""
     cur = conn.cursor()
-    ph = ",".join("?" * len(months))
+    ph = ",".join(["%s"] * len(months))
     cur.execute(
         f"SELECT report_month, techno_json FROM techno_data "
-        f"WHERE plant=? AND unit=? AND report_month IN ({ph})",
+        f"WHERE plant=%s AND unit=%s AND report_month IN ({ph})",
         (plant, unit, *months),
     )
     out = {}
@@ -129,10 +129,10 @@ def _fy_target_pcts(conn, plants: list, fy_label: str, unit: str) -> dict:
     that matters), which would reintroduce one extra connection per plant
     here."""
     cur = conn.cursor()
-    ph = ",".join("?" * len(plants))
+    ph = ",".join(["%s"] * len(plants))
     cur.execute(
         f"SELECT plant_name, techno_json FROM techno_plan_fy "
-        f"WHERE plant_name IN ({ph}) AND fy=? AND unit=?",
+        f"WHERE plant_name IN ({ph}) AND fy=%s AND unit=%s",
         (*plants, fy_label, unit),
     )
     out = {}

@@ -206,12 +206,12 @@ def _prod_item_sum(cur, months: list, entity: str, item: str, is_plan: bool = Fa
     direct_plants = [p for p in plants if item != "Saleable Semis" or p not in _SSPS_PLANTS]
     total, found = 0.0, False
     if direct_plants:
-        ph_m = ",".join("?" * len(months))
-        ph_p = ",".join("?" * len(direct_plants))
+        ph_m = ",".join(["%s"] * len(months))
+        ph_p = ",".join(["%s"] * len(direct_plants))
         cur.execute(f"""
             SELECT COALESCE(SUM(month_actual),0), COUNT(*)
             FROM {table}
-            WHERE report_month IN ({ph_m}) AND plant_name IN ({ph_p}) AND item_name=?
+            WHERE report_month IN ({ph_m}) AND plant_name IN ({ph_p}) AND item_name=%s
         """, (*months, *direct_plants, item))
         t, c = cur.fetchone()
         if c > 0:
@@ -239,8 +239,8 @@ def _ssps_semis_residual(cur, table: str, months: list, plants: list) -> float:
     there when no dedicated Finished Steel row exists — the residual is
     then correctly ~0 for that plant/month, not negative). Clamped at 0
     overall so a data gap in one table/month doesn't flip the sign."""
-    ph_m = ",".join("?" * len(months))
-    ph_p = ",".join("?" * len(plants))
+    ph_m = ",".join(["%s"] * len(months))
+    ph_p = ",".join(["%s"] * len(plants))
     cur.execute(f"""
         SELECT COALESCE(SUM(month_actual),0)
         FROM {table}
@@ -281,12 +281,12 @@ def _desp_item_sum(cur, months: list, entity: str, item: str):
     else:
         plants = [entity]
 
-    ph_m = ",".join("?" * len(months))
-    ph_p = ",".join("?" * len(plants))
+    ph_m = ",".join(["%s"] * len(months))
+    ph_p = ",".join(["%s"] * len(plants))
     cur.execute(f"""
         SELECT COALESCE(SUM(month_actual),0), COUNT(*)
         FROM production_table
-        WHERE report_month IN ({ph_m}) AND plant_name IN ({ph_p}) AND item_name=?
+        WHERE report_month IN ({ph_m}) AND plant_name IN ({ph_p}) AND item_name=%s
     """, (*months, *plants, item))
     t, c = cur.fetchone()
     return (t * 1000) if c > 0 else None
@@ -336,11 +336,11 @@ def _special_fin_semis_split(cur, months: list, entity: str):
         return (qty if has else 0.0), 0.0
 
     semis_products = _SEMIS_PRODUCTS.get(entity, set())
-    ph = ",".join("?" * len(months))
+    ph = ",".join(["%s"] * len(months))
     cur.execute(f"""
         SELECT product, COALESCE(SUM(actual_despatch),0)
         FROM special_steel_orders
-        WHERE report_month IN ({ph}) AND plant_name=?
+        WHERE report_month IN ({ph}) AND plant_name=%s
         GROUP BY product
     """, (*months, entity))
     fin, semis = 0.0, 0.0

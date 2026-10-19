@@ -62,7 +62,7 @@ def _actual_crs(plant: str) -> list:
     try:
         cur = conn.execute(
             f"SELECT {', '.join(_CR_COLS)} FROM capital_repair_table "
-            "WHERE plant=? AND actual_start IS NOT NULL AND actual_start<>''", (plant,))
+            "WHERE plant=%s AND actual_start IS NOT NULL AND actual_start<>''", (plant,))
         return [dict(zip(_CR_COLS, r)) for r in cur.fetchall()]
     finally:
         conn.close()
@@ -73,7 +73,7 @@ def _validate_cr_link(plant: str, cr_id: Optional[int]):
         return
     conn = _db.connect()
     try:
-        row = conn.execute("SELECT plant FROM capital_repair_table WHERE id=?", (cr_id,)).fetchone()
+        row = conn.execute("SELECT plant FROM capital_repair_table WHERE id=%s", (cr_id,)).fetchone()
     finally:
         conn.close()
     if row is None:

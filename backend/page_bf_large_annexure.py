@@ -208,10 +208,10 @@ def _production_table_tonnes(plant: str, months: list) -> dict:
     conn = db.connect()
     cur = conn.cursor()
     try:
-        ph = ",".join("?" * len(months))
+        ph = ",".join(["%s"] * len(months))
         cur.execute(
             f"SELECT report_month, month_actual FROM production_table "
-            f"WHERE plant_name=? AND item_name=? AND report_month IN ({ph})",
+            f"WHERE plant_name=%s AND item_name=%s AND report_month IN ({ph})",
             (plant, item, *months),
         )
         return {rm: v * 1000 for rm, v in cur.fetchall() if v is not None}
@@ -236,10 +236,10 @@ def _production_plan_annual_tonnes(plant: str, fy_months: list) -> float:
     conn = db.connect()
     cur = conn.cursor()
     try:
-        ph = ",".join("?" * len(fy_months))
+        ph = ",".join(["%s"] * len(fy_months))
         cur.execute(
             f"SELECT SUM(month_actual) FROM production_plan_table "
-            f"WHERE plant_name=? AND item_name=? AND report_month IN ({ph})",
+            f"WHERE plant_name=%s AND item_name=%s AND report_month IN ({ph})",
             (plant, item, *fy_months),
         )
         r = cur.fetchone()
@@ -286,10 +286,10 @@ def _fetch_bf_rows(plant, unit, months):
     conn = db.connect()
     cur = conn.cursor()
     try:
-        ph = ",".join("?" * len(months))
+        ph = ",".join(["%s"] * len(months))
         cur.execute(
             f"SELECT report_month, techno_json FROM techno_data "
-            f"WHERE plant=? AND unit=? AND report_month IN ({ph})",
+            f"WHERE plant=%s AND unit=%s AND report_month IN ({ph})",
             (plant, unit, *months),
         )
         return {rm: _json.loads(tj) for rm, tj in cur.fetchall()}
@@ -433,7 +433,7 @@ def _sail_static_working_volume(plant, unit):
     cur = conn.cursor()
     try:
         cur.execute(
-            "SELECT working_volume_m3 FROM bf_benchmark_sail_meta WHERE plant=? AND unit=?",
+            "SELECT working_volume_m3 FROM bf_benchmark_sail_meta WHERE plant=%s AND unit=%s",
             (plant, unit),
         )
         r = cur.fetchone()
@@ -471,11 +471,11 @@ def _coke_ash_and_sinter_fe(plant, unit, report_month, ytd_months, agg_periods=N
     conn = db.connect()
     cur = conn.cursor()
     try:
-        ph_u = ",".join("?" * len(all_units))
-        ph_m = ",".join("?" * len(all_months))
+        ph_u = ",".join(["%s"] * len(all_units))
+        ph_m = ",".join(["%s"] * len(all_months))
         cur.execute(
             f"SELECT unit, report_month, techno_json FROM techno_data "
-            f"WHERE plant=? AND unit IN ({ph_u}) AND report_month IN ({ph_m})",
+            f"WHERE plant=%s AND unit IN ({ph_u}) AND report_month IN ({ph_m})",
             (plant, *all_units, *all_months),
         )
         for row_unit, rm, tj in cur.fetchall():

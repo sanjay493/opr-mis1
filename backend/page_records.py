@@ -35,7 +35,7 @@ _H_LABELS = {1: 'H1', 2: 'H2'}
 
 
 def _ph(lst):
-    return ','.join('?' * len(lst))
+    return ','.join(['%s'] * len(lst))
 
 
 def _mon_label(ym):
@@ -49,9 +49,9 @@ def _fy_label(fy_start):
 
 def _fy_pos_expr():
     """report_month's position within its financial year: 0 = April … 11 = March."""
-    return ("CASE WHEN CAST(SUBSTR(report_month,6,2) AS INTEGER) >= 4 "
-            "THEN CAST(SUBSTR(report_month,6,2) AS INTEGER) - 4 "
-            "ELSE CAST(SUBSTR(report_month,6,2) AS INTEGER) + 8 END")
+    return ("CASE WHEN CAST(SUBSTR(report_month,6,2) AS SIGNED) >= 4 "
+            "THEN CAST(SUBSTR(report_month,6,2) AS SIGNED) - 4 "
+            "ELSE CAST(SUBSTR(report_month,6,2) AS SIGNED) + 8 END")
 
 
 def _pos_to_mon(pos: int) -> int:
@@ -60,16 +60,16 @@ def _pos_to_mon(pos: int) -> int:
 
 
 def _fy_expr():
-    return ("CASE WHEN CAST(SUBSTR(report_month,6,2) AS INTEGER)>=4 "
-            "THEN CAST(SUBSTR(report_month,1,4) AS INTEGER) "
-            "ELSE CAST(SUBSTR(report_month,1,4) AS INTEGER)-1 END")
+    return ("CASE WHEN CAST(SUBSTR(report_month,6,2) AS SIGNED)>=4 "
+            "THEN CAST(SUBSTR(report_month,1,4) AS SIGNED) "
+            "ELSE CAST(SUBSTR(report_month,1,4) AS SIGNED)-1 END")
 
 
 def _q_expr():
     return ("CASE "
-            "WHEN CAST(SUBSTR(report_month,6,2) AS INTEGER) IN (4,5,6)    THEN 1 "
-            "WHEN CAST(SUBSTR(report_month,6,2) AS INTEGER) IN (7,8,9)    THEN 2 "
-            "WHEN CAST(SUBSTR(report_month,6,2) AS INTEGER) IN (10,11,12) THEN 3 "
+            "WHEN CAST(SUBSTR(report_month,6,2) AS SIGNED) IN (4,5,6)    THEN 1 "
+            "WHEN CAST(SUBSTR(report_month,6,2) AS SIGNED) IN (7,8,9)    THEN 2 "
+            "WHEN CAST(SUBSTR(report_month,6,2) AS SIGNED) IN (10,11,12) THEN 3 "
             "ELSE 4 END")
 
 
@@ -78,13 +78,13 @@ def _days_expr():
     (Oven Pushing (nos/day), COB#* battery counts) by days-in-month when
     combining months into a quarter/half/FY/CY, instead of summing an
     already-daily-average figure like it was tonnage."""
-    return ("CASE CAST(SUBSTR(report_month,6,2) AS INTEGER) "
+    return ("CASE CAST(SUBSTR(report_month,6,2) AS SIGNED) "
             "WHEN 1 THEN 31 WHEN 3 THEN 31 WHEN 5 THEN 31 WHEN 7 THEN 31 "
             "WHEN 8 THEN 31 WHEN 10 THEN 31 WHEN 12 THEN 31 "
             "WHEN 4 THEN 30 WHEN 6 THEN 30 WHEN 9 THEN 30 WHEN 11 THEN 30 "
-            "ELSE CASE WHEN CAST(SUBSTR(report_month,1,4) AS INTEGER) % 4 = 0 "
-            "AND (CAST(SUBSTR(report_month,1,4) AS INTEGER) % 100 != 0 "
-            "OR CAST(SUBSTR(report_month,1,4) AS INTEGER) % 400 = 0) "
+            "ELSE CASE WHEN CAST(SUBSTR(report_month,1,4) AS SIGNED) %% 4 = 0 "
+            "AND (CAST(SUBSTR(report_month,1,4) AS SIGNED) %% 100 != 0 "
+            "OR CAST(SUBSTR(report_month,1,4) AS SIGNED) %% 400 = 0) "
             "THEN 29 ELSE 28 END END")
 
 
@@ -175,7 +175,7 @@ def _compute_group_records(cur, items: list, where: str, args: list) -> dict:
     #    best/2nd-best month are always contained in this set. ───────
     cur.execute(f"""
         SELECT item_name,
-               CAST(SUBSTR(report_month,6,2) AS INTEGER) AS mon_num,
+               CAST(SUBSTR(report_month,6,2) AS SIGNED) AS mon_num,
                report_month,
                SUM(month_actual) AS total
         FROM production_table
@@ -209,7 +209,7 @@ def _compute_group_records(cur, items: list, where: str, args: list) -> dict:
     # plant's own days-in-month-weighted mean over the period — the SAIL
     # nos/day, not a per-plant average. Only complete periods (3 / 6 / 12
     # months present) count. ───────────────────────────────────────────
-    _H_EXPR = ("CASE WHEN CAST(SUBSTR(report_month,6,2) AS INTEGER) BETWEEN 4 AND 9 "
+    _H_EXPR = ("CASE WHEN CAST(SUBSTR(report_month,6,2) AS SIGNED) BETWEEN 4 AND 9 "
                "THEN 1 ELSE 2 END")
 
     q_buckets = {}
@@ -286,7 +286,7 @@ def _latest_production_month(cur) -> str:
     were set just now (period ending at/near this month)."""
     cur.execute("""
         SELECT MAX(report_month) FROM production_table
-        WHERE report_month GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]'
+        WHERE report_month REGEXP '^[0-9][0-9][0-9][0-9]-[0-9][0-9]$'
     """)
     return cur.fetchone()[0]
 
@@ -305,7 +305,7 @@ def generate_records() -> dict:
             # unit/item that plant has ever reported (BF#1, SMS-2, URM …).
             if len(plants) == 1:
                 cur.execute(
-                    "SELECT DISTINCT item_name FROM production_table WHERE plant_name=?",
+                    "SELECT DISTINCT item_name FROM production_table WHERE plant_name=%s",
                     plants)
                 items = sorted(
                     (r[0] for r in cur.fetchall() if r[0] not in LEGACY_ITEM_NAMES),
@@ -377,7 +377,7 @@ def _compute_best_period(cur, items: list, where: str, args: list,
                SUM(month_actual)     AS v,
                MAX({_days_expr()})   AS days
         FROM production_table
-        WHERE {where} AND ({_fy_pos_expr()}) BETWEEN ? AND ?
+        WHERE {where} AND ({_fy_pos_expr()}) BETWEEN %s AND %s
         GROUP BY item_name, fy_start, plant_name, report_month
     """, list(args) + [s_pos, e_pos])
 
@@ -496,7 +496,7 @@ def generate_group_records(items: list = HIGHLIGHT_ITEMS, upto_month: str = None
             where = f"item_name IN ({_ph(items)}) AND plant_name IN ({ph})"
             args  = items + plants
             if upto_month:
-                where += " AND report_month <= ?"
+                where += " AND report_month <= %s"
                 args = args + [upto_month]
             result[group_name] = _compute_group_records(cur, items, where, args)
 

@@ -11,7 +11,7 @@ Endpoints:
   DELETE /api/capacity/{id}       – delete one entry
 """
 
-import sqlite3
+from repo.conn import IntegrityError
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -94,7 +94,7 @@ async def create_capacity(body: CapacityCreate, request: Request):
             annual_capacity=body.annual_capacity, reason=(body.reason or "").strip(),
             created_by=_editor_email(request),
         )
-    except sqlite3.IntegrityError:
+    except IntegrityError:
         raise HTTPException(
             409,
             f"A capacity entry already exists for {body.plant}/{body.item} effective {body.effective_month} — edit it instead.",
@@ -131,7 +131,7 @@ async def update_capacity(entry_id: int, body: CapacityUpdate, request: Request)
 
     try:
         ok = _db.update_capacity_entry(entry_id, updated_by=_editor_email(request), **fields)
-    except sqlite3.IntegrityError:
+    except IntegrityError:
         raise HTTPException(409, "Another entry already exists for that plant/item/effective month.")
     if not ok:
         raise HTTPException(404, "Capacity entry not found")

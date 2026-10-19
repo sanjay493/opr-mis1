@@ -578,9 +578,6 @@ async def get_plants():
     """
     try:
         init_db()
-        import sqlite3
-        from db import DB_PATH
-
         conn = db.connect()
         cursor = conn.cursor()
         cursor.execute("SELECT DISTINCT plant FROM techno_data ORDER BY plant")

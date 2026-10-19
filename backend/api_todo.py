@@ -17,7 +17,7 @@ Endpoints:
 """
 
 import re
-import sqlite3
+from repo.conn import Row
 from datetime import datetime
 from typing import Optional
 
@@ -63,15 +63,15 @@ def _validate_priority(priority: str):
 def _fetch_job(conn, job_id: int) -> Optional[dict]:
     """Snapshot one job as a plain dict, for old/new activity-log capture."""
     prev_factory = conn.row_factory
-    conn.row_factory = sqlite3.Row
+    conn.row_factory = Row
     try:
-        row = conn.execute("SELECT * FROM todo_jobs WHERE id=?", (job_id,)).fetchone()
+        row = conn.execute("SELECT * FROM todo_jobs WHERE id=%s", (job_id,)).fetchone()
         return _row_to_dict(row) if row else None
     finally:
         conn.row_factory = prev_factory
 
 
-def _row_to_dict(row: sqlite3.Row) -> dict:
+def _row_to_dict(row: Row) -> dict:
     return {
         "id":           row["id"],
         "subject":      row["subject"],
@@ -92,13 +92,13 @@ async def list_jobs(status: str = Query("pending", description="pending | done |
         raise HTTPException(400, "status must be 'pending', 'done', or 'all'")
     _db.init_db()
     conn = _db.connect()
-    conn.row_factory = sqlite3.Row
+    conn.row_factory = Row
     try:
         if status == "all":
             cur = conn.execute("SELECT * FROM todo_jobs ORDER BY due_date ASC, id ASC")
         else:
             cur = conn.execute(
-                "SELECT * FROM todo_jobs WHERE status=? ORDER BY due_date ASC, id ASC",
+                "SELECT * FROM todo_jobs WHERE status=%s ORDER BY due_date ASC, id ASC",
                 (status,),
             )
         jobs = [_row_to_dict(r) for r in cur.fetchall()]
@@ -120,7 +120,7 @@ async def add_job(body: JobRequest):
         cur = conn.execute(
             """INSERT INTO todo_jobs
                (subject, details, recipient, due_date, priority, status, created_at)
-               VALUES (?, ?, ?, ?, ?, 'pending', ?)""",
+               VALUES (%s, %s, %s, %s, %s, 'pending', %s)""",
             (body.subject.strip(), body.details, body.recipient, body.due_date,
              body.priority, datetime.now().isoformat()),
         )
@@ -143,7 +143,7 @@ async def update_job(job_id: int, body: JobUpdateRequest):
     for col in ("subject", "details", "recipient", "due_date", "priority", "remark"):
         val = getattr(body, col)
         if val is not None:
-            fields.append(f"{col} = ?")
+            fields.append(f"{col} = %s")
             values.append(val)
     if not fields:
         raise HTTPException(400, "No fields provided to update.")
@@ -152,7 +152,7 @@ async def update_job(job_id: int, body: JobUpdateRequest):
     try:
         old = _fetch_job(conn, job_id)
         cur = conn.execute(
-            f"UPDATE todo_jobs SET {', '.join(fields)} WHERE id = ?",
+            f"UPDATE todo_jobs SET {', '.join(fields)} WHERE id = %s",
             (*values, job_id),
         )
         conn.commit()
@@ -171,7 +171,7 @@ async def complete_job(job_id: int):
     try:
         old = _fetch_job(conn, job_id)
         cur = conn.execute(
-            "UPDATE todo_jobs SET status='done', completed_at=? WHERE id=?",
+            "UPDATE todo_jobs SET status='done', completed_at=%s WHERE id=%s",
             (datetime.now().isoformat(), job_id),
         )
         conn.commit()
@@ -190,7 +190,7 @@ async def reopen_job(job_id: int):
     try:
         old = _fetch_job(conn, job_id)
         cur = conn.execute(
-            "UPDATE todo_jobs SET status='pending', completed_at=NULL WHERE id=?",
+            "UPDATE todo_jobs SET status='pending', completed_at=NULL WHERE id=%s",
             (job_id,),
         )
         conn.commit()
@@ -208,7 +208,7 @@ async def delete_job(job_id: int):
     conn = _db.connect()
     try:
         old = _fetch_job(conn, job_id)
-        cur = conn.execute("DELETE FROM todo_jobs WHERE id=?", (job_id,))
+        cur = conn.execute("DELETE FROM todo_jobs WHERE id=%s", (job_id,))
         conn.commit()
         if cur.rowcount == 0:
             raise HTTPException(404, f"No job with id {job_id}")

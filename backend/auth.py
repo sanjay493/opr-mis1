@@ -12,7 +12,7 @@ just your old password" path, per spec.
 import os
 import secrets
 import smtplib
-import sqlite3
+from repo.conn import Row
 import ssl
 import threading
 from datetime import datetime, timedelta, timezone
@@ -141,9 +141,9 @@ def decode_login_challenge(token: str) -> Optional[dict]:
 
 def get_user_by_email(email: str) -> Optional[dict]:
     conn = db.connect()
-    conn.row_factory = sqlite3.Row
+    conn.row_factory = Row
     cur = conn.cursor()
-    cur.execute("SELECT * FROM users WHERE email=?", (email,))
+    cur.execute("SELECT * FROM users WHERE email=%s", (email,))
     row = cur.fetchone()
     conn.close()
     return dict(row) if row else None
@@ -151,9 +151,9 @@ def get_user_by_email(email: str) -> Optional[dict]:
 
 def get_user_by_id(user_id: int) -> Optional[dict]:
     conn = db.connect()
-    conn.row_factory = sqlite3.Row
+    conn.row_factory = Row
     cur = conn.cursor()
-    cur.execute("SELECT * FROM users WHERE id=?", (user_id,))
+    cur.execute("SELECT * FROM users WHERE id=%s", (user_id,))
     row = cur.fetchone()
     conn.close()
     return dict(row) if row else None
@@ -162,7 +162,7 @@ def get_user_by_id(user_id: int) -> Optional[dict]:
 def is_email_allowed(email: str) -> bool:
     conn = db.connect()
     cur = conn.cursor()
-    cur.execute("SELECT barred FROM allowed_emails WHERE email=?", (email,))
+    cur.execute("SELECT barred FROM allowed_emails WHERE email=%s", (email,))
     row = cur.fetchone()
     conn.close()
     return row is not None and row[0] == 0
@@ -173,7 +173,7 @@ def is_email_allowed(email: str) -> bool:
 def _is_barred(email: str) -> bool:
     conn = db.connect()
     cur = conn.cursor()
-    cur.execute("SELECT barred FROM allowed_emails WHERE email=?", (email,))
+    cur.execute("SELECT barred FROM allowed_emails WHERE email=%s", (email,))
     row = cur.fetchone()
     conn.close()
     return bool(row and row[0] == 1)
@@ -250,12 +250,12 @@ def generate_and_store_otp(email: str, purpose: str) -> str:
     conn = db.connect()
     cur = conn.cursor()
     cur.execute(
-        "UPDATE otp_codes SET used=1 WHERE email=? AND purpose=? AND used=0",
+        "UPDATE otp_codes SET used=1 WHERE email=%s AND purpose=%s AND used=0",
         (email, purpose),
     )
     cur.execute(
         """INSERT INTO otp_codes (email, purpose, code_hash, expires_at, used, created_at)
-           VALUES (?, ?, ?, ?, 0, ?)""",
+           VALUES (%s, %s, %s, %s, 0, %s)""",
         (email, purpose, _hash_code(code), expires_at.isoformat(), now.isoformat()),
     )
     conn.commit()
@@ -268,7 +268,7 @@ def otp_resend_wait_seconds(email: str, purpose: str) -> int:
     conn = db.connect()
     cur = conn.cursor()
     cur.execute(
-        """SELECT created_at FROM otp_codes WHERE email=? AND purpose=?
+        """SELECT created_at FROM otp_codes WHERE email=%s AND purpose=%s
            ORDER BY id DESC LIMIT 1""",
         (email, purpose),
     )
@@ -292,7 +292,7 @@ def verify_otp(email: str, purpose: str, code: str) -> bool:
     cur = conn.cursor()
     cur.execute(
         """SELECT id, code_hash, expires_at FROM otp_codes
-           WHERE email=? AND purpose=? AND used=0
+           WHERE email=%s AND purpose=%s AND used=0
            ORDER BY id DESC LIMIT 1""",
         (email, purpose),
     )
@@ -311,7 +311,7 @@ def verify_otp(email: str, purpose: str, code: str) -> bool:
     ok = bcrypt.checkpw((code or "").strip().encode("utf-8"), code_hash.encode("utf-8"))
     if ok:
         _otp_failures.pop(otp_id, None)
-        cur.execute("UPDATE otp_codes SET used=1 WHERE id=?", (otp_id,))
+        cur.execute("UPDATE otp_codes SET used=1 WHERE id=%s", (otp_id,))
         conn.commit()
     else:
         with _otp_failures_lock:
@@ -320,7 +320,7 @@ def verify_otp(email: str, purpose: str, code: str) -> bool:
             if burned:
                 _otp_failures.pop(otp_id, None)
         if burned:
-            cur.execute("UPDATE otp_codes SET used=1 WHERE id=?", (otp_id,))
+            cur.execute("UPDATE otp_codes SET used=1 WHERE id=%s", (otp_id,))
             conn.commit()
     conn.close()
     return ok
@@ -370,7 +370,7 @@ def log_activity(user: Optional[dict], action: str, entity: str, details: str = 
     cur = conn.cursor()
     cur.execute(
         """INSERT INTO activity_log (user_email, user_name, action, entity, details, timestamp)
-           VALUES (?, ?, ?, ?, ?, ?)""",
+           VALUES (%s, %s, %s, %s, %s, %s)""",
         (
             user.get("email") if user else None,
             user.get("name") if user else None,

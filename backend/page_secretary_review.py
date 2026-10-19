@@ -50,7 +50,7 @@ def plan_basis(cur, month):
     else 'app'."""
     try:
         cur.execute("SELECT DISTINCT item_name FROM mou_plan_table "
-                    "WHERE report_month=? AND month_actual IS NOT NULL", (month,))
+                    "WHERE report_month=%s AND month_actual IS NOT NULL", (month,))
         have = {r[0] for r in cur.fetchall()}
     except Exception:
         return "app"

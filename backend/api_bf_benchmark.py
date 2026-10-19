@@ -201,7 +201,7 @@ async def add_external_bf(body: ExternalBFCreate):
     conn = _db.connect()
     cur = conn.cursor()
     cur.execute(
-        "INSERT INTO bf_benchmark_external_bf (name, company, location, active, created_at) VALUES (?, ?, ?, 1, ?)",
+        "INSERT INTO bf_benchmark_external_bf (name, company, location, active, created_at) VALUES (%s, %s, %s, 1, %s)",
         (name, body.company.strip(), body.location.strip(), _now()),
     )
     conn.commit()
@@ -214,25 +214,25 @@ async def add_external_bf(body: ExternalBFCreate):
 async def update_external_bf(bf_id: int, body: ExternalBFUpdate):
     conn = _db.connect()
     cur = conn.cursor()
-    cur.execute("SELECT id FROM bf_benchmark_external_bf WHERE id=?", (bf_id,))
+    cur.execute("SELECT id FROM bf_benchmark_external_bf WHERE id=%s", (bf_id,))
     if not cur.fetchone():
         conn.close()
         raise HTTPException(404, "Non-SAIL BF not found.")
 
     fields, params = [], []
     if body.name is not None:
-        fields.append("name=?"); params.append(body.name.strip())
+        fields.append("name=%s"); params.append(body.name.strip())
     if body.company is not None:
-        fields.append("company=?"); params.append(body.company.strip())
+        fields.append("company=%s"); params.append(body.company.strip())
     if body.location is not None:
-        fields.append("location=?"); params.append(body.location.strip())
+        fields.append("location=%s"); params.append(body.location.strip())
     if body.working_volume_m3 is not None:
-        fields.append("working_volume_m3=?"); params.append(body.working_volume_m3)
+        fields.append("working_volume_m3=%s"); params.append(body.working_volume_m3)
     if body.active is not None:
-        fields.append("active=?"); params.append(1 if body.active else 0)
+        fields.append("active=%s"); params.append(1 if body.active else 0)
     if fields:
         params.append(bf_id)
-        cur.execute(f"UPDATE bf_benchmark_external_bf SET {', '.join(fields)} WHERE id=?", params)
+        cur.execute(f"UPDATE bf_benchmark_external_bf SET {', '.join(fields)} WHERE id=%s", params)
         conn.commit()
     conn.close()
     return {"status": "ok"}
@@ -249,7 +249,7 @@ async def get_external_entry(bf_id: int, fy: str = Query(...)):
     conn = _db.connect()
     cur = conn.cursor()
     cur.execute(
-        "SELECT param_json FROM bf_benchmark_external_data WHERE external_bf_id=? AND report_month=?",
+        "SELECT param_json FROM bf_benchmark_external_data WHERE external_bf_id=%s AND report_month=%s",
         (bf_id, fy),
     )
     row = cur.fetchone()
@@ -263,13 +263,13 @@ async def save_external_entry(bf_id: int, body: EntrySaveRequest):
     _validate_fy(body.fy)
     conn = _db.connect()
     cur = conn.cursor()
-    cur.execute("SELECT id FROM bf_benchmark_external_bf WHERE id=?", (bf_id,))
+    cur.execute("SELECT id FROM bf_benchmark_external_bf WHERE id=%s", (bf_id,))
     if not cur.fetchone():
         conn.close()
         raise HTTPException(404, "Non-SAIL BF not found.")
 
     cur.execute(
-        "SELECT param_json FROM bf_benchmark_external_data WHERE external_bf_id=? AND report_month=?",
+        "SELECT param_json FROM bf_benchmark_external_data WHERE external_bf_id=%s AND report_month=%s",
         (bf_id, body.fy),
     )
     row = cur.fetchone()
@@ -284,14 +284,14 @@ async def save_external_entry(bf_id: int, body: EntrySaveRequest):
     now = _now()
     if row:
         cur.execute(
-            "UPDATE bf_benchmark_external_data SET param_json=?, updated_at=? "
-            "WHERE external_bf_id=? AND report_month=?",
+            "UPDATE bf_benchmark_external_data SET param_json=%s, updated_at=%s "
+            "WHERE external_bf_id=%s AND report_month=%s",
             (json.dumps(merged), now, bf_id, body.fy),
         )
     else:
         cur.execute(
             "INSERT INTO bf_benchmark_external_data (external_bf_id, report_month, param_json, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?)",
+            "VALUES (%s, %s, %s, %s, %s)",
             (bf_id, body.fy, json.dumps(merged), now, now),
         )
     conn.commit()
@@ -332,8 +332,8 @@ async def set_sail_meta(body: SailMetaRequest):
     cur = conn.cursor()
     now = _now()
     cur.execute(
-        "INSERT INTO bf_benchmark_sail_meta (plant, unit, working_volume_m3, updated_at) VALUES (?, ?, ?, ?) "
-        "ON CONFLICT(plant, unit) DO UPDATE SET working_volume_m3=excluded.working_volume_m3, updated_at=excluded.updated_at",
+        "INSERT INTO bf_benchmark_sail_meta (plant, unit, working_volume_m3, updated_at) VALUES (%s, %s, %s, %s) "
+        "AS new ON DUPLICATE KEY UPDATE working_volume_m3=new.working_volume_m3, updated_at=new.updated_at",
         (plant, unit, body.working_volume_m3, now),
     )
     conn.commit()
@@ -422,7 +422,7 @@ def _external_bf_values(bf_id: int, fy_label: str) -> "tuple[bool, Dict[str, Opt
     conn = _db.connect()
     cur = conn.cursor()
     cur.execute(
-        "SELECT param_json FROM bf_benchmark_external_data WHERE external_bf_id=? AND report_month=?",
+        "SELECT param_json FROM bf_benchmark_external_data WHERE external_bf_id=%s AND report_month=%s",
         (bf_id, fy_label),
     )
     row = cur.fetchone()
@@ -467,7 +467,7 @@ def build_compare(body: CompareRequest) -> Dict:
     if body.external_bf_ids:
         conn = _db.connect()
         cur = conn.cursor()
-        ph = ",".join("?" * len(body.external_bf_ids))
+        ph = ",".join(["%s"] * len(body.external_bf_ids))
         cur.execute(
             f"SELECT id, name, company, location, working_volume_m3 FROM bf_benchmark_external_bf WHERE id IN ({ph})",
             body.external_bf_ids,

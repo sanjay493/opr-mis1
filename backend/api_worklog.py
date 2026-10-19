@@ -17,7 +17,7 @@ Endpoints:
 """
 
 import re
-import sqlite3
+from repo.conn import Row
 from datetime import datetime
 from typing import Optional
 
@@ -53,15 +53,15 @@ def _validate_work_date(work_date: str):
 def _fetch_entry(conn, entry_id: int) -> Optional[dict]:
     """Snapshot one work-log entry as a plain dict, for old/new activity-log capture."""
     prev_factory = conn.row_factory
-    conn.row_factory = sqlite3.Row
+    conn.row_factory = Row
     try:
-        row = conn.execute("SELECT * FROM daily_work_log WHERE id=?", (entry_id,)).fetchone()
+        row = conn.execute("SELECT * FROM daily_work_log WHERE id=%s", (entry_id,)).fetchone()
         return _row_to_dict(row) if row else None
     finally:
         conn.row_factory = prev_factory
 
 
-def _row_to_dict(row: sqlite3.Row) -> dict:
+def _row_to_dict(row: Row) -> dict:
     return {
         "id":          row["id"],
         "work_date":   row["work_date"],
@@ -85,19 +85,19 @@ async def list_entries(
 
     where, params = [], []
     if month:
-        where.append("work_date LIKE ?")
+        where.append("work_date LIKE %s")
         params.append(f"{month}-%")
     if from_date:
-        where.append("work_date >= ?")
+        where.append("work_date >= %s")
         params.append(from_date)
     if to_date:
-        where.append("work_date <= ?")
+        where.append("work_date <= %s")
         params.append(to_date)
     where_sql = f"WHERE {' AND '.join(where)}" if where else ""
 
     _db.init_db()
     conn = _db.connect()
-    conn.row_factory = sqlite3.Row
+    conn.row_factory = Row
     try:
         cur = conn.execute(
             f"SELECT * FROM daily_work_log {where_sql} ORDER BY work_date DESC, id DESC",
@@ -120,7 +120,7 @@ async def add_entry(body: EntryRequest):
     try:
         cur = conn.execute(
             """INSERT INTO daily_work_log (work_date, description, remarks, created_at)
-               VALUES (?, ?, ?, ?)""",
+               VALUES (%s, %s, %s, %s)""",
             (body.work_date, body.description.strip(), body.remarks,
              datetime.now().isoformat()),
         )
@@ -143,7 +143,7 @@ async def update_entry(entry_id: int, body: EntryUpdateRequest):
     for col in ("work_date", "description", "remarks"):
         val = getattr(body, col)
         if val is not None:
-            fields.append(f"{col} = ?")
+            fields.append(f"{col} = %s")
             values.append(val)
     if not fields:
         raise HTTPException(400, "No fields provided to update.")
@@ -152,7 +152,7 @@ async def update_entry(entry_id: int, body: EntryUpdateRequest):
     try:
         old = _fetch_entry(conn, entry_id)
         cur = conn.execute(
-            f"UPDATE daily_work_log SET {', '.join(fields)} WHERE id = ?",
+            f"UPDATE daily_work_log SET {', '.join(fields)} WHERE id = %s",
             (*values, entry_id),
         )
         conn.commit()
@@ -170,7 +170,7 @@ async def delete_entry(entry_id: int):
     conn = _db.connect()
     try:
         old = _fetch_entry(conn, entry_id)
-        cur = conn.execute("DELETE FROM daily_work_log WHERE id=?", (entry_id,))
+        cur = conn.execute("DELETE FROM daily_work_log WHERE id=%s", (entry_id,))
         conn.commit()
         if cur.rowcount == 0:
             raise HTTPException(404, f"No entry with id {entry_id}")

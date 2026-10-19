@@ -64,8 +64,8 @@ def get_trend_data(basis: str, group: str) -> dict:
     plants, group_label, use_sail_direct = resolved
 
     db_items = [it for it, _ in TREND_ITEMS]
-    phs_items = ",".join("?" for _ in db_items)
-    phs_plants = ",".join("?" for _ in plants)
+    phs_items = ",".join("%s" for _ in db_items)
+    phs_plants = ",".join("%s" for _ in plants)
 
     conn = db.connect()
     cur = conn.cursor()
@@ -82,7 +82,7 @@ def get_trend_data(basis: str, group: str) -> dict:
 
     alias_plants = [p for p in plants if p in _FS_ALIAS_PLANTS]
     if alias_plants:
-        aphs = ",".join("?" for _ in alias_plants)
+        aphs = ",".join("%s" for _ in alias_plants)
         cur.execute(
             f"SELECT plant_name, report_month, month_actual FROM production_table "
             f"WHERE item_name='Saleable Steel' AND plant_name IN ({aphs})",

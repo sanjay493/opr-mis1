@@ -560,10 +560,10 @@ def _imported_coal_blend_pct(report_month: str):
     conn = db.connect()
     cur = conn.cursor()
     try:
-        ph = ",".join("?" * len(_COAL_BLEND_PLANTS))
+        ph = ",".join(["%s"] * len(_COAL_BLEND_PLANTS))
         cur.execute(
             f"SELECT plant, unit, techno_json FROM techno_data "
-            f"WHERE report_month=? AND unit IN ('Coal_Consumption','General') AND plant IN ({ph})",
+            f"WHERE report_month=%s AND unit IN ('Coal_Consumption','General') AND plant IN ({ph})",
             [report_month, *_COAL_BLEND_PLANTS],
         )
         rows = cur.fetchall()

@@ -55,7 +55,7 @@ def _fmt(v):
 # ── data access ───────────────────────────────────────────────────────────────
 
 def _load_stock(cur, months):
-    ph = ",".join("?" * len(months))
+    ph = ",".join(["%s"] * len(months))
     cur.execute(f"""
         SELECT stock_month, plant_name, item_type, stock_type, stock
         FROM stock_table WHERE stock_month IN ({ph})

@@ -362,7 +362,7 @@ def calculate_sail_actuals(report_month: str) -> dict:
                     # Fetch BF_Shop (BF params) and General (SEC) units
                     for _unit in ("BF_Shop", "General"):
                         cur.execute(
-                            "SELECT techno_json FROM techno_data WHERE plant=? AND unit=? AND report_month=?",
+                            "SELECT techno_json FROM techno_data WHERE plant=%s AND unit=%s AND report_month=%s",
                             (plant, _unit, month)
                         )
                         row = cur.fetchone()
@@ -397,14 +397,14 @@ def calculate_sail_actuals(report_month: str) -> dict:
             def _get_weight(plant, rm, item, months_list=None):
                 """Get production weight for a plant. Single month or sum over months_list."""
                 if months_list:
-                    ph = ",".join("?" * len(months_list))
+                    ph = ",".join(["%s"] * len(months_list))
                     cur.execute(
-                        f"SELECT SUM(month_actual) FROM production_table WHERE plant_name=? AND item_name=? AND report_month IN ({ph})",
+                        f"SELECT SUM(month_actual) FROM production_table WHERE plant_name=%s AND item_name=%s AND report_month IN ({ph})",
                         [plant, item] + months_list
                     )
                 else:
                     cur.execute(
-                        "SELECT month_actual FROM production_table WHERE plant_name=? AND item_name=? AND report_month=?",
+                        "SELECT month_actual FROM production_table WHERE plant_name=%s AND item_name=%s AND report_month=%s",
                         (plant, item, rm)
                     )
                 row = cur.fetchone()
@@ -550,7 +550,7 @@ def calculate_sail_actuals_strict(report_month: str) -> dict:
             units = ("BF_Shop", "BF-5", "General") if plant == "ISP" else ("BF_Shop", "General")
             for _unit in units:
                 cur.execute(
-                    "SELECT techno_json FROM techno_data WHERE plant=? AND unit=? AND report_month=?",
+                    "SELECT techno_json FROM techno_data WHERE plant=%s AND unit=%s AND report_month=%s",
                     (plant, _unit, report_month),
                 )
                 row = cur.fetchone()
@@ -565,7 +565,7 @@ def calculate_sail_actuals_strict(report_month: str) -> dict:
 
         def _get_weight(plant, item):
             cur.execute(
-                "SELECT month_actual FROM production_table WHERE plant_name=? AND item_name=? AND report_month=?",
+                "SELECT month_actual FROM production_table WHERE plant_name=%s AND item_name=%s AND report_month=%s",
                 (plant, item, report_month),
             )
             row = cur.fetchone()
@@ -640,7 +640,7 @@ def _sail_stored_json_value(cur, month, unit, keys, period):
     caller falls back to the calculated weighted average."""
     import json as _json
     cur.execute(
-        "SELECT techno_json FROM techno_data WHERE plant='SAIL' AND unit=? AND report_month=?",
+        "SELECT techno_json FROM techno_data WHERE plant='SAIL' AND unit=%s AND report_month=%s",
         (unit, month)
     )
     row = cur.fetchone()
@@ -824,7 +824,7 @@ def compute_sail_targets(fy: str) -> dict:
         [f"{fy_start}-{m:02d}" for m in range(4, 13)] +
         [f"{fy_start + 1}-{m:02d}" for m in range(1, 4)]
     )
-    ph = ",".join("?" * len(months))
+    ph = ",".join(["%s"] * len(months))
     cur.execute(f"""
         SELECT plant_name, item_name, SUM(month_actual)
         FROM production_plan_table
@@ -1243,7 +1243,7 @@ def generate_major_techno_from_db(report_month: str, exclude_labels: set = None)
     conn = db.connect()
     cur = conn.cursor()
     try:
-        ph = ",".join("?" * len(all_months))
+        ph = ",".join(["%s"] * len(all_months))
         cur.execute(
             f"SELECT plant, report_month, unit, techno_json FROM techno_data WHERE report_month IN ({ph})",
             all_months,
@@ -1270,7 +1270,7 @@ def generate_major_techno_from_db(report_month: str, exclude_labels: set = None)
     conn3 = db.connect()
     cur3 = conn3.cursor()
     try:
-        ph3 = ",".join("?" * len(_weight_months))
+        ph3 = ",".join(["%s"] * len(_weight_months))
         cur3.execute(
             f"SELECT plant_name, report_month, month_actual FROM production_table "
             f"WHERE report_month IN ({ph3}) AND item_name='Total Crude Steel'",
@@ -1286,7 +1286,7 @@ def generate_major_techno_from_db(report_month: str, exclude_labels: set = None)
     conn4 = db.connect()
     cur4 = conn4.cursor()
     try:
-        ph4 = ",".join("?" * len(_weight_months))
+        ph4 = ",".join(["%s"] * len(_weight_months))
         cur4.execute(
             f"SELECT plant_name, report_month, month_actual FROM production_table "
             f"WHERE report_month IN ({ph4}) AND item_name='Hot Metal'",
@@ -1322,8 +1322,8 @@ def generate_major_techno_from_db(report_month: str, exclude_labels: set = None)
         conn5 = db.connect()
         cur5 = conn5.cursor()
         try:
-            ph5m = ",".join("?" * len(_weight_months))
-            ph5i = ",".join("?" * len(_shop_items))
+            ph5m = ",".join(["%s"] * len(_weight_months))
+            ph5i = ",".join(["%s"] * len(_shop_items))
             cur5.execute(
                 f"SELECT plant_name, item_name, report_month, month_actual FROM production_table "
                 f"WHERE report_month IN ({ph5m}) AND item_name IN ({ph5i})",
@@ -1935,7 +1935,7 @@ def generate_major_techno_verification(report_month: str) -> dict:
     conn = db.connect()
     cur = conn.cursor()
     try:
-        ph = ",".join("?" * len(all_months))
+        ph = ",".join(["%s"] * len(all_months))
         cur.execute(
             f"SELECT plant, report_month, unit, techno_json FROM techno_data WHERE report_month IN ({ph})",
             all_months,
@@ -1949,7 +1949,7 @@ def generate_major_techno_verification(report_month: str) -> dict:
     conn = db.connect()
     cur = conn.cursor()
     try:
-        ph = ",".join("?" * len(ytd))
+        ph = ",".join(["%s"] * len(ytd))
         cur.execute(
             f"SELECT plant_name, report_month, month_actual FROM production_table "
             f"WHERE report_month IN ({ph}) AND item_name='Hot Metal'", ytd)
@@ -1973,8 +1973,8 @@ def generate_major_techno_verification(report_month: str) -> dict:
         conn = db.connect()
         cur = conn.cursor()
         try:
-            ph_m = ",".join("?" * len(ytd))
-            ph_i = ",".join("?" * len(_shop_items))
+            ph_m = ",".join(["%s"] * len(ytd))
+            ph_i = ",".join(["%s"] * len(_shop_items))
             cur.execute(
                 f"SELECT plant_name, item_name, report_month, month_actual FROM production_table "
                 f"WHERE report_month IN ({ph_m}) AND item_name IN ({ph_i})",
@@ -3042,7 +3042,7 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
     conn = db.connect()
     cur = conn.cursor()
     try:
-        ph = ",".join("?" * len(all_months))
+        ph = ",".join(["%s"] * len(all_months))
         cur.execute(
             f"SELECT plant, report_month, unit, techno_json FROM techno_data WHERE report_month IN ({ph})",
             all_months,
@@ -3059,7 +3059,7 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
     cur = conn.cursor()
     try:
         cur.execute(
-            f"SELECT plant_name, unit, techno_json FROM techno_plan_fy WHERE fy = ?",
+            f"SELECT plant_name, unit, techno_json FROM techno_plan_fy WHERE fy = %s",
             (fy_str,)
         )
         for plant_name, unit, tj in cur.fetchall():

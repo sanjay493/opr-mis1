@@ -75,7 +75,7 @@ def _signature(fy: int):
     """Changes whenever techno or production data for that FY is added,
     re-uploaded or edited - so a cached FY is recomputed only then."""
     months = _fy_months(fy)
-    ph = ",".join("?" * len(months))
+    ph = ",".join(["%s"] * len(months))
     conn = db.connect()
     try:
         t = conn.execute(f"SELECT COUNT(*), MAX(id), MAX(created_at) FROM techno_data WHERE report_month IN ({ph})",
@@ -119,7 +119,7 @@ def _bf_values() -> dict:
     """{(plant, BF, param): {'YYYY-MM': value}} from techno_data month values."""
     keys = {k for _l, k, _u, _b in BF_PARAMS}
     aliases = {k: [k] + pt.KEY_ALIASES.get(k, []) for k in keys}
-    ph = ",".join("?" * len(BF_UNITS))
+    ph = ",".join(["%s"] * len(BF_UNITS))
     conn = db.connect()
     try:
         rows = conn.execute(f"SELECT plant, report_month, unit, techno_json FROM techno_data "

@@ -119,10 +119,10 @@ def _fetch_techno(report_month: str) -> dict:
     conn = db.connect()
     cur = conn.cursor()
     try:
-        ph = ",".join("?" * len(PLANTS))
+        ph = ",".join(["%s"] * len(PLANTS))
         cur.execute(
             f"SELECT plant, unit, techno_json FROM techno_data "
-            f"WHERE report_month=? AND plant IN ({ph})",
+            f"WHERE report_month=%s AND plant IN ({ph})",
             [report_month, *PLANTS],
         )
         out = {}
@@ -140,8 +140,8 @@ def _fetch_production(ytd_months: list) -> dict:
     conn = db.connect()
     cur = conn.cursor()
     try:
-        ph_p = ",".join("?" * len(PLANTS))
-        ph_m = ",".join("?" * len(ytd_months))
+        ph_p = ",".join(["%s"] * len(PLANTS))
+        ph_m = ",".join(["%s"] * len(ytd_months))
         cur.execute(
             f"SELECT plant_name, item_name, report_month, month_actual FROM production_table "
             f"WHERE report_month IN ({ph_m}) AND plant_name IN ({ph_p})",
@@ -398,11 +398,11 @@ def _demurrage_by_plant(ytd_months: list) -> dict:
     conn = db.connect()
     cur = conn.cursor()
     try:
-        ph_p = ",".join("?" * len(PLANTS))
-        ph_m = ",".join("?" * len(ytd_months))
+        ph_p = ",".join(["%s"] * len(PLANTS))
+        ph_m = ",".join(["%s"] * len(ytd_months))
         cur.execute(
             f"SELECT plant, report_month, techno_json FROM techno_data "
-            f"WHERE unit=? AND plant IN ({ph_p}) AND report_month IN ({ph_m})",
+            f"WHERE unit=%s AND plant IN ({ph_p}) AND report_month IN ({ph_m})",
             [_GENERAL_UNIT, *PLANTS, *ytd_months],
         )
         by_plant_month = {}

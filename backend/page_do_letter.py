@@ -84,10 +84,10 @@ def _gr(cur_v, prev_v):
 
 def _fetch_item_month(cur, item: str, month: str, plants: list) -> dict:
     """{plant: value} for one item/month — only plants with a non-NULL value."""
-    phs = ",".join("?" for _ in plants)
+    phs = ",".join("%s" for _ in plants)
     cur.execute(
         f"SELECT plant_name, month_actual FROM production_table "
-        f"WHERE item_name=? AND report_month=? AND plant_name IN ({phs})",
+        f"WHERE item_name=%s AND report_month=%s AND plant_name IN ({phs})",
         [item, month] + plants,
     )
     return {p: v for p, v in cur.fetchall() if v is not None}
@@ -96,7 +96,7 @@ def _fetch_item_month(cur, item: str, month: str, plants: list) -> dict:
 def _fetch_conversion(cur, month: str):
     cur.execute(
         "SELECT month_actual FROM production_table "
-        "WHERE report_month=? AND plant_name='SAIL' AND item_name='Conversion'",
+        "WHERE report_month=%s AND plant_name='SAIL' AND item_name='Conversion'",
         (month,),
     )
     r = cur.fetchone()
@@ -184,7 +184,7 @@ def _quarter_crude_steel_cu(cur, fy: int, q: int):
 def _fetch_remarks(cur, report_month: str, item_name: str) -> dict:
     cur.execute(
         "SELECT plant_name, remark FROM do_letter_remark_table "
-        "WHERE report_month=? AND item_name=?",
+        "WHERE report_month=%s AND item_name=%s",
         (report_month, item_name),
     )
     return {p: r for p, r in cur.fetchall() if r}
@@ -283,10 +283,10 @@ def _all_time_totals(cur, item, plants):
     excluded rather than compared as a (potentially much lower) partial
     sum, so an incomplete historical month can never falsely look like a
     record or knock a real record off the podium."""
-    phs = ",".join("?" for _ in plants)
+    phs = ",".join("%s" for _ in plants)
     cur.execute(
         f"SELECT report_month, plant_name, month_actual FROM production_table "
-        f"WHERE item_name=? AND plant_name IN ({phs})",
+        f"WHERE item_name=%s AND plant_name IN ({phs})",
         [item] + plants,
     )
     by_month = {}

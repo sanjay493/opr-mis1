@@ -71,7 +71,7 @@ def _load_plant_furnaces(conn: sqlite3.Connection, plant: str
         if cur.fetchone():
             cur = conn.execute(
                 f"SELECT unit_name, display_label, is_shop FROM {tbl} "
-                "WHERE plant_code=? AND unit_type='BF' AND is_active=1 ORDER BY sort_order",
+                "WHERE plant_code=%s AND unit_type='BF' AND is_active=1 ORDER BY sort_order",
                 (plant,),
             )
             rows = cur.fetchall()
@@ -95,7 +95,7 @@ def _get_production(conn: sqlite3.Connection, plant: str, item: str,
                     report_month: str) -> Optional[float]:
     cur = conn.execute(
         "SELECT month_actual FROM production_table "
-        "WHERE plant_name=? AND item_name=? AND report_month=?",
+        "WHERE plant_name=%s AND item_name=%s AND report_month=%s",
         (plant, item, report_month),
     )
     row = cur.fetchone()
@@ -165,7 +165,7 @@ def compute_bf_shop_averages(conn: sqlite3.Connection, report_month: str,
                 cur = conn.execute(
                     "SELECT p.param_id FROM techno_param p "
                     "JOIN techno_param_group g ON p.param_id=g.param_id "
-                    "WHERE g.group_code='IRON_MAKING' AND p.param_name=? AND p.row_label=?",
+                    "WHERE g.group_code='IRON_MAKING' AND p.param_name=%s AND p.row_label=%s",
                     (section, fce_label),
                 )
                 row = cur.fetchone()
@@ -173,7 +173,7 @@ def compute_bf_shop_averages(conn: sqlite3.Connection, report_month: str,
                     continue
                 param_id = row[0]
                 cur2 = conn.execute(
-                    "SELECT actual FROM techno_actuals WHERE param_id=? AND report_month=?",
+                    "SELECT actual FROM techno_actuals WHERE param_id=%s AND report_month=%s",
                     (param_id, report_month),
                 )
                 val_row = cur2.fetchone()
@@ -204,7 +204,7 @@ def compute_bf_shop_averages(conn: sqlite3.Connection, report_month: str,
             cur3 = conn.execute(
                 "SELECT p.unit FROM techno_param p "
                 "JOIN techno_param_group g ON p.param_id=g.param_id "
-                "WHERE g.group_code='IRON_MAKING' AND p.param_name=? AND p.row_label!=? LIMIT 1",
+                "WHERE g.group_code='IRON_MAKING' AND p.param_name=%s AND p.row_label!=%s LIMIT 1",
                 (section, shop_label),
             )
             unit_row = cur3.fetchone()
@@ -230,7 +230,7 @@ def compute_bf_shop_averages(conn: sqlite3.Connection, report_month: str,
                 cur_maj = conn.execute(
                     "SELECT p.param_id FROM techno_param p "
                     "JOIN techno_param_group g ON p.param_id=g.param_id "
-                    "WHERE g.group_code='MAJOR' AND p.param_name=? AND p.row_label=?",
+                    "WHERE g.group_code='MAJOR' AND p.param_name=%s AND p.row_label=%s",
                     (major_section, major_row_label),
                 )
                 maj_row = cur_maj.fetchone()
@@ -263,8 +263,8 @@ def compute_fuel_rate_fallback(conn: sqlite3.Connection, report_month: str) -> i
                 "SELECT a.actual FROM techno_actuals a "
                 "JOIN techno_param p ON p.param_id=a.param_id "
                 "JOIN techno_param_group g ON p.param_id=g.param_id "
-                "WHERE g.group_code='IRON_MAKING' AND p.param_name=? "
-                "AND p.row_label=? AND a.report_month=?",
+                "WHERE g.group_code='IRON_MAKING' AND p.param_name=%s "
+                "AND p.row_label=%s AND a.report_month=%s",
                 (param_name, label, report_month),
             )
             row = cur2.fetchone()

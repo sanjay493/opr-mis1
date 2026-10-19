@@ -6,7 +6,6 @@ Independent of the existing techno_actuals / techno_param tables.
 import os
 import sys
 import json
-import sqlite3
 import tempfile
 from pathlib import Path
 from typing import Optional
@@ -19,7 +18,7 @@ if _TP_DIR not in sys.path:
     sys.path.insert(0, _TP_DIR)
 
 from rsp_technopara_extractor import TechnoExtractor  # noqa: E402  (path set above)
-from db import DB_PATH, init_db, upsert_techno_data, get_techno_data, get_techno_months
+from db import init_db, upsert_techno_data, get_techno_data, get_techno_months
 
 router = APIRouter(prefix="/api/rsp-techno", tags=["rsp-techno"])
 
@@ -249,7 +248,7 @@ async def get_units(
         conn = db.connect()
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT unit FROM techno_data WHERE plant = ? AND report_month = ? ORDER BY unit",
+            "SELECT unit FROM techno_data WHERE plant = %s AND report_month = %s ORDER BY unit",
             [plant, report_month],
         )
         units = [row[0] for row in cursor.fetchall()]

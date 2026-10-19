@@ -59,7 +59,7 @@ def _fetch(cur, tbl, plant, item, month):
         total, found = 0.0, False
         for it in item:
             cur.execute(
-                f"SELECT month_actual FROM {table} WHERE plant_name=? AND item_name=? AND report_month=?",
+                f"SELECT month_actual FROM {table} WHERE plant_name=%s AND item_name=%s AND report_month=%s",
                 (plant, it, month),
             )
             r = cur.fetchone()
@@ -67,7 +67,7 @@ def _fetch(cur, tbl, plant, item, month):
                 total += r[0]; found = True
         return total if found else None
     cur.execute(
-        f"SELECT month_actual FROM {table} WHERE plant_name=? AND item_name=? AND report_month=?",
+        f"SELECT month_actual FROM {table} WHERE plant_name=%s AND item_name=%s AND report_month=%s",
         (plant, item, month),
     )
     r = cur.fetchone()

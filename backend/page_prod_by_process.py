@@ -61,7 +61,7 @@ def _fetch(cur, plant: str, item, month: str):
         for it in item:
             cur.execute(
                 "SELECT month_actual FROM production_table "
-                "WHERE plant_name=? AND item_name=? AND report_month=?",
+                "WHERE plant_name=%s AND item_name=%s AND report_month=%s",
                 (plant, it, month),
             )
             r = cur.fetchone()
@@ -70,7 +70,7 @@ def _fetch(cur, plant: str, item, month: str):
         return tot if ok else None
     cur.execute(
         "SELECT month_actual FROM production_table "
-        "WHERE plant_name=? AND item_name=? AND report_month=?",
+        "WHERE plant_name=%s AND item_name=%s AND report_month=%s",
         (plant, item, month),
     )
     r = cur.fetchone()
@@ -217,8 +217,8 @@ def _semis_ytd(cur, months: list) -> float:
     Finished Steel — matching that convention here too so this page's
     Semis for Sale always agrees with that one instead of quietly running
     ~43,000 T under it every month (ASP's own missing share)."""
-    ph_m = ",".join("?" * len(months))
-    ph_p = ",".join("?" * len(_FIVE))
+    ph_m = ",".join(["%s"] * len(months))
+    ph_p = ",".join(["%s"] * len(_FIVE))
     cur.execute(
         f"SELECT COALESCE(SUM(month_actual),0) FROM production_table "
         f"WHERE report_month IN ({ph_m}) AND plant_name IN ({ph_p}) "
@@ -263,8 +263,8 @@ def _ipt_transfer_ytd(cur, months: list) -> float:
     route for it). ipt_table stores its actual in plain Tonnes (unlike
     production_table's '000 T everywhere else on this page) — /1000 to
     match."""
-    ph_m = ",".join("?" * len(months))
-    ph_i = ",".join("?" * len(_IPT_SEMIS_ITEMS))
+    ph_m = ",".join(["%s"] * len(months))
+    ph_i = ",".join(["%s"] * len(_IPT_SEMIS_ITEMS))
     cur.execute(
         f"SELECT COALESCE(SUM(actual),0) FROM ipt_table "
         f"WHERE report_month IN ({ph_m}) AND item IN ({ph_i})",

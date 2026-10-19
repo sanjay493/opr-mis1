@@ -153,7 +153,7 @@ def generate_ipt(report_month: str) -> dict:
     conn = db.connect()
     cur  = conn.cursor()
     try:
-        ph = ",".join("?" * len(ytd_months))
+        ph = ",".join(["%s"] * len(ytd_months))
 
         # union of routes seen this FY, keeping entry order
         cur.execute(f"""
@@ -168,7 +168,7 @@ def generate_ipt(report_month: str) -> dict:
         # current-month values
         cur.execute("""
             SELECT item, from_plant, to_plant, plan, actual, plan_tonnage, actual_tonnage
-            FROM ipt_table WHERE report_month=?
+            FROM ipt_table WHERE report_month=%s
         """, (report_month,))
         cur_map = {(i, f, t): (p, a, pt, at) for i, f, t, p, a, pt, at in cur.fetchall()}
 

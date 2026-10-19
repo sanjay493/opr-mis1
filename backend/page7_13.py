@@ -7,7 +7,7 @@ Each page shows one item across plant groups:
   - Historical FY rows with ALL-blank monthly values are hidden
   - SAIL and "5 Plants" are computed as sums from constituent plants
 
-Data source: production_table (actuals) and production_plan_table (plans) in mis_reports.db
+Data source: production_table (actuals) and production_plan_table (plans) in MySQL
 """
 import os
 
@@ -347,7 +347,7 @@ def _generate_rows_for_config(report_month: str, config: dict) -> list:
     show_all = config.get("show_all_rows", False)
 
     all_plants = sorted({p for _, pl in groups for p in pl})
-    phs = ",".join("?" for _ in all_plants)
+    phs = ",".join("%s" for _ in all_plants)
 
     min_act  = f"{cur_fy - 10}-04"
     max_act  = f"{cur_fy + 1}-03"
@@ -359,8 +359,8 @@ def _generate_rows_for_config(report_month: str, config: dict) -> list:
 
     cur.execute(
         f"SELECT plant_name, report_month, month_actual FROM production_table "
-        f"WHERE item_name=? AND plant_name IN ({phs}) "
-        f"AND report_month>=? AND report_month<=?",
+        f"WHERE item_name=%s AND plant_name IN ({phs}) "
+        f"AND report_month>=%s AND report_month<=%s",
         [db_item] + all_plants + [min_act, max_act],
     )
     act_data = {p: {} for p in all_plants}
@@ -373,11 +373,11 @@ def _generate_rows_for_config(report_month: str, config: dict) -> list:
     if db_item == "Finished Steel":
         alias_in_query = [p for p in all_plants if p in _FS_ALIAS]
         if alias_in_query:
-            aphs = ",".join("?" for _ in alias_in_query)
+            aphs = ",".join("%s" for _ in alias_in_query)
             cur.execute(
                 f"SELECT plant_name, report_month, month_actual FROM production_table "
                 f"WHERE item_name='Saleable Steel' AND plant_name IN ({aphs}) "
-                f"AND report_month>=? AND report_month<=?",
+                f"AND report_month>=%s AND report_month<=%s",
                 alias_in_query + [min_act, max_act],
             )
             for plant, rm, val in cur.fetchall():
@@ -386,8 +386,8 @@ def _generate_rows_for_config(report_month: str, config: dict) -> list:
 
     cur.execute(
         f"SELECT plant_name, report_month, month_actual FROM production_plan_table "
-        f"WHERE item_name=? AND plant_name IN ({phs}) "
-        f"AND report_month>=? AND report_month<=?",
+        f"WHERE item_name=%s AND plant_name IN ({phs}) "
+        f"AND report_month>=%s AND report_month<=%s",
         [db_item] + all_plants + [plan_min, plan_max],
     )
     plan_data = {p: {} for p in all_plants}
@@ -398,11 +398,11 @@ def _generate_rows_for_config(report_month: str, config: dict) -> list:
     if db_item == "Finished Steel":
         alias_in_query = [p for p in all_plants if p in _FS_ALIAS]
         if alias_in_query:
-            aphs = ",".join("?" for _ in alias_in_query)
+            aphs = ",".join("%s" for _ in alias_in_query)
             cur.execute(
                 f"SELECT plant_name, report_month, month_actual FROM production_plan_table "
                 f"WHERE item_name='Saleable Steel' AND plant_name IN ({aphs}) "
-                f"AND report_month>=? AND report_month<=?",
+                f"AND report_month>=%s AND report_month<=%s",
                 alias_in_query + [plan_min, plan_max],
             )
             for plant, rm, val in cur.fetchall():
@@ -414,15 +414,15 @@ def _generate_rows_for_config(report_month: str, config: dict) -> list:
     if show_all:
         cur.execute(
             "SELECT report_month, month_actual FROM production_table "
-            "WHERE item_name=? AND plant_name='SAIL' "
-            "AND report_month>=? AND report_month<=?",
+            "WHERE item_name=%s AND plant_name='SAIL' "
+            "AND report_month>=%s AND report_month<=%s",
             [db_item, min_act, max_act],
         )
         sail_act_direct = {rm: val for rm, val in cur.fetchall() if val is not None}
         cur.execute(
             "SELECT report_month, month_actual FROM production_plan_table "
-            "WHERE item_name=? AND plant_name='SAIL' "
-            "AND report_month>=? AND report_month<=?",
+            "WHERE item_name=%s AND plant_name='SAIL' "
+            "AND report_month>=%s AND report_month<=%s",
             [db_item, plan_min, plan_max],
         )
         sail_plan_direct = {rm: val for rm, val in cur.fetchall() if val is not None}
@@ -433,7 +433,7 @@ def _generate_rows_for_config(report_month: str, config: dict) -> list:
         cur.execute(
             "SELECT report_month, month_actual FROM production_table "
             "WHERE item_name='Conversion' AND plant_name='SAIL' "
-            "AND report_month>=? AND report_month<=?",
+            "AND report_month>=%s AND report_month<=%s",
             [max(conv_from, min_act), max_act],
         )
         sail_conv = {rm: val for rm, val in cur.fetchall() if val is not None}

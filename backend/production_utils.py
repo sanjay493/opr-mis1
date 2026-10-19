@@ -31,7 +31,7 @@ def get_hm_production_for_furnace(plant: str, furnace: str, report_month: str) -
     for item_name in possible_names:
         cursor.execute("""
             SELECT month_actual FROM production_table
-            WHERE plant_name = ? AND item_name = ? AND report_month = ?
+            WHERE plant_name = %s AND item_name = %s AND report_month = %s
         """, [plant, item_name, report_month])
 
         result = cursor.fetchone()
@@ -55,7 +55,7 @@ def get_plant_hm_production(plant: str, report_month: str) -> Optional[float]:
 
     cursor.execute("""
         SELECT month_actual FROM production_table
-        WHERE plant_name = ? AND item_name = 'Hot Metal' AND report_month = ?
+        WHERE plant_name = %s AND item_name = 'Hot Metal' AND report_month = %s
     """, [plant, report_month])
 
     result = cursor.fetchone()
@@ -110,7 +110,7 @@ def get_furnace_production_variants(plant: str, report_month: str, base_name: st
     for i, pattern in enumerate(patterns):
         cursor.execute("""
             SELECT month_actual FROM production_table
-            WHERE plant_name = ? AND item_name = ? AND report_month = ?
+            WHERE plant_name = %s AND item_name = %s AND report_month = %s
         """, [plant, pattern, report_month])
 
         result = cursor.fetchone()
@@ -120,7 +120,7 @@ def get_furnace_production_variants(plant: str, report_month: str, base_name: st
     # Get plant total
     cursor.execute("""
         SELECT month_actual FROM production_table
-        WHERE plant_name = ? AND item_name = 'Hot Metal' AND report_month = ?
+        WHERE plant_name = %s AND item_name = 'Hot Metal' AND report_month = %s
     """, [plant, report_month])
 
     result = cursor.fetchone()

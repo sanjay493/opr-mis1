@@ -180,7 +180,7 @@ PAGE6_PLANTS = [
 def _one(cur, table, plant, item, month):
     tbl = "production_table" if table == "act" else "production_plan_table"
     cur.execute(
-        f"SELECT month_actual FROM {tbl} WHERE plant_name=? AND item_name=? AND report_month=?",
+        f"SELECT month_actual FROM {tbl} WHERE plant_name=%s AND item_name=%s AND report_month=%s",
         (plant, item, month),
     )
     r = cur.fetchone()
@@ -254,7 +254,7 @@ def _get_single(cur, table, plant, item, month):
             return _sum_items(cur, table, plant, alias_items, month)
 
     cur.execute(
-        f"SELECT month_actual FROM {tbl} WHERE plant_name=? AND item_name=? AND report_month=?",
+        f"SELECT month_actual FROM {tbl} WHERE plant_name=%s AND item_name=%s AND report_month=%s",
         (plant, item, month),
     )
     r = cur.fetchone()
@@ -262,7 +262,7 @@ def _get_single(cur, table, plant, item, month):
         return r[0]
     for alt in _ITEM_ALT_NAMES.get((plant, item), []):
         cur.execute(
-            f"SELECT month_actual FROM {tbl} WHERE plant_name=? AND item_name=? AND report_month=?",
+            f"SELECT month_actual FROM {tbl} WHERE plant_name=%s AND item_name=%s AND report_month=%s",
             (plant, alt, month),
         )
         r = cur.fetchone()
@@ -270,7 +270,7 @@ def _get_single(cur, table, plant, item, month):
             return r[0]
     if item == "Finished Steel" and plant in _FS_ALIAS:
         cur.execute(
-            f"SELECT month_actual FROM {tbl} WHERE plant_name=? AND item_name='Saleable Steel' AND report_month=?",
+            f"SELECT month_actual FROM {tbl} WHERE plant_name=%s AND item_name='Saleable Steel' AND report_month=%s",
             (plant, month),
         )
         r = cur.fetchone()
@@ -520,10 +520,10 @@ def _fy_months_p6(fy_start_year: int) -> list:
 
 
 def _fetch_monthly_item(cur, plant: str, item: str, months: list) -> dict:
-    ph = ",".join("?" for _ in months)
+    ph = ",".join("%s" for _ in months)
     cur.execute(
         f"SELECT report_month, month_actual FROM production_table "
-        f"WHERE plant_name=? AND item_name=? AND report_month IN ({ph})",
+        f"WHERE plant_name=%s AND item_name=%s AND report_month IN ({ph})",
         (plant, item, *months),
     )
     return {rm: v for rm, v in cur.fetchall() if v is not None}

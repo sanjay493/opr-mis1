@@ -30,7 +30,7 @@ def _existing_conflicts(records: list) -> list:
         for rec in records:
             cur.execute(
                 "SELECT month_actual FROM mou_plan_table "
-                "WHERE report_month = ? AND plant_name = ? AND item_name = ?",
+                "WHERE report_month = %s AND plant_name = %s AND item_name = %s",
                 (rec["report_month"], rec["plant_name"], rec["item_name"]),
             )
             row = cur.fetchone()
@@ -115,9 +115,8 @@ async def insert_mou_plan(payload: dict):
         for rec in records:
             cur.execute("""
                 INSERT INTO mou_plan_table (report_month, plant_name, item_name, month_actual)
-                VALUES (?, ?, ?, ?)
-                ON CONFLICT(report_month, plant_name, item_name)
-                DO UPDATE SET month_actual = excluded.month_actual
+                VALUES (%s, %s, %s, %s)
+                AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
             """, (rec["report_month"], rec["plant_name"], rec["item_name"], rec["value"]))
             saved += 1
         conn.commit()

@@ -19,7 +19,7 @@ def get_manual_text(fy: str, quarter: int) -> dict:
     cur = conn.cursor()
     try:
         cur.execute(
-            "SELECT plant, field, text FROM board_note_manual_text WHERE report_fy=? AND quarter=?",
+            "SELECT plant, field, text FROM board_note_manual_text WHERE report_fy=%s AND quarter=%s",
             (fy, quarter),
         )
         return {(plant, field): text for plant, field, text in cur.fetchall() if text}
@@ -43,12 +43,12 @@ def save_manual_text(fy: str, quarter: int, entries: list) -> int:
             if text:
                 cur.execute("""
                     INSERT INTO board_note_manual_text (report_fy, quarter, plant, field, text)
-                    VALUES (?, ?, ?, ?, ?)
-                    ON CONFLICT(report_fy, quarter, plant, field) DO UPDATE SET text = excluded.text
+                    VALUES (%s, %s, %s, %s, %s)
+                    AS new ON DUPLICATE KEY UPDATE text = new.text
                 """, (fy, quarter, plant, field, text))
             else:
                 cur.execute(
-                    "DELETE FROM board_note_manual_text WHERE report_fy=? AND quarter=? AND plant=? AND field=?",
+                    "DELETE FROM board_note_manual_text WHERE report_fy=%s AND quarter=%s AND plant=%s AND field=%s",
                     (fy, quarter, plant, field),
                 )
             saved += 1

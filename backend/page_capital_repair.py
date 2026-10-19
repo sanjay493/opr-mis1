@@ -177,7 +177,7 @@ def generate_capital_repair(plant: str, fy: str = "2026-27", report_month: str |
             SELECT id, shop, equipment, activity, schedule_days, period, actual,
                    actual_start, actual_end, actual_ongoing
             FROM capital_repair_table
-            WHERE plant=? AND fy=?
+            WHERE plant=%s AND fy=%s
             ORDER BY sort_order ASC, id ASC
         """, (plant, fy))
         rows = cur.fetchall()
@@ -314,7 +314,7 @@ def generate_capital_repair_calendar(plant: str, fy: str) -> dict:
             SELECT shop, equipment, activity, period, actual,
                    actual_start, actual_end, actual_ongoing, schedule_days
             FROM capital_repair_table
-            WHERE plant=? AND fy=?
+            WHERE plant=%s AND fy=%s
             ORDER BY sort_order ASC, id ASC
         """, (plant, fy))
         rows = cur.fetchall()

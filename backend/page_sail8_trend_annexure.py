@@ -232,11 +232,11 @@ def generate_sail8_trend_annexure(report_month: str) -> dict:
 
     conn = db.connect()
     cur = conn.cursor()
-    ph_i = ",".join("?" for _ in item_names)
-    ph_p = ",".join("?" for _ in _SAIL_8)
+    ph_i = ",".join("%s" for _ in item_names)
+    ph_p = ",".join("%s" for _ in _SAIL_8)
     cur.execute(
         f"SELECT plant_name, item_name, report_month, month_actual FROM production_table "
-        f"WHERE item_name IN ({ph_i}) AND plant_name IN ({ph_p}) AND report_month <= ?",
+        f"WHERE item_name IN ({ph_i}) AND plant_name IN ({ph_p}) AND report_month <= %s",
         item_names + _SAIL_8 + [report_month],
     )
     data = {}
@@ -245,10 +245,10 @@ def generate_sail8_trend_annexure(report_month: str) -> dict:
             continue
         data.setdefault(item, {}).setdefault(plant, {})[rm] = val
 
-    ph_d = ",".join("?" for _ in direct_items)
+    ph_d = ",".join("%s" for _ in direct_items)
     cur.execute(
         f"SELECT item_name, report_month, month_actual FROM production_table "
-        f"WHERE item_name IN ({ph_d}) AND plant_name='SAIL' AND report_month <= ?",
+        f"WHERE item_name IN ({ph_d}) AND plant_name='SAIL' AND report_month <= %s",
         direct_items + [report_month],
     )
     sail_direct = {}

@@ -112,9 +112,9 @@ def _prod_sum(cur, table: str, months: list) -> dict:
         return {}
     plants = list(_PLANT_DB.values())
     items = list(_SERIES_ITEM.values())
-    ph_p = ",".join("?" * len(plants))
-    ph_i = ",".join("?" * len(items))
-    ph_m = ",".join("?" * len(months))
+    ph_p = ",".join(["%s"] * len(plants))
+    ph_i = ",".join(["%s"] * len(items))
+    ph_m = ",".join(["%s"] * len(months))
     cur.execute(
         f"SELECT plant_name, item_name, COALESCE(SUM(month_actual), 0), "
         f"       COUNT(DISTINCT report_month) "
@@ -134,12 +134,12 @@ def _prod_fy_sums(cur, table: str, from_fy_start: int) -> dict:
     Python — feeds the History columns and the Best-Achieved all-time max."""
     plants = list(_PLANT_DB.values())
     items = list(_SERIES_ITEM.values())
-    ph_p = ",".join("?" * len(plants))
-    ph_i = ",".join("?" * len(items))
+    ph_p = ",".join(["%s"] * len(plants))
+    ph_i = ",".join(["%s"] * len(items))
     cur.execute(
         f"SELECT report_month, plant_name, item_name, month_actual FROM {table} "
         f"WHERE plant_name IN ({ph_p}) AND item_name IN ({ph_i}) "
-        f"  AND month_actual IS NOT NULL AND report_month >= ?",
+        f"  AND month_actual IS NOT NULL AND report_month >= %s",
         [*plants, *items, f"{from_fy_start}-04"],
     )
     agg = {}  # (plant, item, fy_start) -> [sum, {months}]

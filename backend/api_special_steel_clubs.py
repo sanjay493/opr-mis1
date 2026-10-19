@@ -50,7 +50,7 @@ async def list_products(plant: str = Query(...)):
     conn = _db.connect()
     cur = conn.cursor()
     cur.execute(
-        "SELECT DISTINCT product FROM special_steel_orders WHERE plant_name=? ORDER BY product",
+        "SELECT DISTINCT product FROM special_steel_orders WHERE plant_name=%s ORDER BY product",
         (plant,),
     )
     products = [r[0] for r in cur.fetchall()]
@@ -67,14 +67,14 @@ async def list_grades(plant: str = Query(...), product: str = Query(...)):
     cur = conn.cursor()
     cur.execute(
         "SELECT DISTINCT quality_grade FROM special_steel_orders "
-        "WHERE plant_name=? AND product=? AND quality_grade != '' ORDER BY quality_grade",
+        "WHERE plant_name=%s AND product=%s AND quality_grade != '' ORDER BY quality_grade",
         (plant, product),
     )
     all_grades = [r[0] for r in cur.fetchall()]
 
     cur.execute(
         "SELECT quality_grade, club_label FROM special_steel_grade_clubs "
-        "WHERE plant_name=? AND product=?",
+        "WHERE plant_name=%s AND product=%s",
         (plant, product),
     )
     club_rows = cur.fetchall()
@@ -110,8 +110,8 @@ async def create_club(body: ClubRequest):
     for grade in grades:
         cur.execute("""
             INSERT INTO special_steel_grade_clubs (plant_name, product, quality_grade, club_label, created_at)
-            VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT(plant_name, product, quality_grade) DO UPDATE SET club_label=excluded.club_label
+            VALUES (%s, %s, %s, %s, %s)
+            AS new ON DUPLICATE KEY UPDATE club_label=new.club_label
         """, (plant, body.product, grade, label, now))
     conn.commit()
     conn.close()
@@ -135,7 +135,7 @@ async def remove_from_club(body: UnclubRequest):
 
     if body.label:
         cur.execute(
-            "SELECT quality_grade FROM special_steel_grade_clubs WHERE plant_name=? AND product=? AND club_label=?",
+            "SELECT quality_grade FROM special_steel_grade_clubs WHERE plant_name=%s AND product=%s AND club_label=%s",
             (plant, body.product, body.label),
         )
         members = [r[0] for r in cur.fetchall()]
@@ -143,7 +143,7 @@ async def remove_from_club(body: UnclubRequest):
             conn.close()
             raise HTTPException(404, "That club doesn't exist")
         cur.execute(
-            "DELETE FROM special_steel_grade_clubs WHERE plant_name=? AND product=? AND club_label=?",
+            "DELETE FROM special_steel_grade_clubs WHERE plant_name=%s AND product=%s AND club_label=%s",
             (plant, body.product, body.label),
         )
         conn.commit()
@@ -155,7 +155,7 @@ async def remove_from_club(body: UnclubRequest):
         raise HTTPException(400, "Provide either 'grade' or 'label'")
 
     cur.execute(
-        "SELECT club_label FROM special_steel_grade_clubs WHERE plant_name=? AND product=? AND quality_grade=?",
+        "SELECT club_label FROM special_steel_grade_clubs WHERE plant_name=%s AND product=%s AND quality_grade=%s",
         (plant, body.product, body.grade),
     )
     row = cur.fetchone()
@@ -165,18 +165,18 @@ async def remove_from_club(body: UnclubRequest):
     label = row[0]
 
     cur.execute(
-        "DELETE FROM special_steel_grade_clubs WHERE plant_name=? AND product=? AND quality_grade=?",
+        "DELETE FROM special_steel_grade_clubs WHERE plant_name=%s AND product=%s AND quality_grade=%s",
         (plant, body.product, body.grade),
     )
 
     cur.execute(
-        "SELECT quality_grade FROM special_steel_grade_clubs WHERE plant_name=? AND product=? AND club_label=?",
+        "SELECT quality_grade FROM special_steel_grade_clubs WHERE plant_name=%s AND product=%s AND club_label=%s",
         (plant, body.product, label),
     )
     remaining = [r[0] for r in cur.fetchall()]
     if len(remaining) == 1:
         cur.execute(
-            "DELETE FROM special_steel_grade_clubs WHERE plant_name=? AND product=? AND quality_grade=?",
+            "DELETE FROM special_steel_grade_clubs WHERE plant_name=%s AND product=%s AND quality_grade=%s",
             (plant, body.product, remaining[0]),
         )
     conn.commit()

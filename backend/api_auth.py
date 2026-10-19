@@ -8,7 +8,6 @@ and can log in but cannot use any data-entry/upload/edit/delete page. Only an
 administrator (see api_admin.py) can promote a user to 'editor' or 'admin'.
 """
 import os
-import sqlite3
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
@@ -96,7 +95,7 @@ def register_verify(body: RegisterVerify, response: Response):
     cur = conn.cursor()
     cur.execute(
         """INSERT INTO users (email, password_hash, name, role, profile_pic, created_at, updated_at)
-           VALUES (?, ?, ?, NULL, '', ?, ?)""",
+           VALUES (%s, %s, %s, NULL, '', %s, %s)""",
         (email, auth.hash_password(body.password), body.name.strip(), now, now),
     )
     user_id = cur.lastrowid
@@ -241,7 +240,7 @@ def password_verify(body: ResetVerify):
     conn = db.connect()
     cur = conn.cursor()
     cur.execute(
-        "UPDATE users SET password_hash=?, updated_at=? WHERE email=?",
+        "UPDATE users SET password_hash=%s, updated_at=%s WHERE email=%s",
         (auth.hash_password(body.new_password), datetime.now(timezone.utc).isoformat(), email),
     )
     conn.commit()
@@ -268,7 +267,7 @@ def update_profile(
     params = []
 
     if name is not None:
-        updates.append("name=?")
+        updates.append("name=%s")
         params.append(name.strip())
 
     if picture is not None:
@@ -279,17 +278,17 @@ def update_profile(
         fname = f"{user['id']}_{uuid.uuid4().hex[:8]}{ext}"
         with open(os.path.join(PROFILE_PICS_DIR, fname), "wb") as f:
             f.write(picture.file.read())
-        updates.append("profile_pic=?")
+        updates.append("profile_pic=%s")
         params.append(fname)
 
     if updates:
-        updates.append("updated_at=?")
+        updates.append("updated_at=%s")
         params.append(datetime.now(timezone.utc).isoformat())
         params.append(user["id"])
-        cur.execute(f"UPDATE users SET {', '.join(updates)} WHERE id=?", params)
+        cur.execute(f"UPDATE users SET {', '.join(updates)} WHERE id=%s", params)
         conn.commit()
 
-    cur.execute("SELECT * FROM users WHERE id=?", (user["id"],))
+    cur.execute("SELECT * FROM users WHERE id=%s", (user["id"],))
     row = cur.fetchone()
     cols = [d[0] for d in cur.description]
     conn.close()

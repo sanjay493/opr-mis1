@@ -79,7 +79,7 @@ def _fmt_mt(thousand_tonnes):
 
 
 def _ph(lst):
-    return ','.join('?' * len(lst))
+    return ','.join(['%s'] * len(lst))
 
 
 def generate_page3_highlights(month: str) -> list:
@@ -103,7 +103,7 @@ def generate_page3_highlights(month: str) -> list:
             SELECT item_name, report_month, SUM(month_actual) AS total
             FROM production_table
             WHERE item_name IN ({ph_items}) AND plant_name IN ({ph_plants})
-              AND report_month <= ?
+              AND report_month <= %s
             GROUP BY item_name, report_month
         """, item_names + ALL_PLANTS + [month])
         monthly = {n: {} for n in item_names}
@@ -117,7 +117,7 @@ def generate_page3_highlights(month: str) -> list:
         cur.execute("""
             SELECT report_month, SUM(month_actual) AS total
             FROM production_table
-            WHERE item_name='Conversion' AND plant_name='SAIL' AND report_month <= ?
+            WHERE item_name='Conversion' AND plant_name='SAIL' AND report_month <= %s
             GROUP BY report_month
         """, (month,))
         for rm, total in cur.fetchall():

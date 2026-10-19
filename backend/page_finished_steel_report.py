@@ -54,12 +54,12 @@ def _item_pivot(item: str, months: list = None) -> dict:
     added). Items differ in how many units report: Oven Pushing / Sinter /
     Hot Metal / Pig Iron ~5, Crude Steel ~7, Finished / Saleable Steel ~8."""
     aliases = _ITEM_ALIASES[resolve_item(item)]
-    alias_phs = ",".join("?" for _ in aliases)
+    alias_phs = ",".join("%s" for _ in aliases)
     conn = db.connect()
     cur = conn.cursor()
     try:
         if months is not None:
-            month_phs = ",".join("?" for _ in months)
+            month_phs = ",".join("%s" for _ in months)
             cur.execute(f"""
                 SELECT report_month, plant_name, item_name, month_actual
                 FROM production_table
@@ -121,13 +121,13 @@ def list_finished_steel_fys(item: str = DEFAULT_ITEM) -> list:
     """Financial years that have at least one figure for `item`.
     -> [{"fy_start": 2026, "label": "2026-27"}, ...] (newest first)."""
     aliases = _ITEM_ALIASES[resolve_item(item)]
-    alias_phs = ",".join("?" for _ in aliases)
+    alias_phs = ",".join("%s" for _ in aliases)
     conn = db.connect()
     cur = conn.cursor()
     cur.execute(f"""
         SELECT DISTINCT report_month FROM production_table
         WHERE item_name IN ({alias_phs})
-          AND report_month GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]'
+          AND report_month REGEXP '^[0-9][0-9][0-9][0-9]-[0-9][0-9]$'
     """, list(aliases))
     fy_starts = set()
     for (m,) in cur.fetchall():

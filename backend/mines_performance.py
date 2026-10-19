@@ -157,7 +157,7 @@ def _load(months: list) -> dict:
     sail[(section, item)]."""
     conn = db.connect()
     cur = conn.cursor()
-    ph = ",".join("?" * len(months))
+    ph = ",".join(["%s"] * len(months))
     stores = {"prod": {}, "desp": {}, "booked": {}, "sail": {}}
 
     def put(store, key, mo, a=None, p=None):

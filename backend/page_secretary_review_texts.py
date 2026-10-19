@@ -178,8 +178,8 @@ def _fetch_breakdowns(cur, month):
     s, e = _bounds(month)
     cur.execute(
         "SELECT plant, unit_type, unit_name, start_ts, end_ts, is_ongoing, cause, hours_lost_override "
-        "FROM breakdown_table WHERE capital_repair_id IS NULL AND start_ts < ? "
-        "AND (end_ts IS NULL OR end_ts >= ? OR is_ongoing = 1)",
+        "FROM breakdown_table WHERE capital_repair_id IS NULL AND start_ts < %s "
+        "AND (end_ts IS NULL OR end_ts >= %s OR is_ongoing = 1)",
         (e.strftime("%Y-%m-%d"), s.strftime("%Y-%m-%d")),
     )
     cols = ("plant", "unit_type", "unit_name", "start_ts", "end_ts", "is_ongoing", "cause", "hours_lost_override")
@@ -189,7 +189,7 @@ def _fetch_breakdowns(cur, month):
 def _fetch_cr(cur, plant, fy_label, upto):
     cur.execute(
         "SELECT shop, equipment, actual_start, actual_end, actual_ongoing FROM capital_repair_table "
-        "WHERE plant=? AND fy=? AND actual_start IS NOT NULL AND actual_start <> '' AND actual_start <= ? "
+        "WHERE plant=%s AND fy=%s AND actual_start IS NOT NULL AND actual_start <> '' AND actual_start <= %s "
         "ORDER BY actual_start",
         (plant, fy_label, upto.isoformat()),
     )

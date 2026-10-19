@@ -42,7 +42,7 @@ def _all_stock_snapshots() -> dict:
     try:
         cur.execute(
             "SELECT report_month, techno_json FROM techno_data "
-            "WHERE plant='SAIL' AND unit=? ORDER BY report_month ASC",
+            "WHERE plant='SAIL' AND unit=%s ORDER BY report_month ASC",
             [_UNIT],
         )
         rows = cur.fetchall()

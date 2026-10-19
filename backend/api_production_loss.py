@@ -40,7 +40,7 @@ def _production_value(table: str, plant: str, month: str, item_name: str) -> Opt
     conn = _db.connect()
     try:
         cur = conn.execute(
-            f"SELECT month_actual FROM {table} WHERE plant_name=? AND item_name=? AND report_month=?",
+            f"SELECT month_actual FROM {table} WHERE plant_name=%s AND item_name=%s AND report_month=%s",
             (plant, item_name, month),
         )
         row = cur.fetchone()
@@ -56,7 +56,7 @@ def _cr_rows_for_plant(plant: str):
             SELECT id, shop, equipment, activity, unit_type, unit_name, sms_subtag,
                    actual_start, actual_end, actual_ongoing, planned_days, period, schedule_days
             FROM capital_repair_table
-            WHERE plant=?
+            WHERE plant=%s
         """, (plant,))
         cols = ["id", "shop", "equipment", "activity", "unit_type", "unit_name", "sms_subtag",
                 "actual_start", "actual_end", "actual_ongoing", "planned_days", "abp_period", "schedule_days"]
@@ -72,7 +72,7 @@ def _bd_rows_for_plant(plant: str):
             SELECT id, unit_type, unit_name, sms_subtag, start_ts, end_ts, is_ongoing, cause,
                    hours_lost_override, capital_repair_id
             FROM breakdown_table
-            WHERE plant=?
+            WHERE plant=%s
         """, (plant,))
         cols = ["id", "unit_type", "unit_name", "sms_subtag", "start_ts", "end_ts", "is_ongoing", "cause",
                 "hours_lost_override", "capital_repair_id"]
@@ -103,7 +103,7 @@ def _unit_weights(plant: str) -> dict:
     plant storing them in '000 T, like ISP, works the same)."""
     conn = _db.connect()
     try:
-        rows = conn.execute("SELECT unit_label, value FROM major_unit_daily_record WHERE plant_code=?",
+        rows = conn.execute("SELECT unit_label, value FROM major_unit_daily_record WHERE plant_code=%s",
                             (plant,)).fetchall()
     finally:
         conn.close()
@@ -131,12 +131,12 @@ def _stage_capacity_tpd(plant: str, item_name: str, month: str) -> Optional[floa
     conn = _db.connect()
     try:
         row = conn.execute("""SELECT annual_capacity FROM item_capacity_table
-                              WHERE plant_name=? AND item_name=? AND effective_month<=?
+                              WHERE plant_name=%s AND item_name=%s AND effective_month<=%s
                               ORDER BY effective_month DESC LIMIT 1""", (plant, item_name, month)).fetchone()
         y, m = int(month[:4]), int(month[5:7])
         start = f"{y - 3:04d}-{m:02d}"
         hist = conn.execute("""SELECT report_month, month_actual FROM production_table
-                               WHERE plant_name=? AND item_name=? AND report_month>=? AND report_month<?""",
+                               WHERE plant_name=%s AND item_name=%s AND report_month>=%s AND report_month<%s""",
                             (plant, item_name, start, month)).fetchall()
     finally:
         conn.close()
