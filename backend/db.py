@@ -10,6 +10,30 @@ from techno_registry import canonical_unit as _canon_unit
 import dbengine
 from dbengine import Row, IntegrityError, OperationalError
 import activity_context
+from repo.conn import row_dict as _row_dict  # noqa: F401  (also used by main.py)
+# Production / capacity SQL lives in repo/; re-exported so db.<name> callers
+# keep working.
+from repo.production import (  # noqa: F401
+    _FS_ALIAS_PLANTS,
+    _fs_alias_sum,
+    _sail_conversion_actual,
+    get_sail_production_actual,
+    get_sail_production_plan,
+    get_sail_production_ytd_actual,
+    get_sail_production_ytd_plan,
+    save_production_actual,
+    save_production_plan,
+    get_production_actual_value,
+    get_production_actual_for_months,
+    enrich_rows_with_db_production,
+)
+from repo.capacity import (  # noqa: F401
+    list_capacity_entries,
+    get_effective_capacity,
+    save_capacity_entry,
+    update_capacity_entry,
+    delete_capacity_entry,
+)
 
 
 def connect():
@@ -17,20 +41,6 @@ def connect():
     connection (see dbengine.py). Deprecated alias kept for existing call
     sites; new code uses repo.conn.cursor() / repo.conn.tx()."""
     return dbengine.connect()
-
-
-def _row_dict(conn, sql: str, params) -> Optional[dict]:
-    """Fetch one row as a plain dict. Used to snapshot a row's 'old' state
-    before an upsert/delete for the activity log (see activity_context.py)."""
-    prev_factory = conn.row_factory
-    conn.row_factory = Row
-    try:
-        cur = conn.cursor()
-        cur.execute(sql, params)
-        row = cur.fetchone()
-        return dict(row) if row else None
-    finally:
-        conn.row_factory = prev_factory
 
 
 def init_db():
@@ -113,299 +123,6 @@ def get_cply_month(report_month: str) -> str:
     except (ValueError, IndexError):
         return report_month
 
-# For SSP and VISL, Finished Steel = Saleable Steel (same data, no separate BF/SMS).
-# Whenever "Finished Steel" is queried for these plants and no dedicated row exists,
-# the query falls back to "Saleable Steel".
-_FS_ALIAS_PLANTS = ('SSP', 'VISL')
-
-
-def _fs_alias_sum(cursor, tbl: str, month: str, plants: list) -> Optional[float]:
-    """
-    Sum 'Finished Steel' across plants with SSP/VISL fallback to 'Saleable Steel'.
-    Regular plants use a single bulk query; SSP/VISL try FS first then SS.
-    """
-    regular = [p for p in plants if p not in _FS_ALIAS_PLANTS]
-    alias   = [p for p in plants if p in _FS_ALIAS_PLANTS]
-
-    total, found = 0.0, False
-
-    if regular:
-        phs = ",".join("%s" for _ in regular)
-        cursor.execute(
-            f"SELECT SUM(month_actual) FROM {tbl} "
-            f"WHERE report_month=%s AND plant_name IN ({phs}) AND item_name='Finished Steel'",
-            [month] + regular,
-        )
-        r = cursor.fetchone()
-        if r and r[0] is not None:
-            total += r[0]
-            found = True
-
-    for p in alias:
-        cursor.execute(
-            f"SELECT month_actual FROM {tbl} WHERE report_month=%s AND plant_name=%s AND item_name='Finished Steel'",
-            (month, p),
-        )
-        r = cursor.fetchone()
-        if r and r[0] is not None:
-            total += r[0]
-            found = True
-        else:
-            cursor.execute(
-                f"SELECT month_actual FROM {tbl} WHERE report_month=%s AND plant_name=%s AND item_name='Saleable Steel'",
-                (month, p),
-            )
-            r = cursor.fetchone()
-            if r and r[0] is not None:
-                total += r[0]
-                found = True
-
-    return total if found else None
-
-
-def _sail_conversion_actual(cursor, month: str) -> Optional[float]:
-    """SAIL-level 'Conversion' actual for a month (entered via /data-entry/conversion),
-    stored as plant_name='SAIL' in production_table. Represents material converted
-    outside the plants' own reported Finished Steel and must be added to the SAIL
-    Finished Steel total, not just relied on as a plant-sum fallback."""
-    cursor.execute(
-        "SELECT month_actual FROM production_table WHERE report_month=%s AND plant_name='SAIL' AND item_name='Conversion'",
-        (month,),
-    )
-    row = cursor.fetchone()
-    return row[0] if row and row[0] is not None else None
-
-
-def get_sail_production_actual(month: str, item: str) -> Optional[float]:
-    """Calculates the sum of actuals across active plants. Falls back to explicit 'SAIL' record if none found."""
-    init_db()
-    conn = connect()
-    cursor = conn.cursor()
-
-    if item == "Finished Steel":
-        result = _fs_alias_sum(cursor, "production_table", month, PLANTS)
-        conversion = _sail_conversion_actual(cursor, month)
-        if result is not None or conversion is not None:
-            conn.close()
-            return (result or 0.0) + (conversion or 0.0)
-        # Fallback to direct SAIL record
-        cursor.execute(
-            "SELECT month_actual FROM production_table WHERE report_month=%s AND plant_name='SAIL' AND item_name='Finished Steel'",
-            (month,),
-        )
-        row = cursor.fetchone()
-        conn.close()
-        return row[0] if row else None
-
-    placeholders = ",".join("%s" for _ in PLANTS)
-    query = f"""
-        SELECT SUM(month_actual)
-        FROM production_table
-        WHERE report_month = %s
-          AND plant_name IN ({placeholders})
-          AND item_name = %s
-    """
-    cursor.execute(query, [month] + PLANTS + [item])
-    row = cursor.fetchone()
-    if row and row[0] is not None:
-        conn.close()
-        return row[0]
-
-    # Fallback to explicit 'SAIL' record
-    cursor.execute("""
-        SELECT month_actual
-        FROM production_table
-        WHERE report_month = %s AND plant_name = 'SAIL' AND item_name = %s
-    """, (month, item))
-    row = cursor.fetchone()
-    conn.close()
-    return row[0] if row else None
-
-def get_sail_production_plan(month: str, item: str) -> Optional[float]:
-    """Calculates the sum of plans across active plants. Falls back to explicit 'SAIL' record if none found."""
-    init_db()
-    conn = connect()
-    cursor = conn.cursor()
-
-    if item == "Finished Steel":
-        result = _fs_alias_sum(cursor, "production_plan_table", month, PLANTS)
-        if result is not None:
-            conn.close()
-            return result
-        cursor.execute(
-            "SELECT month_actual FROM production_plan_table WHERE report_month=%s AND plant_name='SAIL' AND item_name='Finished Steel'",
-            (month,),
-        )
-        row = cursor.fetchone()
-        conn.close()
-        return row[0] if row else None
-
-    placeholders = ",".join("%s" for _ in PLANTS)
-    query = f"""
-        SELECT SUM(month_actual)
-        FROM production_plan_table
-        WHERE report_month = %s
-          AND plant_name IN ({placeholders})
-          AND item_name = %s
-    """
-    cursor.execute(query, [month] + PLANTS + [item])
-    row = cursor.fetchone()
-    if row and row[0] is not None:
-        conn.close()
-        return row[0]
-
-    # Fallback to explicit 'SAIL' record
-    cursor.execute("""
-        SELECT month_actual
-        FROM production_plan_table
-        WHERE report_month = %s AND plant_name = 'SAIL' AND item_name = %s
-    """, (month, item))
-    row = cursor.fetchone()
-    conn.close()
-    return row[0] if row else None
-
-def get_sail_production_ytd_actual(months: List[str], item: str) -> Optional[float]:
-    """Sums the actuals across active plants over a list of months (YTD). Falls back to 'SAIL' if no plant records exist."""
-    if not months:
-        return None
-    init_db()
-    conn = connect()
-    cursor = conn.cursor()
-
-    if item == "Finished Steel":
-        total, found = 0.0, False
-        for m in months:
-            v = _fs_alias_sum(cursor, "production_table", m, PLANTS)
-            c = _sail_conversion_actual(cursor, m)
-            if v is not None or c is not None:
-                total += (v or 0.0) + (c or 0.0)
-                found = True
-        conn.close()
-        return total if found else None
-
-    plant_placeholders = ",".join("%s" for _ in PLANTS)
-    month_placeholders = ",".join("%s" for _ in months)
-    query = f"""
-        SELECT SUM(month_actual)
-        FROM production_table
-        WHERE report_month IN ({month_placeholders})
-          AND plant_name IN ({plant_placeholders})
-          AND item_name = %s
-    """
-    cursor.execute(query, months + PLANTS + [item])
-    row = cursor.fetchone()
-    if row and row[0] is not None:
-        conn.close()
-        return row[0]
-
-    # Fallback: Sum explicit 'SAIL' records across months
-    query = f"""
-        SELECT SUM(month_actual)
-        FROM production_table
-        WHERE report_month IN ({month_placeholders})
-          AND plant_name = 'SAIL'
-          AND item_name = %s
-    """
-    cursor.execute(query, months + [item])
-    row = cursor.fetchone()
-    conn.close()
-    return row[0] if (row and row[0] is not None) else None
-
-def get_sail_production_ytd_plan(months: List[str], item: str) -> Optional[float]:
-    """Sums the plans across active plants over a list of months (YTD). Falls back to 'SAIL' if no plant records exist."""
-    if not months:
-        return None
-    init_db()
-    conn = connect()
-    cursor = conn.cursor()
-
-    if item == "Finished Steel":
-        total, found = 0.0, False
-        for m in months:
-            v = _fs_alias_sum(cursor, "production_plan_table", m, PLANTS)
-            if v is not None:
-                total += v
-                found = True
-        conn.close()
-        return total if found else None
-
-    plant_placeholders = ",".join("%s" for _ in PLANTS)
-    month_placeholders = ",".join("%s" for _ in months)
-    query = f"""
-        SELECT SUM(month_actual)
-        FROM production_plan_table
-        WHERE report_month IN ({month_placeholders})
-          AND plant_name IN ({plant_placeholders})
-          AND item_name = %s
-    """
-    cursor.execute(query, months + PLANTS + [item])
-    row = cursor.fetchone()
-    if row and row[0] is not None:
-        conn.close()
-        return row[0]
-
-    # Fallback: Sum explicit 'SAIL' records across months
-    query = f"""
-        SELECT SUM(month_actual)
-        FROM production_plan_table
-        WHERE report_month IN ({month_placeholders})
-          AND plant_name = 'SAIL'
-          AND item_name = %s
-    """
-    cursor.execute(query, months + [item])
-    row = cursor.fetchone()
-    conn.close()
-    return row[0] if (row and row[0] is not None) else None
-
-def save_production_actual(month: str, plant: str, item: str, value: Optional[float]):
-    """Saves or updates an actual production record."""
-    item = item.strip()
-    init_db()
-    conn = connect()
-    cursor = conn.cursor()
-    old = _row_dict(conn,
-        "SELECT * FROM production_table WHERE report_month=%s AND plant_name=%s AND item_name=%s",
-        (month, plant, item))
-    if value is None:
-        cursor.execute("""
-            DELETE FROM production_table
-            WHERE report_month = %s AND plant_name = %s AND item_name = %s
-        """, (month, plant, item))
-    else:
-        cursor.execute("""
-            INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
-            VALUES (%s, %s, %s, %s)
-            AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
-        """, (month, plant, item, value))
-    conn.commit()
-    conn.close()
-    new = None if value is None else {"report_month": month, "plant_name": plant, "item_name": item, "month_actual": value}
-    activity_context.record(f"production_table/{plant}/{item}/{month}", old, new)
-
-def save_production_plan(month: str, plant: str, item: str, value: Optional[float]):
-    """Saves or updates a planned production record."""
-    item = item.strip()
-    init_db()
-    conn = connect()
-    cursor = conn.cursor()
-    old = _row_dict(conn,
-        "SELECT * FROM production_plan_table WHERE report_month=%s AND plant_name=%s AND item_name=%s",
-        (month, plant, item))
-    if value is None:
-        cursor.execute("""
-            DELETE FROM production_plan_table
-            WHERE report_month = %s AND plant_name = %s AND item_name = %s
-        """, (month, plant, item))
-    else:
-        cursor.execute("""
-            INSERT INTO production_plan_table (report_month, plant_name, item_name, month_actual)
-            VALUES (%s, %s, %s, %s)
-            AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
-        """, (month, plant, item, value))
-    conn.commit()
-    conn.close()
-    new = None if value is None else {"report_month": month, "plant_name": plant, "item_name": item, "month_actual": value}
-    activity_context.record(f"production_plan_table/{plant}/{item}/{month}", old, new)
 
 def get_page_config(month: str, page_number: int) -> Optional[dict]:
     """Retrieves standard page configuration if saved in DB."""
@@ -814,124 +531,6 @@ def delete_breakdown_entry(breakdown_id: int) -> bool:
     return True
 
 
-def list_capacity_entries(plant: Optional[str] = None, item: Optional[str] = None) -> List[Dict[str, Any]]:
-    """List capacity-change entries, optionally filtered. Newest effective_month first."""
-    init_db()
-    conn = connect()
-    sql = "SELECT * FROM item_capacity_table WHERE 1=1"
-    args = []
-    if plant:
-        sql += " AND plant_name=%s"; args.append(plant)
-    if item:
-        sql += " AND item_name=%s"; args.append(item)
-    sql += " ORDER BY plant_name, item_name, effective_month DESC"
-    prev_factory = conn.row_factory
-    conn.row_factory = Row
-    try:
-        cur = conn.execute(sql, args)
-        rows = [dict(r) for r in cur.fetchall()]
-    finally:
-        conn.row_factory = prev_factory
-        conn.close()
-    return rows
-
-
-def get_effective_capacity(plant: str, item: str, month: str) -> Optional[float]:
-    """Annual capacity ('000 T/yr) in effect for `plant`/`item` at `month` —
-    the latest entry with effective_month <= month, or None if the plant/item
-    has never had a capacity entered at or before that month."""
-    init_db()
-    conn = connect()
-    try:
-        cur = conn.execute(
-            "SELECT annual_capacity FROM item_capacity_table "
-            "WHERE plant_name=%s AND item_name=%s AND effective_month<=%s "
-            "ORDER BY effective_month DESC LIMIT 1",
-            (plant, item, month),
-        )
-        row = cur.fetchone()
-        return row[0] if row else None
-    finally:
-        conn.close()
-
-
-def save_capacity_entry(plant: str, item: str, effective_month: str,
-                         annual_capacity: float, reason: str, created_by: str) -> int:
-    """Create one capacity entry. Returns the new row id. Raises
-    IntegrityError if (plant, item, effective_month) already exists —
-    callers should surface that as "an entry for this month already exists,
-    edit it instead"."""
-    from datetime import datetime
-    init_db()
-    conn = connect()
-    now = datetime.now().isoformat()
-    try:
-        cur = conn.execute("""
-            INSERT INTO item_capacity_table
-                (plant_name, item_name, effective_month, annual_capacity, reason,
-                 created_by, created_at, updated_by, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """, (plant, item, effective_month, annual_capacity, reason,
-              created_by, now, created_by, now))
-        conn.commit()
-        new_id = cur.lastrowid
-    finally:
-        conn.close()
-    activity_context.record(f"item_capacity_table/{plant}/{item}/{new_id}", None, {
-        "plant_name": plant, "item_name": item, "effective_month": effective_month,
-        "annual_capacity": annual_capacity, "reason": reason,
-    })
-    return new_id
-
-
-def update_capacity_entry(entry_id: int, updated_by: str, **fields) -> bool:
-    """Update any subset of item_name/plant_name/effective_month/annual_capacity/
-    reason on one capacity entry. Returns False if the row doesn't exist.
-    Raises IntegrityError on a resulting (plant, item, effective_month)
-    clash with another row."""
-    from datetime import datetime
-    init_db()
-    conn = connect()
-    old = _row_dict(conn, "SELECT * FROM item_capacity_table WHERE id=%s", (entry_id,))
-    if old is None:
-        conn.close()
-        return False
-    allowed = {"plant_name", "item_name", "effective_month", "annual_capacity", "reason"}
-    sets, args = [], []
-    for k, v in fields.items():
-        if k not in allowed:
-            continue
-        sets.append(f"{k}=%s")
-        args.append(v)
-    if not sets:
-        conn.close()
-        return True
-    sets.append("updated_by=%s"); args.append(updated_by)
-    sets.append("updated_at=%s"); args.append(datetime.now().isoformat())
-    args.append(entry_id)
-    try:
-        conn.execute(f"UPDATE item_capacity_table SET {', '.join(sets)} WHERE id=%s", args)
-        conn.commit()
-    finally:
-        conn.close()
-    new = {**old, **{k: v for k, v in fields.items() if k in allowed}}
-    activity_context.record(f"item_capacity_table/{old['plant_name']}/{old['item_name']}/{entry_id}", old, new)
-    return True
-
-
-def delete_capacity_entry(entry_id: int) -> bool:
-    """Delete one capacity entry, recording its prior state. Returns False if not found."""
-    init_db()
-    conn = connect()
-    old = _row_dict(conn, "SELECT * FROM item_capacity_table WHERE id=%s", (entry_id,))
-    if old is None:
-        conn.close()
-        return False
-    conn.execute("DELETE FROM item_capacity_table WHERE id=%s", (entry_id,))
-    conn.commit()
-    conn.close()
-    activity_context.record(f"item_capacity_table/{old['plant_name']}/{old['item_name']}/{entry_id}", old, None)
-    return True
 
 
 def save_techno_data_from_extraction(plant: str, report_month: str, extracted_rows: List[Dict[str, Any]],
@@ -1458,78 +1057,6 @@ def merge_upsert_techno_data(plant: str, report_month: str, unit: str, new_techn
     upsert_techno_data(plant, report_month, unit, merged, source_file, conn=(conn if not owns_conn else None))
 
 
-def get_production_actual_value(plant: str, item_name: str, report_month: str) -> Optional[float]:
-    """Single plant/item/month lookup from production_table (no cross-plant
-    aggregation) - used to show 'current DB value' next to a freshly-extracted
-    figure during upload preview, so the user can compare before confirming."""
-    init_db()
-    conn = connect()
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT month_actual FROM production_table WHERE plant_name=%s AND item_name=%s AND report_month=%s",
-        (plant, item_name, report_month),
-    )
-    row = cursor.fetchone()
-    conn.close()
-    return row[0] if row and row[0] is not None else None
-
-
-def get_production_actual_for_months(plant: str, item_name: str, months: List[str]) -> Dict[str, float]:
-    """-> {report_month: month_actual} for one plant/item across an explicit
-    list of report_months (only months with a saved row come back) — used
-    by the /data-entry/production-range bulk editor (see main.py's
-    /api/production-item-range) to pre-fill a whole month range in one
-    query rather than one lookup per month."""
-    if not months:
-        return {}
-    init_db()
-    conn = connect()
-    cursor = conn.cursor()
-    placeholders = ",".join(["%s"] * len(months))
-    cursor.execute(
-        f"SELECT report_month, month_actual FROM production_table "
-        f"WHERE plant_name = %s AND item_name = %s AND report_month IN ({placeholders})",
-        [plant, item_name] + months,
-    )
-    out = {rm: v for rm, v in cursor.fetchall() if v is not None}
-    conn.close()
-    return out
-
-
-def enrich_rows_with_db_production(rows: List[Dict[str, Any]], plant: str, report_month: str) -> List[Dict[str, Any]]:
-    """Attach 'db_value' (current production_table value, or None) to each
-    preview row in-place, keyed by (the row's own report_month, item_name).
-    Used by upload preview endpoints so the UI can show DB-vs-extracted side
-    by side before insert.
-
-    Multi-month previews (ASP's FL report-month + previous-month pair, BSL's
-    all-months FY preview) carry their own per-row `report_month`, which can
-    differ from the top-level *report_month* argument — falling back to a
-    single lookup keyed by item_name alone (the previous version of this
-    function) compared every row against the SAME month's DB value, so a
-    previous-month row's "In DB" figure silently showed the report month's
-    value instead of its own. That makes an already-successful previous-month
-    insert look like it never took effect, even though production_table was
-    updated correctly."""
-    if not rows:
-        return rows
-    init_db()
-    months = {r.get("report_month") or report_month for r in rows}
-    conn = connect()
-    cursor = conn.cursor()
-    placeholders = ",".join(["%s"] * len(months))
-    cursor.execute(
-        f"SELECT report_month, item_name, month_actual FROM production_table "
-        f"WHERE plant_name=%s AND report_month IN ({placeholders})",
-        (plant, *months),
-    )
-    current = {(rm, item): val for rm, item, val in cursor.fetchall()}
-    conn.close()
-    for r in rows:
-        item = r.get("item_name") or r.get("pdf_label")
-        rm = r.get("report_month") or report_month
-        r["db_value"] = current.get((rm, item)) if item else None
-    return rows
 
 
 def enrich_techno_records_with_db(records: List[Dict[str, Any]], plant: str, report_month: str, conn=None) -> List[Dict[str, Any]]:

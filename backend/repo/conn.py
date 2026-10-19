@@ -95,6 +95,21 @@ class Cursor:
         return self._cur.description
 
 
+def row_dict(dbconn, sql, params):
+    """Fetch one row as a plain dict on a db.connect() connection. Used to
+    snapshot a row's 'old' state before an upsert/delete for the activity log
+    (see activity_context.py)."""
+    prev_factory = dbconn.row_factory
+    dbconn.row_factory = Row
+    try:
+        cur = dbconn.cursor()
+        cur.execute(sql, params)
+        row = cur.fetchone()
+        return dict(row) if row else None
+    finally:
+        dbconn.row_factory = prev_factory
+
+
 def _shared_cursor(raw):
     cur = raw.cursor()
     try:
