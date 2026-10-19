@@ -3346,8 +3346,8 @@ async def bsl_bf_techno_save(payload: dict):
             # below, never to techno_data - production and production_ytd
             # aren't techno-economic parameters, and duplicating them here
             # would just drift out of sync with production_table (the source
-            # of truth for the cumulative-weighting code in techno_cumulative.py
-            # / techno_aggregates.py). BF_Shop's total, when needed, is derived
+            # of truth for the cumulative-weighting code in techno_cumulative.py).
+            # BF_Shop's total, when needed, is derived
             # by summing the four furnaces' production_table rows (see the
             # preview endpoint above) rather than stored separately.
             is_furnace = unit.startswith("BF-")

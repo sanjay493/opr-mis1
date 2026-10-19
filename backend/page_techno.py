@@ -1,9 +1,9 @@
 """
 Techno-Economic Parameter pages — pages 27-35.
 
-Data source: techno_actuals JOIN techno_param (replaces techno_table + techno_param_master)
-Display ordering: techno_param_group (group_code, sort_order)
-Annual targets:   techno_target JOIN techno_param JOIN techno_param_group
+Data source: techno_data (per plant/unit/month JSON) and techno_plan_fy.
+(The older techno_actuals / techno_param / techno_param_group / techno_target
+tables no longer exist.)
 
 Column layout:
   <FY-2> Actual | <FY-1> Actual | Target <FY> |

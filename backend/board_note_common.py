@@ -166,7 +166,7 @@ def improvement_pct(cur_v, cply_v, higher_is_better: bool):
 def fuel_rate_fallback(tgt: dict) -> dict:
     """Return a new dict with "Fuel Rate" filled in as Coke Rate + Nut Coke
     Rate + CDI Rate when it is None and all three components are present
-    -- same rule techno_aggregates.py applies to actuals."""
+    -- the same rule the former techno_aggregates.py applied to actuals."""
     result = dict(tgt)
     if result.get("Fuel Rate") is None:
         coke, nut, cdi = result.get("Coke Rate"), result.get("Nut Coke Rate"), result.get("CDI Rate")

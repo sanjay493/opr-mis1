@@ -1,6 +1,6 @@
 """
 API endpoints for ISP Technopara data.
-Independent of the existing techno_actuals / techno_param tables.
+Independent of the old techno_actuals / techno_param tables (removed).
 """
 
 import os

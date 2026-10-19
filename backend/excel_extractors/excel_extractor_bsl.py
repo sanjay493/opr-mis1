@@ -1652,7 +1652,7 @@ def extract_preview_bf_pdf(file_path: str, report_month: str) -> dict:
     entry points). This path only surfaces production for review/insert here;
     the other techno parameters for this PDF are entered via /data-entry/techno.
     BF_Shop (plant aggregate) is skipped — production_table never carries a
-    separate shop-level row (see techno_aggregates.py).
+    separate shop-level row.
     """
     import pdfplumber
     import sys as _sys
