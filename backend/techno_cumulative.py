@@ -259,7 +259,7 @@ def compute_cumulative_preview(
             values[m] = float(v)
         except (TypeError, ValueError):
             # Non-numeric stored value (e.g. a 'HH:MM' time) — cannot average
-            warnings.append(f"{m}: non-numeric value {v!r} — new.")
+            warnings.append(f"{m}: non-numeric value {v!r} — excluded.")
 
     return compute_cumulative_from_values(
         plant, unit, param_key, report_month, values,
@@ -304,7 +304,7 @@ def compute_cumulative_from_values(
             f"No Month Value for {report_month} — cumulative covers earlier months only.")
     skipped = [m for m in months if m not in values and m != report_month]
     if skipped:
-        warnings.append(f"No monthly value in DB for: {', '.join(skipped)} — new.")
+        warnings.append(f"No monthly value in DB for: {', '.join(skipped)} — excluded.")
 
     if not values:
         raise ValueError(
@@ -435,7 +435,7 @@ def aggregate_values(
             w = weights[m]
             if w == 0:
                 rows.append({"month": m, "value": v, "weight": w, "product": None})
-                steps.append(f"{m}: zero production — new.")
+                steps.append(f"{m}: zero production — excluded.")
                 continue
             usable.append((m, v, w))
             term = round(v * w, 4) if method == "weighted" else round(w / v, 4)
