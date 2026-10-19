@@ -239,12 +239,12 @@ def generate_records() -> dict:
                     (r[0] for r in rp.distinct_items(cur, "actual", plants[0])
                      if r[0] not in LEGACY_ITEM_NAMES),
                     key=sort_key)
-                scope = rp.records_scope(plants)
+                sql_scope = rp.records_scope(plants)
             else:
                 items = ITEMS
-                scope = rp.records_scope(plants, ITEMS)
+                sql_scope = rp.records_scope(plants, ITEMS)
 
-            result[group_name] = _compute_group_records(cur, items, scope)
+            result[group_name] = _compute_group_records(cur, items, sql_scope)
 
         result['latest_month'] = _latest_production_month(cur)
         return result
@@ -366,9 +366,9 @@ def generate_best_period(start_mon: int, end_mon: int, scope: str = 'sail5',
                 items = sorted((r[0] for r in rp.records_plants_items_in(cur, plants)), key=sort_key)
             else:
                 items = MAJOR_ITEMS
-            scope = rp.records_scope(plants, items)
+            sql_scope = rp.records_scope(plants, items)
             results[col_key] = _compute_best_period(
-                cur, items, scope, s_pos, e_pos, top_n)
+                cur, items, sql_scope, s_pos, e_pos, top_n)
 
         window_months = [_MON[_pos_to_mon(p)] for p in range(s_pos, e_pos + 1)]
         return {
@@ -405,8 +405,8 @@ def generate_group_records(items: list = HIGHLIGHT_ITEMS, upto_month: str = None
     try:
         result = {}
         for group_name, plants in [('sail5', SAIL5), ('all8', ALL8)]:
-            scope = rp.records_scope(plants, items, upto_month)
-            result[group_name] = _compute_group_records(cur, items, scope)
+            sql_scope = rp.records_scope(plants, items, upto_month)
+            result[group_name] = _compute_group_records(cur, items, sql_scope)
 
         latest = _latest_production_month(cur)
         result['latest_month'] = min(latest, upto_month) if (latest and upto_month) else (upto_month or latest)
