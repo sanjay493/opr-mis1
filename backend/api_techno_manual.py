@@ -15,6 +15,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 import db as _db
+from repo import production as _rp
 
 router = APIRouter(prefix="/api/techno/manual", tags=["techno-manual"])
 
@@ -102,20 +103,10 @@ def _get_hm_production(report_month: str, ytd: bool = False) -> Dict[str, float]
             months = _db.get_ytd_months(report_month)
             if not months:
                 return {}
-            ph = ",".join(["%s"] * len(months))
-            cur.execute(
-                f"SELECT plant_name, SUM(month_actual) FROM production_table "
-                f"WHERE report_month IN ({ph}) AND item_name='Hot Metal' "
-                f"GROUP BY plant_name",
-                months,
-            )
+            rows = _rp.hot_metal_by_plant(cur, report_month, months)
         else:
-            cur.execute(
-                "SELECT plant_name, month_actual FROM production_table "
-                "WHERE report_month=%s AND item_name='Hot Metal'",
-                [report_month],
-            )
-        return {p: v for p, v in cur.fetchall() if v and v > 0}
+            rows = _rp.hot_metal_by_plant(cur, report_month)
+        return {p: v for p, v in rows if v and v > 0}
     finally:
         conn.close()
 

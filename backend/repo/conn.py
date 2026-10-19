@@ -13,6 +13,7 @@ dbengine's pool, so DB selection and pooling stay in one place.
 from contextlib import contextmanager
 
 import itertools
+import logging
 
 import pymysql
 
@@ -20,6 +21,8 @@ import dbengine
 
 IntegrityError = dbengine.IntegrityError
 OperationalError = dbengine.OperationalError
+
+_log = logging.getLogger(__name__)
 
 
 # Same class as the rows db.connect() returns with row_factory set.
@@ -227,7 +230,13 @@ def rollback_tx():
             cur.close()
     finally:
         dbengine._shared_raw.reset(token)
+        # Cleanup failures are logged, never raised: they must not mask the
+        # block's own exception (e.g. a failing extractor in a dry run).
         try:
             raw.rollback()
-        finally:
+        except Exception:  # noqa: BLE001
+            _log.exception("rollback_tx: rollback failed")
+        try:
             raw.close()
+        except Exception:  # noqa: BLE001
+            _log.exception("rollback_tx: close failed")

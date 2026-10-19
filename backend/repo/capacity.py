@@ -120,3 +120,12 @@ def delete_capacity_entry(entry_id: int) -> bool:
     conn.close()
     activity_context.record(f"item_capacity_table/{old['plant_name']}/{old['item_name']}/{entry_id}", old, None)
     return True
+
+
+# ── Queries moved from page / api modules ──────────────────────────────────
+
+def capacity_row_at(cur, plant, item_name, month):
+    """fetchone() of the annual_capacity in effect at `month` (api_production_loss)."""
+    return cur.execute("""SELECT annual_capacity FROM item_capacity_table
+                              WHERE plant_name=%s AND item_name=%s AND effective_month<=%s
+                              ORDER BY effective_month DESC LIMIT 1""", (plant, item_name, month)).fetchone()

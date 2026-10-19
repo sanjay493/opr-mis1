@@ -18,6 +18,7 @@ from excel_extractor_mou_plan import extract_mou_plan  # noqa: E402
 
 import db  # noqa: E402
 from page4 import PAGE4_ITEMS  # noqa: E402
+from repo import production as rp  # noqa: E402
 
 router = APIRouter(prefix="/api/mou-plan", tags=["mou-plan"])
 
@@ -28,12 +29,7 @@ def _existing_conflicts(records: list) -> list:
     conflicts = []
     try:
         for rec in records:
-            cur.execute(
-                "SELECT month_actual FROM mou_plan_table "
-                "WHERE report_month = %s AND plant_name = %s AND item_name = %s",
-                (rec["report_month"], rec["plant_name"], rec["item_name"]),
-            )
-            row = cur.fetchone()
+            row = rp.value_row(cur, "mou", rec["report_month"], rec["plant_name"], rec["item_name"])
             if row and row[0] is not None:
                 conflicts.append(rec)
     finally:
@@ -113,11 +109,7 @@ async def insert_mou_plan(payload: dict):
     saved = 0
     try:
         for rec in records:
-            cur.execute("""
-                INSERT INTO mou_plan_table (report_month, plant_name, item_name, month_actual)
-                VALUES (%s, %s, %s, %s)
-                AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
-            """, (rec["report_month"], rec["plant_name"], rec["item_name"], rec["value"]))
+            rp.upsert_row(cur, "mou", rec["report_month"], rec["plant_name"], rec["item_name"], rec["value"])
             saved += 1
         conn.commit()
     finally:

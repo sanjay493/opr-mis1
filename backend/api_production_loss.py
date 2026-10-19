@@ -27,23 +27,21 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 
 import db as _db
+from repo import capacity as _cap_repo
+from repo import production as rp
 from production_loss_analysis import ITEM_NAMES, MILL_ALIASES, build_report, _norm
 
 router = APIRouter(prefix="/api/production-loss-analysis", tags=["production-loss-analysis"])
 
 
-def _production_value(table: str, plant: str, month: str, item_name: str) -> Optional[float]:
+def _production_value(measure: str, plant: str, month: str, item_name: str) -> Optional[float]:
     """Monthly plan/actual in TONNES. production_table / production_plan_table
     store this in '000 T (repo-wide convention); the loss engine and the
     frontend both work in plain tonnes (fields named *_t, axis/tiles labelled
     "T"), so scale up here — the one place the two units meet."""
     conn = _db.connect()
     try:
-        cur = conn.execute(
-            f"SELECT month_actual FROM {table} WHERE plant_name=%s AND item_name=%s AND report_month=%s",
-            (plant, item_name, month),
-        )
-        row = cur.fetchone()
+        row = rp.plant_item_value_row(conn.cursor(), measure, plant, item_name, month)
         return round(float(row[0]) * 1000, 3) if row and row[0] is not None else None
     finally:
         conn.close()
@@ -130,14 +128,10 @@ def _stage_capacity_tpd(plant: str, item_name: str, month: str) -> Optional[floa
     capacity, so rated alone would leave no headroom at all."""
     conn = _db.connect()
     try:
-        row = conn.execute("""SELECT annual_capacity FROM item_capacity_table
-                              WHERE plant_name=%s AND item_name=%s AND effective_month<=%s
-                              ORDER BY effective_month DESC LIMIT 1""", (plant, item_name, month)).fetchone()
+        row = _cap_repo.capacity_row_at(conn.cursor(), plant, item_name, month)
         y, m = int(month[:4]), int(month[5:7])
         start = f"{y - 3:04d}-{m:02d}"
-        hist = conn.execute("""SELECT report_month, month_actual FROM production_table
-                               WHERE plant_name=%s AND item_name=%s AND report_month>=%s AND report_month<%s""",
-                            (plant, item_name, start, month)).fetchall()
+        hist = rp.actual_history(conn.cursor(), plant, item_name, start, month)
     finally:
         conn.close()
     rated = float(row[0]) * 1000 / 365 if row and row[0] else None
@@ -211,9 +205,9 @@ async def get_production_loss_analysis(
 
     def fetch_month_data(plant_: str, month: str):
         return {
-            "plan": _production_value("production_plan_table", plant_, month, item_name),
-            "actual": _production_value("production_table", plant_, month, item_name),
-            "hm_plan": (_production_value("production_plan_table", plant_, month, ITEM_NAMES["HM"])
+            "plan": _production_value("abp", plant_, month, item_name),
+            "actual": _production_value("actual", plant_, month, item_name),
+            "hm_plan": (_production_value("abp", plant_, month, ITEM_NAMES["HM"])
                         if item == "CS" else None),
             "cr_rows": cr_rows, "bd_rows": bd_rows,
             "capacity": _capacity_for_month(plant_, month, weights, cap_cache),

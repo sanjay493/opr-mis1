@@ -16,6 +16,7 @@ from pathlib import Path
 
 import db
 import dbengine
+from repo import production as rp
 from constants import ALL_PLANTS as _FS_SAIL_8
 from constants import PAGE_MODULES
 from models import PDFRequest, ProductionEntry, ProductionEntryRequest, ProductionRangeSaveRequest, SpecialSteelSaveRequest, SpecialSteelAbpSaveRequest, Page3NarrativeRequest, CostTrendAnnualSaveRequest, CostTrendMonthlySaveRequest, SailMinesSaveRequest, MinesProductionDespatchSaveRequest
@@ -1038,10 +1039,7 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
 
         conn = db.connect()
         cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM production_table WHERE report_month = %s", (month,))
-        has_actuals = cursor.fetchone()[0] > 0
-        cursor.execute("SELECT COUNT(*) FROM production_plan_table WHERE report_month = %s", (month,))
-        has_plans = cursor.fetchone()[0] > 0
+        has_actuals, has_plans = rp.month_has_actual_and_plan(cursor, month)
         conn.close()
 
         if has_actuals or has_plans:
@@ -2204,19 +2202,7 @@ def get_special_steel_ssps_basis(month: str = Query(...)):
     conn = db.connect()
     cur = conn.cursor()
     try:
-        cur.execute("""
-            SELECT month_actual FROM production_table
-            WHERE report_month=%s AND plant_name='SSP' AND item_name='Saleable Steel Despatch'
-        """, (month,))
-        row = cur.fetchone()
-        saleable_000t = row[0] if row else None
-
-        cur.execute("""
-            SELECT month_actual FROM production_table
-            WHERE report_month=%s AND plant_name='SSP' AND item_name='Finished Carbon Steel Despatch'
-        """, (month,))
-        row = cur.fetchone()
-        carbon_000t = row[0] if row else None
+        saleable_000t, carbon_000t = rp.ssp_despatch_basis(cur, month)
 
         computed_actual = _ssps_special_steel(cur, [month])
     finally:
@@ -2573,33 +2559,12 @@ _PLAN_EXCEL_PLANTS   = ("RSP", "ISP", "BSP", "DSP", "BSL", "ASP_SSP_VISL")
 _PLAN_UNIT_OVERRIDE  = {"Oven Pushing(nos/d)": "nos/d"}   # all other items → '000T
 
 def _plan_preview_rows(plant_name: str, mod, file_path: str, financial_year: str):
-    """Run a plan extractor as a dry run and return the rows it wrote.
-
-    The extractors write production_plan_table and commit on their own
-    db.connect() connections. Inside repo.conn.rollback_tx() all of those
-    connections are this one connection, whose commits are no-ops and which
-    is rolled back and closed at the end. A session TEMPORARY TABLE named
-    production_plan_table shadows the real table on that connection, so the
-    extractor writes into an empty private copy (exactly the rows it
-    produced; no locks on the real table) and nothing reaches the real table.
-    """
-    from repo import conn as _rc
-    with _rc.rollback_tx() as cur:
-        # (LIKE cannot name the table it shadows, hence the rename.)
-        cur.execute("CREATE TEMPORARY TABLE _plan_preview LIKE production_plan_table")
-        cur.execute("ALTER TABLE _plan_preview RENAME TO production_plan_table")
-        try:
-            if not mod.extract_and_save_excel_plan(file_path, financial_year):
-                raise Exception(f"{plant_name} plan extractor returned failure.")
-            cur.execute(
-                "SELECT plant_name, item_name, report_month, month_actual "
-                "FROM production_plan_table"
-            )
-            # Sorted in Python: binary (code point) order, as the old preview
-            # gave; MySQL's collation would sort case-insensitively.
-            return sorted(cur.fetchall(), key=lambda r: (r[0], r[1], r[2]))
-        finally:
-            cur.execute("DROP TEMPORARY TABLE IF EXISTS production_plan_table")
+    """Run a plan extractor as a dry run and return the rows it wrote
+    (see repo.production.plan_preview_rows: nothing reaches the real table)."""
+    def _run():
+        if not mod.extract_and_save_excel_plan(file_path, financial_year):
+            raise Exception(f"{plant_name} plan extractor returned failure.")
+    return rp.plan_preview_rows(_run)
 
 
 @app.post("/api/preview-plan")
@@ -2709,11 +2674,8 @@ async def confirm_plan(payload: dict):
         for r in plan_rows:
             if r.get("status") != "ok" or r.get("value") is None:
                 continue
-            cur.execute("""
-                INSERT INTO production_plan_table (report_month, plant_name, item_name, month_actual)
-                VALUES (%s, %s, %s, %s)
-                AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
-            """, (r["month"], r.get("plant", ""), normalize_item_name(r["item_name"], r.get("plant", "")), r["value"]))
+            rp.upsert_row(cur, "abp", r["month"], r.get("plant", ""),
+                          normalize_item_name(r["item_name"], r.get("plant", "")), r["value"])
             saved += 1
         conn.commit()
         conn.close()
@@ -2936,22 +2898,16 @@ async def confirm_extraction(payload: dict):
                 # top-level month; every single-month extractor's rows simply
                 # don't carry this key, so they fall back to `month` as before.
                 row_month = r.get("report_month") or month
-                cur.execute("""
-                    INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
-                    VALUES (%s, %s, %s, %s)
-                    AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
-                """, (row_month, plant, normalize_item_name(r.get("item_name"), plant), r.get("value")))
+                rp.upsert_row(cur, "actual", row_month, plant,
+                              normalize_item_name(r.get("item_name"), plant), r.get("value"))
                 if r.get("value") is not None:
                     saved_prod += 1
 
             for r in payload.get("plan_rows", []):
                 if r.get("status") != "ok" or r.get("value") is None:
                     continue
-                cur.execute("""
-                    INSERT INTO production_plan_table (report_month, plant_name, item_name, month_actual)
-                    VALUES (%s, %s, %s, %s)
-                    AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
-                """, (r["month"], r.get("plant", plant), normalize_item_name(r["item_name"], r.get("plant", plant)), r["value"]))
+                rp.upsert_row(cur, "abp", r["month"], r.get("plant", plant),
+                              normalize_item_name(r["item_name"], r.get("plant", plant)), r["value"])
                 saved_plan += 1
 
             # Legacy "techno_rows" are ignored: they targeted techno_param /
@@ -3208,11 +3164,7 @@ async def bsl_bf_techno_preview(
                 row["db"]["production"] = _db_prod_kt * 1000.0 if _db_prod_kt is not None else None
             elif unit == "BF_Shop":
                 _conn = db.connect()
-                _sum_kt = _conn.execute(
-                    "SELECT SUM(month_actual) FROM production_table WHERE plant_name='BSL' "
-                    "AND report_month=%s AND item_name IN ('BF-1','BF-2','BF-4','BF-5')",
-                    (month,),
-                ).fetchone()[0]
+                _sum_kt = rp.bsl_bf_shop_production_sum(_conn.cursor(), month)
                 _conn.close()
                 row["db"]["production"] = _sum_kt * 1000.0 if _sum_kt is not None else None
             for k in _param_keys:
@@ -3380,12 +3332,7 @@ async def bsl_bf_techno_save(payload: dict):
             prod = row.get("production")
             if is_furnace and isinstance(prod, (int, float)) and prod > 0:
                 conn = db.connect()
-                conn.execute(
-                    """INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
-                       VALUES (%s, 'BSL', %s, %s)
-                       AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual""",
-                    (month, unit, round(prod / 1000.0, 3)),
-                )
+                rp.upsert_bsl_furnace_production(conn.cursor(), month, unit, round(prod / 1000.0, 3))
                 conn.commit()
                 conn.close()
 
@@ -3610,14 +3557,10 @@ async def get_item_mapping_suggestions(plant: str):
     cursor = conn.cursor()
 
     # Get all unique item names for this plant
-    cursor.execute(
-        "SELECT DISTINCT item_name FROM production_table WHERE plant_name = %s",
-        (plant,)
-    )
     # Process-order the dropdown; sort on the normalized form but keep the
     # raw DB name, since aliases must map to what's actually stored.
     items = sorted(
-        (row[0] for row in cursor.fetchall()),
+        (row[0] for row in rp.distinct_actual_items(cursor, plant)),
         key=lambda n: production_item_sort_key(normalize_item_name(n, plant)),
     )
 
@@ -3985,21 +3928,13 @@ def production_item_sort_key(item):
 async def get_production_items(plant: str, month: str):
     conn = db.connect()
     cursor = conn.cursor()
-    cursor.execute(
-        "SELECT item_name, month_actual FROM production_plan_table WHERE plant_name = %s AND report_month = %s ORDER BY item_name",
-        (plant, month),
-    )
     plan_rows = {}
-    for row in cursor.fetchall():
+    for row in rp.plant_month_plan_items(cursor, plant, month):
         normalized = normalize_item_name(row[0], plant)
         plan_rows[normalized] = row[1]
 
-    cursor.execute(
-        "SELECT item_name, month_actual FROM production_table WHERE plant_name = %s AND report_month = %s",
-        (plant, month),
-    )
     actual_rows = {}
-    for row in cursor.fetchall():
+    for row in rp.plant_month_actual_items(cursor, plant, month):
         normalized = normalize_item_name(row[0], plant)
         actual_rows[normalized] = row[1]
 
@@ -4141,13 +4076,7 @@ async def get_conversion_data(fy_start: str = Query(...)):
     ]
     conn = db.connect()
     cur = conn.cursor()
-    phs = ",".join("%s" for _ in months)
-    cur.execute(
-        f"SELECT report_month, month_actual FROM production_table "
-        f"WHERE plant_name='SAIL' AND item_name='Conversion' AND report_month IN ({phs})",
-        months,
-    )
-    data = {r[0]: r[1] for r in cur.fetchall()}
+    data = {r[0]: r[1] for r in rp.sail_conversion_by_month(cur, months)}
     conn.close()
     return {"data": {m: data.get(m) for m in months}}
 
@@ -4458,15 +4387,8 @@ async def list_production_fys():
     Response: { fys: [{"fy_start": 2026, "label": "2026-27"}, ...] } (newest first)"""
     conn = db.connect()
     cur = conn.cursor()
-    cur.execute("""
-        SELECT DISTINCT report_month FROM production_table
-        WHERE report_month REGEXP '^[0-9][0-9][0-9][0-9]-[0-9][0-9]$'
-        UNION
-        SELECT DISTINCT report_month FROM production_plan_table
-        WHERE report_month REGEXP '^[0-9][0-9][0-9][0-9]-[0-9][0-9]$'
-    """)
     fy_starts = set()
-    for (m,) in cur.fetchall():
+    for (m,) in rp.production_report_months(cur):
         year, month = int(m[:4]), int(m[5:7])
         fy_starts.add(year if month >= 4 else year - 1)
     conn.close()
@@ -4525,19 +4447,13 @@ def _production_fy_data(fy_start: int) -> dict:
     Excel/PDF export endpoints below."""
     months = [f"{fy_start}-{m:02d}" for m in range(4, 13)] + \
              [f"{fy_start + 1}-{m:02d}" for m in range(1, 4)]
-    phs = ",".join("%s" for _ in months)
 
     conn = db.connect()
     cur = conn.cursor()
     # data[plant][item] = {"actual": {month: val}, "plan": {month: val}}
     data = {}
-    for table, key in (("production_table", "actual"), ("production_plan_table", "plan")):
-        cur.execute(
-            f"SELECT plant_name, item_name, report_month, month_actual FROM {table} "
-            f"WHERE report_month IN ({phs}) AND plant_name != 'plant_name'",
-            months,
-        )
-        for plant, item, month, value in cur.fetchall():
+    for measure, key in (("actual", "actual"), ("abp", "plan")):
+        for plant, item, month, value in rp.fy_rows_excluding_header(cur, measure, months):
             item = normalize_item_name(item, plant)
             entry = data.setdefault(plant, {}).setdefault(item, {"actual": {}, "plan": {}})
             entry[key][month] = value
@@ -5002,17 +4918,8 @@ async def production_query_meta():
     Response: { plants: [...], months: ["2026-06", ...] } (months newest first)"""
     conn = db.connect()
     cur = conn.cursor()
-    cur.execute("""
-        SELECT plant_name, report_month FROM production_table
-        WHERE report_month REGEXP '^[0-9][0-9][0-9][0-9]-[0-9][0-9]$'
-          AND plant_name != 'plant_name'
-        UNION
-        SELECT plant_name, report_month FROM production_plan_table
-        WHERE report_month REGEXP '^[0-9][0-9][0-9][0-9]-[0-9][0-9]$'
-          AND plant_name != 'plant_name'
-    """)
     plants, months = set(), set()
-    for plant, month in cur.fetchall():
+    for plant, month in rp.production_plants_and_months(cur):
         plants.add(plant)
         months.add(month)
     conn.close()
@@ -5040,12 +4947,9 @@ async def production_query_items(plants: str = Query(...)):
     items = {}
     for plant in plant_list:
         names = set()
-        for table in ("production_table", "production_plan_table"):
-            cur.execute(
-                f"SELECT DISTINCT item_name FROM {table} WHERE plant_name = %s",
-                (plant,),
-            )
-            names.update(normalize_item_name(r[0], plant) for r in cur.fetchall())
+        for measure in ("actual", "abp"):
+            names.update(normalize_item_name(r[0], plant)
+                         for r in rp.distinct_items(cur, measure, plant))
         items[plant] = sorted(names, key=production_item_sort_key)
     conn.close()
     return {"items": items}
@@ -5098,19 +5002,12 @@ def _production_query_data(start: str, end: str, units: list) -> dict:
 
     if wanted and months:
         query_plants = sorted(set(plant_set) | (set(SAIL_MEMBER_PLANTS) if sail_items else set()))
-        phs_m = ",".join("%s" for _ in months)
-        phs_p = ",".join("%s" for _ in query_plants)
         alias_plan = {k: {} for k in index if k in PLAN_SOURCE_ALIASES}
         member_sums = {"actual": {}, "plan": {}}  # {(item, month): sum over 5 plants}
         conn = db.connect()
         cur = conn.cursor()
-        for table, key in (("production_table", "actual"), ("production_plan_table", "plan")):
-            cur.execute(
-                f"SELECT plant_name, item_name, report_month, month_actual FROM {table} "
-                f"WHERE report_month IN ({phs_m}) AND plant_name IN ({phs_p})",
-                months + query_plants,
-            )
-            for plant, item, month, value in cur.fetchall():
+        for measure, key in (("actual", "actual"), ("abp", "plan")):
+            for plant, item, month, value in rp.rows_for_months_plants(cur, measure, months, query_plants):
                 norm = normalize_item_name(item, plant)
                 s = index.get((plant, norm))
                 if s is not None and value is not None:
@@ -5910,9 +5807,7 @@ def _latest_report_month() -> str:
     import datetime as _dt
     conn = db.connect()
     cur = conn.cursor()
-    cur.execute("SELECT MAX(report_month) FROM production_table "
-                "WHERE report_month REGEXP '^[0-9][0-9][0-9][0-9]-[0-9][0-9]$'")
-    row = cur.fetchone()
+    row = rp.latest_actual_month(cur)
     conn.close()
     return (row[0] if row and row[0] else _dt.date.today().strftime("%Y-%m"))
 
@@ -7577,25 +7472,10 @@ async def recalculate_sail_weighted(payload: dict):
         cur = conn.cursor()
 
         # Fetch HM production targets by plant (for BF params)
-        ph = ",".join(["%s"] * len(months))
-        cur.execute(f"""
-            SELECT plant_name, SUM(month_actual)
-            FROM production_plan_table
-            WHERE report_month IN ({ph}) AND item_name = 'Hot Metal'
-              AND plant_name IN ('BSP','DSP','RSP','BSL','ISP')
-            GROUP BY plant_name
-        """, months)
-        hm_weights = {row[0]: row[1] for row in cur.fetchall() if row[1]}
+        hm_weights = {row[0]: row[1] for row in rp.plan_hm_by_plant(cur, months) if row[1]}
 
         # Fetch CS production targets by plant (for SMS params)
-        cur.execute(f"""
-            SELECT plant_name, SUM(month_actual)
-            FROM production_plan_table
-            WHERE report_month IN ({ph}) AND item_name = 'Total Crude Steel'
-              AND plant_name IN ('BSP','DSP','RSP','BSL','ISP')
-            GROUP BY plant_name
-        """, months)
-        cs_weights = {row[0]: row[1] for row in cur.fetchall() if row[1]}
+        cs_weights = {row[0]: row[1] for row in rp.plan_crude_steel_by_plant(cur, months) if row[1]}
 
         # Simple weighted average for all SMS shops
         # SAIL = Σ(Shop_Value × Shop_Production) / Σ(Shop_Production)
@@ -7610,13 +7490,7 @@ async def recalculate_sail_weighted(payload: dict):
         # Fetch SMS-wise Crude Steel production for each shop
         # Query SMS items grouped by plant and SMS identifier
         # Items are named: "SMS-2 BLOOM", "SMS-2 SLAB", "SMS-3 BILLET105", etc.
-        cur.execute(f"""
-            SELECT plant_name, item_name, SUM(month_actual)
-            FROM production_plan_table
-            WHERE report_month IN ({ph})
-              AND item_name LIKE '%%SMS%%'
-            GROUP BY plant_name, item_name
-        """, months)
+        _sms_rows = rp.plan_sms_items_by_plant(cur, months)
 
         # Build SMS-wise production totals: {(plant, sms_id): total_cs_production}
         # Some plants (BSP) report BOTH a shop-total item ("SMS-2") AND its own
@@ -7628,7 +7502,7 @@ async def recalculate_sail_weighted(payload: dict):
         # item, which the sum reduces to trivially).
         _exact_items = {}
         _by_sms_id = {}
-        for plant_name, item_name, cs_prod in cur.fetchall():
+        for plant_name, item_name, cs_prod in _sms_rows:
             cs_prod = cs_prod or 0
             _exact_items[(plant_name, item_name)] = cs_prod
             # Extract SMS identifier from item_name (e.g., "SMS-2 BLOOM" → "SMS-2")
@@ -8005,17 +7879,9 @@ async def get_techno_summary(fy: str = Query("2026-27")):
             [f"{fy_year}-{m:02d}" for m in range(4, 13)] +
             [f"{fy_year + 1}-{m:02d}" for m in range(1, 4)]
         )
-        ph = ",".join(["%s"] * len(months))
 
         # HM production by plant
-        cur.execute(f"""
-            SELECT plant_name, SUM(month_actual)
-            FROM production_plan_table
-            WHERE report_month IN ({ph}) AND item_name = 'Hot Metal'
-              AND plant_name IN ('BSP','DSP','RSP','BSL','ISP')
-            GROUP BY plant_name
-        """, months)
-        hm_weights = {row[0]: row[1] for row in cur.fetchall()}
+        hm_weights = {row[0]: row[1] for row in rp.plan_hm_by_plant(cur, months)}
 
         # CS production by plant and SMS shop
         shop_to_plant = {
@@ -8029,14 +7895,7 @@ async def get_techno_summary(fy: str = Query("2026-27")):
         for shop, plant in shop_to_plant.items():
             shop_parts = shop.split()
             sms_identifier = " ".join(shop_parts[1:]) if len(shop_parts) > 1 else shop
-            cur.execute(f"""
-                SELECT SUM(month_actual)
-                FROM production_plan_table
-                WHERE report_month IN ({ph})
-                  AND (item_name = %s OR item_name LIKE %s)
-                  AND plant_name = %s
-            """, months + [sms_identifier, sms_identifier + " %", plant])
-            result = cur.fetchone()
+            result = rp.plan_sms_shop_sum(cur, months, sms_identifier, plant)
             weight = result[0] if result and result[0] else None
             if weight is None:
                 # ISP's production items are named "SMS CCM-1&2"/"SMS CCM-3" —
@@ -8045,14 +7904,7 @@ async def get_techno_summary(fy: str = Query("2026-27")):
                 # back to summing all of its "SMS%" production items.
                 plant_shops = [s for s, p in shop_to_plant.items() if p == plant]
                 if len(plant_shops) == 1:
-                    cur.execute(f"""
-                        SELECT SUM(month_actual)
-                        FROM production_plan_table
-                        WHERE report_month IN ({ph})
-                          AND item_name LIKE 'SMS%%'
-                          AND plant_name = %s
-                    """, months + [plant])
-                    fallback = cur.fetchone()
+                    fallback = rp.plan_all_sms_sum(cur, months, plant)
                     weight = fallback[0] if fallback and fallback[0] else 0
             shop_cs_weights[shop] = weight or 0
 

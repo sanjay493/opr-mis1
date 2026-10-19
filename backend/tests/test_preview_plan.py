@@ -92,3 +92,22 @@ def test_preview_plan_bad_file_is_400_and_writes_nothing(tc):
     r = _post(tc, plant="BSL")       # BSL needs a 'PLAN SUMMARY' sheet
     assert r.status_code in (400, 500)
     assert _plan_rows() == before
+
+
+def test_plan_preview_cleanup_failure_does_not_mask_extractor_error(tc):
+    # The extractor fails AND leaves the shared connection unusable, so the
+    # DROP TEMPORARY TABLE and the rollback in the cleanup fail too. The
+    # caller must still see the extractor's own exception.
+    import dbengine
+    from repo import production as rp
+
+    class ExtractorBroke(Exception):
+        pass
+
+    def run():
+        dbengine._shared_raw.get().close()
+        raise ExtractorBroke("extractor failed")
+
+    with pytest.raises(ExtractorBroke):
+        rp.plan_preview_rows(run)
+    assert _plan_rows() == [tuple(r) for r in SEED]

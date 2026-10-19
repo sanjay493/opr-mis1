@@ -457,3 +457,331 @@ def enrich_rows_with_db_production(rows: List[Dict[str, Any]], plant: str, repor
         rm = r.get("report_month") or report_month
         r["db_value"] = current.get((rm, item)) if item else None
     return rows
+
+
+
+# ── Cursor-level helpers ────────────────────────────────────────────────────
+# These run on the caller's cursor so they join the caller's transaction and
+# return rows in the caller's row type (tuple or Row). Used where a caller
+# mixes production SQL with other statements on one connection.
+
+_UPSERT_ROW_SQL = """
+    INSERT INTO {table} (report_month, plant_name, item_name, month_actual)
+    VALUES (%s, %s, %s, %s)
+    AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
+"""
+
+
+def upsert_row(cur, measure: Measure, month, plant, item, value) -> None:
+    """Insert or update one (month, plant, item) value on `cur`."""
+    cur.execute(_UPSERT_ROW_SQL.format(table=_table(measure)), (month, plant, item, value))
+
+
+def upsert_rows(cur, measure: Measure, rows) -> None:
+    """executemany form of upsert_row on `cur` (rows of (month, plant, item, value))."""
+    cur.executemany(_UPSERT_ROW_SQL.format(table=_table(measure)), rows)
+
+
+def delete_row(cur, measure: Measure, month, plant, item) -> None:
+    """Delete one (month, plant, item) row on `cur`."""
+    cur.execute(f"DELETE FROM {_table(measure)} "
+                "WHERE report_month=%s AND plant_name=%s AND item_name=%s",
+                (month, plant, item))
+
+
+def value_row(cur, measure: Measure, month, plant, item):
+    """fetchone() of `SELECT month_actual` for one (month, plant, item)."""
+    cur.execute(f"SELECT month_actual FROM {_table(measure)} "
+                "WHERE report_month=%s AND plant_name=%s AND item_name=%s",
+                (month, plant, item))
+    return cur.fetchone()
+
+
+# ── main.py ─────────────────────────────────────────────────────────────────
+
+def month_has_actual_and_plan(cursor, month):
+    """(has_actuals, has_plans) for a report month."""
+    cursor.execute("SELECT COUNT(*) FROM production_table WHERE report_month = %s", (month,))
+    has_actuals = cursor.fetchone()[0] > 0
+    cursor.execute("SELECT COUNT(*) FROM production_plan_table WHERE report_month = %s", (month,))
+    has_plans = cursor.fetchone()[0] > 0
+    return has_actuals, has_plans
+
+
+def ssp_despatch_basis(cur, month):
+    """(Saleable Steel Despatch, Finished Carbon Steel Despatch) for SSP, '000 t."""
+    cur.execute("""
+        SELECT month_actual FROM production_table
+        WHERE report_month=%s AND plant_name='SSP' AND item_name='Saleable Steel Despatch'
+    """, (month,))
+    row = cur.fetchone()
+    saleable_000t = row[0] if row else None
+
+    cur.execute("""
+        SELECT month_actual FROM production_table
+        WHERE report_month=%s AND plant_name='SSP' AND item_name='Finished Carbon Steel Despatch'
+    """, (month,))
+    row = cur.fetchone()
+    carbon_000t = row[0] if row else None
+    return saleable_000t, carbon_000t
+
+
+def plan_preview_rows(run_extractor):
+    """Dry-run a plan extractor and return the production_plan_table rows it
+    wrote, as (plant_name, item_name, report_month, month_actual) Rows sorted
+    in binary (code point) order.
+
+    The extractors write production_plan_table and commit on their own
+    db.connect() connections. Inside repo.conn.rollback_tx() all of those
+    connections are this one connection, whose commits are no-ops and which
+    is rolled back and closed at the end. A session TEMPORARY TABLE named
+    production_plan_table shadows the real table on that connection, so the
+    extractor writes into an empty private copy (exactly the rows it
+    produced; no locks on the real table) and nothing reaches the real table.
+
+    `run_extractor()` runs the extractor; its exception propagates unchanged.
+    """
+    import logging
+    log = logging.getLogger(__name__)
+    with rc.rollback_tx() as cur:
+        # (LIKE cannot name the table it shadows, hence the rename.)
+        # The ALTER must stay the first statement on this connection: ALTER
+        # TABLE commits implicitly, which is harmless only while the shared
+        # transaction is still empty (the extractor hasn't written yet).
+        cur.execute("CREATE TEMPORARY TABLE _plan_preview LIKE production_plan_table")
+        cur.execute("ALTER TABLE _plan_preview RENAME TO production_plan_table")
+        try:
+            run_extractor()
+            cur.execute(
+                "SELECT plant_name, item_name, report_month, month_actual "
+                "FROM production_plan_table"
+            )
+            # Sorted in Python: binary (code point) order, as the old preview
+            # gave; MySQL's collation would sort case-insensitively.
+            return sorted(cur.fetchall(), key=lambda r: (r[0], r[1], r[2]))
+        finally:
+            # Never let cleanup mask the extractor's own exception.
+            try:
+                cur.execute("DROP TEMPORARY TABLE IF EXISTS production_plan_table")
+            except Exception:  # noqa: BLE001
+                log.exception("plan preview: dropping the temporary production_plan_table failed")
+
+
+def bsl_bf_shop_production_sum(cur, month):
+    """SUM of BSL's four furnaces' month production ('000 t) for a month."""
+    return cur.execute(
+        "SELECT SUM(month_actual) FROM production_table WHERE plant_name='BSL' "
+        "AND report_month=%s AND item_name IN ('BF-1','BF-2','BF-4','BF-5')",
+        (month,),
+    ).fetchone()[0]
+
+
+def upsert_bsl_furnace_production(cur, month, unit, value):
+    cur.execute(
+        """INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
+           VALUES (%s, 'BSL', %s, %s)
+           AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual""",
+        (month, unit, value),
+    )
+
+
+def distinct_actual_items(cursor, plant):
+    """fetchall() of DISTINCT item_name in production_table for a plant."""
+    cursor.execute(
+        "SELECT DISTINCT item_name FROM production_table WHERE plant_name = %s",
+        (plant,)
+    )
+    return cursor.fetchall()
+
+
+def plant_month_plan_items(cursor, plant, month):
+    cursor.execute(
+        "SELECT item_name, month_actual FROM production_plan_table WHERE plant_name = %s AND report_month = %s ORDER BY item_name",
+        (plant, month),
+    )
+    return cursor.fetchall()
+
+
+def plant_month_actual_items(cursor, plant, month):
+    cursor.execute(
+        "SELECT item_name, month_actual FROM production_table WHERE plant_name = %s AND report_month = %s",
+        (plant, month),
+    )
+    return cursor.fetchall()
+
+
+def sail_conversion_by_month(cur, months):
+    phs = ",".join("%s" for _ in months)
+    cur.execute(
+        f"SELECT report_month, month_actual FROM production_table "
+        f"WHERE plant_name='SAIL' AND item_name='Conversion' AND report_month IN ({phs})",
+        months,
+    )
+    return cur.fetchall()
+
+
+def production_report_months(cur):
+    """fetchall() of DISTINCT well-formed report_months in actual UNION plan."""
+    cur.execute("""
+        SELECT DISTINCT report_month FROM production_table
+        WHERE report_month REGEXP '^[0-9][0-9][0-9][0-9]-[0-9][0-9]$'
+        UNION
+        SELECT DISTINCT report_month FROM production_plan_table
+        WHERE report_month REGEXP '^[0-9][0-9][0-9][0-9]-[0-9][0-9]$'
+    """)
+    return cur.fetchall()
+
+
+def fy_rows_excluding_header(cur, measure: Measure, months):
+    """(plant_name, item_name, report_month, month_actual) for `months`,
+    skipping the stray 'plant_name' header row."""
+    phs = ",".join("%s" for _ in months)
+    cur.execute(
+        f"SELECT plant_name, item_name, report_month, month_actual FROM {_table(measure)} "
+        f"WHERE report_month IN ({phs}) AND plant_name != 'plant_name'",
+        months,
+    )
+    return cur.fetchall()
+
+
+def production_plants_and_months(cur):
+    cur.execute("""
+        SELECT plant_name, report_month FROM production_table
+        WHERE report_month REGEXP '^[0-9][0-9][0-9][0-9]-[0-9][0-9]$'
+          AND plant_name != 'plant_name'
+        UNION
+        SELECT plant_name, report_month FROM production_plan_table
+        WHERE report_month REGEXP '^[0-9][0-9][0-9][0-9]-[0-9][0-9]$'
+          AND plant_name != 'plant_name'
+    """)
+    return cur.fetchall()
+
+
+def distinct_items(cur, measure: Measure, plant):
+    """fetchall() of DISTINCT item_name for a plant in the measure's table."""
+    cur.execute(
+        f"SELECT DISTINCT item_name FROM {_table(measure)} WHERE plant_name = %s",
+        (plant,),
+    )
+    return cur.fetchall()
+
+
+def rows_for_months_plants(cur, measure: Measure, months, plants):
+    """(plant_name, item_name, report_month, month_actual) for months x plants."""
+    phs_m = ",".join("%s" for _ in months)
+    phs_p = ",".join("%s" for _ in plants)
+    cur.execute(
+        f"SELECT plant_name, item_name, report_month, month_actual FROM {_table(measure)} "
+        f"WHERE report_month IN ({phs_m}) AND plant_name IN ({phs_p})",
+        months + plants,
+    )
+    return cur.fetchall()
+
+
+def latest_actual_month(cur):
+    """fetchone() of MAX(well-formed report_month) in production_table."""
+    cur.execute("SELECT MAX(report_month) FROM production_table "
+                "WHERE report_month REGEXP '^[0-9][0-9][0-9][0-9]-[0-9][0-9]$'")
+    return cur.fetchone()
+
+
+def plan_hm_by_plant(cur, months):
+    """fetchall() of (plant_name, SUM ABP Hot Metal) over months, 5 ISPs."""
+    ph = ",".join(["%s"] * len(months))
+    cur.execute(f"""
+            SELECT plant_name, SUM(month_actual)
+            FROM production_plan_table
+            WHERE report_month IN ({ph}) AND item_name = 'Hot Metal'
+              AND plant_name IN ('BSP','DSP','RSP','BSL','ISP')
+            GROUP BY plant_name
+        """, months)
+    return cur.fetchall()
+
+
+def plan_crude_steel_by_plant(cur, months):
+    """fetchall() of (plant_name, SUM ABP Total Crude Steel) over months, 5 ISPs."""
+    ph = ",".join(["%s"] * len(months))
+    cur.execute(f"""
+            SELECT plant_name, SUM(month_actual)
+            FROM production_plan_table
+            WHERE report_month IN ({ph}) AND item_name = 'Total Crude Steel'
+              AND plant_name IN ('BSP','DSP','RSP','BSL','ISP')
+            GROUP BY plant_name
+        """, months)
+    return cur.fetchall()
+
+
+def plan_sms_items_by_plant(cur, months):
+    """fetchall() of (plant_name, item_name, SUM ABP) for items LIKE '%SMS%'."""
+    ph = ",".join(["%s"] * len(months))
+    cur.execute(f"""
+            SELECT plant_name, item_name, SUM(month_actual)
+            FROM production_plan_table
+            WHERE report_month IN ({ph})
+              AND item_name LIKE '%%SMS%%'
+            GROUP BY plant_name, item_name
+        """, months)
+    return cur.fetchall()
+
+
+def plan_sms_shop_sum(cur, months, sms_identifier, plant):
+    """fetchone() of the ABP SUM for an SMS shop's exact or prefixed items."""
+    ph = ",".join(["%s"] * len(months))
+    cur.execute(f"""
+                SELECT SUM(month_actual)
+                FROM production_plan_table
+                WHERE report_month IN ({ph})
+                  AND (item_name = %s OR item_name LIKE %s)
+                  AND plant_name = %s
+            """, months + [sms_identifier, sms_identifier + " %", plant])
+    return cur.fetchone()
+
+
+def plan_all_sms_sum(cur, months, plant):
+    """fetchone() of the ABP SUM of a plant's items LIKE 'SMS%'."""
+    ph = ",".join(["%s"] * len(months))
+    cur.execute(f"""
+                        SELECT SUM(month_actual)
+                        FROM production_plan_table
+                        WHERE report_month IN ({ph})
+                          AND item_name LIKE 'SMS%%'
+                          AND plant_name = %s
+                    """, months + [plant])
+    return cur.fetchone()
+
+
+# ── api_*.py ────────────────────────────────────────────────────────────────
+
+def plant_item_value_row(cur, measure: Measure, plant, item_name, month):
+    """fetchone() of month_actual for one plant/item/month (api_production_loss)."""
+    return cur.execute(
+        f"SELECT month_actual FROM {_table(measure)} WHERE plant_name=%s AND item_name=%s AND report_month=%s",
+        (plant, item_name, month),
+    ).fetchone()
+
+
+def actual_history(cur, plant, item_name, start, end):
+    """fetchall() of (report_month, month_actual) with start <= month < end."""
+    return cur.execute("""SELECT report_month, month_actual FROM production_table
+                               WHERE plant_name=%s AND item_name=%s AND report_month>=%s AND report_month<%s""",
+                       (plant, item_name, start, end)).fetchall()
+
+
+def hot_metal_by_plant(cur, report_month, months=None):
+    """fetchall() of (plant_name, Hot Metal actual): the month's value, or
+    SUM over `months` (YTD) when months is given."""
+    if months is not None:
+        ph = ",".join(["%s"] * len(months))
+        cur.execute(
+            f"SELECT plant_name, SUM(month_actual) FROM production_table "
+            f"WHERE report_month IN ({ph}) AND item_name='Hot Metal' "
+            f"GROUP BY plant_name",
+            months,
+        )
+    else:
+        cur.execute(
+            "SELECT plant_name, month_actual FROM production_table "
+            "WHERE report_month=%s AND item_name='Hot Metal'",
+            [report_month],
+        )
+    return cur.fetchall()
