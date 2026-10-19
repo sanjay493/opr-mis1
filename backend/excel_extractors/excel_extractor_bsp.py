@@ -655,7 +655,6 @@ def extract_and_save_excel(file_path: str, report_month: str = None,
         import sys
         sys.path.insert(0, os.path.dirname(__file__))
         import db as _db
-        from repo import production as rp
         _db.log_extraction(
             plant="BSP", report_month=db_report_month,
             file_name=source_file_name, sheet_name="S1",

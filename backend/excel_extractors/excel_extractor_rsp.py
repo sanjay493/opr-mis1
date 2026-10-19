@@ -1250,7 +1250,6 @@ def _rsp_ss_grade_case_map(db_month: str) -> dict:
     the spelling already on record instead of letting it read as a new grade —
     see the caller in _extract_rsp_ss_preview for what breaks otherwise."""
     import db as _db
-    from repo import production as rp
     try:
         conn = _db.connect()
         cur = conn.cursor()
@@ -1381,7 +1380,6 @@ def _extract_rsp_ss_preview(wb, report_month: str) -> dict:
 def _save_rsp_special_steel(wb, report_month: str, source_file_name: str) -> bool:
     """Persist RSP special steel rows to special_steel_orders."""
     import db as _db
-    from repo import production as rp
     result  = _extract_rsp_ss_preview(wb, report_month)
     db_month = result["month"]
     saved = 0

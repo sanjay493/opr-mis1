@@ -6,7 +6,6 @@ each test.
 """
 
 import threading
-import time
 
 import pytest
 
@@ -135,9 +134,10 @@ def test_stale_idle_connection_is_replaced(fake_pool, monkeypatch):
     raw = c._conn
     c.close()
     raw.ping_ok = False
-    # Make the pooled connection look idle past the ping threshold.
-    monkeypatch.setattr(dbengine, "_POOL_PING_AFTER", 0.0)
-    time.sleep(0.01)
+    # Make the pooled connection look idle past the ping threshold. A negative
+    # threshold always forces the ping: time.monotonic() on Windows ticks only
+    # every ~15.6 ms, so "elapsed > 0.0" after a short sleep was flaky.
+    monkeypatch.setattr(dbengine, "_POOL_PING_AFTER", -1.0)
     c2 = dbengine._mysql_connect()
     assert c2._conn is not raw
     assert raw.closed
