@@ -73,3 +73,11 @@ def test_cli_exit_code(tmp_path, capsys):
     _write(tmp_path / "b", "x.json", {"v": 2})
     assert main([str(tmp_path / "a"), str(tmp_path / "b")]) == 1
     assert "x.json" in capsys.readouterr().out
+
+
+def test_diff_ignores_summary_file(tmp_path):
+    _write(tmp_path / "a", "x.json", {"v": 1})
+    _write(tmp_path / "b", "x.json", {"v": 1})
+    _write(tmp_path / "a", "_summary.json", {"status_counts": {"200": 1}})
+    _write(tmp_path / "b", "_summary.json", {"status_counts": {"200": 2}})
+    assert diff(tmp_path / "a", tmp_path / "b") == []

@@ -65,6 +65,11 @@ SKIPPED_ENDPOINTS = {
     "/api/techno/manual/cumulative-preview": "needs a param_key and live input values",
     "/api/techno/manual/param-history": "needs a unit and param_key",
     "/api/secretary-review/default-text": "needs a block id; covered by /api/secretary-review/context",
+    "/api/production-query/excel": "POST; needs a user-chosen plant/unit list; the data is served by the GET production endpoints",
+    "/api/techno-table-export/excel": "POST echoes a table the browser built; reads nothing from the DB",
+    "/api/bd-cr-log/excel": "POST echoes a log the browser built; reads nothing from the DB",
+    "/api/upload-excel, /api/upload-excel-plan, /api/rake-detention/extract-pdf": "POST uploads: write to the DB",
+    "POST */pdf, /api/generate-pdf*": "POST PDF renders; the full report PDF is covered by report.pdf.txt for the pdf months",
     "*/pdf": "PDF-only twin of a JSON/xlsx endpoint (data covered there); rendering is covered by report.pdf",
     "/api/board-note/annexures (fmt=pdf)": "the xlsx variant is snapshotted; rendering is covered by report.pdf",
 }
@@ -84,12 +89,32 @@ _DYNAMIC_PARAMS = {"mine_code", "bf_id"}
 # Optional params pinned to a single non-default value for specific routes.
 # A value may be a callable(month) -> dict for month-dependent pins.
 FIXED_PARAMS = {
-    # start_mon/end_mon are FY-order month indexes 1..12 (1 = April).
-    "/api/best-period-records": lambda m: {"start_mon": 1, "end_mon": (int(m[5:7]) - 4) % 12 + 1},
+    # start_mon/end_mon are calendar month numbers read within the Apr->Mar
+    # financial year (page_records.generate_best_period): April up to the
+    # report month is always a valid window, including Jan-Mar.
+    "/api/best-period-records": lambda m: {"start_mon": 4, "end_mon": int(m[5:7])},
     "/api/board-note/annexures": {"fmt": "xlsx", "annex": "all"},
     "/api/production-query-items": {"plants": "BSP,DSP,RSP,BSL,ISP"},
 }
 _MONTH_FIXED = {"/api/best-period-records"}
+
+# POST-only exports that only read the DB (checked: no INSERT/UPDATE/DELETE or
+# commit on their render path; secretary_review_text save/unlink are separate
+# routes). Each is driven once per month with a payload built from the month.
+# (path, payload(month, ctx) -> dict)
+POST_EXPORTS = [
+    ("/api/secretary-review/pptx", lambda m, c: {"month": m}),
+    ("/api/techno-custom-standard/excel", lambda m, c: {"month": m}),
+    ("/api/techno-custom-period/excel",
+     lambda m, c: {"plants": ["BSP", "DSP", "RSP", "BSL", "ISP", "SAIL"],
+                   "periods": [{"label": m, "months": [m]}]}),
+    ("/api/bf-benchmark/excel", lambda m, c: {"sail_bf_keys": c["sail_bf_keys"], "months": [m]}),
+    ("/api/techno-bf-furnace/excel",
+     lambda m, c: {"furnaces": c["furnace_keys"], "mode": "range", "start_month": m, "end_month": m}),
+]
+
+# Report-PDF polling gives up after this long.
+PDF_TIMEOUT_SECONDS = 30 * 60
 
 # FY-keyed routes that take about a minute per call (Word/annexure builds): run
 # only for the FYs of the PDF months and the FY before, not for every FY seen.
@@ -359,7 +384,10 @@ def _full_report_pdf(client, month: str) -> str:
     start = client.post("/api/generate-pdf/start", json={"month": month, "pages": pages, "full_export": True})
     start.raise_for_status()
     job = start.json()["job_id"]
+    deadline = time.time() + PDF_TIMEOUT_SECONDS
     while True:
+        if time.time() > deadline:
+            raise TimeoutError(f"report PDF for {month} not finished after {PDF_TIMEOUT_SECONDS // 60} minutes (job {job})")
         time.sleep(4)
         st = client.get(f"/api/generate-pdf/status/{job}").json()
         if st["status"] == "error":
@@ -371,14 +399,53 @@ def _full_report_pdf(client, month: str) -> str:
     return _pdf_text(res.content)
 
 
-def snapshot(months: list, out_dir: Path, db_name: str, pdf_months=()) -> None:
+_FILE_RE = re.compile(r"(\.(xlsx|pptx|docx|pdf|html))?\.(json|txt)$")
+
+
+def summarise(out_dir: Path) -> dict:
+    """Status counts and always-failing endpoints, read from the files on disk
+    (so a partial regeneration still yields the summary of the whole snapshot).
+    Written to out_dir/_summary.json; parity_diff ignores that file."""
+    counts = {}
+    per_endpoint = {}   # endpoint -> {variant: [statuses]}
+    for f in sorted(Path(out_dir).rglob("*")):
+        if not f.is_file() or f.name in ("_summary.json", "report.pdf.txt"):
+            continue
+        data = f.read_bytes()
+        status = 200
+        if data.startswith(b'{"_detail"'):
+            m = re.search(rb'"_status":(\d+)', data[-400:])
+            status = int(m.group(1)) if m else 200
+        counts[str(status)] = counts.get(str(status), 0) + 1
+        stem = _FILE_RE.sub("", f.name)
+        per_endpoint.setdefault(stem.split("--")[0], {}).setdefault(stem, []).append(status)
+    always_endpoints = {}
+    always_variants = {}
+    for ep, variants in per_endpoint.items():
+        allst = [s for v in variants.values() for s in v]
+        if all(s >= 400 for s in allst):
+            always_endpoints[ep] = sorted(set(allst))
+            continue
+        for var, sts in variants.items():
+            if all(s >= 400 for s in sts):
+                always_variants[var] = sorted(set(sts))
+    summary = {"status_counts": dict(sorted(counts.items())),
+               "endpoints_failing_every_time": dict(sorted(always_endpoints.items())),
+               "variants_failing_every_time": dict(sorted(always_variants.items()))}
+    (Path(out_dir) / "_summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True), encoding="utf-8")
+    return summary
+
+
+def snapshot(months: list, out_dir: Path, db_name: str, pdf_months=(), only=None) -> None:
+    """`only`: restrict to these endpoint paths (GET or POST export), e.g. to
+    regenerate a few files in an existing snapshot."""
     out_dir = Path(out_dir)
     _select_database(db_name)
     from fastapi.testclient import TestClient
     import main
 
     t0 = time.time()
-    endpoints = [(p, ps) for p, ps in enumerate_get_endpoints(main.app) if not _is_skipped(p)]
+    endpoints = [(p, ps) for p, ps in enumerate_get_endpoints(main.app) if not _is_skipped(p) and (not only or p in only)]
     fys = sorted({fy_start_year(m) for m in months} | {fy_start_year(m) - 1 for m in months})
     slow_base = list(pdf_months) or [max(months)]
     slow_fys = sorted({fy_start_year(m) for m in slow_base} | {fy_start_year(m) - 1 for m in slow_base})
@@ -388,6 +455,10 @@ def snapshot(months: list, out_dir: Path, db_name: str, pdf_months=()) -> None:
     timings = {}
     with TestClient(main.app, raise_server_exceptions=False) as client:
         dynamic = _dynamic_values(client)
+        ctx = {
+            "sail_bf_keys": [f"{r['plant']}:{r['unit']}" for r in client.get("/api/bf-benchmark/sail-meta").json().get("sail_meta", [])],
+            "furnace_keys": client.get("/api/techno-bf-furnace/meta").json().get("furnace_keys", []),
+        }
         done_global = set()
         for month in months:
             for path, params in endpoints:
@@ -410,6 +481,15 @@ def snapshot(months: list, out_dir: Path, db_name: str, pdf_months=()) -> None:
                     drop = {n for n in call if n in _MONTH_PARAMS | _FY_START_MONTH_PARAMS} if scope == "month" else ()
                     _write(target / (slug(path, call, drop) + suffix), text)
                     written += 1
+        for month in months:
+            for path, make in POST_EXPORTS:
+                if only and path not in only:
+                    continue
+                resp = client.post(path, json=make(month, ctx))
+                calls += 1
+                suffix, text = _normalise(resp)
+                _write(out_dir / month / (slug(path, {}) + suffix), text)
+                written += 1
         for month in pdf_months:
             _write(out_dir / month / "report.pdf.txt", _full_report_pdf(client, month))
             written += 1
@@ -419,6 +499,14 @@ def snapshot(months: list, out_dir: Path, db_name: str, pdf_months=()) -> None:
     print("slowest endpoints (total seconds):")
     for p, secs in sorted(timings.items(), key=lambda kv: -kv[1])[:8]:
         print(f"  {secs:7.1f}s  {p}")
+    summary = summarise(out_dir)
+    print("status counts (all files in snapshot): " + ", ".join(f"{k}: {v}" for k, v in summary["status_counts"].items()))
+    print("endpoints returning 4xx/5xx every time:")
+    for ep, sts in summary["endpoints_failing_every_time"].items():
+        print(f"  {ep}: {sts}")
+    print("variants (plant etc.) returning 4xx/5xx every time:")
+    for ep, sts in summary["variants_failing_every_time"].items():
+        print(f"  {ep}: {sts}")
     skipped = dict(SKIPPED_ENDPOINTS)
     skipped.update({p: r for p, r in undriven.items() if p not in skipped})
     print("SKIPPED_ENDPOINTS:")
@@ -432,10 +520,12 @@ def main_cli(argv=None) -> int:
     ap.add_argument("--out", required=True, type=Path)
     ap.add_argument("--months", default=DEFAULT_MONTHS)
     ap.add_argument("--pdf-months", default=DEFAULT_PDF_MONTHS, help="months that also get the full report PDF text ('' for none)")
+    ap.add_argument("--only", default="", help="comma-separated endpoint paths to (re)generate; other files are left alone")
     a = ap.parse_args(argv)
     months = parse_months(a.months)
     pdf_months = parse_months(a.pdf_months)
-    snapshot(months, a.out, a.db, pdf_months=pdf_months)
+    only = {x.strip() for x in a.only.split(",") if x.strip()} or None
+    snapshot(months, a.out, a.db, pdf_months=pdf_months, only=only)
     return 0
 
 

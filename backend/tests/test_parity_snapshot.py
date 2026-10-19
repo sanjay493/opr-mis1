@@ -41,3 +41,40 @@ def test_slug_is_filesystem_safe_and_stable():
     s = ps.slug("/api/major-unit-daily/{plant_code}", {"plant_code": "BSP"})
     assert s == "api_major-unit-daily__plant_code--plant_code=BSP"
     assert ps.slug("/api/data", {"month": "2026-08"}, drop={"month"}) == "api_data"
+
+
+def test_best_period_window_is_valid_for_every_month():
+    # page_records.generate_best_period reads calendar months inside the Apr->Mar
+    # FY, so April..report-month must never run backwards (incl. Jan-Mar).
+    params = [("start_mon", "query", True), ("end_mon", "query", True)]
+
+    def pos(x):
+        return x - 4 if x >= 4 else x + 8
+
+    for mm in range(1, 13):
+        scope, calls = ps.expand_calls("/api/best-period-records", params, f"2026-{mm:02d}", [2026], {})
+        assert scope == "month" and len(calls) == 1
+        s, e = calls[0]["start_mon"], calls[0]["end_mon"]
+        assert s == 4 and e == mm and pos(e) >= pos(s)
+
+
+def test_post_exports_build_payloads():
+    ctx = {"sail_bf_keys": ["BSP:BF-8"], "furnace_keys": ["BSP:BF-8"]}
+    payloads = {p: make("2026-08", ctx) for p, make in ps.POST_EXPORTS}
+    assert payloads["/api/secretary-review/pptx"] == {"month": "2026-08"}
+    assert payloads["/api/bf-benchmark/excel"]["months"] == ["2026-08"]
+
+
+def test_summarise_counts_and_always_failing(tmp_path):
+    d = tmp_path / "2026-08"
+    d.mkdir()
+    (d / "api_a.json").write_text('{"x":1}')
+    (d / "api_b.json").write_text('{"_detail":"boom","_status":500}')
+    (d / "api_c--plant=BSP.json").write_text('{"x":1}')
+    (d / "api_c--plant=ASP.json").write_text('{"_detail":{"detail":"none"},"_status":404}')
+    (tmp_path / "report.pdf.txt").write_text("page")
+    s = ps.summarise(tmp_path)
+    assert s["status_counts"] == {"200": 2, "404": 1, "500": 1}
+    assert s["endpoints_failing_every_time"] == {"api_b": [500]}
+    assert s["variants_failing_every_time"] == {"api_c--plant=ASP": [404]}
+    assert (tmp_path / "_summary.json").exists()

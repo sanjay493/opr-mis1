@@ -18,6 +18,11 @@ VOLATILE_KEYS = {
     "generated_at",   # wall-clock stamp some payloads carry
 }
 
+# Files that describe a snapshot rather than being part of it. _summary.json is
+# derived from the other files (status counts), so any change in it already
+# shows up in the files it was built from.
+IGNORED_FILES = {"_summary.json"}
+
 _MAX_DIFFS_PER_FILE = 50
 
 
@@ -82,7 +87,7 @@ def _diff_text(pa: Path, pb: Path) -> list:
 
 
 def _files(root: Path) -> dict:
-    return {p.relative_to(root).as_posix(): p for p in sorted(root.rglob("*")) if p.is_file()}
+    return {p.relative_to(root).as_posix(): p for p in sorted(root.rglob("*")) if p.is_file() and p.name not in IGNORED_FILES}
 
 
 def diff(a: Path, b: Path) -> list:
