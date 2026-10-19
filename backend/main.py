@@ -18,6 +18,9 @@ import db
 import dbengine
 from repo import production as rp
 from repo import techno as rt
+from repo import special_steel as rss
+from repo import stock as rst
+from repo import ipt as ript
 from constants import ALL_PLANTS as _FS_SAIL_8
 from constants import PAGE_MODULES
 from models import PDFRequest, ProductionEntry, ProductionEntryRequest, ProductionRangeSaveRequest, SpecialSteelSaveRequest, SpecialSteelAbpSaveRequest, Page3NarrativeRequest, CostTrendAnnualSaveRequest, CostTrendMonthlySaveRequest, SailMinesSaveRequest, MinesProductionDespatchSaveRequest
@@ -2177,16 +2180,10 @@ def get_special_steel_manual(plant: str = Query(...), month: str = Query(...)):
     conn = db.connect()
     cur = conn.cursor()
     try:
-        cur.execute("""
-            SELECT product, quality_grade, section, sort_order, order_qty, actual_despatch
-            FROM special_steel_orders
-            WHERE report_month=%s AND plant_name=%s
-            ORDER BY sort_order ASC, product ASC, quality_grade ASC
-        """, (month, plant))
         rows = [
             {"product": r[0], "quality_grade": r[1], "section": r[2],
              "sort_order": r[3], "order_qty": r[4], "actual_despatch": r[5]}
-            for r in cur.fetchall()
+            for r in rss.manual_rows(cur, month, plant)
         ]
     finally:
         conn.close()
@@ -2246,14 +2243,9 @@ def get_special_steel_abp(financial_year: str = Query(...)):
     conn = db.connect()
     cur = conn.cursor()
     try:
-        ph = ",".join(["%s"] * len(months))
-        cur.execute(f"""
-            SELECT plant_name, report_month, abp_qty
-            FROM special_steel_abp_table
-            WHERE report_month IN ({ph})
-        """, tuple(months))
+        abp_rows = rss.abp_rows(cur, months)
         by_plant = {p: {} for p in SPECIAL_STEEL_ABP_PLANTS}
-        for plant_name, report_month, abp_qty in cur.fetchall():
+        for plant_name, report_month, abp_qty in abp_rows:
             by_plant.setdefault(plant_name, {})[report_month] = abp_qty
     finally:
         conn.close()
@@ -2268,11 +2260,7 @@ def save_special_steel_abp(request: SpecialSteelAbpSaveRequest):
     try:
         saved = 0
         for e in request.entries:
-            cur.execute("""
-                INSERT INTO special_steel_abp_table (report_month, plant_name, abp_qty)
-                VALUES (%s, %s, %s)
-                AS new ON DUPLICATE KEY UPDATE abp_qty = new.abp_qty
-            """, (e.report_month, e.plant_name, e.abp_qty))
+            rss.upsert_abp(cur, e.report_month, e.plant_name, e.abp_qty)
             saved += 1
         conn.commit()
     finally:
@@ -4576,21 +4564,13 @@ def _special_steel_fy_data(fy_start: int) -> dict:
     _production_fy_data's shape/conventions above."""
     months = [f"{fy_start}-{m:02d}" for m in range(4, 13)] + \
              [f"{fy_start + 1}-{m:02d}" for m in range(1, 4)]
-    phs = ",".join("%s" for _ in months)
-    plant_phs = ",".join("%s" for _ in SPECIAL_STEEL_FY_PLANTS)
-
     conn = db.connect()
     cur = conn.cursor()
     try:
         # data[plant][month] = {"order": val, "actual": val}
         data = {p: {m: {"order": None, "actual": None} for m in months} for p in SPECIAL_STEEL_FY_PLANTS}
-        cur.execute(f"""
-            SELECT plant_name, report_month, SUM(order_qty), SUM(actual_despatch)
-            FROM special_steel_orders
-            WHERE report_month IN ({phs}) AND plant_name IN ({plant_phs})
-            GROUP BY plant_name, report_month
-        """, (*months, *SPECIAL_STEEL_FY_PLANTS))
-        for plant, month, order_qty, actual_despatch in cur.fetchall():
+        for plant, month, order_qty, actual_despatch in rss.fy_plant_month_sums(
+                cur, months, SPECIAL_STEEL_FY_PLANTS):
             data[plant][month] = {"order": order_qty, "actual": actual_despatch}
 
         # SSPs carries no real order-book rows in special_steel_orders — its
@@ -4634,12 +4614,8 @@ async def list_special_steel_fys():
     Response: { fys: [{"fy_start": 2026, "label": "2026-27"}, ...] } (newest first)"""
     conn = db.connect()
     cur = conn.cursor()
-    cur.execute("""
-        SELECT DISTINCT report_month FROM special_steel_orders
-        WHERE report_month REGEXP '^[0-9][0-9][0-9][0-9]-[0-9][0-9]$'
-    """)
     fy_starts = set()
-    for (m,) in cur.fetchall():
+    for (m,) in rss.order_months(cur):
         year, month = int(m[:4]), int(m[5:7])
         fy_starts.add(year if month >= 4 else year - 1)
     conn.close()
@@ -4735,11 +4711,7 @@ async def sail_1page_confirm(payload: dict):
             data = r.get("data")
             if not item or not data or all(v is None for v in data.values()):
                 continue
-            cur.execute("""
-                INSERT INTO sail_sales_table (report_month, item_name, data_json)
-                VALUES (%s, %s, %s)
-                AS new ON DUPLICATE KEY UPDATE data_json = new.data_json
-            """, (month, item, json.dumps(data)))
+            rst.upsert_sales(cur, month, item, json.dumps(data))
             saved_sales += 1
 
         for r in payload.get("stock_rows", []):
@@ -4748,11 +4720,7 @@ async def sail_1page_confirm(payload: dict):
             val = r.get("value")
             if not item or not snap or val is None:
                 continue
-            cur.execute("""
-                INSERT INTO sail_stock_snapshot_table (snapshot_date, item_name, value)
-                VALUES (%s, %s, %s)
-                AS new ON DUPLICATE KEY UPDATE value = new.value
-            """, (snap, item, val))
+            rst.upsert_stock_snapshot(cur, snap, item, val)
             saved_stock += 1
 
         note = payload.get("sales_note")
@@ -5351,12 +5319,8 @@ async def get_stock_data(plant: str = Query(...), stock_month: str = Query(...))
     """Return all stock entries for a plant + stock_month."""
     conn = db.connect()
     cur = conn.cursor()
-    cur.execute(
-        "SELECT item_type, stock_type, stock FROM stock_table "
-        "WHERE plant_name=%s AND stock_month=%s ORDER BY item_type, stock_type",
-        (plant, stock_month),
-    )
-    rows = [{"item_type": r[0], "stock_type": r[1] or "", "stock": r[2]} for r in cur.fetchall()]
+    rows = [{"item_type": r[0], "stock_type": r[1] or "", "stock": r[2]}
+            for r in rst.plant_month_rows(cur, plant, stock_month)]
     conn.close()
     return {"plant": plant, "stock_month": stock_month, "data": rows}
 
@@ -5571,8 +5535,7 @@ def get_sail_sms_params(month: str = Query(..., description="YYYY-MM")):
 def get_ipt_items():
     conn = db.connect()
     cur  = conn.cursor()
-    cur.execute("SELECT DISTINCT item FROM ipt_table WHERE item IS NOT NULL AND item <> '' ORDER BY item")
-    items = [r[0] for r in cur.fetchall()]
+    items = [r[0] for r in ript.items(cur)]
     conn.close()
     return {"items": items}
 
@@ -5581,18 +5544,12 @@ def get_ipt_items():
 def get_ipt_entries(month: str = Query(..., description="YYYY-MM")):
     conn = db.connect()
     cur  = conn.cursor()
-    cur.execute("""
-        SELECT item, from_plant, to_plant, unit, sort_order,
-               plan, actual, plan_tonnage, actual_tonnage
-        FROM ipt_table WHERE report_month = %s
-        ORDER BY sort_order, item, from_plant, to_plant
-    """, (month,))
     rows = [
         {"item": r[0], "from_plant": r[1], "to_plant": r[2],
          "unit": r[3], "sort_order": r[4] if r[4] is not None else 0,
          "plan": r[5], "actual": r[6],
          "plan_tonnage": r[7], "actual_tonnage": r[8]}
-        for r in cur.fetchall()
+        for r in ript.entry_rows(cur, month)
     ]
     conn.close()
     return {"month": month, "rows": rows}
@@ -5716,26 +5673,14 @@ def _ipt_fy_data(fy_start: int) -> dict:
     financial year. Mirrors _special_steel_fy_data's shape/conventions."""
     months = [f"{fy_start}-{m:02d}" for m in range(4, 13)] + \
              [f"{fy_start + 1}-{m:02d}" for m in range(1, 4)]
-    phs = ",".join("%s" for _ in months)
-
     conn = db.connect()
     cur = conn.cursor()
     try:
         # union of routes seen across the FY, keeping first-appearance order
-        cur.execute(f"""
-            SELECT item, from_plant, to_plant, MAX(unit), MIN(sort_order)
-            FROM ipt_table
-            WHERE report_month IN ({phs})
-            GROUP BY item, from_plant, to_plant
-            ORDER BY MIN(sort_order), item, from_plant, to_plant
-        """, months)
-        routes = cur.fetchall()
+        routes = ript.routes(cur, months)
 
-        cur.execute(f"""
-            SELECT item, from_plant, to_plant, report_month, plan, actual
-            FROM ipt_table WHERE report_month IN ({phs})
-        """, months)
-        val_map = {(item, frm, to, rm): (plan, actual) for item, frm, to, rm, plan, actual in cur.fetchall()}
+        val_map = {(item, frm, to, rm): (plan, actual)
+                   for item, frm, to, rm, plan, actual in ript.plan_actual_rows(cur, months)}
     finally:
         conn.close()
 
@@ -5772,12 +5717,8 @@ async def list_ipt_fys():
     Response: { fys: [{"fy_start": 2026, "label": "2026-27"}, ...] } (newest first)"""
     conn = db.connect()
     cur = conn.cursor()
-    cur.execute("""
-        SELECT DISTINCT report_month FROM ipt_table
-        WHERE report_month REGEXP '^[0-9][0-9][0-9][0-9]-[0-9][0-9]$'
-    """)
     fy_starts = set()
-    for (m,) in cur.fetchall():
+    for (m,) in ript.report_months(cur):
         year, month = int(m[:4]), int(m[5:7])
         fy_starts.add(year if month >= 4 else year - 1)
     conn.close()

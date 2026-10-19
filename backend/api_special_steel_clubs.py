@@ -18,6 +18,7 @@ from pydantic import BaseModel
 
 import db as _db
 from page_special_steel import _auto_club_label
+from repo import special_steel as rss
 
 router = APIRouter(prefix="/api/special-steel", tags=["special-steel-clubs"])
 
@@ -49,11 +50,7 @@ async def list_products(plant: str = Query(...)):
         raise HTTPException(400, f"Grade clubbing isn't applicable for {plant}")
     conn = _db.connect()
     cur = conn.cursor()
-    cur.execute(
-        "SELECT DISTINCT product FROM special_steel_orders WHERE plant_name=%s ORDER BY product",
-        (plant,),
-    )
-    products = [r[0] for r in cur.fetchall()]
+    products = [r[0] for r in rss.products_for_plant(cur, plant)]
     conn.close()
     return {"plant": plant, "products": products}
 
@@ -65,19 +62,9 @@ async def list_grades(plant: str = Query(...), product: str = Query(...)):
     plant = plant.upper()
     conn = _db.connect()
     cur = conn.cursor()
-    cur.execute(
-        "SELECT DISTINCT quality_grade FROM special_steel_orders "
-        "WHERE plant_name=%s AND product=%s AND quality_grade != '' ORDER BY quality_grade",
-        (plant, product),
-    )
-    all_grades = [r[0] for r in cur.fetchall()]
+    all_grades = [r[0] for r in rss.grades_for_product(cur, plant, product)]
 
-    cur.execute(
-        "SELECT quality_grade, club_label FROM special_steel_grade_clubs "
-        "WHERE plant_name=%s AND product=%s",
-        (plant, product),
-    )
-    club_rows = cur.fetchall()
+    club_rows = rss.club_rows(cur, plant, product)
     conn.close()
 
     clubbed = {g for g, _ in club_rows}
@@ -108,11 +95,7 @@ async def create_club(body: ClubRequest):
     conn = _db.connect()
     cur = conn.cursor()
     for grade in grades:
-        cur.execute("""
-            INSERT INTO special_steel_grade_clubs (plant_name, product, quality_grade, club_label, created_at)
-            VALUES (%s, %s, %s, %s, %s)
-            AS new ON DUPLICATE KEY UPDATE club_label=new.club_label
-        """, (plant, body.product, grade, label, now))
+        rss.upsert_grade_club(cur, plant, body.product, grade, label, now)
     conn.commit()
     conn.close()
 
@@ -134,18 +117,11 @@ async def remove_from_club(body: UnclubRequest):
     cur = conn.cursor()
 
     if body.label:
-        cur.execute(
-            "SELECT quality_grade FROM special_steel_grade_clubs WHERE plant_name=%s AND product=%s AND club_label=%s",
-            (plant, body.product, body.label),
-        )
-        members = [r[0] for r in cur.fetchall()]
+        members = [r[0] for r in rss.club_member_rows(cur, plant, body.product, body.label)]
         if not members:
             conn.close()
             raise HTTPException(404, "That club doesn't exist")
-        cur.execute(
-            "DELETE FROM special_steel_grade_clubs WHERE plant_name=%s AND product=%s AND club_label=%s",
-            (plant, body.product, body.label),
-        )
+        rss.delete_club(cur, plant, body.product, body.label)
         conn.commit()
         conn.close()
         return {"status": "ok", "plant": plant, "product": body.product, "ungrouped": members}
@@ -154,31 +130,17 @@ async def remove_from_club(body: UnclubRequest):
         conn.close()
         raise HTTPException(400, "Provide either 'grade' or 'label'")
 
-    cur.execute(
-        "SELECT club_label FROM special_steel_grade_clubs WHERE plant_name=%s AND product=%s AND quality_grade=%s",
-        (plant, body.product, body.grade),
-    )
-    row = cur.fetchone()
+    row = rss.grade_club_row(cur, plant, body.product, body.grade)
     if row is None:
         conn.close()
         raise HTTPException(404, "That grade isn't currently clubbed")
     label = row[0]
 
-    cur.execute(
-        "DELETE FROM special_steel_grade_clubs WHERE plant_name=%s AND product=%s AND quality_grade=%s",
-        (plant, body.product, body.grade),
-    )
+    rss.delete_grade_club(cur, plant, body.product, body.grade)
 
-    cur.execute(
-        "SELECT quality_grade FROM special_steel_grade_clubs WHERE plant_name=%s AND product=%s AND club_label=%s",
-        (plant, body.product, label),
-    )
-    remaining = [r[0] for r in cur.fetchall()]
+    remaining = [r[0] for r in rss.club_member_rows(cur, plant, body.product, label)]
     if len(remaining) == 1:
-        cur.execute(
-            "DELETE FROM special_steel_grade_clubs WHERE plant_name=%s AND product=%s AND quality_grade=%s",
-            (plant, body.product, remaining[0]),
-        )
+        rss.delete_grade_club(cur, plant, body.product, remaining[0])
     conn.commit()
     conn.close()
 

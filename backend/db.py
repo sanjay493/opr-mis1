@@ -60,6 +60,21 @@ from repo.techno import (  # noqa: F401
     save_sail_techno_plan,
     list_techno_plan_fys,
 )
+# Special steel / stock / IPT SQL lives in repo/special_steel.py,
+# repo/stock.py and repo/ipt.py.
+from repo.special_steel import (  # noqa: F401
+    clear_special_steel_orders,
+    save_special_steel_entry,
+    get_ss_phys_perf,
+    save_ss_phys_meta,
+    save_ss_phys_perf,
+    get_ss_ipt_requirement,
+    list_ss_ipt_requirement_fys,
+    save_ss_ipt_requirement,
+    delete_ss_ipt_requirement,
+)
+from repo.stock import save_stock_entry  # noqa: F401
+from repo.ipt import save_ipt_entry, delete_ipt_entry  # noqa: F401
 
 
 def connect():
@@ -312,137 +327,6 @@ def save_steel_sales_highlights(month: str, month_items: list, ytd_items: list, 
     """, (month, json.dumps(month_items or []), json.dumps(ytd_items or []), updated_by or ""))
     conn.commit()
     conn.close()
-
-def clear_special_steel_orders(month: str, plant: str) -> int:
-    """Delete all special_steel_orders rows for a given month + plant.
-    Called once before a batch insert so stale grades/products don't linger."""
-    init_db()
-    conn = connect()
-    conn.row_factory = Row
-    old_rows = conn.execute(
-        "SELECT * FROM special_steel_orders WHERE report_month=%s AND plant_name=%s",
-        (month, plant),
-    )
-    olds = [dict(r) for r in old_rows.fetchall()]
-    conn.row_factory = None
-    cur = conn.execute(
-        "DELETE FROM special_steel_orders WHERE report_month=%s AND plant_name=%s",
-        (month, plant),
-    )
-    deleted = cur.rowcount
-    conn.commit()
-    conn.close()
-    for old in olds:
-        activity_context.record(
-            f"special_steel_orders/{plant}/{old.get('product')}/{old.get('quality_grade')}/{month}",
-            old, None,
-        )
-    return deleted
-
-
-def save_special_steel_entry(month: str, plant: str, product: str, quality_grade: str,
-                             sort_order: int = 0, order_qty: Optional[float] = None,
-                             actual_despatch: Optional[float] = None,
-                             section: str = ""):
-    """Upsert one row into special_steel_orders. section stays '' for plants
-    whose report has no section breakdown."""
-    init_db()
-    conn = connect()
-    old = _row_dict(conn,
-        "SELECT * FROM special_steel_orders WHERE report_month=%s AND plant_name=%s AND product=%s AND quality_grade=%s AND section=%s",
-        (month, plant, product, quality_grade, section or ""))
-    conn.execute("""
-        INSERT INTO special_steel_orders
-            (report_month, plant_name, product, quality_grade, section,
-             sort_order, order_qty, actual_despatch)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        AS new ON DUPLICATE KEY UPDATE
-            sort_order      = new.sort_order,
-            order_qty       = new.order_qty,
-            actual_despatch = new.actual_despatch
-    """, (month, plant, product, quality_grade, section or "",
-          sort_order, order_qty, actual_despatch))
-    conn.commit()
-    conn.close()
-    new = {"report_month": month, "plant_name": plant, "product": product,
-           "quality_grade": quality_grade, "section": section or "",
-           "sort_order": sort_order, "order_qty": order_qty, "actual_despatch": actual_despatch}
-    activity_context.record(f"special_steel_orders/{plant}/{product}/{quality_grade}/{month}", old, new)
-
-
-def save_stock_entry(stock_month: str, plant: str, item_type: str,
-                     stock_type: str = "", stock: Optional[float] = None):
-    """Upsert one opening-stock record ('000T, as on 1st of stock_month)."""
-    init_db()
-    conn = connect()
-    old = _row_dict(conn,
-        "SELECT * FROM stock_table WHERE stock_month=%s AND plant_name=%s AND item_type=%s AND stock_type=%s",
-        (stock_month, plant, item_type, stock_type))
-    conn.execute("""
-        INSERT INTO stock_table (stock_month, plant_name, item_type, stock_type, stock)
-        VALUES (%s, %s, %s, %s, %s)
-        AS new ON DUPLICATE KEY UPDATE stock = new.stock
-    """, (stock_month, plant, item_type, stock_type, stock))
-    conn.commit()
-    conn.close()
-    new = {"stock_month": stock_month, "plant_name": plant, "item_type": item_type,
-           "stock_type": stock_type, "stock": stock}
-    activity_context.record(f"stock_table/{plant}/{item_type}/{stock_month}", old, new)
-
-
-def save_ipt_entry(month: str, item: str, from_plant: str, to_plant: str,
-                   unit: str = "T", sort_order: int = 0,
-                   plan: Optional[float] = None, actual: Optional[float] = None,
-                   plan_tonnage: Optional[float] = None,
-                   actual_tonnage: Optional[float] = None):
-    """Upsert one IPT route record for a month.
-    For Rake routes, plan/actual are rake counts and
-    plan_tonnage/actual_tonnage hold the tonnes equivalent."""
-    init_db()
-    conn = connect()
-    old = _row_dict(conn,
-        "SELECT * FROM ipt_table WHERE report_month=%s AND item=%s AND from_plant=%s AND to_plant=%s",
-        (month, item, from_plant, to_plant))
-    conn.execute("""
-        INSERT INTO ipt_table
-            (report_month, item, from_plant, to_plant, unit, sort_order,
-             plan, actual, plan_tonnage, actual_tonnage)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        AS new ON DUPLICATE KEY UPDATE
-            unit = new.unit,
-            sort_order = new.sort_order,
-            plan = new.plan,
-            actual = new.actual,
-            plan_tonnage = new.plan_tonnage,
-            actual_tonnage = new.actual_tonnage
-    """, (month, item, from_plant, to_plant, unit, sort_order,
-          plan, actual, plan_tonnage, actual_tonnage))
-    conn.commit()
-    conn.close()
-    new = {"report_month": month, "item": item, "from_plant": from_plant, "to_plant": to_plant,
-           "unit": unit, "sort_order": sort_order, "plan": plan, "actual": actual,
-           "plan_tonnage": plan_tonnage, "actual_tonnage": actual_tonnage}
-    activity_context.record(f"ipt_table/{item}/{from_plant}->{to_plant}/{month}", old, new)
-
-
-def delete_ipt_entry(month: str, item: str, from_plant: str, to_plant: str) -> int:
-    """Delete one IPT route record for a month, recording its prior state."""
-    init_db()
-    conn = connect()
-    old = _row_dict(conn,
-        "SELECT * FROM ipt_table WHERE report_month=%s AND item=%s AND from_plant=%s AND to_plant=%s",
-        (month, item, from_plant, to_plant))
-    cur = conn.execute(
-        "DELETE FROM ipt_table WHERE report_month=%s AND item=%s AND from_plant=%s AND to_plant=%s",
-        (month, item, from_plant, to_plant),
-    )
-    deleted = cur.rowcount
-    conn.commit()
-    conn.close()
-    if old:
-        activity_context.record(f"ipt_table/{item}/{from_plant}->{to_plant}/{month}", old, None)
-    return deleted
-
 
 # ============================================================================
 # Breakdown log — plant/unit-wise unplanned-downtime events (see
@@ -1419,74 +1303,6 @@ def get_iron_ore_mines_series(report_months: List[str]) -> Dict[str, Any]:
 # Backing store for page_special_steel_physical.py + its two data-entry pages.
 # All physical figures are '000 T. See migrate_add_special_steel_physical.sql.
 
-def get_ss_phys_perf():
-    """-> (meta, perf):
-      meta[(plant, series)] = {capacity_kt, best_actual_kt, best_year, remark, sort_order}
-      perf[(financial_year, plant, series, metric)] = value_kt
-    """
-    init_db()
-    conn = connect()
-    cur = conn.cursor()
-    cur.execute("SELECT plant, series, capacity_kt, best_actual_kt, best_year, remark, sort_order "
-                "FROM special_steel_phys_meta")
-    meta = {
-        (p, s): {"capacity_kt": cap, "best_actual_kt": ba, "best_year": by,
-                 "remark": rm, "sort_order": so or 0}
-        for p, s, cap, ba, by, rm, so in cur.fetchall()
-    }
-    cur.execute("SELECT financial_year, plant, series, metric, value_kt FROM special_steel_phys_perf")
-    perf = {(fy, p, s, m): v for fy, p, s, m, v in cur.fetchall()}
-    conn.close()
-    return meta, perf
-
-
-def save_ss_phys_meta(rows):
-    """Upsert special_steel_phys_meta rows: {plant, series, capacity_kt,
-    best_actual_kt, best_year, remark, sort_order}."""
-    init_db()
-    conn = connect()
-    cur = conn.cursor()
-    for r in rows:
-        cur.execute("""
-            INSERT INTO special_steel_phys_meta
-                (plant, series, capacity_kt, best_actual_kt, best_year, remark, sort_order)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-            AS new ON DUPLICATE KEY UPDATE
-                capacity_kt = new.capacity_kt, best_actual_kt = new.best_actual_kt,
-                best_year = new.best_year, remark = new.remark,
-                sort_order = new.sort_order
-        """, (r["plant"], r["series"], r.get("capacity_kt"), r.get("best_actual_kt"),
-              r.get("best_year"), r.get("remark"), int(r.get("sort_order") or 0)))
-    conn.commit()
-    conn.close()
-    return len(rows)
-
-
-def save_ss_phys_perf(rows):
-    """Upsert special_steel_phys_perf rows: {financial_year, plant, series,
-    metric, value_kt}. value_kt None deletes the cell."""
-    init_db()
-    conn = connect()
-    cur = conn.cursor()
-    saved = 0
-    for r in rows:
-        key = (r["financial_year"], r["plant"], r["series"], r["metric"])
-        if r.get("value_kt") is None:
-            cur.execute("DELETE FROM special_steel_phys_perf WHERE financial_year=%s AND plant=%s "
-                        "AND series=%s AND metric=%s", key)
-        else:
-            cur.execute("""
-                INSERT INTO special_steel_phys_perf
-                    (financial_year, plant, series, metric, value_kt)
-                VALUES (%s, %s, %s, %s, %s)
-                AS new ON DUPLICATE KEY UPDATE value_kt = new.value_kt
-            """, (*key, r["value_kt"]))
-        saved += 1
-    conn.commit()
-    conn.close()
-    return saved
-
-
 def get_ss_phys_notes(financial_year):
     """-> [(sort_order, note_text), ...] ordered."""
     init_db()
@@ -1514,73 +1330,6 @@ def save_ss_phys_notes(financial_year, rows):
     conn.commit()
     conn.close()
     return len(rows)
-
-
-def get_ss_ipt_requirement(financial_year):
-    """-> [{item, from_plant, to_plant, plan_kt, sort_order}, ...] ordered."""
-    init_db()
-    conn = connect()
-    cur = conn.cursor()
-    cur.execute("""
-        SELECT item, from_plant, to_plant, plan_kt, sort_order
-        FROM special_steel_ipt_requirement WHERE financial_year=%s
-        ORDER BY sort_order, item, from_plant, to_plant
-    """, (financial_year,))
-    rows = [{"item": i, "from_plant": f, "to_plant": t, "plan_kt": p, "sort_order": so or 0}
-            for i, f, t, p, so in cur.fetchall()]
-    conn.close()
-    return rows
-
-
-def list_ss_ipt_requirement_fys():
-    init_db()
-    conn = connect()
-    cur = conn.cursor()
-    cur.execute("SELECT DISTINCT financial_year FROM special_steel_ipt_requirement "
-                "ORDER BY financial_year DESC")
-    fys = [r[0] for r in cur.fetchall()]
-    conn.close()
-    return fys
-
-
-def save_ss_ipt_requirement(financial_year, rows):
-    """Upsert a batch of IPT-requirement rows for one FY. Each row:
-    {item, from_plant, to_plant, plan_kt, sort_order} plus optional
-    orig_item/orig_from_plant/orig_to_plant — if the natural key changed,
-    the old row is deleted first (same rename handling as ipt_table)."""
-    init_db()
-    conn = connect()
-    cur = conn.cursor()
-    saved = 0
-    for r in rows:
-        item = (r.get("item") or "").strip()
-        frm, to = (r.get("from_plant") or "").strip(), (r.get("to_plant") or "").strip()
-        if not item or not frm or not to or frm == to:
-            continue
-        oi, of, ot = r.get("orig_item"), r.get("orig_from_plant"), r.get("orig_to_plant")
-        if oi and (oi != item or of != frm or ot != to):
-            cur.execute("DELETE FROM special_steel_ipt_requirement WHERE financial_year=%s "
-                        "AND item=%s AND from_plant=%s AND to_plant=%s", (financial_year, oi, of, ot))
-        cur.execute("""
-            INSERT INTO special_steel_ipt_requirement
-                (financial_year, item, from_plant, to_plant, plan_kt, sort_order)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            AS new ON DUPLICATE KEY UPDATE plan_kt = new.plan_kt, sort_order = new.sort_order
-        """, (financial_year, item, frm, to, r.get("plan_kt"), int(r.get("sort_order") or 0)))
-        saved += 1
-    conn.commit()
-    conn.close()
-    return saved
-
-
-def delete_ss_ipt_requirement(financial_year, item, from_plant, to_plant):
-    init_db()
-    conn = connect()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM special_steel_ipt_requirement WHERE financial_year=%s AND item=%s "
-                "AND from_plant=%s AND to_plant=%s", (financial_year, item, from_plant, to_plant))
-    conn.commit()
-    conn.close()
 
 
 # ── "Rail Production & Dispatch from BSP" (page 18.5) ──────────────────────
