@@ -6,56 +6,12 @@ extra plant highlights the auto-generated data doesn't cover, and short
 narratives explaining notable variances ("why" text). An empty text value
 deletes the row rather than storing a blank, so a cleared textbox doesn't
 leave a stale empty row behind (same convention as do_letter_remark_table).
+get_manual_text / save_manual_text live in repo/text.py (re-exported here).
 """
 
-import db
+from repo.text import get_manual_text, save_manual_text  # noqa: F401
 
 FIELDS = ("additional_highlights", "why_narrative")
-
-
-def get_manual_text(fy: str, quarter: int) -> dict:
-    """Return {(plant, field): text} for every non-empty row in this period."""
-    conn = db.connect()
-    cur = conn.cursor()
-    try:
-        cur.execute(
-            "SELECT plant, field, text FROM board_note_manual_text WHERE report_fy=%s AND quarter=%s",
-            (fy, quarter),
-        )
-        return {(plant, field): text for plant, field, text in cur.fetchall() if text}
-    finally:
-        conn.close()
-
-
-def save_manual_text(fy: str, quarter: int, entries: list) -> int:
-    """Upsert or delete each entry ({"plant", "field", "text"}). An empty
-    (after strip) text deletes the row. Returns the count processed."""
-    conn = db.connect()
-    cur = conn.cursor()
-    try:
-        saved = 0
-        for e in entries:
-            plant = str(e.get("plant", "")).strip()
-            field = str(e.get("field", "")).strip()
-            text = str(e.get("text", "")).strip()
-            if not plant or not field:
-                continue
-            if text:
-                cur.execute("""
-                    INSERT INTO board_note_manual_text (report_fy, quarter, plant, field, text)
-                    VALUES (%s, %s, %s, %s, %s)
-                    AS new ON DUPLICATE KEY UPDATE text = new.text
-                """, (fy, quarter, plant, field, text))
-            else:
-                cur.execute(
-                    "DELETE FROM board_note_manual_text WHERE report_fy=%s AND quarter=%s AND plant=%s AND field=%s",
-                    (fy, quarter, plant, field),
-                )
-            saved += 1
-        conn.commit()
-    finally:
-        conn.close()
-    return saved
 
 
 def additional_highlight_lines(manual: dict, plant: str) -> list:

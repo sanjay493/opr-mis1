@@ -12,7 +12,6 @@ just your old password" path, per spec.
 import os
 import secrets
 import smtplib
-from repo.conn import Row
 import ssl
 import threading
 from datetime import datetime, timedelta, timezone
@@ -25,6 +24,7 @@ from dotenv import load_dotenv
 from fastapi import Cookie, Depends, HTTPException, status
 
 import db
+from repo import ops as rop
 
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
@@ -138,46 +138,19 @@ def decode_login_challenge(token: str) -> Optional[dict]:
 
 
 # ── DB user lookups ──────────────────────────────────────────────────────────
+# Moved verbatim to repo/ops.py; re-exported here (main.py's editor gate
+# middleware calls get_user_by_id / _is_barred / log_activity through auth).
 
-def get_user_by_email(email: str) -> Optional[dict]:
-    conn = db.connect()
-    conn.row_factory = Row
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM users WHERE email=%s", (email,))
-    row = cur.fetchone()
-    conn.close()
-    return dict(row) if row else None
-
-
-def get_user_by_id(user_id: int) -> Optional[dict]:
-    conn = db.connect()
-    conn.row_factory = Row
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM users WHERE id=%s", (user_id,))
-    row = cur.fetchone()
-    conn.close()
-    return dict(row) if row else None
-
-
-def is_email_allowed(email: str) -> bool:
-    conn = db.connect()
-    cur = conn.cursor()
-    cur.execute("SELECT barred FROM allowed_emails WHERE email=%s", (email,))
-    row = cur.fetchone()
-    conn.close()
-    return row is not None and row[0] == 0
+from repo.ops import (  # noqa: E402,F401
+    get_user_by_email,
+    get_user_by_id,
+    is_email_allowed,
+    _is_barred,
+    log_activity,
+)
 
 
 # ── FastAPI dependencies ──────────────────────────────────────────────────────
-
-def _is_barred(email: str) -> bool:
-    conn = db.connect()
-    cur = conn.cursor()
-    cur.execute("SELECT barred FROM allowed_emails WHERE email=%s", (email,))
-    row = cur.fetchone()
-    conn.close()
-    return bool(row and row[0] == 1)
-
 
 def get_current_user(mis_session: Optional[str] = Cookie(default=None)) -> dict:
     if not mis_session:
@@ -249,15 +222,8 @@ def generate_and_store_otp(email: str, purpose: str) -> str:
 
     conn = db.connect()
     cur = conn.cursor()
-    cur.execute(
-        "UPDATE otp_codes SET used=1 WHERE email=%s AND purpose=%s AND used=0",
-        (email, purpose),
-    )
-    cur.execute(
-        """INSERT INTO otp_codes (email, purpose, code_hash, expires_at, used, created_at)
-           VALUES (%s, %s, %s, %s, 0, %s)""",
-        (email, purpose, _hash_code(code), expires_at.isoformat(), now.isoformat()),
-    )
+    rop.otp_invalidate_unused(cur, email, purpose)
+    rop.otp_insert(cur, email, purpose, _hash_code(code), expires_at.isoformat(), now.isoformat())
     conn.commit()
     conn.close()
     return code
@@ -267,12 +233,7 @@ def otp_resend_wait_seconds(email: str, purpose: str) -> int:
     """Seconds until another code may be emailed for email+purpose (0 = now)."""
     conn = db.connect()
     cur = conn.cursor()
-    cur.execute(
-        """SELECT created_at FROM otp_codes WHERE email=%s AND purpose=%s
-           ORDER BY id DESC LIMIT 1""",
-        (email, purpose),
-    )
-    row = cur.fetchone()
+    row = rop.otp_latest_created_row(cur, email, purpose)
     conn.close()
     if not row:
         return 0
@@ -290,13 +251,7 @@ def verify_otp(email: str, purpose: str, code: str) -> bool:
     brute-forced within its lifetime."""
     conn = db.connect()
     cur = conn.cursor()
-    cur.execute(
-        """SELECT id, code_hash, expires_at FROM otp_codes
-           WHERE email=%s AND purpose=%s AND used=0
-           ORDER BY id DESC LIMIT 1""",
-        (email, purpose),
-    )
-    row = cur.fetchone()
+    row = rop.otp_latest_unused_row(cur, email, purpose)
     if not row:
         conn.close()
         return False
@@ -311,7 +266,7 @@ def verify_otp(email: str, purpose: str, code: str) -> bool:
     ok = bcrypt.checkpw((code or "").strip().encode("utf-8"), code_hash.encode("utf-8"))
     if ok:
         _otp_failures.pop(otp_id, None)
-        cur.execute("UPDATE otp_codes SET used=1 WHERE id=%s", (otp_id,))
+        rop.otp_mark_used(cur, otp_id)
         conn.commit()
     else:
         with _otp_failures_lock:
@@ -320,7 +275,7 @@ def verify_otp(email: str, purpose: str, code: str) -> bool:
             if burned:
                 _otp_failures.pop(otp_id, None)
         if burned:
-            cur.execute("UPDATE otp_codes SET used=1 WHERE id=%s", (otp_id,))
+            rop.otp_mark_used(cur, otp_id)
             conn.commit()
     conn.close()
     return ok
@@ -360,25 +315,3 @@ def send_otp_email(to_email: str, code: str, purpose: str) -> None:
            "If you did not request this, you can ignore this email.")
     )
     send_email(to_email, subject, body)
-
-
-# ── activity log ──────────────────────────────────────────────────────────────
-
-def log_activity(user: Optional[dict], action: str, entity: str, details: str = "") -> None:
-    """action: 'insert' | 'update' | 'delete'."""
-    conn = db.connect()
-    cur = conn.cursor()
-    cur.execute(
-        """INSERT INTO activity_log (user_email, user_name, action, entity, details, timestamp)
-           VALUES (%s, %s, %s, %s, %s, %s)""",
-        (
-            user.get("email") if user else None,
-            user.get("name") if user else None,
-            action,
-            entity,
-            details,
-            datetime.now(timezone.utc).isoformat(),
-        ),
-    )
-    conn.commit()
-    conn.close()

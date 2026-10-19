@@ -119,6 +119,36 @@ from repo.rake import (  # noqa: F401
     get_rake_detention_annual,
     save_rake_detention_annual,
 )
+from repo.pages import (  # noqa: F401
+    get_page_config,
+    get_all_page_configs,
+    save_page_config,
+)
+from repo.text import (  # noqa: F401
+    get_page3_narrative,
+    save_page3_narrative,
+    get_key_highlights_narrative,
+    save_key_highlights_narrative,
+    get_steel_sales_highlights,
+    save_steel_sales_highlights,
+    get_ss_phys_notes,
+    save_ss_phys_notes,
+    get_rail_report_notes,
+    save_rail_report_notes,
+)
+from repo.ops import (  # noqa: F401
+    log_page_visit,
+    ANON_VISIT_NOTIFY_WINDOW_MINUTES,
+    add_admin_notification,
+    _add_admin_notification,
+    list_admin_notifications,
+    _FINAL_STATUS_FROM,
+    _FINAL_REPORT_RULES,
+    _production_month_status,
+    production_month_status,
+    log_extraction,
+    get_extraction_logs,
+)
 
 
 def connect():
@@ -208,169 +238,6 @@ def get_cply_month(report_month: str) -> str:
     except (ValueError, IndexError):
         return report_month
 
-
-def get_page_config(month: str, page_number: int) -> Optional[dict]:
-    """Retrieves standard page configuration if saved in DB."""
-    init_db()
-    conn = connect()
-    cursor = conn.cursor()
-    cursor.execute("SELECT page_data FROM page_configs WHERE report_month = %s AND page_number = %s", (month, page_number))
-    row = cursor.fetchone()
-    conn.close()
-    return json.loads(row[0]) if row else None
-
-def get_all_page_configs(month: str) -> List[dict]:
-    """Retrieves all standard page configurations for a month, ordered by page number."""
-    init_db()
-    conn = connect()
-    cursor = conn.cursor()
-    cursor.execute("SELECT page_data FROM page_configs WHERE report_month = %s ORDER BY page_number ASC", (month,))
-    rows = cursor.fetchall()
-    conn.close()
-    return [json.loads(row[0]) for row in rows]
-
-def save_page_config(month: str, page_number: int, page_data: dict):
-    """Saves or updates a page configuration."""
-    init_db()
-    conn = connect()
-    cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO page_configs (report_month, page_number, page_data)
-        VALUES (%s, %s, %s)
-        AS new ON DUPLICATE KEY UPDATE page_data = new.page_data
-    """, (month, page_number, json.dumps(page_data)))
-    conn.commit()
-    conn.close()
-
-def get_page3_narrative(month: str) -> Optional[dict]:
-    """Returns the saved Page 3 Production Narrative + Highlights for a month,
-    or None if nothing has ever been saved (caller should keep whatever
-    default/computed value it already has)."""
-    init_db()
-    conn = connect()
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT production_narrative, highlights FROM page3_narrative WHERE report_month = %s",
-        (month,)
-    )
-    row = cursor.fetchone()
-    conn.close()
-    if not row:
-        return None
-    narrative, highlights_text = row[0] or "", row[1] or ""
-    return {
-        "production_narrative": narrative,
-        "highlights": highlights_text.split("\n") if highlights_text else [],
-    }
-
-def save_page3_narrative(month: str, production_narrative: str, highlights: List[str]):
-    """Saves/updates Page 3's Production Narrative + Highlights, keyed only by
-    report_month — independent of page_configs so it never risks touching
-    the other 34 pages' saved data for the month."""
-    init_db()
-    conn = connect()
-    cursor = conn.cursor()
-    highlights_text = "\n".join(highlights or [])
-    cursor.execute("""
-        INSERT INTO page3_narrative (report_month, production_narrative, highlights, updated_at)
-        VALUES (%s, %s, %s, NOW())
-        AS new ON DUPLICATE KEY UPDATE production_narrative = new.production_narrative,
-                       highlights = new.highlights,
-                       updated_at = new.updated_at
-    """, (month, production_narrative or "", highlights_text))
-    conn.commit()
-    conn.close()
-
-def get_key_highlights_narrative(month: str) -> Optional[dict]:
-    """Returns the saved Key Highlights & Variances narrative (Major
-    Achievements / Major Shortfalls / Focus Areas Going Forward) for a
-    month, or None if nothing has ever been saved for it — the report page
-    shows empty sections in that case rather than inventing text."""
-    init_db()
-    conn = connect()
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT achievements, shortfalls, focus_areas, updated_by, updated_at "
-        "FROM key_highlights_narrative WHERE report_month = %s",
-        (month,)
-    )
-    row = cursor.fetchone()
-    conn.close()
-    if not row:
-        return None
-    achievements, shortfalls, focus_areas, updated_by, updated_at = row
-    return {
-        "achievements": json.loads(achievements) if achievements else [],
-        "shortfalls":   json.loads(shortfalls) if shortfalls else [],
-        "focus_areas":  json.loads(focus_areas) if focus_areas else [],
-        "updated_by":   updated_by or "",
-        "updated_at":   updated_at or "",
-    }
-
-def save_key_highlights_narrative(month: str, achievements: list, shortfalls: list,
-                                   focus_areas: list, updated_by: str = ""):
-    """Saves/updates the Key Highlights & Variances narrative for a month,
-    keyed only by report_month — independent of page_configs, same as
-    save_page3_narrative above."""
-    init_db()
-    conn = connect()
-    cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO key_highlights_narrative
-            (report_month, achievements, shortfalls, focus_areas, updated_by, updated_at)
-        VALUES (%s, %s, %s, %s, %s, NOW())
-        AS new ON DUPLICATE KEY UPDATE achievements = new.achievements,
-                       shortfalls  = new.shortfalls,
-                       focus_areas = new.focus_areas,
-                       updated_by  = new.updated_by,
-                       updated_at  = new.updated_at
-    """, (month, json.dumps(achievements or []), json.dumps(shortfalls or []),
-          json.dumps(focus_areas or []), updated_by or ""))
-    conn.commit()
-    conn.close()
-
-def get_steel_sales_highlights(month: str) -> Optional[dict]:
-    """Saved Steel Sales Performance bullets (report-month + YTD lists) for
-    a month, or None if nothing has ever been saved for it — the report
-    page shows empty sections in that case rather than inventing text."""
-    init_db()
-    conn = connect()
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT month_items, ytd_items, updated_by, updated_at "
-        "FROM steel_sales_highlights WHERE report_month = %s",
-        (month,)
-    )
-    row = cursor.fetchone()
-    conn.close()
-    if not row:
-        return None
-    month_items, ytd_items, updated_by, updated_at = row
-    return {
-        "month_items": json.loads(month_items) if month_items else [],
-        "ytd_items":   json.loads(ytd_items) if ytd_items else [],
-        "updated_by":  updated_by or "",
-        "updated_at":  updated_at or "",
-    }
-
-def save_steel_sales_highlights(month: str, month_items: list, ytd_items: list, updated_by: str = ""):
-    """Saves/updates the Steel Sales Performance bullets for a month, keyed
-    only by report_month — independent of page_configs, same as
-    save_key_highlights_narrative above."""
-    init_db()
-    conn = connect()
-    cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO steel_sales_highlights
-            (report_month, month_items, ytd_items, updated_by, updated_at)
-        VALUES (%s, %s, %s, %s, NOW())
-        AS new ON DUPLICATE KEY UPDATE month_items = new.month_items,
-                       ytd_items   = new.ytd_items,
-                       updated_by  = new.updated_by,
-                       updated_at  = new.updated_at
-    """, (month, json.dumps(month_items or []), json.dumps(ytd_items or []), updated_by or ""))
-    conn.commit()
-    conn.close()
 
 # ============================================================================
 # Breakdown log — plant/unit-wise unplanned-downtime events (see
@@ -485,158 +352,6 @@ def delete_breakdown_entry(breakdown_id: int) -> bool:
     return True
 
 
-
-
-
-def log_page_visit(ip_address: str, user: Optional[dict], path: str) -> None:
-    """Appends one row to page_visits — a frontend navigation to `path`,
-    from `ip_address`, by `user` (the get_current_user_optional dict) or
-    anonymously if `user` is None. See api_visits.py's POST /api/log-visit."""
-    init_db()
-    conn = connect()
-    conn.execute("""
-        INSERT INTO page_visits (timestamp, ip_address, user_email, user_name, path)
-        VALUES (%s, %s, %s, %s, %s)
-    """, (
-        datetime.now(timezone.utc).isoformat(),
-        ip_address or None,
-        user.get("email") if user else None,
-        user.get("name") if user else None,
-        path,
-    ))
-    conn.commit()
-    conn.close()
-
-
-ANON_VISIT_NOTIFY_WINDOW_MINUTES = 30
-
-
-def add_admin_notification(kind: str, ip_address: str = "", user: Optional[dict] = None,
-                           path: Optional[str] = None) -> None:
-    """Records one event for the admin notification bell. kind is 'sign_in'
-    or 'anon_visit'. An 'anon_visit' is skipped when the same IP already
-    raised one in the last ANON_VISIT_NOTIFY_WINDOW_MINUTES, so a visitor
-    clicking around doesn't produce one alert per page.
-
-    Best-effort: a failure here is logged and swallowed — it must never
-    break the sign-in or visit request that triggered it."""
-    try:
-        _add_admin_notification(kind, ip_address, user, path)
-    except Exception as e:
-        print(f"[admin_notifications] could not record {kind}: {e}")
-
-
-def _add_admin_notification(kind, ip_address, user, path) -> None:
-    from datetime import timedelta
-    init_db()
-    now = datetime.now(timezone.utc)
-    conn = connect()
-    try:
-        if kind == "anon_visit":
-            since = (now - timedelta(minutes=ANON_VISIT_NOTIFY_WINDOW_MINUTES)).isoformat()
-            row = conn.execute(
-                "SELECT 1 FROM admin_notifications WHERE kind = 'anon_visit' AND ip_address = %s AND created_at >= %s LIMIT 1",
-                (ip_address or None, since),
-            ).fetchone()
-            if row:
-                return
-        conn.execute("""
-            INSERT INTO admin_notifications (created_at, kind, user_email, user_name, ip_address, path)
-            VALUES (%s, %s, %s, %s, %s, %s)
-        """, (
-            now.isoformat(),
-            kind,
-            user.get("email") if user else None,
-            user.get("name") if user else None,
-            ip_address or None,
-            path,
-        ))
-        conn.commit()
-    finally:
-        conn.close()
-
-
-def list_admin_notifications(limit: int = 30) -> List[Dict[str, Any]]:
-    """Newest-first admin notification events (see add_admin_notification)."""
-    init_db()
-    conn = connect()
-    conn.row_factory = Row
-    try:
-        rows = conn.execute(
-            "SELECT id, created_at, kind, user_email, user_name, ip_address, path "
-            "FROM admin_notifications ORDER BY id DESC LIMIT %s",
-            (int(limit),),
-        ).fetchall()
-        return [dict(r) for r in rows]
-    finally:
-        conn.close()
-
-
-# ── Is a month's production data final? (page 4's "Tentative" label) ──────
-# A month is final once each of these plants has its FINAL monthly report in
-# extraction_log for that month; interim uploads (daily/morning reports, DSP's
-# pcontrep/mcr1, BSL's DPR mail) don't count. BSP/ASP/SSP/VISL aren't
-# checked (per direct instruction, 2026-10-04: BSP re-uploads the same PPC MIS
-# workbook through and after the month, so no upload marks it final).
-# Months before _FINAL_STATUS_FROM predate the log tracking these uploads
-# (their final figures came from backfills), so they always count as final.
-_FINAL_STATUS_FROM = "2026-04"
-_FINAL_REPORT_RULES = {
-    "RSP": lambda src, fname, ym: src.startswith("Final Monthly Report"),
-    "ISP": lambda src, fname, ym: src.startswith(("Final Monthly Report", "Summarized Monthly Report")),
-    "BSL": lambda src, fname, ym: src.startswith("BSL Production of Main Products (PDF)"),
-    # DSP's monthly MIS PDF is named for its month: mis0826.pdf = Aug'26.
-    "DSP": lambda src, fname, ym: src == "DSP OMI PDF Report" and re.match(
-        rf"(?i)mis{ym[5:7]}{ym[2:4]}\b", fname or "") is not None,
-}
-
-
-def _production_month_status(report_month: str, log_rows) -> dict:
-    """Pure rule: log_rows = [(plant_name, source_type, file_name), ...] for
-    report_month -> {"tentative": bool, "missing": [plants without a final
-    monthly report]}."""
-    if report_month < _FINAL_STATUS_FROM:
-        return {"tentative": False, "missing": []}
-    missing = [plant for plant, rule in _FINAL_REPORT_RULES.items()
-               if not any(p == plant and rule(src or "", fname, report_month) for p, src, fname in log_rows)]
-    return {"tentative": bool(missing), "missing": missing}
-
-
-def production_month_status(report_month: str) -> dict:
-    """{"tentative", "missing"} for report_month from extraction_log — see
-    _production_month_status."""
-    init_db()
-    conn = connect()
-    try:
-        cur = conn.cursor()
-        cur.execute("SELECT plant_name, source_type, file_name FROM extraction_log WHERE report_month = %s",
-                    (report_month,))
-        return _production_month_status(report_month, cur.fetchall())
-    finally:
-        conn.close()
-
-
-def log_extraction(plant: str, report_month: str, file_name: str, sheet_name: str,
-                   source_type: str, items_extracted: int, conn=None):
-    """Appends a record to the extraction audit log.
-
-    `conn`: see merge_upsert_techno_data's docstring — when reused, this
-    does NOT commit; the caller owns the transaction boundary (see
-    _raw_upsert_techno_data's docstring for why that matters here)."""
-    init_db()
-    from datetime import datetime
-    owns_conn = conn is None
-    if owns_conn:
-        conn = connect()
-    conn.execute("""
-        INSERT INTO extraction_log (logged_at, plant_name, report_month, file_name, sheet_name, source_type, items_extracted)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
-    """, (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), plant, report_month, file_name, sheet_name, source_type, items_extracted))
-    if owns_conn:
-        conn.commit()
-        conn.close()
-
-
 def get_pdf_item_aliases(plant: str) -> Dict[str, Any]:
     """User-saved PDF label corrections for a plant: {pdf_label: (item_name, convert_t)}."""
     init_db()
@@ -671,68 +386,6 @@ def save_pdf_item_alias(plant: str, pdf_label: str, item_name: str, convert_t: i
     activity_context.record(f"pdf_item_alias/{plant}/{pdf_label}", old, new)
 
 
-def get_extraction_logs(limit: int = 60, plant: Optional[str] = None,
-                         source_type: Optional[str] = None) -> List[Dict[str, Any]]:
-    """Returns the most recent extraction log entries, newest first.
-    Optional plant/source_type filters let a page (e.g. /data-entry/techno)
-    show only its own entries from this shared log table."""
-    init_db()
-    conn = connect()
-    conn.row_factory = Row
-    clauses, params = [], []
-    if plant:
-        clauses.append("plant_name = %s")
-        params.append(plant)
-    if source_type:
-        clauses.append("source_type = %s")
-        params.append(source_type)
-    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-    params.append(limit)
-    rows = conn.execute(f"""
-        SELECT id, logged_at, plant_name, report_month, file_name, sheet_name, source_type, items_extracted
-        FROM extraction_log
-        {where}
-        ORDER BY id DESC
-        LIMIT %s
-    """, params).fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
-
-
-
-# ── "Special Steel Plants Physical Performance" report ────────────────────────
-# Backing store for page_special_steel_physical.py + its two data-entry pages.
-# All physical figures are '000 T. See migrate_add_special_steel_physical.sql.
-
-def get_ss_phys_notes(financial_year):
-    """-> [(sort_order, note_text), ...] ordered."""
-    init_db()
-    conn = connect()
-    cur = conn.cursor()
-    cur.execute("SELECT sort_order, note_text FROM special_steel_phys_note "
-                "WHERE financial_year=%s ORDER BY sort_order", (financial_year,))
-    rows = cur.fetchall()
-    conn.close()
-    return [(so, t) for so, t in rows]
-
-
-def save_ss_phys_notes(financial_year, rows):
-    """Replace every note for a FY with `rows`: {sort_order, note_text}."""
-    init_db()
-    conn = connect()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM special_steel_phys_note WHERE financial_year=%s", (financial_year,))
-    for r in rows:
-        text = (r.get("note_text") or "").strip()
-        if not text:
-            continue
-        cur.execute("INSERT INTO special_steel_phys_note (financial_year, sort_order, note_text) "
-                    "VALUES (%s, %s, %s)", (financial_year, int(r.get("sort_order") or 0), text))
-    conn.commit()
-    conn.close()
-    return len(rows)
-
-
 # ── "Rail Production & Dispatch from BSP" (page 18.5) ──────────────────────
 # Backing store for page_rail_report.py + /data-entry/rail-report. See
 # scripts/migrate_add_rail_report.sql.
@@ -765,34 +418,6 @@ def save_rail_report_data(rows: List[Dict[str, Any]]) -> int:
             AS new ON DUPLICATE KEY UPDATE
                 value = new.value, note = new.note
         """, (r["financial_year"], r["metric"], r.get("value"), r.get("note")))
-    conn.commit()
-    conn.close()
-    return len(rows)
-
-
-def get_rail_report_notes() -> List[tuple]:
-    """-> [(sort_order, note_text), ...] ordered."""
-    init_db()
-    conn = connect()
-    cur = conn.cursor()
-    cur.execute("SELECT sort_order, note_text FROM rail_prod_despatch_note ORDER BY sort_order")
-    rows = cur.fetchall()
-    conn.close()
-    return [(so, t) for so, t in rows]
-
-
-def save_rail_report_notes(rows: List[Dict[str, Any]]) -> int:
-    """Replace every footer remark with `rows`: {sort_order, note_text}."""
-    init_db()
-    conn = connect()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM rail_prod_despatch_note")
-    for r in rows:
-        text = (r.get("note_text") or "").strip()
-        if not text:
-            continue
-        cur.execute("INSERT INTO rail_prod_despatch_note (sort_order, note_text) VALUES (%s, %s)",
-                    (int(r.get("sort_order") or 0), text))
     conn.commit()
     conn.close()
     return len(rows)
