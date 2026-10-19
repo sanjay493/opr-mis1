@@ -132,3 +132,32 @@ def test_merge_upsert_matches_db_merge(mysql_db):
     _insert([s for s in _SEED if s[1] == "DSP"])
     db.merge_upsert_techno_data("DSP", "2026-04", "BF_Shop", new, "s1")
     assert _row("2026-04", "DSP", "BF_Shop") == via_repo
+
+
+def test_merge_upsert_logs_extraction_and_recomputes(mysql_db):
+    """The moved write chain still runs its post-save hooks: the tmi /
+    fuel_rate recompute and the extraction_log entry (db.log_extraction,
+    bound at call time from repo.techno)."""
+    rt.merge_upsert("2026-08", "BSL", "BF_Shop",
+                    {"month": {"coke_rate": 400, "cdi": 100}, "till_month": {}}, "bsl.xlsx")
+    blob, _ = _row("2026-08", "BSL", "BF_Shop")
+    assert blob["month"]["fuel_rate"] == 500
+    with rc.cursor() as cur:
+        cur.execute("SELECT plant_name, report_month, file_name, sheet_name, source_type, items_extracted "
+                    "FROM extraction_log")
+        rows = [tuple(r) for r in cur.fetchall()]
+    assert rows == [("BSL", "2026-08", "bsl.xlsx", "BF_Shop", "Techno Data", 2)]
+
+
+def test_techno_plan_save_clears_cache_and_returns_copies(mysql_db):
+    import db
+    db._get_techno_plan_cached.cache_clear()
+    assert db.get_techno_plan("BSP", "2026-27", "Shop") == {
+        "data": {}, "is_user_supplied": False, "calculated": {}}
+    db.save_techno_plan("BSP", "2026-27", "Shop", {"coke_rate": {"value": 410}})
+    got = db.get_techno_plan("BSP", "2026-27", "Shop")
+    assert got["data"] == {"coke_rate": {"value": 410}}
+    got["data"]["coke_rate"]["value"] = 0          # caller mutation ...
+    assert db.get_techno_plant_plan("BSP", "2026-27")["data"] == {"coke_rate": {"value": 410}}
+    assert db.get_techno_plan("BSP", "2026-27", "Shop")["data"] == {"coke_rate": {"value": 410}}
+    assert db.list_techno_plan_fys("BSP") == ["2026-27"]
