@@ -16,6 +16,7 @@ series and then deriving the 11 values, so totals' percentages come from
 the summed quantities, never from averaging percentages.
 """
 import db
+from repo import mines as rmn
 
 PCT_IDX = (3, 5, 8, 10)
 
@@ -157,7 +158,6 @@ def _load(months: list) -> dict:
     sail[(section, item)]."""
     conn = db.connect()
     cur = conn.cursor()
-    ph = ",".join(["%s"] * len(months))
     stores = {"prod": {}, "desp": {}, "booked": {}, "sail": {}}
 
     def put(store, key, mo, a=None, p=None):
@@ -165,39 +165,23 @@ def _load(months: list) -> dict:
         oa, op = s.get(mo, (None, None))
         s[mo] = (_sum([oa, _f(a)]), _sum([op, _f(p)]))
 
-    cur.execute("SELECT group_code, group_name FROM mine_groups_master ORDER BY sort_order")
-    groups = cur.fetchall()
+    groups = rmn.group_rows(cur)
     # Every mine, active or not: a closed mine's history still counts in its
     # group and SAIL (as db.get_iron_ore_group_rollup_monthly counts it).
-    cur.execute("SELECT mine_code, mine_name, group_code, is_active FROM mines_master "
-                "ORDER BY sort_order")
-    mines = cur.fetchall()
-    cur.execute("SELECT material_code, material_name FROM mine_materials_master ORDER BY sort_order")
-    materials = cur.fetchall()
+    mines = rmn.mine_rows(cur)
+    materials = rmn.material_rows(cur)
 
-    cur.execute(f"SELECT mine_code, material_code, report_month, qty_actual, qty_plan "
-                f"FROM mines_production_monthly WHERE report_month IN ({ph})", months)
-    for mine, mat, mo, a, p in cur.fetchall():
+    for mine, mat, mo, a, p in rmn.production_rows(cur, months):
         put("prod", (mine, mat), mo, a, p)
-    cur.execute(f"SELECT mine_code, material_code, end_use_code, report_month, qty_actual "
-                f"FROM mines_despatch_actual_monthly WHERE report_month IN ({ph})", months)
-    for mine, mat, eu, mo, a in cur.fetchall():
+    for mine, mat, eu, mo, a in rmn.despatch_actual_rows(cur, months):
         put("desp", (mine, mat, eu), mo, a=a)
-    cur.execute(f"SELECT mine_code, material_code, end_use_code, report_month, qty_plan "
-                f"FROM mines_despatch_plan_monthly WHERE report_month IN ({ph})", months)
-    for mine, mat, eu, mo, p in cur.fetchall():
+    for mine, mat, eu, mo, p in rmn.despatch_plan_rows(cur, months):
         put("desp", (mine, mat, eu), mo, p=p)
-    cur.execute(f"SELECT mine_code, material_code, report_month, qty_actual "
-                f"FROM mines_booked_qty_actual_monthly WHERE report_month IN ({ph})", months)
-    for mine, mat, mo, a in cur.fetchall():
+    for mine, mat, mo, a in rmn.booked_actual_rows(cur, months):
         put("booked", (mine, mat), mo, a=a)
-    cur.execute(f"SELECT mine_code, material_code, report_month, qty_plan "
-                f"FROM mines_booked_qty_plan_monthly WHERE report_month IN ({ph})", months)
-    for mine, mat, mo, p in cur.fetchall():
+    for mine, mat, mo, p in rmn.booked_plan_rows(cur, months):
         put("booked", (mine, mat), mo, p=p)
-    cur.execute(f"SELECT section, item, report_month, month_actual, month_plan "
-                f"FROM sail_mines_monthly WHERE report_month IN ({ph})", months)
-    for section, item, mo, a, p in cur.fetchall():
+    for section, item, mo, a, p in rmn.sail_rows(cur, months):
         put("sail", (section, item), mo, a, p)
     conn.close()
     return {"groups": groups, "mines": mines, "materials": materials, **stores}

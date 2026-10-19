@@ -52,6 +52,8 @@ from repo import techno as rt
 from repo import special_steel as rss
 from repo import stock as rst
 from repo import ipt as ript
+from repo import cost_trend as rct
+from repo import mines as rmn
 
 _TP_DIR = str(Path(__file__).parent / "techno_project")
 if _TP_DIR not in sys.path:
@@ -214,7 +216,7 @@ def generate_missing_data(report_month: str) -> dict:
             "report_pages": "3.61–3.63 (+ Key Parameters CoP rows)",
             "checks": [{
                 "label": "SAIL (all plants)",
-                "present": _any_row("cost_trend_monthly", "report_month", report_month),
+                "present": rct.monthly_any_row(report_month),
                 "data_entry": [
                     {"label": "Cost Trend", "link": "/data-entry/cost-trend"},
                     {"label": "Cost Trend Excel Extractor", "link": "/data-entry/cost-trend-extract"},
@@ -227,7 +229,7 @@ def generate_missing_data(report_month: str) -> dict:
             "report_pages": "4.5",
             "checks": [{
                 "label": "SAIL Mines",
-                "present": _any_row("sail_mines_monthly", "report_month", report_month),
+                "present": rmn.sail_mines_any_row(report_month),
                 "data_entry": [{"label": "SAIL Mines Entry", "link": "/data-entry/sail-mines"}],
             }],
         },
