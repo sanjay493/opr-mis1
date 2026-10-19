@@ -42,6 +42,7 @@ import io
 import db
 import page4
 from repo import production as rp
+from repo import text as rtx
 from constants import FIVE_PLANTS as _5P
 
 _TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "do_letter_templates")
@@ -172,12 +173,7 @@ def _quarter_crude_steel_cu(cur, fy: int, q: int):
 
 
 def _fetch_remarks(cur, report_month: str, item_name: str) -> dict:
-    cur.execute(
-        "SELECT plant_name, remark FROM do_letter_remark_table "
-        "WHERE report_month=%s AND item_name=%s",
-        (report_month, item_name),
-    )
-    return {p: r for p, r in cur.fetchall() if r}
+    return {p: r for p, r in rtx.do_letter_item_remark_rows(cur, report_month, item_name) if r}
 
 
 def _build_plant_table(cur, report_month, cply_month, prev_month, item, plant_row_order,

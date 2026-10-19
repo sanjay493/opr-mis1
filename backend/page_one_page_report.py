@@ -36,6 +36,7 @@ from openpyxl.utils import get_column_letter
 import db
 from constants import FIVE_PLANTS as _5P
 from repo import production as rp
+from repo import text as rtx
 from repo import stock as rst
 from page_techno import generate_summary_te_table
 
@@ -126,8 +127,7 @@ def _build_sales_rows(cur, month):
 def _sales_note(cur, month):
     """Asterisked remark extracted alongside Table A (e.g. NSL-inclusion
     caveat on the CPLY figures) — reprinted verbatim under the table."""
-    cur.execute("SELECT note FROM sail_sales_note_table WHERE report_month=%s", (month,))
-    r = cur.fetchone()
+    r = rtx.sail_sales_note_row(cur, month)
     return r[0] if r and r[0] else None
 
 

@@ -25,6 +25,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 import db as _db
+from repo import ops as rop
 import activity_context as _activity_context
 
 router = APIRouter(prefix="/api/worklog", tags=["worklog"])
@@ -55,7 +56,7 @@ def _fetch_entry(conn, entry_id: int) -> Optional[dict]:
     prev_factory = conn.row_factory
     conn.row_factory = Row
     try:
-        row = conn.execute("SELECT * FROM daily_work_log WHERE id=%s", (entry_id,)).fetchone()
+        row = rop.worklog_entry_row(conn, entry_id)
         return _row_to_dict(row) if row else None
     finally:
         conn.row_factory = prev_factory
@@ -99,10 +100,7 @@ async def list_entries(
     conn = _db.connect()
     conn.row_factory = Row
     try:
-        cur = conn.execute(
-            f"SELECT * FROM daily_work_log {where_sql} ORDER BY work_date DESC, id DESC",
-            params,
-        )
+        cur = rop.worklog_rows(conn, where_sql, params)
         entries = [_row_to_dict(r) for r in cur.fetchall()]
     finally:
         conn.close()
@@ -118,12 +116,8 @@ async def add_entry(body: EntryRequest):
     _db.init_db()
     conn = _db.connect()
     try:
-        cur = conn.execute(
-            """INSERT INTO daily_work_log (work_date, description, remarks, created_at)
-               VALUES (%s, %s, %s, %s)""",
-            (body.work_date, body.description.strip(), body.remarks,
-             datetime.now().isoformat()),
-        )
+        cur = rop.insert_worklog_entry(conn, body.work_date, body.description.strip(), body.remarks,
+                                       datetime.now().isoformat())
         conn.commit()
         new_id = cur.lastrowid
     finally:
@@ -151,10 +145,7 @@ async def update_entry(entry_id: int, body: EntryUpdateRequest):
     conn = _db.connect()
     try:
         old = _fetch_entry(conn, entry_id)
-        cur = conn.execute(
-            f"UPDATE daily_work_log SET {', '.join(fields)} WHERE id = %s",
-            (*values, entry_id),
-        )
+        cur = rop.update_worklog_entry(conn, fields, values, entry_id)
         conn.commit()
         if cur.rowcount == 0:
             raise HTTPException(404, f"No entry with id {entry_id}")
@@ -170,7 +161,7 @@ async def delete_entry(entry_id: int):
     conn = _db.connect()
     try:
         old = _fetch_entry(conn, entry_id)
-        cur = conn.execute("DELETE FROM daily_work_log WHERE id=%s", (entry_id,))
+        cur = rop.delete_worklog_entry(conn, entry_id)
         conn.commit()
         if cur.rowcount == 0:
             raise HTTPException(404, f"No entry with id {entry_id}")

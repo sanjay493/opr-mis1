@@ -25,6 +25,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 import db as _db
+from repo import ops as rop
 import activity_context as _activity_context
 
 router = APIRouter(prefix="/api/todo", tags=["todo"])
@@ -65,7 +66,7 @@ def _fetch_job(conn, job_id: int) -> Optional[dict]:
     prev_factory = conn.row_factory
     conn.row_factory = Row
     try:
-        row = conn.execute("SELECT * FROM todo_jobs WHERE id=%s", (job_id,)).fetchone()
+        row = rop.todo_job_row(conn, job_id)
         return _row_to_dict(row) if row else None
     finally:
         conn.row_factory = prev_factory
@@ -95,12 +96,9 @@ async def list_jobs(status: str = Query("pending", description="pending | done |
     conn.row_factory = Row
     try:
         if status == "all":
-            cur = conn.execute("SELECT * FROM todo_jobs ORDER BY due_date ASC, id ASC")
+            cur = rop.todo_all_jobs(conn)
         else:
-            cur = conn.execute(
-                "SELECT * FROM todo_jobs WHERE status=%s ORDER BY due_date ASC, id ASC",
-                (status,),
-            )
+            cur = rop.todo_jobs_by_status(conn, status)
         jobs = [_row_to_dict(r) for r in cur.fetchall()]
     finally:
         conn.close()
@@ -117,13 +115,8 @@ async def add_job(body: JobRequest):
     _db.init_db()
     conn = _db.connect()
     try:
-        cur = conn.execute(
-            """INSERT INTO todo_jobs
-               (subject, details, recipient, due_date, priority, status, created_at)
-               VALUES (%s, %s, %s, %s, %s, 'pending', %s)""",
-            (body.subject.strip(), body.details, body.recipient, body.due_date,
-             body.priority, datetime.now().isoformat()),
-        )
+        cur = rop.insert_todo_job(conn, body.subject.strip(), body.details, body.recipient, body.due_date,
+                                  body.priority, datetime.now().isoformat())
         conn.commit()
         new_id = cur.lastrowid
     finally:
@@ -151,10 +144,7 @@ async def update_job(job_id: int, body: JobUpdateRequest):
     conn = _db.connect()
     try:
         old = _fetch_job(conn, job_id)
-        cur = conn.execute(
-            f"UPDATE todo_jobs SET {', '.join(fields)} WHERE id = %s",
-            (*values, job_id),
-        )
+        cur = rop.update_todo_job(conn, fields, values, job_id)
         conn.commit()
         if cur.rowcount == 0:
             raise HTTPException(404, f"No job with id {job_id}")
@@ -170,10 +160,7 @@ async def complete_job(job_id: int):
     conn = _db.connect()
     try:
         old = _fetch_job(conn, job_id)
-        cur = conn.execute(
-            "UPDATE todo_jobs SET status='done', completed_at=%s WHERE id=%s",
-            (datetime.now().isoformat(), job_id),
-        )
+        cur = rop.complete_todo_job(conn, datetime.now().isoformat(), job_id)
         conn.commit()
         if cur.rowcount == 0:
             raise HTTPException(404, f"No job with id {job_id}")
@@ -189,10 +176,7 @@ async def reopen_job(job_id: int):
     conn = _db.connect()
     try:
         old = _fetch_job(conn, job_id)
-        cur = conn.execute(
-            "UPDATE todo_jobs SET status='pending', completed_at=NULL WHERE id=%s",
-            (job_id,),
-        )
+        cur = rop.reopen_todo_job(conn, job_id)
         conn.commit()
         if cur.rowcount == 0:
             raise HTTPException(404, f"No job with id {job_id}")
@@ -208,7 +192,7 @@ async def delete_job(job_id: int):
     conn = _db.connect()
     try:
         old = _fetch_job(conn, job_id)
-        cur = conn.execute("DELETE FROM todo_jobs WHERE id=%s", (job_id,))
+        cur = rop.delete_todo_job(conn, job_id)
         conn.commit()
         if cur.rowcount == 0:
             raise HTTPException(404, f"No job with id {job_id}")

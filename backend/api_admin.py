@@ -13,6 +13,7 @@ from pydantic import BaseModel, EmailStr
 
 import auth
 import db
+from repo import ops as rop
 from constants import PAGE_MODULES
 
 router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(auth.require_admin)])
@@ -42,8 +43,7 @@ def list_allowed_emails():
     conn = db.connect()
     conn.row_factory = Row
     cur = conn.cursor()
-    cur.execute("SELECT * FROM allowed_emails ORDER BY added_at DESC")
-    rows = [dict(r) for r in cur.fetchall()]
+    rows = [dict(r) for r in rop.allowed_email_rows(cur)]
     conn.close()
     return {"emails": rows}
 
@@ -54,12 +54,7 @@ def add_allowed_email(body: EmailOnly, admin: dict = Depends(auth.require_admin)
     now = datetime.now(timezone.utc).isoformat()
     conn = db.connect()
     cur = conn.cursor()
-    cur.execute(
-        """INSERT INTO allowed_emails (email, added_by, added_at, barred)
-           VALUES (%s, %s, %s, 0)
-           AS new ON DUPLICATE KEY UPDATE barred=0, added_by=new.added_by, added_at=new.added_at""",
-        (email, admin["email"], now),
-    )
+    rop.upsert_allowed_email(cur, email, admin["email"], now)
     conn.commit()
     conn.close()
     auth.log_activity(admin, "insert", "allowed_emails", f"added/unbarred {email}")
@@ -71,7 +66,7 @@ def remove_allowed_email(email: str, admin: dict = Depends(auth.require_admin)):
     email = email.lower()
     conn = db.connect()
     cur = conn.cursor()
-    cur.execute("DELETE FROM allowed_emails WHERE email=%s", (email,))
+    rop.delete_allowed_email(cur, email)
     conn.commit()
     conn.close()
     auth.log_activity(admin, "delete", "allowed_emails", f"removed {email}")
@@ -84,15 +79,11 @@ def bar_allowed_email(email: str, body: BarRequest, admin: dict = Depends(auth.r
     now = datetime.now(timezone.utc).isoformat()
     conn = db.connect()
     cur = conn.cursor()
-    cur.execute("SELECT 1 FROM allowed_emails WHERE email=%s", (email,))
-    if not cur.fetchone():
+    if not rop.allowed_email_exists_row(cur, email):
         conn.close()
         raise HTTPException(status_code=404, detail="Email is not on the allow-list.")
-    cur.execute(
-        "UPDATE allowed_emails SET barred=%s, barred_by=%s, barred_at=%s WHERE email=%s",
-        (1 if body.barred else 0, admin["email"] if body.barred else None,
-         now if body.barred else None, email),
-    )
+    rop.set_allowed_email_barred(cur, 1 if body.barred else 0, admin["email"] if body.barred else None,
+                                 now if body.barred else None, email)
     conn.commit()
     conn.close()
     auth.log_activity(admin, "update", "allowed_emails", f"{'barred' if body.barred else 'unbarred'} {email}")
@@ -111,11 +102,7 @@ def list_users():
     conn = db.connect()
     conn.row_factory = Row
     cur = conn.cursor()
-    cur.execute(
-        "SELECT id, email, name, role, profile_pic, allowed_pages, can_delete, created_at, updated_at "
-        "FROM users ORDER BY created_at DESC"
-    )
-    rows = [dict(r) for r in cur.fetchall()]
+    rows = [dict(r) for r in rop.user_list_rows(cur)]
     for r in rows:
         r["allowed_pages"] = json.loads(r["allowed_pages"]) if r["allowed_pages"] else None
         r["can_delete"] = bool(r["can_delete"])
@@ -131,19 +118,16 @@ def set_user_permissions(user_id: int, body: PermissionsRequest, admin: dict = D
             raise HTTPException(status_code=400, detail=f"Unknown page module(s): {', '.join(sorted(unknown))}")
     conn = db.connect()
     cur = conn.cursor()
-    cur.execute("SELECT email FROM users WHERE id=%s", (user_id,))
-    row = cur.fetchone()
+    row = rop.user_email_row(cur, user_id)
     if not row:
         conn.close()
         raise HTTPException(status_code=404, detail="User not found.")
-    cur.execute(
-        "UPDATE users SET allowed_pages=%s, can_delete=%s, updated_at=%s WHERE id=%s",
-        (
-            json.dumps(body.allowed_pages) if body.allowed_pages is not None else None,
-            1 if body.can_delete else 0,
-            datetime.now(timezone.utc).isoformat(),
-            user_id,
-        ),
+    rop.set_user_permissions(
+        cur,
+        json.dumps(body.allowed_pages) if body.allowed_pages is not None else None,
+        1 if body.can_delete else 0,
+        datetime.now(timezone.utc).isoformat(),
+        user_id,
     )
     conn.commit()
     conn.close()
@@ -161,15 +145,11 @@ def set_user_role(user_id: int, body: RoleRequest, admin: dict = Depends(auth.re
         raise HTTPException(status_code=400, detail="Role must be 'editor', 'admin', or null.")
     conn = db.connect()
     cur = conn.cursor()
-    cur.execute("SELECT email FROM users WHERE id=%s", (user_id,))
-    row = cur.fetchone()
+    row = rop.user_email_row(cur, user_id)
     if not row:
         conn.close()
         raise HTTPException(status_code=404, detail="User not found.")
-    cur.execute(
-        "UPDATE users SET role=%s, updated_at=%s WHERE id=%s",
-        (body.role, datetime.now(timezone.utc).isoformat(), user_id),
-    )
+    rop.set_user_role(cur, body.role, datetime.now(timezone.utc).isoformat(), user_id)
     conn.commit()
     conn.close()
     auth.log_activity(admin, "update", "users", f"set role of {row[0]} to {body.role!r}")
@@ -180,12 +160,11 @@ def set_user_role(user_id: int, body: RoleRequest, admin: dict = Depends(auth.re
 def delete_user(user_id: int, admin: dict = Depends(auth.require_admin)):
     conn = db.connect()
     cur = conn.cursor()
-    cur.execute("SELECT email FROM users WHERE id=%s", (user_id,))
-    row = cur.fetchone()
+    row = rop.user_email_row(cur, user_id)
     if not row:
         conn.close()
         raise HTTPException(status_code=404, detail="User not found.")
-    cur.execute("DELETE FROM users WHERE id=%s", (user_id,))
+    rop.delete_user(cur, user_id)
     conn.commit()
     conn.close()
     auth.log_activity(admin, "delete", "users", f"deleted account {row[0]}")
@@ -198,10 +177,8 @@ def delete_user(user_id: int, admin: dict = Depends(auth.require_admin)):
 def get_activity_log_filters():
     conn = db.connect()
     cur = conn.cursor()
-    cur.execute("SELECT DISTINCT user_email FROM activity_log WHERE user_email IS NOT NULL ORDER BY user_email")
-    users = [r[0] for r in cur.fetchall()]
-    cur.execute("SELECT DISTINCT action FROM activity_log WHERE action IS NOT NULL ORDER BY action")
-    actions = [r[0] for r in cur.fetchall()]
+    users = [r[0] for r in rop.activity_log_user_rows(cur)]
+    actions = [r[0] for r in rop.activity_log_action_rows(cur)]
     conn.close()
     return {"users": users, "actions": actions}
 
@@ -220,11 +197,7 @@ def get_activity_log(limit: int = 200, offset: int = 0, user_email: Optional[str
         where.append("action=%s")
         params.append(action)
     clause = f"WHERE {' AND '.join(where)}" if where else ""
-    cur.execute(
-        f"SELECT * FROM activity_log {clause} ORDER BY id DESC LIMIT %s OFFSET %s",
-        (*params, limit, offset),
-    )
-    rows = [dict(r) for r in cur.fetchall()]
+    rows = [dict(r) for r in rop.activity_log_rows(cur, clause, params, limit, offset)]
     conn.close()
     return {"entries": rows}
 
@@ -253,10 +226,9 @@ def get_site_visits(days: int = 30):
     cur = conn.cursor()
     if days > 0:
         since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
-        cur.execute("SELECT * FROM page_visits WHERE timestamp >= %s ORDER BY timestamp ASC", (since,))
+        rows = [dict(r) for r in rop.page_visit_rows_since(cur, since)]
     else:
-        cur.execute("SELECT * FROM page_visits ORDER BY timestamp ASC")
-    rows = [dict(r) for r in cur.fetchall()]
+        rows = [dict(r) for r in rop.page_visit_rows(cur)]
     conn.close()
 
     visitors: dict = {}

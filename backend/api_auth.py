@@ -17,6 +17,7 @@ from pydantic import BaseModel, EmailStr
 
 import auth
 import db
+from repo import ops as rop
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -93,11 +94,7 @@ def register_verify(body: RegisterVerify, response: Response):
     now = datetime.now(timezone.utc).isoformat()
     conn = db.connect()
     cur = conn.cursor()
-    cur.execute(
-        """INSERT INTO users (email, password_hash, name, role, profile_pic, created_at, updated_at)
-           VALUES (%s, %s, %s, NULL, '', %s, %s)""",
-        (email, auth.hash_password(body.password), body.name.strip(), now, now),
-    )
+    rop.insert_user(cur, email, auth.hash_password(body.password), body.name.strip(), now, now)
     user_id = cur.lastrowid
     conn.commit()
     conn.close()
@@ -239,10 +236,7 @@ def password_verify(body: ResetVerify):
 
     conn = db.connect()
     cur = conn.cursor()
-    cur.execute(
-        "UPDATE users SET password_hash=%s, updated_at=%s WHERE email=%s",
-        (auth.hash_password(body.new_password), datetime.now(timezone.utc).isoformat(), email),
-    )
+    rop.update_password(cur, auth.hash_password(body.new_password), datetime.now(timezone.utc).isoformat(), email)
     conn.commit()
     conn.close()
     return {"status": "ok"}
@@ -285,11 +279,10 @@ def update_profile(
         updates.append("updated_at=%s")
         params.append(datetime.now(timezone.utc).isoformat())
         params.append(user["id"])
-        cur.execute(f"UPDATE users SET {', '.join(updates)} WHERE id=%s", params)
+        rop.update_user_fields(cur, updates, params)
         conn.commit()
 
-    cur.execute("SELECT * FROM users WHERE id=%s", (user["id"],))
-    row = cur.fetchone()
+    row = rop.user_row(cur, user["id"])
     cols = [d[0] for d in cur.description]
     conn.close()
     return {"user": _public_user(dict(zip(cols, row)))}

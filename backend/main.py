@@ -22,6 +22,7 @@ from repo import techno as rt
 from repo import special_steel as rss
 from repo import stock as rst
 from repo import ipt as ript
+from repo import text as rtx
 from constants import ALL_PLANTS as _FS_SAIL_8
 from constants import PAGE_MODULES
 from models import PDFRequest, ProductionEntry, ProductionEntryRequest, ProductionRangeSaveRequest, SpecialSteelSaveRequest, SpecialSteelAbpSaveRequest, Page3NarrativeRequest, CostTrendAnnualSaveRequest, CostTrendMonthlySaveRequest, SailMinesSaveRequest, MinesProductionDespatchSaveRequest
@@ -4726,11 +4727,7 @@ async def sail_1page_confirm(payload: dict):
 
         note = payload.get("sales_note")
         if note:
-            cur.execute("""
-                INSERT INTO sail_sales_note_table (report_month, note)
-                VALUES (%s, %s)
-                AS new ON DUPLICATE KEY UPDATE note = new.note
-            """, (month, note))
+            rtx.upsert_sail_sales_note(cur, month, note)
 
         conn.commit()
     finally:
@@ -5164,12 +5161,9 @@ async def get_do_letter_remarks(month: str = Query(...)):
     conn = db.connect()
     cur = conn.cursor()
     try:
-        cur.execute(
-            "SELECT item_name, plant_name, remark FROM do_letter_remark_table WHERE report_month=%s",
-            (month,),
-        )
+        rows = rtx.do_letter_remark_rows(cur, month)
         out = {"Crude Steel": {}, "Finished Steel": {}}
-        for item_name, plant_name, remark in cur.fetchall():
+        for item_name, plant_name, remark in rows:
             out.setdefault(item_name, {})[plant_name] = remark or ""
         return out
     finally:
@@ -5197,16 +5191,9 @@ async def save_do_letter_remarks(payload: dict):
             if not item_name or not plant_name:
                 continue
             if remark:
-                cur.execute("""
-                    INSERT INTO do_letter_remark_table (report_month, item_name, plant_name, remark)
-                    VALUES (%s, %s, %s, %s)
-                    AS new ON DUPLICATE KEY UPDATE remark = new.remark
-                """, (report_month, item_name, plant_name, remark))
+                rtx.upsert_do_letter_remark(cur, report_month, item_name, plant_name, remark)
             else:
-                cur.execute(
-                    "DELETE FROM do_letter_remark_table WHERE report_month=%s AND item_name=%s AND plant_name=%s",
-                    (report_month, item_name, plant_name),
-                )
+                rtx.delete_do_letter_remark(cur, report_month, item_name, plant_name)
             saved += 1
         conn.commit()
     finally:

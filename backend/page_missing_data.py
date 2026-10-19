@@ -54,6 +54,7 @@ from repo import stock as rst
 from repo import ipt as ript
 from repo import cost_trend as rct
 from repo import mines as rmn
+from repo import text as rtx
 
 _TP_DIR = str(Path(__file__).parent / "techno_project")
 if _TP_DIR not in sys.path:
@@ -270,10 +271,7 @@ def generate_missing_data(report_month: str) -> dict:
             "report_pages": "3",
             "checks": [{
                 "label": "SAIL",
-                "present": bool(_rows(
-                    "SELECT 1 FROM page3_narrative WHERE report_month = %s "
-                    "AND (COALESCE(production_narrative,'') != '' OR COALESCE(highlights,'') != '')",
-                    [report_month])),
+                "present": rtx.page3_narrative_any_row(report_month),
                 "data_entry": [{"label": "Report page 3 (inline edit)", "link": "/report"}],
             }],
         },
