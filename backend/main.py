@@ -5,6 +5,7 @@ import re
 from repo.conn import Row, OperationalError
 import time
 import uuid
+import datetime as _dt   # module-level so tools.parity_snapshot --today can pin it
 import asyncio
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Query, Depends
 from fastapi.concurrency import run_in_threadpool
@@ -5742,7 +5743,6 @@ async def get_ipt_fy(fy_start: int = Query(...)):
 # ---------------------------------------------------------------------------
 
 def _latest_report_month() -> str:
-    import datetime as _dt
     conn = db.connect()
     cur = conn.cursor()
     row = rp.latest_actual_month(cur)
@@ -7651,7 +7651,6 @@ def _radar_default_month() -> str:
     entered, so the latest techno_data row is often sparse); falls back to
     the latest available month with any techno data at all if even that's
     empty."""
-    import datetime as _dt
     available = db.get_techno_months() or []
     _now = _dt.datetime.now()
     last_month = (_now.replace(day=1) - _dt.timedelta(days=1)).strftime("%Y-%m")

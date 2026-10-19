@@ -1,7 +1,8 @@
 """Freeze what the app shows, so a schema change can be proven invisible.
 
     python -m tools.parity_snapshot --db mis_reports_baseline --out <dir> \
-        [--months 2024-04..2026-09,2016-03,2021-03] [--pdf-months 2026-08,2026-09]
+        [--months 2024-04..2026-09,2016-03,2021-03] [--pdf-months 2026-08,2026-09] \
+        [--today 2026-10-19]
 
 Runs the FastAPI app in-process (fastapi.testclient.TestClient) against the
 MySQL schema `db_name` - never the live `mis_reports` - and writes, for every
@@ -14,6 +15,28 @@ Layout of out_dir:
     <YYYY-MM>/report.pdf.txt              full report PDF text (pdf months only)
     _global/<endpoint-slug>.json          endpoints that do not depend on the month
                                           (FY-keyed ones once per FY, value in the slug)
+
+--today YYYY-MM-DD pins the app's notion of "today" for the whole run. The
+baseline snapshot was taken on 2026-10-19, so every parity run passes
+--today 2026-10-19. Date-dependent output reached by snapshotted endpoints
+(the capital-repair calendar's "N days so far" counters, the techno records'
+last month, the default month of some GETs) then cannot drift when a run
+crosses midnight. The patch is per module (TODAY_PINNED_MODULES):
+
+    page_capital_repair.date          generate_capital_repair_calendar's today
+    page_techno_records.date          generate_techno_records' last month
+    main._dt                          _latest_report_month, _radar_default_month
+    api_production_loss.date          production-loss-analysis default today
+    production_loss_analysis.date     build_report's default today ...
+    production_loss_analysis.datetime ... and its "now"
+
+today()/now() return real date/datetime objects for the pinned day; now()
+keeps the real time of day (and honours a tz argument). Constructors,
+classmethods and isinstance behave as the real classes. Timestamps only
+written to logs, or to the DB by write routes (never snapshotted), are left
+alone: api_admin / api_auth / auth, cover_store, db.py writers, todo /
+worklog, secretary_review_text saves, page_techno's calculated_at (POST),
+the PDF job TTL (time.time()) and the upload-only extractors.
 
 Auth: none needed. Only /api/admin/* and /api/auth/me read the session cookie,
 and both are excluded; every other GET is open (the editor/admin gate in
@@ -29,6 +52,7 @@ import os
 import re
 import sys
 import time
+from contextlib import contextmanager
 from pathlib import Path
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
@@ -119,6 +143,96 @@ PDF_TIMEOUT_SECONDS = 30 * 60
 # FY-keyed routes that take about a minute per call (Word/annexure builds): run
 # only for the FYs of the PDF months and the FY before, not for every FY seen.
 SLOW_FY_ENDPOINTS = {"/api/board-note/docx", "/api/board-note/annexures"}
+
+
+# ---------------------------------------------------------------------------
+# --today: pin the app's date
+# ---------------------------------------------------------------------------
+
+# (module, attributes to replace). An attribute named date / datetime is that
+# class; any other (main's `_dt`) is the datetime module itself.
+TODAY_PINNED_MODULES = [
+    ("page_capital_repair", ("date",)),
+    ("page_techno_records", ("date",)),
+    ("main", ("_dt",)),
+    ("api_production_loss", ("date",)),
+    ("production_loss_analysis", ("date", "datetime")),
+]
+
+
+def _pinned_classes(day):
+    """(date, datetime) stand-ins whose today()/now() report `day`. Calls,
+    classmethods and isinstance behave as the real classes, and every value
+    they hand out is a real date / datetime."""
+    import datetime as real
+
+    class _Meta(type):
+        def __instancecheck__(cls, obj):
+            return isinstance(obj, cls._real)
+
+        def __subclasscheck__(cls, sub):
+            return issubclass(sub, cls._real)
+
+    class PinnedDate(real.date, metaclass=_Meta):
+        _real = real.date
+
+        def __new__(cls, *a, **k):
+            return real.date(*a, **k)
+
+        @classmethod
+        def today(cls):
+            return real.date(day.year, day.month, day.day)
+
+    class PinnedDatetime(real.datetime, metaclass=_Meta):
+        _real = real.datetime
+
+        def __new__(cls, *a, **k):
+            return real.datetime(*a, **k)
+
+        @classmethod
+        def now(cls, tz=None):
+            return real.datetime.now(tz).replace(year=day.year, month=day.month, day=day.day)
+
+        @classmethod
+        def today(cls):
+            return cls.now()
+
+    return PinnedDate, PinnedDatetime
+
+
+def _pinned_datetime_module(day):
+    """A copy of the datetime module with date / datetime pinned."""
+    import datetime as real
+    import types
+    mod = types.ModuleType("datetime")
+    mod.__dict__.update({k: v for k, v in vars(real).items() if not k.startswith("__")})
+    mod.date, mod.datetime = _pinned_classes(day)
+    return mod
+
+
+@contextmanager
+def pin_today(day):
+    """Pin date.today() / datetime.now() / datetime.today() to `day` (a
+    datetime.date) in every TODAY_PINNED_MODULES module; the real objects are
+    put back on exit. `day` None is a no-op."""
+    if day is None:
+        yield
+        return
+    import importlib
+    pdate, pdatetime = _pinned_classes(day)
+    saved = []
+    try:
+        for name, attrs in TODAY_PINNED_MODULES:
+            mod = importlib.import_module(name)
+            for attr in attrs:
+                new = (pdate if attr == "date" else pdatetime if attr == "datetime"
+                       else _pinned_datetime_module(day))
+                saved.append((mod, attr, getattr(mod, attr)))
+                setattr(mod, attr, new)
+        yield
+    finally:
+        for mod, attr, orig in reversed(saved):
+            setattr(mod, attr, orig)
 
 
 # ---------------------------------------------------------------------------
@@ -434,11 +548,17 @@ def summarise(out_dir: Path) -> dict:
     return summary
 
 
-def snapshot(months: list, out_dir: Path, db_name: str, pdf_months=(), only=None) -> None:
+def snapshot(months: list, out_dir: Path, db_name: str, pdf_months=(), only=None, today=None) -> None:
     """`only`: restrict to these endpoint paths (GET or POST export), e.g. to
-    regenerate a few files in an existing snapshot."""
+    regenerate a few files in an existing snapshot. `today`: a datetime.date
+    pinned as the app's today for the whole run (see pin_today)."""
     out_dir = Path(out_dir)
     _select_database(db_name)
+    with pin_today(today):
+        _snapshot(months, out_dir, db_name, pdf_months, only)
+
+
+def _snapshot(months, out_dir, db_name, pdf_months, only) -> None:
     from fastapi.testclient import TestClient
     import main
 
@@ -519,11 +639,15 @@ def main_cli(argv=None) -> int:
     ap.add_argument("--months", default=DEFAULT_MONTHS)
     ap.add_argument("--pdf-months", default=DEFAULT_PDF_MONTHS, help="months that also get the full report PDF text ('' for none)")
     ap.add_argument("--only", default="", help="comma-separated endpoint paths to (re)generate; other files are left alone")
+    ap.add_argument("--today", default=None,
+                    help="YYYY-MM-DD pinned as the app's today (parity runs: 2026-10-19)")
     a = ap.parse_args(argv)
     months = parse_months(a.months)
     pdf_months = parse_months(a.pdf_months)
     only = {x.strip() for x in a.only.split(",") if x.strip()} or None
-    snapshot(months, a.out, a.db, pdf_months=pdf_months, only=only)
+    import datetime
+    today = datetime.date.fromisoformat(a.today) if a.today else None
+    snapshot(months, a.out, a.db, pdf_months=pdf_months, only=only, today=today)
     return 0
 
 
