@@ -15,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 
 import db
+import dbengine
 from constants import ALL_PLANTS as _FS_SAIL_8
 from constants import PAGE_MODULES
 from models import PDFRequest, ProductionEntry, ProductionEntryRequest, ProductionRangeSaveRequest, SpecialSteelSaveRequest, SpecialSteelAbpSaveRequest, Page3NarrativeRequest, CostTrendAnnualSaveRequest, CostTrendMonthlySaveRequest, SailMinesSaveRequest, MinesProductionDespatchSaveRequest
@@ -452,11 +453,6 @@ from api_cost_trend_extract import router as cost_trend_extract_router
 from api_cover import router as cover_router
 
 db.init_db()
-
-# Mapping of IRON_MAKING param_ids to their corresponding MAJOR param_ids.
-# With recent consolidation of BF params, they share param_ids between groups.
-# This mapping is empty since params are now linked via many-to-many group membership.
-_IM_AVG_TO_MAJOR = {}
 
 # Special Steel trend/performance-analysis page (line + bar charts) has no
 # slot of its own in the fixed 1-40 page numbering (see PAGE_LABELS in
@@ -2965,26 +2961,9 @@ async def confirm_extraction(payload: dict):
                 """, (r["month"], r.get("plant", plant), normalize_item_name(r["item_name"], r.get("plant", plant)), r["value"]))
                 saved_plan += 1
 
-            for r in payload.get("techno_rows", []):
-                # Legacy preview format: (plant_name, parameter_name) → look up param_id
-                # Note: techno_actuals table no longer exists - skip legacy extraction
-                try:
-                    cur.execute(
-                        "SELECT param_id FROM techno_param WHERE row_label=%s AND param_name=%s",
-                        (plant, r.get("parameter", "")),
-                    )
-                    row = cur.fetchone()
-                    if row and r.get("month_actual") is not None:
-                        cur.execute("""
-                            INSERT INTO techno_actuals (report_month, param_id, actual, source)
-                            VALUES (%s, %s, %s, 'excel')
-                            AS new ON DUPLICATE KEY UPDATE
-                                actual = new.actual, source = new.source
-                        """, (month, row[0], r["month_actual"]))
-                        saved_te += 1
-                except OperationalError:
-                    # techno_actuals table doesn't exist - skip
-                    pass
+            # Legacy "techno_rows" are ignored: they targeted techno_param /
+            # techno_actuals, which no longer exist, so they were always
+            # skipped (saved_techno stays 0) while the rest still saved.
             conn.commit()
         finally:
             conn.close()
@@ -2998,22 +2977,15 @@ async def confirm_extraction(payload: dict):
                                        1 if o.get("convert_t", 1) else 0)
                 saved_aliases += 1
 
-        for r in payload.get("techno_param_rows", []):
-            if r.get("actual") is None and r.get("cum_actual") is None:
-                continue
-            pid = db.get_or_create_techno_param(
-                r.get("group_code", ""), r.get("section", ""), r.get("parameter", ""),
-                r.get("unit", ""), r.get("sort_order", 0))
-            src_pri = r.get("source_priority", 5)
-            db.save_techno_value(month, pid, r.get("actual"),
-                                 till_month_actual=r.get("cum_actual"),
-                                 source_priority=src_pri)
-            # Mirror to canonical MAJOR param at priority 4 (won't overwrite manual priority-5 entries)
-            major_pid = _IM_AVG_TO_MAJOR.get(pid)
-            if major_pid:
-                db.save_techno_value(month, major_pid, r.get("actual"), r.get("cum_actual"),
-                                     source_priority=4)
-            saved_mill += 1
+        # Legacy "techno_param_rows" wrote to techno_param, which no longer
+        # exists, so a row carrying a value has always failed here with the
+        # missing-table error (500 "Insertion failed: ..."), after the
+        # production/plan rows and aliases above were already committed.
+        # Kept as-is (known-broken, pending a decision) without touching the DB.
+        if any(r.get("actual") is not None or r.get("cum_actual") is not None
+               for r in payload.get("techno_param_rows", [])):
+            raise OperationalError(
+                1146, f"Table '{dbengine._MYSQL_CFG['database']}.techno_param' doesn't exist")
 
         saved_ss = 0
         _ss_rows_to_save = [r for r in payload.get("special_steel_rows", []) if r.get("status") == "ok"]
@@ -3045,23 +3017,8 @@ async def confirm_extraction(payload: dict):
             db.log_extraction(plant, month, payload.get("file_name", ""),
                               payload.get("sheets", ""),
                               payload.get("source_type", "Preview Confirmed"), total)
-        # Recompute BF shop averages for plants that have per-furnace cross-plant data.
-        # Runs at priority 4 so direct-extracted shop rows (priority 5) are never overwritten.
-        agg_written = 0
-        if plant in ("BSL", "DSP", "RSP", "BSP"):
-            try:
-                import sqlite3 as _sqlite3
-                from techno_aggregates import compute_bf_shop_averages as _bf_agg
-                _conn = _db.connect()
-                agg_written = _bf_agg(_conn, month, plants=[plant])
-                _conn.close()
-            except Exception:
-                pass  # aggregation failure must not block the main save
-
         msg = (f"Inserted {saved_prod} production, {saved_plan} plan, {saved_te} techno, "
                f"{saved_mill} mill techno, {saved_ss} special steel, {saved_stock} opening stock values for {plant} {month}.")
-        if agg_written:
-            msg += f" Computed {agg_written} BF shop aggregate row(s)."
         if saved_aliases:
             msg += f" Remembered {saved_aliases} item-name mapping(s) for future extractions."
         return {
@@ -5599,24 +5556,6 @@ async def api_param_types(unit_type: str = Query(None)):
 
 
 # ---------------------------------------------------------------------------
-# Techno group metadata
-# ---------------------------------------------------------------------------
-
-_GROUP_META = {
-    'IRON_MAKING': {'label': 'Iron Making — Blast Furnace',  'type': 'entry'},
-    'COKE_SINTER': {'label': 'Coke & Sinter',                 'type': 'entry'},
-    'SMS':         {'label': 'Steel Making — SMS',            'type': 'entry'},
-    'MILL_BSP':    {'label': 'Mills — BSP',                   'type': 'entry'},
-    'MILL_DSP':    {'label': 'Mills — DSP',                   'type': 'entry'},
-    'MILL_RSP':    {'label': 'Mills — RSP',                   'type': 'entry'},
-    'MILL_BSL':    {'label': 'Mills — BSL',                   'type': 'entry'},
-    'MILL_ISP':    {'label': 'Mills — ISP',                   'type': 'entry'},
-    'MILLS':       {'label': 'Mills — All Plants',            'type': 'entry'},
-    'GENERAL':     {'label': 'General / Plant-level',         'type': 'entry'},
-    'MAJOR':       {'label': 'Major — Page 27 Display',       'type': 'page'},
-}
-
-# ---------------------------------------------------------------------------
 # Techno manual data entry
 # ---------------------------------------------------------------------------
 
@@ -5662,118 +5601,56 @@ async def get_best_period_records(
 
 @app.get("/api/techno-groups")
 async def get_techno_groups():
-    """Return distinct group_codes with labels and types."""
-    conn = db.connect()
-    cur = conn.cursor()
-    cur.execute("""
-        SELECT group_code, COUNT(*) as cnt
-        FROM techno_param_group
-        GROUP BY group_code
-        ORDER BY group_code
-    """)
-    rows = []
-    for group_code, cnt in cur.fetchall():
-        meta = _GROUP_META.get(group_code, {'label': group_code, 'type': 'entry'})
-        rows.append({
-            "group_code": group_code,
-            "label": meta['label'],
-            "type": meta['type'],
-            "param_count": cnt
-        })
-    conn.close()
-    return {"groups": rows}
+    """Known-broken legacy endpoint, pending a decision.
+
+    It listed groups from techno_param_group, which no longer exists, so it
+    has always failed with an unhandled error (500 "Internal Server Error").
+    That response is kept without touching the DB."""
+    raise RuntimeError("/api/techno-groups: techno_param_group no longer exists")
 
 
 @app.get("/api/techno-monthly-data")
 async def get_techno_monthly_data(group_code: str = Query(...), month: str = Query(...)):
-    """Return all params for a group with their current monthly actual and till_month_actual."""
-    try:
-        conn = db.connect()
-        cur = conn.cursor()
-        cur.execute("""
-            SELECT p.param_name, p.row_label, p.unit, p.param_id, g.sort_order,
-                   a.actual, a.till_month_actual, a.source
-            FROM techno_param p
-            JOIN techno_param_group g ON p.param_id = g.param_id
-            LEFT JOIN techno_actuals a ON a.param_id = p.param_id AND a.report_month = %s
-            WHERE g.group_code = %s
-            ORDER BY g.sort_order, p.param_id
-        """, (month, group_code))
-        rows = cur.fetchall()
-        conn.close()
-    except OperationalError:
-        # Legacy schema not available - return empty results
-        rows = []
-        conn = db.connect()
-        conn.close()
-
-    sections_map = {}
-    section_order = []
-    for param_name, row_label, unit, param_id, _, actual, till_month_actual, source in rows:
-        if param_name not in sections_map:
-            sections_map[param_name] = {"section": param_name, "unit": unit, "rows": []}
-            section_order.append(param_name)
-        sections_map[param_name]["rows"].append({
-            "param_id": param_id,
-            "row_label": row_label,
-            "unit": unit,
-            "actual": actual,
-            "till_month_actual": till_month_actual,
-            "source": source,
-        })
-
+    """Legacy endpoint: params came from techno_param / techno_actuals, which
+    no longer exist, so the result has always been empty. Kept as such."""
     return {
         "group_code": group_code,
         "month": month,
-        "sections": [sections_map[s] for s in section_order],
+        "sections": [],
     }
 
 
 @app.post("/api/techno-manual-save")
 async def save_techno_manual(payload: dict):
     """
-    Save manually entered techno values.
-    Payload: { group_code, month, rows: [{param_id, actual, till_month_actual}] }
+    Legacy manual techno save.
+    Payload: { group_code, month, rows: [{param_id, actual, till_month_actual, clear}] }
+
+    Values went to techno_actuals, which no longer exists; the write errors
+    were swallowed, so a row with a value was reported as saved and a clear
+    as not cleared, while nothing was stored. That response is kept without
+    touching the DB.
     """
     month = payload.get("month", "")
     rows = payload.get("rows", [])
     if not month or not rows:
         raise HTTPException(status_code=400, detail="month and rows are required")
 
+    def _flt(x):
+        try:
+            return float(x) if x not in (None, "", "–", "-") else None
+        except (ValueError, TypeError):
+            return None
+
     saved = 0
     cleared = 0
     for r in rows:
-        param_id = r.get("param_id")
-        if param_id is None:
+        if r.get("param_id") is None:
             continue
-        clear = r.get("clear", False)
-
-        if clear:
-            try:
-                conn = db.connect()
-                conn.execute("DELETE FROM techno_actuals WHERE param_id=%s AND report_month=%s",
-                             (param_id, month))
-                conn.commit()
-                conn.close()
-                cleared += 1
-            except OperationalError:
-                # techno_actuals table doesn't exist - skip
-                pass
+        if r.get("clear", False):
             continue
-
-        def _flt(x):
-            try:
-                return float(x) if x not in (None, "", "–", "-") else None
-            except (ValueError, TypeError):
-                return None
-
-        actual           = _flt(r.get("actual"))
-        till_month_actual = _flt(r.get("till_month_actual"))
-
-        if actual is None and till_month_actual is None:
+        if _flt(r.get("actual")) is None and _flt(r.get("till_month_actual")) is None:
             continue
-
-        db.save_techno_monthly(param_id, month, actual, till_month_actual, source_priority=5)
         saved += 1
 
     return {
@@ -5787,192 +5664,16 @@ async def save_techno_manual(payload: dict):
 @app.get("/api/sail-sms-params")
 def get_sail_sms_params(month: str = Query(..., description="YYYY-MM")):
     """
-    Calculate SAIL consolidated SMS parameters (Hot Metal Consumption, Scrap Consumption)
-    using weighted average by Crude Steel production.
+    Legacy SAIL consolidated SMS parameters (Hot Metal / Scrap Consumption).
 
-    Returns: {
-        "month": "2026-03",
-        "sail_params": {
-            "Hot Metal Consumption": {
-                "actual": 1042.90,
-                "till_month_actual": 1042.35,
-                "source": "calculated",  # or "db"
-                "unit": "Kg/TCS"
-            },
-            "Scrap Consumption": { ... }
-        }
-    }
+    The values came from techno_actuals / techno_param, which no longer
+    exist, so sail_params has always been empty: {"month": month,
+    "sail_params": {}}. A month that is not "YYYY-MM" still fails (500), as
+    before. Kept as such without touching the DB.
     """
-
-    SMS_SHOPS = [
-        "BSP SMS-2", "BSP SMS-3", "DSP SMS",
-        "RSP SMS-1", "RSP SMS-2",
-        "BSL SMS-1", "BSL SMS-2",
-        "ISP SMS-1",
-    ]
-
-    SMS_SHOP_PLANT = {
-        "BSP SMS-2": "BSP", "BSP SMS-3": "BSP", "DSP SMS": "DSP",
-        "RSP SMS-1": "RSP", "RSP SMS-2": "RSP",
-        "BSL SMS-1": "BSL", "BSL SMS-2": "BSL", "ISP SMS-1": "ISP",
-    }
-
-    SMS_PARAMS = ["Hot Metal Consumption", "Scrap Consumption"]
-
-    result = {"month": month, "sail_params": {}}
-    db_values = {}
-    sms_values = {}
-
-    try:
-        conn = db.connect()
-        cursor = conn.cursor()
-
-        # First check if SAIL values exist in DB
-        cursor.execute(
-            """SELECT p.param_name, a.actual, a.till_month_actual
-               FROM techno_actuals a
-               JOIN techno_param p ON a.param_id = p.param_id
-               WHERE p.row_label = 'SAIL'
-                 AND a.report_month = %s
-                 AND p.param_name IN ('Hot Metal Consumption', 'Scrap Consumption')""",
-            (month,)
-        )
-
-        for param_name, actual, till_month in cursor.fetchall():
-            db_values[param_name] = (actual, till_month, "db")
-
-        # Get SMS shop values
-        cursor.execute(
-            """SELECT p.row_label, p.param_name, a.actual, a.till_month_actual
-               FROM techno_actuals a
-               JOIN techno_param p ON a.param_id = p.param_id
-               WHERE p.param_name IN ('Hot Metal Consumption', 'Scrap Consumption')
-                 AND a.report_month = %s
-                 AND p.row_label IN ({})""".format(','.join(['%s' for _ in SMS_SHOPS])),
-            [month] + SMS_SHOPS
-        )
-
-        for shop, param_name, actual, till_month in cursor.fetchall():
-            if param_name not in sms_values:
-                sms_values[param_name] = {}
-            sms_values[param_name][shop] = (actual, till_month)
-        conn.close()
-    except OperationalError:
-        # Legacy schema not available - continue with empty values
-        pass
-
-    # Get Crude Steel production (monthly and YTD)
-    cursor.execute(
-        """SELECT plant_name, month_actual
-           FROM production_table
-           WHERE item_name = 'Total Crude Steel'
-             AND report_month = %s""",
-        (month,)
-    )
-
-    cs_monthly = {}
-    for plant, value in cursor.fetchall():
-        if value is not None:
-            cs_monthly[plant] = value
-
-    # Get YTD Crude Steel (sum from Apr to this month)
-    # Extract year and month from the month string
     year, month_num = month.split('-')
-    year, month_num = int(year), int(month_num)
-
-    # Build list of months from Apr (04) of previous year to current month
-    ytd_months = []
-    if month_num >= 4:
-        # Same fiscal year
-        for m in range(4, month_num + 1):
-            ytd_months.append(f"{year}-{m:02d}")
-    else:
-        # Previous fiscal year started in Apr of previous year
-        prev_year = year - 1
-        for m in range(4, 13):
-            ytd_months.append(f"{prev_year}-{m:02d}")
-        for m in range(1, month_num + 1):
-            ytd_months.append(f"{year}-{m:02d}")
-
-    cursor.execute(
-        """SELECT plant_name, SUM(month_actual) as ytd_cs
-           FROM production_table
-           WHERE item_name = 'Total Crude Steel'
-             AND report_month IN ({})
-           GROUP BY plant_name""".format(','.join(['%s' for _ in ytd_months])),
-        ytd_months
-    )
-
-    cs_ytd = {}
-    for plant, value in cursor.fetchall():
-        if value is not None:
-            cs_ytd[plant] = value
-
-    conn.close()
-
-    # Calculate weighted averages for each parameter
-    for param_name in SMS_PARAMS:
-        # Check if value exists in DB
-        if param_name in db_values:
-            actual, till_month, source = db_values[param_name]
-            result["sail_params"][param_name] = {
-                "actual": actual,
-                "till_month_actual": till_month,
-                "source": source,
-                "unit": "Kg/TCS"
-            }
-            continue
-
-        # Calculate if not in DB
-        if param_name not in sms_values or not sms_values[param_name]:
-            continue
-
-        shop_values = sms_values[param_name]
-
-        # Count shops per plant
-        shops_per_plant = {}
-        for shop in SMS_SHOPS:
-            plant = SMS_SHOP_PLANT[shop]
-            shops_per_plant[plant] = shops_per_plant.get(plant, 0) + 1
-
-        # Calculate weighted averages directly from SMS shops
-        # Each shop gets equal share of its plant's CS production
-        monthly_sum = 0.0
-        total_cs_monthly_sum = 0.0
-        ytd_sum = 0.0
-        total_cs_ytd_sum = 0.0
-
-        for shop in SMS_SHOPS:
-            if shop not in shop_values:
-                continue
-
-            actual, till = shop_values[shop]
-            plant = SMS_SHOP_PLANT[shop]
-
-            # Each shop gets equal share of plant's CS
-            cs_m = cs_monthly.get(plant, 0) / shops_per_plant[plant]
-            cs_y = cs_ytd.get(plant, 0) / shops_per_plant[plant]
-
-            if actual is not None:
-                monthly_sum += actual * cs_m
-                total_cs_monthly_sum += cs_m
-
-            if till is not None:
-                ytd_sum += till * cs_y
-                total_cs_ytd_sum += cs_y
-
-        actual_value = monthly_sum / total_cs_monthly_sum if total_cs_monthly_sum > 0 else None
-        till_value = ytd_sum / total_cs_ytd_sum if total_cs_ytd_sum > 0 else None
-
-        if actual_value is not None or till_value is not None:
-            result["sail_params"][param_name] = {
-                "actual": actual_value,
-                "till_month_actual": till_value,
-                "source": "calculated",
-                "unit": "Kg/TCS"
-            }
-
-    return result
+    int(year), int(month_num)
+    return {"month": month, "sail_params": {}}
 
 
 # ---------------------------------------------------------------------------
