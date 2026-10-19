@@ -17,7 +17,7 @@ def clean_val(val) -> Optional[float]:
 def extract_and_save_excel_plan(file_path: str, financial_year: str) -> bool:
     """
     Extracts data from Excel ABP Plan file for all 12 months.
-    Writes directly to SQLite table production_plan_table.
+    Writes directly to the MySQL table production_plan_table.
     """
     try:
         wb = openpyxl.load_workbook(file_path, data_only=True)
@@ -102,7 +102,7 @@ def extract_and_save_excel_plan(file_path: str, financial_year: str) -> bool:
         
         vals_extracted = 0
         
-        # Connect to SQLite
+        # Connect to the database
         conn = db.connect()
         cursor = conn.cursor()
         

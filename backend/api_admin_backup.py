@@ -229,8 +229,7 @@ def _source_table_counts(path: Path) -> dict:
 
 def _live_table_counts() -> dict:
     """{table: row_count} for every table currently in mis_reports, via the
-    app's own MySQL connection (db.py) rather than shelling out — a plain
-    SHOW TABLES / SELECT COUNT(*) needs no SQLite-dialect translation."""
+    app's own MySQL connection (db.py) rather than shelling out."""
     conn = db.connect()
     try:
         cur = conn.cursor()

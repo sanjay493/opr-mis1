@@ -2595,8 +2595,8 @@ def _plan_preview_rows(plant_name: str, mod, file_path: str, financial_year: str
                 "SELECT plant_name, item_name, report_month, month_actual "
                 "FROM production_plan_table"
             )
-            # Sorted in Python: binary (code point) order, as the old SQLite
-            # preview's ORDER BY gave; MySQL's collation is case-insensitive.
+            # Sorted in Python: binary (code point) order, as the old preview
+            # gave; MySQL's collation would sort case-insensitively.
             return sorted(cur.fetchall(), key=lambda r: (r[0], r[1], r[2]))
         finally:
             cur.execute("DROP TEMPORARY TABLE IF EXISTS production_plan_table")

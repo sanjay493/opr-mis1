@@ -56,7 +56,7 @@ Usage:
   python scripts/backfill_asp_legacy_fl_excel.py            # dry-run: prints a diff, writes nothing
   python scripts/backfill_asp_legacy_fl_excel.py --apply     # actually writes to production_table (live DB)
 
-Dry-run is the default on purpose — this touches the live MySQL DB.
+Dry-run is the default on purpose — this touches the live MySQL DB.
 """
 import sys
 import os
