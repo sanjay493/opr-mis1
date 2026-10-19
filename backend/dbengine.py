@@ -276,7 +276,36 @@ def _open_raw():
         raise _wrap_error(e) from e
 
 
+# ── Shared rolled-back connection (repo.conn.rollback_tx) ──────────────────
+# While set (per thread / asyncio task, via contextvars), every connect() in
+# that context gets this one raw connection, so code that commits on its own
+# connections can be dry-run and rolled back as a whole. Other threads and
+# requests never see it.
+import contextvars as _contextvars
+
+_shared_raw = _contextvars.ContextVar("dbengine_shared_raw", default=None)
+
+
+class _SharedConnWrapper(ConnWrapper):
+    """connect() result inside rollback_tx: commit() is a no-op and close()
+    only detaches; the owner of the shared connection rolls it back and
+    closes it."""
+
+    def __init__(self, conn):
+        super().__init__(conn)
+        self._poolable = False
+
+    def commit(self):
+        pass
+
+    def close(self):
+        self._conn = None
+
+
 def _mysql_connect():
+    shared = _shared_raw.get()
+    if shared is not None:
+        return _SharedConnWrapper(shared)
     raw = _pool_acquire() if _POOL_ENABLED else None
     return ConnWrapper(raw if raw is not None else _open_raw())
 

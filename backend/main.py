@@ -2572,14 +2572,34 @@ _PLAN_PREVIEW_PLANTS = ("RSP", "ISP", "BSP", "DSP", "BSL", "ASP_SSP_VISL", "ASP"
 _PLAN_EXCEL_PLANTS   = ("RSP", "ISP", "BSP", "DSP", "BSL", "ASP_SSP_VISL")
 _PLAN_UNIT_OVERRIDE  = {"Oven Pushing(nos/d)": "nos/d"}   # all other items → '000T
 
-_PLAN_TABLE_DDL = """
-CREATE TABLE IF NOT EXISTS production_plan_table (
-    report_month TEXT NOT NULL,
-    plant_name   TEXT NOT NULL,
-    item_name    TEXT NOT NULL,
-    month_actual REAL,
-    PRIMARY KEY (report_month, plant_name, item_name)
-)"""
+def _plan_preview_rows(plant_name: str, mod, file_path: str, financial_year: str):
+    """Run a plan extractor as a dry run and return the rows it wrote.
+
+    The extractors write production_plan_table and commit on their own
+    db.connect() connections. Inside repo.conn.rollback_tx() all of those
+    connections are this one connection, whose commits are no-ops and which
+    is rolled back and closed at the end. A session TEMPORARY TABLE named
+    production_plan_table shadows the real table on that connection, so the
+    extractor writes into an empty private copy (exactly the rows it
+    produced; no locks on the real table) and nothing reaches the real table.
+    """
+    from repo import conn as _rc
+    with _rc.rollback_tx() as cur:
+        # (LIKE cannot name the table it shadows, hence the rename.)
+        cur.execute("CREATE TEMPORARY TABLE _plan_preview LIKE production_plan_table")
+        cur.execute("ALTER TABLE _plan_preview RENAME TO production_plan_table")
+        try:
+            if not mod.extract_and_save_excel_plan(file_path, financial_year):
+                raise Exception(f"{plant_name} plan extractor returned failure.")
+            cur.execute(
+                "SELECT plant_name, item_name, report_month, month_actual "
+                "FROM production_plan_table"
+            )
+            # Sorted in Python: binary (code point) order, as the old SQLite
+            # preview's ORDER BY gave; MySQL's collation is case-insensitive.
+            return sorted(cur.fetchall(), key=lambda r: (r[0], r[1], r[2]))
+        finally:
+            cur.execute("DROP TEMPORARY TABLE IF EXISTS production_plan_table")
 
 
 @app.post("/api/preview-plan")
@@ -2590,7 +2610,7 @@ async def preview_plan(
 ):
     """Extract ABP plan rows without writing to the real DB.
     Returns plan_rows ready for display; caller confirms via /api/confirm-plan."""
-    import shutil, tempfile, sys, asyncio, concurrent.futures, sqlite3 as _sql
+    import shutil, tempfile, sys, asyncio, concurrent.futures, contextvars
 
     if plant_name not in _PLAN_PREVIEW_PLANTS:
         raise HTTPException(status_code=400,
@@ -2617,78 +2637,51 @@ async def preview_plan(
                     pool, lambda: _asp_mod.extract_preview_pdf(tmp_path, f"{fy_start}-04"))
             return result
 
-        # Excel plants — redirect writes to a temp SQLite, then read back rows
-        tmp_db_fd, tmp_db_path = tempfile.mkstemp(suffix=".db", dir=temp_dir)
-        os.close(tmp_db_fd)
-        try:
-            # Set up minimal schema in the temp DB
-            _c = _sql.connect(tmp_db_path)
-            _c.execute(_PLAN_TABLE_DDL)
-            _c.commit()
-            _c.close()
+        # Excel plants — dry-run the extractor and read back what it wrote
+        if plant_name == "RSP":
+            import excel_extractor_rsp_plan as _mod
+        elif plant_name == "ISP":
+            import excel_extractor_isp_plan as _mod
+        elif plant_name == "BSP":
+            import excel_extractor_bsp_plan as _mod
+        elif plant_name == "BSL":
+            import excel_extractor_bsl_plan as _mod
+        elif plant_name == "ASP_SSP_VISL":
+            import excel_extractor_asp_ssp_visl_plan as _mod
+        else:
+            import excel_extractor_dsp_plan as _mod
 
-            # Load module and patch its DB_PATH to the temp file
-            if plant_name == "RSP":
-                import excel_extractor_rsp_plan as _mod
-            elif plant_name == "ISP":
-                import excel_extractor_isp_plan as _mod
-            elif plant_name == "BSP":
-                import excel_extractor_bsp_plan as _mod
-            elif plant_name == "BSL":
-                import excel_extractor_bsl_plan as _mod
-            elif plant_name == "ASP_SSP_VISL":
-                import excel_extractor_asp_ssp_visl_plan as _mod
-            else:
-                import excel_extractor_dsp_plan as _mod
+        # Run in a copied context so the rollback_tx routing stays confined
+        # to this call, even on a reused worker thread.
+        ctx = contextvars.copy_context()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            rows = await loop.run_in_executor(
+                pool, lambda: ctx.run(_plan_preview_rows, plant_name, _mod,
+                                      tmp_path, financial_year))
 
-            orig_db = _mod.DB_PATH
-            _mod.DB_PATH = tmp_db_path
-            try:
-                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                    ok = await loop.run_in_executor(
-                        pool, lambda: _mod.extract_and_save_excel_plan(tmp_path, financial_year))
-                if not ok:
-                    raise Exception(f"{plant_name} plan extractor returned failure.")
-            finally:
-                _mod.DB_PATH = orig_db
-
-            # Read written rows from the temp DB
-            _c = _sql.connect(tmp_db_path)
-            rows = _c.execute(
-                "SELECT plant_name, item_name, report_month, month_actual "
-                "FROM production_plan_table "
-                "ORDER BY plant_name, item_name, report_month"
-            ).fetchall()
-            _c.close()
-
-            plan_rows = [
-                {
-                    "item_name": r[1],
-                    "month":     r[2],
-                    "value":     r[3],
-                    "unit":      _PLAN_UNIT_OVERRIDE.get(r[1], "'000T"),
-                    "plant":     r[0],
-                    "status":    "ok" if r[3] is not None else "skip",
-                }
-                for r in rows
-            ]
-            ok_count = sum(1 for r in plan_rows if r["status"] == "ok")
-            if ok_count == 0:
-                raise ValueError(f"No data extracted from {plant_name} plan file.")
-
-            return {
-                "plant":          plant_name,
-                "financial_year": financial_year,
-                "plan_rows":      plan_rows,
-                "source_type":    f"{plant_name} ABP Plan Excel",
-                "sheets":         "",
-                "workbook_sheets": [],
+        plan_rows = [
+            {
+                "item_name": r[1],
+                "month":     r[2],
+                "value":     r[3],
+                "unit":      _PLAN_UNIT_OVERRIDE.get(r[1], "'000T"),
+                "plant":     r[0],
+                "status":    "ok" if r[3] is not None else "skip",
             }
-        finally:
-            try:
-                os.unlink(tmp_db_path)
-            except Exception:
-                pass
+            for r in rows
+        ]
+        ok_count = sum(1 for r in plan_rows if r["status"] == "ok")
+        if ok_count == 0:
+            raise ValueError(f"No data extracted from {plant_name} plan file.")
+
+        return {
+            "plant":          plant_name,
+            "financial_year": financial_year,
+            "plan_rows":      plan_rows,
+            "source_type":    f"{plant_name} ABP Plan Excel",
+            "sheets":         "",
+            "workbook_sheets": [],
+        }
 
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))

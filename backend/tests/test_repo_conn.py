@@ -75,6 +75,43 @@ def test_double_percent_in_executemany(mysql_db):
         assert [r[0] for r in cur.fetchall()] == ["BSP%", "DSP%"]
 
 
+def test_rollback_tx_routes_all_connections_and_rolls_back(mysql_db):
+    import threading
+
+    import db
+    ins = "INSERT INTO mou_plan_table VALUES (%s, %s, %s, %s)"
+
+    def other_thread():
+        c = db.connect()
+        c.execute(ins, ("2026-04", "DSP", "Hot Metal", 3.0))
+        c.commit()
+        c.close()
+
+    with rc.rollback_tx() as cur:
+        # Code that commits on its own connections (like the plan extractors).
+        c = db.connect()
+        c.execute(ins, ("2026-04", "BSP", "Hot Metal", 1.0))
+        c.commit()
+        c.close()
+        with rc.tx() as cur2:
+            cur2.execute(ins, ("2026-04", "RSP", "Hot Metal", 2.0))
+        cur.execute("SELECT COUNT(*) AS n FROM mou_plan_table")
+        assert cur.fetchone()["n"] == 2          # sees its own writes
+        # Other threads (other requests) are not routed into the shared tx.
+        t = threading.Thread(target=other_thread)
+        t.start()
+        t.join()
+    with rc.cursor() as cur:
+        cur.execute("SELECT plant_name FROM mou_plan_table")
+        assert [r[0] for r in cur.fetchall()] == ["DSP"]
+    # Outside the block, connect() uses the pool again.
+    c = db.connect()
+    c.execute(ins, ("2026-05", "BSP", "Hot Metal", 4.0))
+    c.commit()
+    c.close()
+    assert _count() == 2
+
+
 def test_missing_table_raises_operational_error(mysql_db):
     with pytest.raises(rc.OperationalError):
         with rc.cursor() as cur:

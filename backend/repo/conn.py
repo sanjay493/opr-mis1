@@ -84,6 +84,14 @@ class Cursor:
         return self._cur.description
 
 
+def _shared_cursor(raw):
+    cur = raw.cursor()
+    try:
+        yield Cursor(cur)
+    finally:
+        cur.close()
+
+
 def _acquire():
     raw = dbengine._pool_acquire() if dbengine._POOL_ENABLED else None
     return raw if raw is not None else dbengine._open_raw()
@@ -93,6 +101,10 @@ def _acquire():
 def cursor():
     """Read cursor on a pooled connection. Never commits: the pool rolls the
     connection back when it is released."""
+    shared = dbengine._shared_raw.get()
+    if shared is not None:          # inside rollback_tx(): use its connection
+        yield from _shared_cursor(shared)
+        return
     raw = _acquire()
     poolable = True
     try:
@@ -111,6 +123,10 @@ def cursor():
 @contextmanager
 def tx():
     """Cursor in a transaction: commit on success, rollback on exception."""
+    shared = dbengine._shared_raw.get()
+    if shared is not None:          # inside rollback_tx(): never commits
+        yield from _shared_cursor(shared)
+        return
     raw = _acquire()
     poolable = True
     try:
@@ -128,3 +144,31 @@ def tx():
             cur.close()
     finally:
         dbengine._pool_release(raw, poolable)
+
+
+@contextmanager
+def rollback_tx():
+    """Cursor in a transaction that is always rolled back, on a dedicated
+    connection that is closed afterwards (never pooled).
+
+    Inside the block, every db.connect() / dbengine.connect() and
+    repo.conn.cursor() / tx() made in the same context (thread or asyncio
+    task; contextvars) uses this same connection, with commit() and close()
+    as no-ops. So code that writes and commits on its own connections (the
+    plan extractors) can be dry-run: nothing it writes persists. Other
+    threads and requests are unaffected.
+    """
+    raw = dbengine._open_raw()
+    token = dbengine._shared_raw.set(raw)
+    try:
+        cur = raw.cursor()
+        try:
+            yield Cursor(cur)
+        finally:
+            cur.close()
+    finally:
+        dbengine._shared_raw.reset(token)
+        try:
+            raw.rollback()
+        finally:
+            raw.close()
