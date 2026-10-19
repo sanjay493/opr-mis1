@@ -32,6 +32,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import db
+from repo import techno as rt
 
 _RENAMES = {
     "specific_co2_emissions": "sp_co2_emission",
@@ -44,11 +45,7 @@ def main(apply: bool):
     db.init_db()
     conn = db.connect()
     cur = conn.cursor()
-    cur.execute(
-        "SELECT plant, report_month, unit, techno_json, source_file "
-        "FROM techno_data WHERE unit = 'General'"
-    )
-    rows = cur.fetchall()
+    rows = rt.general_rows_with_source(cur)
 
     changed = 0
     conflicts = 0

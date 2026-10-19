@@ -58,6 +58,7 @@ import json as _json
 
 import db
 from repo import production as rp
+from repo import techno as rt
 
 PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP"]
 
@@ -120,14 +121,8 @@ def _fetch_techno(report_month: str) -> dict:
     conn = db.connect()
     cur = conn.cursor()
     try:
-        ph = ",".join(["%s"] * len(PLANTS))
-        cur.execute(
-            f"SELECT plant, unit, techno_json FROM techno_data "
-            f"WHERE report_month=%s AND plant IN ({ph})",
-            [report_month, *PLANTS],
-        )
         out = {}
-        for plant, unit, tj in cur.fetchall():
+        for plant, unit, tj in rt.plants_month_rows(cur, report_month, PLANTS):
             out[(plant, unit)] = _json.loads(tj).get("till_month", {})
         return out
     finally:
@@ -392,15 +387,8 @@ def _demurrage_by_plant(ytd_months: list) -> dict:
     conn = db.connect()
     cur = conn.cursor()
     try:
-        ph_p = ",".join(["%s"] * len(PLANTS))
-        ph_m = ",".join(["%s"] * len(ytd_months))
-        cur.execute(
-            f"SELECT plant, report_month, techno_json FROM techno_data "
-            f"WHERE unit=%s AND plant IN ({ph_p}) AND report_month IN ({ph_m})",
-            [_GENERAL_UNIT, *PLANTS, *ytd_months],
-        )
         by_plant_month = {}
-        for plant, rm, tj in cur.fetchall():
+        for plant, rm, tj in rt.unit_plants_months_rows(cur, _GENERAL_UNIT, PLANTS, ytd_months):
             v = _json.loads(tj).get("till_month", {}).get("demurrage")
             if v is not None:
                 by_plant_month[(plant, rm)] = v

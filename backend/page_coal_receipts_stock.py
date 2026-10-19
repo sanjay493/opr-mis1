@@ -26,6 +26,7 @@ reflow column-by-column as they fill in.
 import json as _json
 
 import db
+from repo import techno as rt
 
 _UNIT = "Coal_Receipt_Stock"
 
@@ -40,12 +41,7 @@ def _all_stock_snapshots() -> dict:
     conn = db.connect()
     cur = conn.cursor()
     try:
-        cur.execute(
-            "SELECT report_month, techno_json FROM techno_data "
-            "WHERE plant='SAIL' AND unit=%s ORDER BY report_month ASC",
-            [_UNIT],
-        )
-        rows = cur.fetchall()
+        rows = rt.sail_unit_rows(cur, _UNIT)
     finally:
         conn.close()
 

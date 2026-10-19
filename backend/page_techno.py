@@ -28,6 +28,7 @@ SAIL row computation (MAJOR page + Summary page te_table):
 from decimal import Decimal, ROUND_HALF_UP
 import db
 from repo import production as rp
+from repo import techno as rt
 from techno_cumulative import compute_cumulative_preview, compute_cumulative_from_values
 from bf_benchmark_registry import compute_fuel_rate
 
@@ -362,11 +363,7 @@ def calculate_sail_actuals(report_month: str) -> dict:
                 for month in all_months:
                     # Fetch BF_Shop (BF params) and General (SEC) units
                     for _unit in ("BF_Shop", "General"):
-                        cur.execute(
-                            "SELECT techno_json FROM techno_data WHERE plant=%s AND unit=%s AND report_month=%s",
-                            (plant, _unit, month)
-                        )
-                        row = cur.fetchone()
+                        row = rt.json_row(cur, plant, month, _unit)
                         if row:
                             try:
                                 techno_json = _json.loads(row[0])
@@ -542,11 +539,7 @@ def calculate_sail_actuals_strict(report_month: str) -> dict:
             # figures ARE its shop-wide figures (same rule as BF_UNITS below).
             units = ("BF_Shop", "BF-5", "General") if plant == "ISP" else ("BF_Shop", "General")
             for _unit in units:
-                cur.execute(
-                    "SELECT techno_json FROM techno_data WHERE plant=%s AND unit=%s AND report_month=%s",
-                    (plant, _unit, report_month),
-                )
-                row = cur.fetchone()
+                row = rt.json_row(cur, plant, report_month, _unit)
                 if row:
                     try:
                         techno_json = _json.loads(row[0])
@@ -628,11 +621,7 @@ def _sail_stored_json_value(cur, month, unit, keys, period):
     written by the techno-manual entry page). Returns None when absent so the
     caller falls back to the calculated weighted average."""
     import json as _json
-    cur.execute(
-        "SELECT techno_json FROM techno_data WHERE plant='SAIL' AND unit=%s AND report_month=%s",
-        (unit, month)
-    )
-    row = cur.fetchone()
+    row = rt.json_row(cur, "SAIL", month, unit)
     if not row:
         return None
     try:
@@ -1223,12 +1212,7 @@ def generate_major_techno_from_db(report_month: str, exclude_labels: set = None)
     conn = db.connect()
     cur = conn.cursor()
     try:
-        ph = ",".join(["%s"] * len(all_months))
-        cur.execute(
-            f"SELECT plant, report_month, unit, techno_json FROM techno_data WHERE report_month IN ({ph})",
-            all_months,
-        )
-        for plant, rm, unit, tj in cur.fetchall():
+        for plant, rm, unit, tj in rt.rows_for_months(cur, all_months):
             store.setdefault((plant, rm), {})[unit] = _json.loads(tj)
     finally:
         conn.close()
@@ -1896,12 +1880,7 @@ def generate_major_techno_verification(report_month: str) -> dict:
     conn = db.connect()
     cur = conn.cursor()
     try:
-        ph = ",".join(["%s"] * len(all_months))
-        cur.execute(
-            f"SELECT plant, report_month, unit, techno_json FROM techno_data WHERE report_month IN ({ph})",
-            all_months,
-        )
-        for plant, rm, unit, tj in cur.fetchall():
+        for plant, rm, unit, tj in rt.rows_for_months(cur, all_months):
             store.setdefault((plant, rm), {})[unit] = _json.loads(tj)
     finally:
         conn.close()
@@ -2881,8 +2860,7 @@ def generate_techno_target_columns(page_no: int) -> dict:
     conn = db.connect()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT plant, unit, techno_json FROM techno_data WHERE plant != 'SAIL'")
-        for plant, unit, tj in cur.fetchall():
+        for plant, unit, tj in rt.non_sail_rows(cur):
             try:
                 data = _json.loads(tj)
             except (TypeError, ValueError):
@@ -2990,12 +2968,7 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
     conn = db.connect()
     cur = conn.cursor()
     try:
-        ph = ",".join(["%s"] * len(all_months))
-        cur.execute(
-            f"SELECT plant, report_month, unit, techno_json FROM techno_data WHERE report_month IN ({ph})",
-            all_months,
-        )
-        for plant, rm, unit, tj in cur.fetchall():
+        for plant, rm, unit, tj in rt.rows_for_months(cur, all_months):
             store.setdefault((plant, rm), {})[unit] = _json.loads(tj)
     finally:
         conn.close()
@@ -3006,11 +2979,7 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
     conn = db.connect()
     cur = conn.cursor()
     try:
-        cur.execute(
-            f"SELECT plant_name, unit, techno_json FROM techno_plan_fy WHERE fy = %s",
-            (fy_str,)
-        )
-        for plant_name, unit, tj in cur.fetchall():
+        for plant_name, unit, tj in rt.plan_rows_for_fy(cur, fy_str):
             plan_store[(plant_name, unit)] = _json.loads(tj) if tj else {}
     finally:
         conn.close()

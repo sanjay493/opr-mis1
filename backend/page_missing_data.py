@@ -48,6 +48,7 @@ from pathlib import Path
 
 import db
 from repo import production as rp
+from repo import techno as rt
 
 _TP_DIR = str(Path(__file__).parent / "techno_project")
 if _TP_DIR not in sys.path:
@@ -94,7 +95,12 @@ def _techno_data_presence(report_month: str) -> dict:
     """One pass over techno_data for report_month -> presence sets for the
     4 things it feeds that this checklist tracks (see module docstring for
     why unit-level detail beyond this split isn't attempted)."""
-    rows = _rows("SELECT plant, unit, techno_json FROM techno_data WHERE report_month = %s", [report_month])
+    conn = db.connect()
+    cur = conn.cursor()
+    try:
+        rows = rt.month_rows(cur, report_month)
+    finally:
+        conn.close()
     other_unit_plants, epi_plants, coal_plants, coal_stock_sail = set(), set(), set(), False
     for plant, unit, tj in rows:
         if unit == "Coal_Receipt_Stock":

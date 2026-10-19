@@ -97,6 +97,7 @@ than silently removed.
 import json as _json
 import db
 from repo import production as rp
+from repo import techno as rt
 from bf_benchmark_registry import SAIL_BFS, PARAM_BY_KEY, KEY_ALIASES, compute_fuel_rate
 from page_key_parameters import (
     _COKE_UNITS, _SP_UNIT_MAP, _first_present_val, _round, _days_in_month,
@@ -276,13 +277,7 @@ def _fetch_bf_rows(plant, unit, months):
     conn = db.connect()
     cur = conn.cursor()
     try:
-        ph = ",".join(["%s"] * len(months))
-        cur.execute(
-            f"SELECT report_month, techno_json FROM techno_data "
-            f"WHERE plant=%s AND unit=%s AND report_month IN ({ph})",
-            (plant, unit, *months),
-        )
-        return {rm: _json.loads(tj) for rm, tj in cur.fetchall()}
+        return {rm: _json.loads(tj) for rm, tj in rt.plant_unit_month_rows(cur, plant, unit, months)}
     finally:
         conn.close()
 
@@ -461,14 +456,7 @@ def _coke_ash_and_sinter_fe(plant, unit, report_month, ytd_months, agg_periods=N
     conn = db.connect()
     cur = conn.cursor()
     try:
-        ph_u = ",".join(["%s"] * len(all_units))
-        ph_m = ",".join(["%s"] * len(all_months))
-        cur.execute(
-            f"SELECT unit, report_month, techno_json FROM techno_data "
-            f"WHERE plant=%s AND unit IN ({ph_u}) AND report_month IN ({ph_m})",
-            (plant, *all_units, *all_months),
-        )
-        for row_unit, rm, tj in cur.fetchall():
+        for row_unit, rm, tj in rt.plant_units_month_rows(cur, plant, all_units, all_months):
             rows[(row_unit, rm)] = _json.loads(tj)
     finally:
         conn.close()

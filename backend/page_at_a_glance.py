@@ -15,6 +15,7 @@ import datetime as _dt
 import re as _re
 
 import db
+from repo import techno as rt
 from chart_utils import axis_break_svg, own_scale
 from report_utils import compute_item_row
 from page_techno import generate_at_a_glance_te_table
@@ -560,13 +561,7 @@ def _imported_coal_blend_pct(report_month: str):
     conn = db.connect()
     cur = conn.cursor()
     try:
-        ph = ",".join(["%s"] * len(_COAL_BLEND_PLANTS))
-        cur.execute(
-            f"SELECT plant, unit, techno_json FROM techno_data "
-            f"WHERE report_month=%s AND unit IN ('Coal_Consumption','General') AND plant IN ({ph})",
-            [report_month, *_COAL_BLEND_PLANTS],
-        )
-        rows = cur.fetchall()
+        rows = rt.coal_blend_rows(cur, report_month, _COAL_BLEND_PLANTS)
     finally:
         conn.close()
 

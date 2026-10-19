@@ -18,6 +18,7 @@ this module only reads what's already been saved there.
 """
 import json
 import db
+from repo import techno as rt
 from chart_utils import axis_break_svg, own_scale
 from page_special_steel_trend import (
     _last_n_fys, _fy_months, _rounded_bar_path, _contrast_text,
@@ -81,14 +82,8 @@ def _batched_techno_rows(conn, plant: str, unit: str, months: list) -> dict:
     added — confirmed by tracing dbengine.connect()'s per-call
     pymysql.connect(), which has no pooling."""
     cur = conn.cursor()
-    ph = ",".join(["%s"] * len(months))
-    cur.execute(
-        f"SELECT report_month, techno_json FROM techno_data "
-        f"WHERE plant=%s AND unit=%s AND report_month IN ({ph})",
-        (plant, unit, *months),
-    )
     out = {}
-    for report_month, techno_json in cur.fetchall():
+    for report_month, techno_json in rt.plant_unit_month_rows(cur, plant, unit, months):
         try:
             out[report_month] = json.loads(techno_json)
         except (TypeError, ValueError):
@@ -129,14 +124,8 @@ def _fy_target_pcts(conn, plants: list, fy_label: str, unit: str) -> dict:
     that matters), which would reintroduce one extra connection per plant
     here."""
     cur = conn.cursor()
-    ph = ",".join(["%s"] * len(plants))
-    cur.execute(
-        f"SELECT plant_name, techno_json FROM techno_plan_fy "
-        f"WHERE plant_name IN ({ph}) AND fy=%s AND unit=%s",
-        (*plants, fy_label, unit),
-    )
     out = {}
-    for plant_name, techno_json in cur.fetchall():
+    for plant_name, techno_json in rt.plan_plants_rows(cur, plants, fy_label, unit):
         try:
             data = json.loads(techno_json) if techno_json else {}
         except (TypeError, ValueError):
