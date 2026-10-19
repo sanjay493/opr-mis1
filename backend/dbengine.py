@@ -1,34 +1,26 @@
 """
-Engine abstraction: one connect() that returns either a plain sqlite3
-connection or a MySQL connection wrapped to speak the sqlite3 dialect.
+MySQL connection layer: connect() returns a pooled PyMySQL connection
+wrapped in ConnWrapper, which keeps the small DB-API surface the codebase
+uses (cursor(), execute(), commit(), rollback(), close(), row_factory).
 
-Selected by DB_ENGINE in backend/.env ('sqlite' default, or 'mysql').
-Call sites keep their existing shape — qmark placeholders, sqlite upsert
-syntax, conn.row_factory = sqlite3.Row, except sqlite3.OperationalError —
-and the wrapper translates at execute time:
+SQL is native MySQL (``%s`` placeholders). The wrapper always passes a
+params tuple to PyMySQL (empty when there are none), so every literal ``%``
+in SQL text is written ``%%``.
 
-  ?                                  -> %s   (all literal % escaped first)
-  ON CONFLICT(..) DO UPDATE SET      -> AS excluded ON DUPLICATE KEY UPDATE
-                                        (MySQL 8.0.19+ row alias, so existing
-                                        `excluded.col` references work as-is)
-  INSERT OR REPLACE / OR IGNORE      -> REPLACE / INSERT IGNORE
-  pymysql Programming/OperationalErr -> sqlite3.OperationalError (5 call
-                                        sites catch it for missing tables)
-  DATETIME/DATE/TIMESTAMP results    -> ISO strings (sqlite semantics)
-  CAST(x AS INTEGER)                 -> CAST(x AS SIGNED)
-
-The two PRAGMA table_info sites and init_db's CREATE TABLEs are handled in
-db.py (skipped under MySQL — schema is owned by scripts/mysql_schema.sql).
+  conn.row_factory = Row             -> fetches return Row objects
+                                        (row[0], row['col'], dict(row))
+  pymysql ProgrammingError           -> pymysql OperationalError (callers
+                                        catch OperationalError for missing
+                                        tables, as they did before)
+  DATETIME/DATE/TIMESTAMP results    -> ISO strings
 """
 import os
 import re
-import sqlite3
 
+import pymysql
 from dotenv import load_dotenv
 
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
-
-DB_ENGINE = os.environ.get("DB_ENGINE", "sqlite").strip().lower()
 
 _MYSQL_CFG = {
     "host":     os.environ.get("MYSQL_HOST", "127.0.0.1"),
@@ -38,48 +30,15 @@ _MYSQL_CFG = {
     "password": os.environ.get("MYSQL_PASSWORD", ""),
 }
 
-
-# ── SQL translation (sqlite dialect -> MySQL), cached per statement ─────────
-
-_UPSERT_RE = re.compile(r"ON\s+CONFLICT\s*\([^)]*\)\s*DO\s+UPDATE\s+SET", re.I)
-_OR_REPLACE_RE = re.compile(r"\bINSERT\s+OR\s+REPLACE\b", re.I)
-_OR_IGNORE_RE = re.compile(r"\bINSERT\s+OR\s+IGNORE\b", re.I)
-# sqlite GLOB with a literal pattern -> MySQL REGEXP. Charset classes carry
-# over verbatim; * -> .*, ? (already %s after qmark translation) -> .
-_GLOB_RE = re.compile(r"\bGLOB\s+'([^']*)'", re.I)
+IntegrityError = pymysql.err.IntegrityError
+OperationalError = pymysql.err.OperationalError
 
 
-def _glob_to_regexp(m):
-    pat = m.group(1).replace("*", ".*").replace("%s", ".")
-    return f"REGEXP '^{pat}$'"
-
-_translate_cache = {}
-
-
-def translate_sql(sql: str) -> str:
-    out = _translate_cache.get(sql)
-    if out is not None:
-        return out
-    # Literal % first (e.g. LIKE '%SMS%'), THEN qmark -> %s. Safe because the
-    # source dialect is qmark-only: any % in the original SQL is literal.
-    t = sql.replace("%", "%%").replace("?", "%s")
-    t = _UPSERT_RE.sub("AS excluded ON DUPLICATE KEY UPDATE", t)
-    t = _OR_REPLACE_RE.sub("REPLACE", t)
-    t = _OR_IGNORE_RE.sub("INSERT IGNORE", t)
-    t = _GLOB_RE.sub(_glob_to_regexp, t)
-    # sqlite datetime('now') -> NOW(); both yield 'YYYY-MM-DD HH:MM:SS'
-    t = re.sub(r"datetime\('now'\)", "NOW()", t, flags=re.I)
-    # sqlite CAST(x AS INTEGER) -> MySQL requires SIGNED, not INTEGER
-    t = re.sub(r"\bAS\s+INTEGER\b", "AS SIGNED", t, flags=re.I)
-    _translate_cache[sql] = t
-    return t
-
-
-# ── sqlite3.Row-compatible row for MySQL results ────────────────────────────
+# ── Result row ──────────────────────────────────────────────────────────────
 
 class Row:
-    """Supports row[0], row['col'] (case-insensitive like sqlite3.Row),
-    iteration over values, len(), keys(), and dict(row)."""
+    """Supports row[0], row['col'] (case-insensitive fallback), iteration
+    over values, len(), keys(), and dict(row)."""
     __slots__ = ("_keys", "_values", "_lower")
 
     def __init__(self, keys, values):
@@ -110,14 +69,13 @@ class Row:
         return f"Row({dict(zip(self._keys, self._values))!r})"
 
 
-# ── MySQL wrappers mimicking the sqlite3 API surface used in this codebase ──
+# ── Connection / cursor wrappers ────────────────────────────────────────────
 
 def _wrap_error(exc):
-    import pymysql
-    if isinstance(exc, pymysql.err.IntegrityError):
-        return sqlite3.IntegrityError(str(exc))
-    if isinstance(exc, (pymysql.err.ProgrammingError, pymysql.err.OperationalError)):
-        return sqlite3.OperationalError(str(exc))
+    """ProgrammingError (e.g. missing table) is raised as OperationalError so
+    `except OperationalError` keeps catching both, as callers expect."""
+    if isinstance(exc, pymysql.err.ProgrammingError):
+        return OperationalError(*exc.args)
     return exc
 
 
@@ -131,8 +89,8 @@ class CursorWrapper:
         if _SESSION_STATE_RE.search(sql):
             self._conn._poolable = False
         try:
-            self._cur.execute(translate_sql(sql), tuple(params) or None)
-        except Exception as e:  # noqa: BLE001 - re-raise as sqlite3 error
+            self._cur.execute(sql, tuple(params))
+        except pymysql.err.ProgrammingError as e:
             raise _wrap_error(e) from e
         return self
 
@@ -140,8 +98,8 @@ class CursorWrapper:
         if _SESSION_STATE_RE.search(sql):
             self._conn._poolable = False
         try:
-            self._cur.executemany(translate_sql(sql), [tuple(p) for p in seq_of_params])
-        except Exception as e:  # noqa: BLE001
+            self._cur.executemany(sql, [tuple(p) for p in seq_of_params])
+        except pymysql.err.ProgrammingError as e:
             raise _wrap_error(e) from e
         return self
 
@@ -194,8 +152,8 @@ class CursorWrapper:
 
 
 class ConnWrapper:
-    """PyMySQL connection with the sqlite3.Connection surface this codebase
-    uses: cursor(), execute(), commit(), rollback(), close(), row_factory.
+    """PyMySQL connection with the surface this codebase uses: cursor(),
+    execute(), commit(), rollback(), close(), row_factory.
 
     close() hands the raw connection back to the pool (see below) instead of
     closing it, unless the connection picked up session state."""
@@ -207,7 +165,7 @@ class ConnWrapper:
 
     def cursor(self):
         if self._conn is None:
-            raise sqlite3.ProgrammingError("Cannot operate on a closed database.")
+            raise pymysql.err.ProgrammingError("Cannot operate on a closed database.")
         return CursorWrapper(self._conn.cursor(), self)
 
     def execute(self, sql, params=()):
@@ -228,8 +186,7 @@ class ConnWrapper:
 
 
 # ── Connection reuse (MySQL) ────────────────────────────────────────────────
-# Callers were written for sqlite, where connect() is a cheap file open, and
-# open a fresh connection for nearly every query (db.py alone has ~110
+# Callers open a fresh connection for nearly every query (db.py alone has ~110
 # connect() sites; one report page can make hundreds of calls). A new MySQL
 # connection costs ~3-4 ms (TCP + handshake + auth), which dominated slow
 # pages. So close() returns the raw PyMySQL connection to a small idle pool
@@ -300,11 +257,10 @@ def _pool_release(raw, poolable):
 
 
 def _open_raw():
-    import pymysql
     from pymysql import converters
     conv = converters.conversions.copy()
-    # sqlite returns TEXT for stored timestamps; keep string semantics so
-    # callers never see datetime objects where they expect strings.
+    # Timestamps come back as strings (the codebase was written for TEXT
+    # timestamps), so callers never see datetime objects.
     for ft in (pymysql.constants.FIELD_TYPE.DATETIME,
                pymysql.constants.FIELD_TYPE.DATE,
                pymysql.constants.FIELD_TYPE.TIMESTAMP):
@@ -325,9 +281,7 @@ def _mysql_connect():
     return ConnWrapper(raw if raw is not None else _open_raw())
 
 
-def connect(db_path):
-    """Drop-in for sqlite3.connect(DB_PATH): returns a sqlite3 connection or
-    a MySQL wrapper depending on DB_ENGINE. db_path is used only by sqlite."""
-    if DB_ENGINE == "mysql":
-        return _mysql_connect()
-    return sqlite3.connect(db_path)
+def connect(db_path=None):
+    """Pooled MySQL connection (ConnWrapper). db_path is ignored; it is kept
+    only so old call sites keep working."""
+    return _mysql_connect()

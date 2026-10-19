@@ -9,7 +9,7 @@ def _has_month(month):
     try:
         c = db.connect()
         cur = c.cursor()
-        cur.execute("SELECT COUNT(*) FROM production_table WHERE report_month=? AND item_name='Hot Metal'", (month,))
+        cur.execute("SELECT COUNT(*) FROM production_table WHERE report_month=%s AND item_name='Hot Metal'", (month,))
         n = cur.fetchone()[0]
         c.close()
         return n > 0

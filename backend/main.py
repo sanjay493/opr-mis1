@@ -2,7 +2,7 @@ import os
 import json
 import copy
 import re
-import sqlite3
+from repo.conn import Row, OperationalError
 import time
 import uuid
 import asyncio
@@ -1042,9 +1042,9 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
 
         conn = db.connect()
         cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM production_table WHERE report_month = ?", (month,))
+        cursor.execute("SELECT COUNT(*) FROM production_table WHERE report_month = %s", (month,))
         has_actuals = cursor.fetchone()[0] > 0
-        cursor.execute("SELECT COUNT(*) FROM production_plan_table WHERE report_month = ?", (month,))
+        cursor.execute("SELECT COUNT(*) FROM production_plan_table WHERE report_month = %s", (month,))
         has_plans = cursor.fetchone()[0] > 0
         conn.close()
 
@@ -2185,7 +2185,7 @@ def get_special_steel_manual(plant: str = Query(...), month: str = Query(...)):
         cur.execute("""
             SELECT product, quality_grade, section, sort_order, order_qty, actual_despatch
             FROM special_steel_orders
-            WHERE report_month=? AND plant_name=?
+            WHERE report_month=%s AND plant_name=%s
             ORDER BY sort_order ASC, product ASC, quality_grade ASC
         """, (month, plant))
         rows = [
@@ -2210,14 +2210,14 @@ def get_special_steel_ssps_basis(month: str = Query(...)):
     try:
         cur.execute("""
             SELECT month_actual FROM production_table
-            WHERE report_month=? AND plant_name='SSP' AND item_name='Saleable Steel Despatch'
+            WHERE report_month=%s AND plant_name='SSP' AND item_name='Saleable Steel Despatch'
         """, (month,))
         row = cur.fetchone()
         saleable_000t = row[0] if row else None
 
         cur.execute("""
             SELECT month_actual FROM production_table
-            WHERE report_month=? AND plant_name='SSP' AND item_name='Finished Carbon Steel Despatch'
+            WHERE report_month=%s AND plant_name='SSP' AND item_name='Finished Carbon Steel Despatch'
         """, (month,))
         row = cur.fetchone()
         carbon_000t = row[0] if row else None
@@ -2263,7 +2263,7 @@ def get_special_steel_abp(financial_year: str = Query(...)):
     conn = db.connect()
     cur = conn.cursor()
     try:
-        ph = ",".join("?" * len(months))
+        ph = ",".join(["%s"] * len(months))
         cur.execute(f"""
             SELECT plant_name, report_month, abp_qty
             FROM special_steel_abp_table
@@ -2287,9 +2287,8 @@ def save_special_steel_abp(request: SpecialSteelAbpSaveRequest):
         for e in request.entries:
             cur.execute("""
                 INSERT INTO special_steel_abp_table (report_month, plant_name, abp_qty)
-                VALUES (?, ?, ?)
-                ON CONFLICT(report_month, plant_name)
-                DO UPDATE SET abp_qty = excluded.abp_qty
+                VALUES (%s, %s, %s)
+                AS new ON DUPLICATE KEY UPDATE abp_qty = new.abp_qty
             """, (e.report_month, e.plant_name, e.abp_qty))
             saved += 1
         conn.commit()
@@ -2715,7 +2714,6 @@ async def confirm_plan(payload: dict):
     if not plan_rows:
         raise HTTPException(status_code=400, detail="No plan rows provided.")
     try:
-        DB_PATH = db.DB_PATH
         conn = db.connect()
         cur = conn.cursor()
         saved = 0
@@ -2724,9 +2722,8 @@ async def confirm_plan(payload: dict):
                 continue
             cur.execute("""
                 INSERT INTO production_plan_table (report_month, plant_name, item_name, month_actual)
-                VALUES (?, ?, ?, ?)
-                ON CONFLICT(report_month, plant_name, item_name)
-                DO UPDATE SET month_actual = excluded.month_actual
+                VALUES (%s, %s, %s, %s)
+                AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
             """, (r["month"], r.get("plant", ""), normalize_item_name(r["item_name"], r.get("plant", "")), r["value"]))
             saved += 1
         conn.commit()
@@ -2952,9 +2949,8 @@ async def confirm_extraction(payload: dict):
                 row_month = r.get("report_month") or month
                 cur.execute("""
                     INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
-                    VALUES (?, ?, ?, ?)
-                    ON CONFLICT(report_month, plant_name, item_name)
-                    DO UPDATE SET month_actual = excluded.month_actual
+                    VALUES (%s, %s, %s, %s)
+                    AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
                 """, (row_month, plant, normalize_item_name(r.get("item_name"), plant), r.get("value")))
                 if r.get("value") is not None:
                     saved_prod += 1
@@ -2964,9 +2960,8 @@ async def confirm_extraction(payload: dict):
                     continue
                 cur.execute("""
                     INSERT INTO production_plan_table (report_month, plant_name, item_name, month_actual)
-                    VALUES (?, ?, ?, ?)
-                    ON CONFLICT(report_month, plant_name, item_name)
-                    DO UPDATE SET month_actual = excluded.month_actual
+                    VALUES (%s, %s, %s, %s)
+                    AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
                 """, (r["month"], r.get("plant", plant), normalize_item_name(r["item_name"], r.get("plant", plant)), r["value"]))
                 saved_plan += 1
 
@@ -2975,19 +2970,19 @@ async def confirm_extraction(payload: dict):
                 # Note: techno_actuals table no longer exists - skip legacy extraction
                 try:
                     cur.execute(
-                        "SELECT param_id FROM techno_param WHERE row_label=? AND param_name=?",
+                        "SELECT param_id FROM techno_param WHERE row_label=%s AND param_name=%s",
                         (plant, r.get("parameter", "")),
                     )
                     row = cur.fetchone()
                     if row and r.get("month_actual") is not None:
                         cur.execute("""
                             INSERT INTO techno_actuals (report_month, param_id, actual, source)
-                            VALUES (?, ?, ?, 'excel')
-                            ON CONFLICT(report_month, param_id) DO UPDATE SET
-                                actual = excluded.actual, source = excluded.source
+                            VALUES (%s, %s, %s, 'excel')
+                            AS new ON DUPLICATE KEY UPDATE
+                                actual = new.actual, source = new.source
                         """, (month, row[0], r["month_actual"]))
                         saved_te += 1
-                except sqlite3.OperationalError:
+                except OperationalError:
                     # techno_actuals table doesn't exist - skip
                     pass
             conn.commit()
@@ -3265,7 +3260,7 @@ async def bsl_bf_techno_preview(
                 _conn = db.connect()
                 _sum_kt = _conn.execute(
                     "SELECT SUM(month_actual) FROM production_table WHERE plant_name='BSL' "
-                    "AND report_month=? AND item_name IN ('BF-1','BF-2','BF-4','BF-5')",
+                    "AND report_month=%s AND item_name IN ('BF-1','BF-2','BF-4','BF-5')",
                     (month,),
                 ).fetchone()[0]
                 _conn.close()
@@ -3437,9 +3432,8 @@ async def bsl_bf_techno_save(payload: dict):
                 conn = db.connect()
                 conn.execute(
                     """INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
-                       VALUES (?, 'BSL', ?, ?)
-                       ON CONFLICT(report_month, plant_name, item_name)
-                       DO UPDATE SET month_actual = excluded.month_actual""",
+                       VALUES (%s, 'BSL', %s, %s)
+                       AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual""",
                     (month, unit, round(prod / 1000.0, 3)),
                 )
                 conn.commit()
@@ -3667,7 +3661,7 @@ async def get_item_mapping_suggestions(plant: str):
 
     # Get all unique item names for this plant
     cursor.execute(
-        "SELECT DISTINCT item_name FROM production_table WHERE plant_name = ?",
+        "SELECT DISTINCT item_name FROM production_table WHERE plant_name = %s",
         (plant,)
     )
     # Process-order the dropdown; sort on the normalized form but keep the
@@ -4042,7 +4036,7 @@ async def get_production_items(plant: str, month: str):
     conn = db.connect()
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT item_name, month_actual FROM production_plan_table WHERE plant_name = ? AND report_month = ? ORDER BY item_name",
+        "SELECT item_name, month_actual FROM production_plan_table WHERE plant_name = %s AND report_month = %s ORDER BY item_name",
         (plant, month),
     )
     plan_rows = {}
@@ -4051,7 +4045,7 @@ async def get_production_items(plant: str, month: str):
         plan_rows[normalized] = row[1]
 
     cursor.execute(
-        "SELECT item_name, month_actual FROM production_table WHERE plant_name = ? AND report_month = ?",
+        "SELECT item_name, month_actual FROM production_table WHERE plant_name = %s AND report_month = %s",
         (plant, month),
     )
     actual_rows = {}
@@ -4132,7 +4126,7 @@ async def save_production_entry(request: ProductionEntryRequest):
                 if paired_entry is not None and getattr(paired_entry, value_type) is not None:
                     continue  # explicit value for both sides — respect it, don't derive
                 cur.execute(
-                    f"SELECT month_actual FROM {table} WHERE plant_name=? AND report_month=? AND item_name=?",
+                    f"SELECT month_actual FROM {table} WHERE plant_name=%s AND report_month=%s AND item_name=%s",
                     ("BSP", request.month, total_item),
                 )
                 row = cur.fetchone()
@@ -4197,7 +4191,7 @@ async def get_conversion_data(fy_start: str = Query(...)):
     ]
     conn = db.connect()
     cur = conn.cursor()
-    phs = ",".join("?" for _ in months)
+    phs = ",".join("%s" for _ in months)
     cur.execute(
         f"SELECT report_month, month_actual FROM production_table "
         f"WHERE plant_name='SAIL' AND item_name='Conversion' AND report_month IN ({phs})",
@@ -4516,10 +4510,10 @@ async def list_production_fys():
     cur = conn.cursor()
     cur.execute("""
         SELECT DISTINCT report_month FROM production_table
-        WHERE report_month GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]'
+        WHERE report_month REGEXP '^[0-9][0-9][0-9][0-9]-[0-9][0-9]$'
         UNION
         SELECT DISTINCT report_month FROM production_plan_table
-        WHERE report_month GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]'
+        WHERE report_month REGEXP '^[0-9][0-9][0-9][0-9]-[0-9][0-9]$'
     """)
     fy_starts = set()
     for (m,) in cur.fetchall():
@@ -4581,7 +4575,7 @@ def _production_fy_data(fy_start: int) -> dict:
     Excel/PDF export endpoints below."""
     months = [f"{fy_start}-{m:02d}" for m in range(4, 13)] + \
              [f"{fy_start + 1}-{m:02d}" for m in range(1, 4)]
-    phs = ",".join("?" for _ in months)
+    phs = ",".join("%s" for _ in months)
 
     conn = db.connect()
     cur = conn.cursor()
@@ -4719,8 +4713,8 @@ def _special_steel_fy_data(fy_start: int) -> dict:
     _production_fy_data's shape/conventions above."""
     months = [f"{fy_start}-{m:02d}" for m in range(4, 13)] + \
              [f"{fy_start + 1}-{m:02d}" for m in range(1, 4)]
-    phs = ",".join("?" for _ in months)
-    plant_phs = ",".join("?" for _ in SPECIAL_STEEL_FY_PLANTS)
+    phs = ",".join("%s" for _ in months)
+    plant_phs = ",".join("%s" for _ in SPECIAL_STEEL_FY_PLANTS)
 
     conn = db.connect()
     cur = conn.cursor()
@@ -4779,7 +4773,7 @@ async def list_special_steel_fys():
     cur = conn.cursor()
     cur.execute("""
         SELECT DISTINCT report_month FROM special_steel_orders
-        WHERE report_month GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]'
+        WHERE report_month REGEXP '^[0-9][0-9][0-9][0-9]-[0-9][0-9]$'
     """)
     fy_starts = set()
     for (m,) in cur.fetchall():
@@ -4880,8 +4874,8 @@ async def sail_1page_confirm(payload: dict):
                 continue
             cur.execute("""
                 INSERT INTO sail_sales_table (report_month, item_name, data_json)
-                VALUES (?, ?, ?)
-                ON CONFLICT(report_month, item_name) DO UPDATE SET data_json = excluded.data_json
+                VALUES (%s, %s, %s)
+                AS new ON DUPLICATE KEY UPDATE data_json = new.data_json
             """, (month, item, json.dumps(data)))
             saved_sales += 1
 
@@ -4893,8 +4887,8 @@ async def sail_1page_confirm(payload: dict):
                 continue
             cur.execute("""
                 INSERT INTO sail_stock_snapshot_table (snapshot_date, item_name, value)
-                VALUES (?, ?, ?)
-                ON CONFLICT(snapshot_date, item_name) DO UPDATE SET value = excluded.value
+                VALUES (%s, %s, %s)
+                AS new ON DUPLICATE KEY UPDATE value = new.value
             """, (snap, item, val))
             saved_stock += 1
 
@@ -4902,8 +4896,8 @@ async def sail_1page_confirm(payload: dict):
         if note:
             cur.execute("""
                 INSERT INTO sail_sales_note_table (report_month, note)
-                VALUES (?, ?)
-                ON CONFLICT(report_month) DO UPDATE SET note = excluded.note
+                VALUES (%s, %s)
+                AS new ON DUPLICATE KEY UPDATE note = new.note
             """, (month, note))
 
         conn.commit()
@@ -5021,11 +5015,11 @@ async def steel_sector_performance_confirm(payload: dict):
     try:
         cur.execute("""
             INSERT INTO steel_sector_performance_table (report_month, data_json, source_file, created_at)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(report_month) DO UPDATE SET
-                data_json = excluded.data_json,
-                source_file = excluded.source_file,
-                created_at = excluded.created_at
+            VALUES (%s, %s, %s, %s)
+            AS new ON DUPLICATE KEY UPDATE
+                data_json = new.data_json,
+                source_file = new.source_file,
+                created_at = new.created_at
         """, (month, json.dumps(payload), source_file, now))
         conn.commit()
     finally:
@@ -5060,11 +5054,11 @@ async def production_query_meta():
     cur = conn.cursor()
     cur.execute("""
         SELECT plant_name, report_month FROM production_table
-        WHERE report_month GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]'
+        WHERE report_month REGEXP '^[0-9][0-9][0-9][0-9]-[0-9][0-9]$'
           AND plant_name != 'plant_name'
         UNION
         SELECT plant_name, report_month FROM production_plan_table
-        WHERE report_month GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]'
+        WHERE report_month REGEXP '^[0-9][0-9][0-9][0-9]-[0-9][0-9]$'
           AND plant_name != 'plant_name'
     """)
     plants, months = set(), set()
@@ -5098,7 +5092,7 @@ async def production_query_items(plants: str = Query(...)):
         names = set()
         for table in ("production_table", "production_plan_table"):
             cur.execute(
-                f"SELECT DISTINCT item_name FROM {table} WHERE plant_name = ?",
+                f"SELECT DISTINCT item_name FROM {table} WHERE plant_name = %s",
                 (plant,),
             )
             names.update(normalize_item_name(r[0], plant) for r in cur.fetchall())
@@ -5154,8 +5148,8 @@ def _production_query_data(start: str, end: str, units: list) -> dict:
 
     if wanted and months:
         query_plants = sorted(set(plant_set) | (set(SAIL_MEMBER_PLANTS) if sail_items else set()))
-        phs_m = ",".join("?" for _ in months)
-        phs_p = ",".join("?" for _ in query_plants)
+        phs_m = ",".join("%s" for _ in months)
+        phs_p = ",".join("%s" for _ in query_plants)
         alias_plan = {k: {} for k in index if k in PLAN_SOURCE_ALIASES}
         member_sums = {"actual": {}, "plan": {}}  # {(item, month): sum over 5 plants}
         conn = db.connect()
@@ -5358,7 +5352,7 @@ async def get_do_letter_remarks(month: str = Query(...)):
     cur = conn.cursor()
     try:
         cur.execute(
-            "SELECT item_name, plant_name, remark FROM do_letter_remark_table WHERE report_month=?",
+            "SELECT item_name, plant_name, remark FROM do_letter_remark_table WHERE report_month=%s",
             (month,),
         )
         out = {"Crude Steel": {}, "Finished Steel": {}}
@@ -5392,12 +5386,12 @@ async def save_do_letter_remarks(payload: dict):
             if remark:
                 cur.execute("""
                     INSERT INTO do_letter_remark_table (report_month, item_name, plant_name, remark)
-                    VALUES (?, ?, ?, ?)
-                    ON CONFLICT(report_month, item_name, plant_name) DO UPDATE SET remark = excluded.remark
+                    VALUES (%s, %s, %s, %s)
+                    AS new ON DUPLICATE KEY UPDATE remark = new.remark
                 """, (report_month, item_name, plant_name, remark))
             else:
                 cur.execute(
-                    "DELETE FROM do_letter_remark_table WHERE report_month=? AND item_name=? AND plant_name=?",
+                    "DELETE FROM do_letter_remark_table WHERE report_month=%s AND item_name=%s AND plant_name=%s",
                     (report_month, item_name, plant_name),
                 )
             saved += 1
@@ -5515,7 +5509,7 @@ async def get_stock_data(plant: str = Query(...), stock_month: str = Query(...))
     cur = conn.cursor()
     cur.execute(
         "SELECT item_type, stock_type, stock FROM stock_table "
-        "WHERE plant_name=? AND stock_month=? ORDER BY item_type, stock_type",
+        "WHERE plant_name=%s AND stock_month=%s ORDER BY item_type, stock_type",
         (plant, stock_month),
     )
     rows = [{"item_type": r[0], "stock_type": r[1] or "", "stock": r[2]} for r in cur.fetchall()]
@@ -5701,13 +5695,13 @@ async def get_techno_monthly_data(group_code: str = Query(...), month: str = Que
                    a.actual, a.till_month_actual, a.source
             FROM techno_param p
             JOIN techno_param_group g ON p.param_id = g.param_id
-            LEFT JOIN techno_actuals a ON a.param_id = p.param_id AND a.report_month = ?
-            WHERE g.group_code = ?
+            LEFT JOIN techno_actuals a ON a.param_id = p.param_id AND a.report_month = %s
+            WHERE g.group_code = %s
             ORDER BY g.sort_order, p.param_id
         """, (month, group_code))
         rows = cur.fetchall()
         conn.close()
-    except sqlite3.OperationalError:
+    except OperationalError:
         # Legacy schema not available - return empty results
         rows = []
         conn = db.connect()
@@ -5757,12 +5751,12 @@ async def save_techno_manual(payload: dict):
         if clear:
             try:
                 conn = db.connect()
-                conn.execute("DELETE FROM techno_actuals WHERE param_id=? AND report_month=?",
+                conn.execute("DELETE FROM techno_actuals WHERE param_id=%s AND report_month=%s",
                              (param_id, month))
                 conn.commit()
                 conn.close()
                 cleared += 1
-            except sqlite3.OperationalError:
+            except OperationalError:
                 # techno_actuals table doesn't exist - skip
                 pass
             continue
@@ -5839,7 +5833,7 @@ def get_sail_sms_params(month: str = Query(..., description="YYYY-MM")):
                FROM techno_actuals a
                JOIN techno_param p ON a.param_id = p.param_id
                WHERE p.row_label = 'SAIL'
-                 AND a.report_month = ?
+                 AND a.report_month = %s
                  AND p.param_name IN ('Hot Metal Consumption', 'Scrap Consumption')""",
             (month,)
         )
@@ -5853,8 +5847,8 @@ def get_sail_sms_params(month: str = Query(..., description="YYYY-MM")):
                FROM techno_actuals a
                JOIN techno_param p ON a.param_id = p.param_id
                WHERE p.param_name IN ('Hot Metal Consumption', 'Scrap Consumption')
-                 AND a.report_month = ?
-                 AND p.row_label IN ({})""".format(','.join(['?' for _ in SMS_SHOPS])),
+                 AND a.report_month = %s
+                 AND p.row_label IN ({})""".format(','.join(['%s' for _ in SMS_SHOPS])),
             [month] + SMS_SHOPS
         )
 
@@ -5863,7 +5857,7 @@ def get_sail_sms_params(month: str = Query(..., description="YYYY-MM")):
                 sms_values[param_name] = {}
             sms_values[param_name][shop] = (actual, till_month)
         conn.close()
-    except sqlite3.OperationalError:
+    except OperationalError:
         # Legacy schema not available - continue with empty values
         pass
 
@@ -5872,7 +5866,7 @@ def get_sail_sms_params(month: str = Query(..., description="YYYY-MM")):
         """SELECT plant_name, month_actual
            FROM production_table
            WHERE item_name = 'Total Crude Steel'
-             AND report_month = ?""",
+             AND report_month = %s""",
         (month,)
     )
 
@@ -5905,7 +5899,7 @@ def get_sail_sms_params(month: str = Query(..., description="YYYY-MM")):
            FROM production_table
            WHERE item_name = 'Total Crude Steel'
              AND report_month IN ({})
-           GROUP BY plant_name""".format(','.join(['?' for _ in ytd_months])),
+           GROUP BY plant_name""".format(','.join(['%s' for _ in ytd_months])),
         ytd_months
     )
 
@@ -6002,7 +5996,7 @@ def get_ipt_entries(month: str = Query(..., description="YYYY-MM")):
     cur.execute("""
         SELECT item, from_plant, to_plant, unit, sort_order,
                plan, actual, plan_tonnage, actual_tonnage
-        FROM ipt_table WHERE report_month = ?
+        FROM ipt_table WHERE report_month = %s
         ORDER BY sort_order, item, from_plant, to_plant
     """, (month,))
     rows = [
@@ -6134,7 +6128,7 @@ def _ipt_fy_data(fy_start: int) -> dict:
     financial year. Mirrors _special_steel_fy_data's shape/conventions."""
     months = [f"{fy_start}-{m:02d}" for m in range(4, 13)] + \
              [f"{fy_start + 1}-{m:02d}" for m in range(1, 4)]
-    phs = ",".join("?" for _ in months)
+    phs = ",".join("%s" for _ in months)
 
     conn = db.connect()
     cur = conn.cursor()
@@ -6192,7 +6186,7 @@ async def list_ipt_fys():
     cur = conn.cursor()
     cur.execute("""
         SELECT DISTINCT report_month FROM ipt_table
-        WHERE report_month GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]'
+        WHERE report_month REGEXP '^[0-9][0-9][0-9][0-9]-[0-9][0-9]$'
     """)
     fy_starts = set()
     for (m,) in cur.fetchall():
@@ -6223,7 +6217,7 @@ def _latest_report_month() -> str:
     conn = db.connect()
     cur = conn.cursor()
     cur.execute("SELECT MAX(report_month) FROM production_table "
-                "WHERE report_month GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]'")
+                "WHERE report_month REGEXP '^[0-9][0-9][0-9][0-9]-[0-9][0-9]$'")
     row = cur.fetchone()
     conn.close()
     return (row[0] if row and row[0] else _dt.date.today().strftime("%Y-%m"))
@@ -6731,7 +6725,7 @@ def get_capital_repair_entries(plant: str = Query(...), fy: str = Query(...)):
                unit_type, unit_name, sms_subtag, actual_start, actual_end,
                actual_ongoing, planned_days
         FROM capital_repair_table
-        WHERE plant=? AND fy=?
+        WHERE plant=%s AND fy=%s
         ORDER BY sort_order ASC, id ASC
     """, (plant, fy))
     rows = [
@@ -6835,7 +6829,7 @@ async def save_capital_repair_entry(payload: dict):
 
     conn = db.connect()
     cur  = conn.cursor()
-    cur.execute("SELECT plant FROM capital_repair_table WHERE id=?", (row_id,))
+    cur.execute("SELECT plant FROM capital_repair_table WHERE id=%s", (row_id,))
     row = cur.fetchone()
     if not row:
         conn.close()
@@ -6866,7 +6860,7 @@ async def save_capital_repair_entry(payload: dict):
         # A row whose Actual exists only as older free text (no structured
         # dates behind it) must not be wiped just because the row was saved
         # for another field - that lost 5 BSP actuals on 2026-09-26.
-        cur.execute("SELECT actual, actual_start FROM capital_repair_table WHERE id=?", (row_id,))
+        cur.execute("SELECT actual, actual_start FROM capital_repair_table WHERE id=%s", (row_id,))
         prev_actual, prev_start = cur.fetchone()
         if not prev_start and (prev_actual or "").strip():
             actual = prev_actual
@@ -6877,13 +6871,13 @@ async def save_capital_repair_entry(payload: dict):
 
     old = db._row_dict(conn,
         "SELECT unit_type, unit_name, sms_subtag, actual_start, actual_end, actual_ongoing, planned_days, actual, "
-        + ", ".join(_CR_PLAN_FIELDS) + " FROM capital_repair_table WHERE id=?", (row_id,))
-    plan_sql = "".join(f", {f}=?" for f in plan_updates)
+        + ", ".join(_CR_PLAN_FIELDS) + " FROM capital_repair_table WHERE id=%s", (row_id,))
+    plan_sql = "".join(f", {f}=%s" for f in plan_updates)
     cur.execute(f"""
         UPDATE capital_repair_table
-        SET unit_type=?, unit_name=?, sms_subtag=?, actual_start=?, actual_end=?,
-            actual_ongoing=?, planned_days=?, actual=?{plan_sql}
-        WHERE id=?
+        SET unit_type=%s, unit_name=%s, sms_subtag=%s, actual_start=%s, actual_end=%s,
+            actual_ongoing=%s, planned_days=%s, actual=%s{plan_sql}
+        WHERE id=%s
     """, (unit_type, unit_name, sms_subtag, actual_start, actual_end,
           int(actual_ongoing), planned_days, actual, *plan_updates.values(), row_id))
     conn.commit()
@@ -6902,12 +6896,12 @@ _CR_PLAN_FIELDS = ("shop", "equipment", "activity", "schedule_days", "period")
 
 def _cr_renumber(cur, plant: str, fy: str, ids: list) -> None:
     for i, rid in enumerate(ids):
-        cur.execute("UPDATE capital_repair_table SET sort_order=? WHERE id=? AND plant=? AND fy=?",
+        cur.execute("UPDATE capital_repair_table SET sort_order=%s WHERE id=%s AND plant=%s AND fy=%s",
                     (i, rid, plant, fy))
 
 
 def _cr_ordered_ids(cur, plant: str, fy: str) -> list:
-    cur.execute("SELECT id FROM capital_repair_table WHERE plant=? AND fy=? ORDER BY sort_order ASC, id ASC",
+    cur.execute("SELECT id FROM capital_repair_table WHERE plant=%s AND fy=%s ORDER BY sort_order ASC, id ASC",
                 (plant, fy))
     return [r[0] for r in cur.fetchall()]
 
@@ -6930,7 +6924,7 @@ async def add_capital_repair_row(payload: dict):
     if copy_from is not None:
         src = db._row_dict(conn,
             "SELECT shop, equipment, activity, unit_type, unit_name, sms_subtag "
-            "FROM capital_repair_table WHERE id=? AND plant=? AND fy=?", (copy_from, plant, fy))
+            "FROM capital_repair_table WHERE id=%s AND plant=%s AND fy=%s", (copy_from, plant, fy))
         if not src:
             conn.close()
             raise HTTPException(status_code=404, detail="Row to copy not found")
@@ -6943,7 +6937,7 @@ async def add_capital_repair_row(payload: dict):
         INSERT INTO capital_repair_table
             (plant, fy, shop, equipment, activity, schedule_days, period, actual,
              unit_type, unit_name, sms_subtag, actual_ongoing, sort_order)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 0, 0)
     """, tuple(new.values()))
     new_id = cur.lastrowid
     ids = [i for i in _cr_ordered_ids(cur, plant, fy) if i != new_id]
@@ -6961,11 +6955,11 @@ async def add_capital_repair_row(payload: dict):
 async def delete_capital_repair_row(row_id: int):
     conn = db.connect()
     cur = conn.cursor()
-    old = db._row_dict(conn, "SELECT * FROM capital_repair_table WHERE id=?", (row_id,))
+    old = db._row_dict(conn, "SELECT * FROM capital_repair_table WHERE id=%s", (row_id,))
     if not old:
         conn.close()
         raise HTTPException(status_code=404, detail="Capital repair row not found")
-    cur.execute("DELETE FROM capital_repair_table WHERE id=?", (row_id,))
+    cur.execute("DELETE FROM capital_repair_table WHERE id=%s", (row_id,))
     _cr_renumber(cur, old["plant"], old["fy"], _cr_ordered_ids(cur, old["plant"], old["fy"]))
     conn.commit()
     conn.close()
@@ -7100,11 +7094,11 @@ async def get_techno_data(plants: str = Query(""), parameters: str = Query("")):
         param_keys = [p.lower().replace(' ', '_') for p in param_list]
 
         conn = db.connect()
-        conn.row_factory = sqlite3.Row
+        conn.row_factory = Row
         cursor = conn.cursor()
 
         # Get techno data for selected plants from new techno_data table
-        placeholders = ','.join('?' * len(plant_list))
+        placeholders = ','.join(['%s'] * len(plant_list))
         cursor.execute(f"""
             SELECT plant, report_month, unit, techno_json
             FROM techno_data
@@ -7642,7 +7636,7 @@ async def get_techno_page_targets(page: float = Query(...), fy: str = Query(...)
                 key = (col["plant"], col["unit"])
                 if key not in cache:
                     cur.execute(
-                        "SELECT techno_json FROM techno_plan_fy WHERE plant_name=? AND unit=? AND fy=?",
+                        "SELECT techno_json FROM techno_plan_fy WHERE plant_name=%s AND unit=%s AND fy=%s",
                         (*key, fy),
                     )
                     row = cur.fetchone()
@@ -7889,7 +7883,7 @@ async def recalculate_sail_weighted(payload: dict):
         cur = conn.cursor()
 
         # Fetch HM production targets by plant (for BF params)
-        ph = ",".join("?" * len(months))
+        ph = ",".join(["%s"] * len(months))
         cur.execute(f"""
             SELECT plant_name, SUM(month_actual)
             FROM production_plan_table
@@ -7926,7 +7920,7 @@ async def recalculate_sail_weighted(payload: dict):
             SELECT plant_name, item_name, SUM(month_actual)
             FROM production_plan_table
             WHERE report_month IN ({ph})
-              AND item_name LIKE '%SMS%'
+              AND item_name LIKE '%%SMS%%'
             GROUP BY plant_name, item_name
         """, months)
 
@@ -8195,7 +8189,7 @@ def _radar_plant_value(cur, plant: str, report_month: str, unit: str, keys: list
         units_to_try = ["BF_Shop", "BF-5"]
     for u in units_to_try:
         cur.execute(
-            "SELECT techno_json FROM techno_data WHERE plant=? AND report_month=? AND unit=?",
+            "SELECT techno_json FROM techno_data WHERE plant=%s AND report_month=%s AND unit=%s",
             (plant, report_month, u),
         )
         r = cur.fetchone()
@@ -8317,7 +8311,7 @@ async def get_techno_summary(fy: str = Query("2026-27")):
             [f"{fy_year}-{m:02d}" for m in range(4, 13)] +
             [f"{fy_year + 1}-{m:02d}" for m in range(1, 4)]
         )
-        ph = ",".join("?" * len(months))
+        ph = ",".join(["%s"] * len(months))
 
         # HM production by plant
         cur.execute(f"""
@@ -8345,8 +8339,8 @@ async def get_techno_summary(fy: str = Query("2026-27")):
                 SELECT SUM(month_actual)
                 FROM production_plan_table
                 WHERE report_month IN ({ph})
-                  AND (item_name = ? OR item_name LIKE ?)
-                  AND plant_name = ?
+                  AND (item_name = %s OR item_name LIKE %s)
+                  AND plant_name = %s
             """, months + [sms_identifier, sms_identifier + " %", plant])
             result = cur.fetchone()
             weight = result[0] if result and result[0] else None
@@ -8361,8 +8355,8 @@ async def get_techno_summary(fy: str = Query("2026-27")):
                         SELECT SUM(month_actual)
                         FROM production_plan_table
                         WHERE report_month IN ({ph})
-                          AND item_name LIKE 'SMS%'
-                          AND plant_name = ?
+                          AND item_name LIKE 'SMS%%'
+                          AND plant_name = %s
                     """, months + [plant])
                     fallback = cur.fetchone()
                     weight = fallback[0] if fallback and fallback[0] else 0

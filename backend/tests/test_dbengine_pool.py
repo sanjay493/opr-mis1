@@ -108,16 +108,15 @@ def test_use_after_close_raises(fake_pool):
 
 
 def test_row_factory_is_fresh_per_connect(fake_pool):
-    import sqlite3
     c = dbengine._mysql_connect()
-    c.row_factory = sqlite3.Row
+    c.row_factory = dbengine.Row
     c.close()
     c2 = dbengine._mysql_connect()
     assert c2.row_factory is None
 
 
 @pytest.mark.parametrize("sql", [
-    "SELECT GET_LOCK(?, 0)",
+    "SELECT GET_LOCK(%s, 0)",
     "SET FOREIGN_KEY_CHECKS = 0",
     "CREATE TEMPORARY TABLE t (x INT)",
 ])

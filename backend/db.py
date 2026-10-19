@@ -1,4 +1,3 @@
-import sqlite3
 import json
 import os
 import copy
@@ -9,25 +8,22 @@ from typing import List, Dict, Any, Optional
 from constants import ALL_PLANTS as PLANTS
 from techno_registry import canonical_unit as _canon_unit
 import dbengine
+from dbengine import Row, IntegrityError, OperationalError
 import activity_context
-
-DB_PATH = os.path.join(os.path.dirname(__file__), "mis_reports.db")
 
 
 def connect():
-    """Single connection factory for the whole backend. Returns a sqlite3
-    connection or a MySQL sqlite-dialect wrapper depending on DB_ENGINE
-    (see dbengine.py). Every module should use this instead of calling
-    connect() directly."""
-    return dbengine.connect(DB_PATH)
+    """Single connection factory for the whole backend: a pooled MySQL
+    connection (see dbengine.py). Deprecated alias kept for existing call
+    sites; new code uses repo.conn.cursor() / repo.conn.tx()."""
+    return dbengine.connect()
 
 
 def _row_dict(conn, sql: str, params) -> Optional[dict]:
-    """Fetch one row as a plain dict, regardless of sqlite/MySQL engine.
-    Used to snapshot a row's 'old' state before an upsert/delete for the
-    activity log (see activity_context.py)."""
+    """Fetch one row as a plain dict. Used to snapshot a row's 'old' state
+    before an upsert/delete for the activity log (see activity_context.py)."""
     prev_factory = conn.row_factory
-    conn.row_factory = sqlite3.Row
+    conn.row_factory = Row
     try:
         cur = conn.cursor()
         cur.execute(sql, params)
@@ -37,1148 +33,11 @@ def _row_dict(conn, sql: str, params) -> Optional[dict]:
         conn.row_factory = prev_factory
 
 
-_INIT_DONE = False
-
 def init_db():
-    """Initializes the database and creates the production tables if they don't exist.
-    Runs the DDL only once per process — subsequent calls are no-ops.
-
-    Under MySQL this is a no-op: the DDL below is sqlite-flavored, and the
-    MySQL schema is owned by scripts/mysql_schema.sql (applied once during
-    migration/deploy), not created lazily at runtime."""
-    global _INIT_DONE
-    if _INIT_DONE:
-        return
-    _INIT_DONE = True
-    if dbengine.DB_ENGINE == "mysql":
-        return
-    conn = connect()
-    cursor = conn.cursor()
-    
-    # 1. Actuals table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS production_table (
-            report_month TEXT,
-            plant_name TEXT,
-            item_name TEXT,
-            month_actual REAL,
-            PRIMARY KEY (report_month, plant_name, item_name)
-        )
-    """)
-    
-    # 2. Plans table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS production_plan_table (
-            report_month TEXT,
-            plant_name TEXT,
-            item_name TEXT,
-            month_actual REAL, -- user requested month_actual as field name here too
-            PRIMARY KEY (report_month, plant_name, item_name)
-        )
-    """)
-
-    # 2c. Power-OIS monthly power data — same narrow (report_month,
-    # plant_name, item_name, value) shape as production_table, its own
-    # table since these aren't production tonnage items and item_name
-    # values (plan_own, actual_total, wheeling_px, last_year_own_cpp_cum,
-    # etc.) come from a different vocabulary. See excel_extractors/
-    # excel_extractor_power_omi.py and page_power_data.py.
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS power_data_table (
-            report_month TEXT,
-            plant_name TEXT,
-            item_name TEXT,
-            value REAL,
-            PRIMARY KEY (report_month, plant_name, item_name)
-        )
-    """)
-
-    # MoU month-wise production targets — see api_mou_plan.py.
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS mou_plan_table (
-            report_month TEXT,
-            plant_name TEXT,
-            item_name TEXT,
-            month_actual REAL,
-            PRIMARY KEY (report_month, plant_name, item_name)
-        )
-    """)
-
-    # 2b. Special Steel ABP (Annual Business Plan) — one monthly target per
-    # plant, entered for all 12 months of a FY at once via the Special Steel
-    # ABP Entry page. plant_name matches special_steel_orders' values (the 5
-    # integrated plants + the 'SSPs' aggregate row), not the broader plant list.
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS special_steel_abp_table (
-            report_month TEXT,
-            plant_name TEXT,
-            abp_qty REAL,
-            PRIMARY KEY (report_month, plant_name)
-        )
-    """)
-
-    # 3. Page configs table for other pages
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS page_configs (
-            report_month TEXT,
-            page_number INTEGER,
-            page_data TEXT,
-            PRIMARY KEY (report_month, page_number)
-        )
-    """)
-    
-    # 4. (removed — techno_table replaced by techno_param + techno_actuals)
-
-    # 5. Special steel orders / actual despatch table.
-    # 'section' is optional (only some plants — e.g. DSP — report it); it is part
-    # of the PK because DSP rows can differ only by section (same product+grade).
-    # SQLite cannot ALTER a PK, so pre-section databases are rebuilt in place,
-    # old rows getting section = ''.
-    cursor.execute("PRAGMA table_info(special_steel_orders)")
-    _ss_cols = [r[1] for r in cursor.fetchall()]
-    if _ss_cols and "section" not in _ss_cols:
-        cursor.execute("ALTER TABLE special_steel_orders RENAME TO special_steel_orders_presection")
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS special_steel_orders (
-            report_month    TEXT,
-            plant_name      TEXT,
-            product         TEXT,
-            quality_grade   TEXT,
-            section         TEXT NOT NULL DEFAULT '',
-            sort_order      INTEGER DEFAULT 0,
-            order_qty       REAL,
-            actual_despatch REAL,
-            PRIMARY KEY (report_month, plant_name, product, quality_grade, section)
-        )
-    """)
-    if _ss_cols and "section" not in _ss_cols:
-        cursor.execute("""
-            INSERT INTO special_steel_orders
-                (report_month, plant_name, product, quality_grade, section,
-                 sort_order, order_qty, actual_despatch)
-            SELECT report_month, plant_name, product, quality_grade, '',
-                   sort_order, order_qty, actual_despatch
-            FROM special_steel_orders_presection
-        """)
-        cursor.execute("DROP TABLE special_steel_orders_presection")
-
-    # 5b. Special Steel grade clubbing — rows sharing (plant_name, product,
-    # club_label) are members of one combined display row on the Special
-    # Steel report. See page_special_steel.py's _resolve_clubs().
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS special_steel_grade_clubs (
-            plant_name     TEXT,
-            product        TEXT,
-            quality_grade  TEXT,
-            club_label     TEXT NOT NULL,
-            created_at     TEXT,
-            PRIMARY KEY (plant_name, product, quality_grade)
-        )
-    """)
-
-    # 5c. "Special Steel Plants Physical Performance" report tables — see
-    # page_special_steel_physical.py and scripts/migrate_add_special_steel_physical.sql.
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS special_steel_phys_perf (
-            financial_year TEXT,
-            plant          TEXT,
-            series         TEXT,
-            metric         TEXT,
-            value_kt       REAL,
-            PRIMARY KEY (financial_year, plant, series, metric)
-        )
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS special_steel_phys_meta (
-            plant          TEXT,
-            series         TEXT,
-            capacity_kt    REAL,
-            best_actual_kt REAL,
-            best_year      TEXT,
-            remark         TEXT,
-            sort_order     INTEGER NOT NULL DEFAULT 0,
-            PRIMARY KEY (plant, series)
-        )
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS special_steel_phys_note (
-            financial_year TEXT,
-            sort_order     INTEGER,
-            note_text      TEXT NOT NULL,
-            PRIMARY KEY (financial_year, sort_order)
-        )
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS special_steel_ipt_requirement (
-            financial_year TEXT,
-            item           TEXT,
-            from_plant     TEXT,
-            to_plant       TEXT,
-            plan_kt        REAL,
-            sort_order     INTEGER NOT NULL DEFAULT 0,
-            PRIMARY KEY (financial_year, item, from_plant, to_plant)
-        )
-    """)
-
-    # 6. Opening stock table — stock as on 1st of stock_month (tonnes)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS stock_table (
-            stock_month TEXT,                -- 'YYYY-MM' → stock as on 1st of this month
-            plant_name  TEXT,
-            item_type   TEXT,                -- STEEL INGOTS / SLABS / BLOOM-BILLETS / FINISHED STEEL / PIG IRON
-            stock_type  TEXT DEFAULT '',     -- INPROCESS / FOR SALE / '' for single-value items
-            stock       REAL,                -- tonnes
-            PRIMARY KEY (stock_month, plant_name, item_type, stock_type)
-        )
-    """)
-
-    # 6b. SAIL sales — Table A of the "1 page report" (LP/FP/PET sales,
-    # exports, etc.). Pure archive: data_json holds all 10 figures the
-    # source department reports (month ABP/Actual/%Ful/CPLY/Growth, same
-    # 5 for Apr-month cumulative) exactly as given — nothing here is
-    # computed or re-derived, since the department's own cumulative
-    # figures are provisional and revise between reports, and we have no
-    # reliable way to reproduce their CPLY/growth from our own history.
-    # See excel_extractors/sail_sales_stock_extractor.py.
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS sail_sales_table (
-            report_month TEXT,
-            item_name    TEXT,
-            data_json    TEXT,
-            PRIMARY KEY (report_month, item_name)
-        )
-    """)
-
-    # 6c-note. Asterisked remark under Table A (Sales) of the "1 page
-    # report", e.g. "*Jul25 & Apr-Jul25 fig incl NSL sales: 98 & 482
-    # respectively" — extracted alongside sail_sales_table (see
-    # sail_sales_stock_extractor.py) and reprinted verbatim under Table A
-    # in the generated report.
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS sail_sales_note_table (
-            report_month TEXT PRIMARY KEY,
-            note         TEXT
-        )
-    """)
-
-    # 6c-steel. "Indian Steel Sector Performance" — PIB Ministry of Steel
-    # monthly release (Report_format/"Indian Steel Sector Performance in
-    # <Mon>'<YY>.pdf"), reproduced verbatim as pages 2.1-2.4 of the report
-    # (see page_steel_sector_performance.py). Pure archive, like
-    # sail_sales_table: one row per report_month, the ENTIRE extracted
-    # content (all numbered tables 1a/1b/1c/2/3a/4a/5 + narrative text
-    # sections 6/7/8) as a single JSON blob, so the extractor stays generic
-    # and any future consumer can walk sections without re-parsing the PDF.
-    # See excel_extractors/pdf_extractor_steel_sector_performance.py for the
-    # JSON shape.
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS steel_sector_performance_table (
-            report_month TEXT PRIMARY KEY,
-            data_json    TEXT,
-            source_file  TEXT,
-            created_at   TEXT
-        )
-    """)
-
-    # 6c-do. Plant-wise remarks for the Monthly DO Letter's Annexure-A
-    # (Crude Steel) / Annexure-B (Finished Steel) tables, e.g. RSP's power-
-    # interruption note explaining a Crude Steel shortfall. Entered ahead of
-    # time (any day in the month, or after) so the letter — due on the 1st
-    # of the following month — already has them when generated. Keyed by
-    # (report_month, item_name, plant_name); item_name is 'Crude Steel' or
-    # 'Finished Steel' (matches the two Annexure tables, not production_
-    # table's own 'Total Crude Steel'/'Finished Steel' item names, since a
-    # remark is about the letter's narrative, not a specific DB figure).
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS do_letter_remark_table (
-            report_month TEXT,
-            item_name    TEXT,   -- 'Crude Steel' | 'Finished Steel'
-            plant_name   TEXT,
-            remark       TEXT,
-            PRIMARY KEY (report_month, item_name, plant_name)
-        )
-    """)
-
-    # Board Note generator: per-plant editable narrative text for "Additional
-    # highlights" and "Why narrative" fields. New quarters/plants start blank by
-    # convention; text is never migrated or copied by any code path.
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS board_note_manual_text (
-            report_fy TEXT,
-            quarter   INTEGER,
-            plant     TEXT,
-            field     TEXT,
-            text      TEXT,
-            PRIMARY KEY (report_fy, quarter, plant, field)
-        )
-    """)
-
-    # Secretary Review deck: editable narrative per (month, block). See
-    # secretary_review_text.py; block keys in secretary_review_layout.BLOCKS.
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS secretary_review_text (
-            report_month TEXT,
-            block_key    TEXT,
-            text         TEXT,
-            updated_at   TEXT,
-            PRIMARY KEY (report_month, block_key)
-        )
-    """)
-
-    # 6c. SAIL stock snapshot — Table D of the "1 page report" (Plants /
-    # Stockyards / Stock in Transit / Total, '000T). Keyed by the report's
-    # own snapshot date, not report_month — a single upload backfills
-    # several years of history at once (see sail_sales_stock_extractor.py).
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS sail_stock_snapshot_table (
-            snapshot_date TEXT,               -- 'YYYY-MM-DD'
-            item_name     TEXT,               -- Plants / Stockyards / Stock In Transit / Total
-            value         REAL,
-            PRIMARY KEY (snapshot_date, item_name)
-        )
-    """)
-
-    # 6d. Capital Repair plan — page 36-40 (Report_format/CR.pdf format).
-    # The plan columns (shop/equipment/activity/schedule/period) are the
-    # annual CR plan and effectively static for the FY; "actual" is the only
-    # field users update from the frontend as each repair executes (a free-
-    # text date range like "7.6.26-cont.." or "19.4.26-30.4.26" — not a
-    # clean date pair, so kept as text rather than forced into two DATE
-    # columns). schedule_days/period are also free text (source data mixes
-    # "9 days", "1 month", "3+3 (revival)", multi-month ranges, etc.).
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS capital_repair_table (
-            id            INTEGER PRIMARY KEY AUTOINCREMENT,
-            plant         TEXT,
-            fy            TEXT,               -- '2026-27'
-            shop          TEXT,               -- 'SP-2' / 'BFs' / 'SMS2' / 'Sinter Plant' / ...
-            equipment     TEXT,               -- 'M/c-1' / 'No-4' / 'Conv-A' / 'BAND-3' / ...
-            activity      TEXT,               -- 'Capital Repair' / 'BLT Chute Changing + Shot Creting'
-            schedule_days TEXT,
-            period        TEXT,
-            actual        TEXT,
-            sort_order    INTEGER DEFAULT 0
-        )
-    """)
-    # 6d-1. Structured classification/date columns for production-loss
-    # analysis (see production_loss_analysis.py). Additive/nullable — every
-    # existing shop/equipment/activity/schedule_days/period/actual column
-    # above is untouched so pages 36-40 keep printing exactly as before.
-    # `actual` becomes a derived display string (written by
-    # format_cr_actual() in main.py) once a row is edited through the
-    # updated data-entry UI; unedited rows keep whatever free text they had.
-    cursor.execute("PRAGMA table_info(capital_repair_table)")
-    _cr_cols = [r[1] for r in cursor.fetchall()]
-    for _col, _ddl in [
-        ("unit_type",      "TEXT"),                              # BF/SMS/MILL/COKE/SINTER/GENERAL
-        ("unit_name",      "TEXT"),                              # matches plant_registry.PLANT_UNITS
-        ("sms_subtag",     "TEXT"),                               # 'CONVERTER' | 'CASTER' | NULL (unit_type='SMS' only)
-        ("actual_start",   "TEXT"),                               # 'YYYY-MM-DD'
-        ("actual_end",     "TEXT"),                               # 'YYYY-MM-DD', NULL if ongoing
-        ("actual_ongoing", "INTEGER NOT NULL DEFAULT 0"),
-        ("planned_days",   "REAL"),                                # manually confirmed, used for overrun math only
-    ]:
-        if _col not in _cr_cols:
-            cursor.execute(f"ALTER TABLE capital_repair_table ADD COLUMN {_col} {_ddl}")
-
-    # 6d-2. Breakdown log — plant/unit-wise unplanned-downtime events, entered
-    # ad hoc (full CRUD, unlike capital_repair_table's pre-seeded annual
-    # plan). Used alongside capital_repair_table by production_loss_analysis.py
-    # to explain Hot Metal / Crude Steel / Finished Steel shortfalls vs ABP.
-    # No `fy` column — always derived from start_ts via
-    # page_capital_repair.fy_from_month() to avoid a second source of truth.
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS breakdown_table (
-            id                   INTEGER PRIMARY KEY AUTOINCREMENT,
-            plant                TEXT NOT NULL,
-            unit_type            TEXT NOT NULL,     -- BF/SMS/MILL/COKE/SINTER/GENERAL
-            unit_name            TEXT NOT NULL,     -- matches plant_registry.PLANT_UNITS
-            sms_subtag           TEXT,               -- 'CONVERTER' | 'CASTER' | NULL
-            start_ts             TEXT NOT NULL,      -- 'YYYY-MM-DD HH:MM'
-            end_ts               TEXT,               -- NULL = ongoing
-            is_ongoing           INTEGER NOT NULL DEFAULT 0,
-            cause                TEXT NOT NULL,
-            hours_lost_override  REAL,
-            capital_repair_id    INTEGER,            -- capital_repair_table.id this entry IS (see bd_cr_link)
-            created_by           TEXT,
-            created_at           TEXT,
-            updated_by           TEXT,
-            updated_at           TEXT
-        )
-    """)
-    # A capital repair also logged here (exact date-times + a remark naming
-    # it) is linked to its capital_repair_table row, so every report counts
-    # the event once, as the CR. Added 2026-10-05; MySQL:
-    # scripts/migrate_add_breakdown_cr_link.sql.
-    cursor.execute("PRAGMA table_info(breakdown_table)")
-    if "capital_repair_id" not in [r[1] for r in cursor.fetchall()]:
-        cursor.execute("ALTER TABLE breakdown_table ADD COLUMN capital_repair_id INTEGER")
-
-    # 6d-3. Annual rated capacity per plant/item, with mid-FY change history.
-    # One row per (plant, item, effective_month): the capacity in effect for
-    # a given report month is the row with the latest effective_month <= that
-    # month (carries forward across FY boundaries and, within an FY, across
-    # a commissioning/decommissioning change — see db.get_effective_capacity).
-    # Absent any override, a single entry dated to FY-start covers the whole
-    # FY, matching "FY capacity shall be same for a FY period otherwise".
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS item_capacity_table (
-            id               INTEGER PRIMARY KEY AUTOINCREMENT,
-            plant_name       TEXT NOT NULL,     -- BSP/DSP/RSP/BSL/ISP/ASP/SSP/VISL (individual plants only)
-            item_name        TEXT NOT NULL,     -- matches page4's db_item, e.g. 'Hot Metal'
-            effective_month  TEXT NOT NULL,      -- 'YYYY-MM'
-            annual_capacity  REAL NOT NULL,      -- '000 T / year, rated
-            reason           TEXT DEFAULT '',    -- e.g. commissioning/decommissioning note
-            created_by       TEXT,
-            created_at       TEXT,
-            updated_by       TEXT,
-            updated_at       TEXT,
-            UNIQUE(plant_name, item_name, effective_month)
-        )
-    """)
-
-    # 7. Inter-Plant Transfer (IPT) plan vs actual, per route per month
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS ipt_table (
-            report_month TEXT,               -- 'YYYY-MM'
-            item         TEXT,               -- Screened Coke / Sinter / CC Slabs ...
-            from_plant   TEXT,
-            to_plant     TEXT,
-            unit         TEXT,               -- 'Rake' or 'T'
-            sort_order   INTEGER DEFAULT 0,
-            plan         REAL,
-            actual       REAL,
-            plan_tonnage   REAL,             -- tonnes equivalent (for Rake routes)
-            actual_tonnage REAL,
-            PRIMARY KEY (report_month, item, from_plant, to_plant)
-        )
-    """)
-
-    # (techno_param, techno_param_group, techno_actuals, techno_target removed —
-    #  replaced by techno_data and the JSON-based techno tables)
-
-    # 10a. Unified Techno Plan table — all levels (units, plants, SAIL) by FY
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS techno_plan_fy (
-            plant_name   TEXT NOT NULL,   -- "BSP", "DSP", "RSP", "BSL", "ISP", "SAIL"
-            unit         TEXT NOT NULL,   -- "BF-1", "SMS-2", "Shop" (for plant or SAIL level)
-            fy           TEXT NOT NULL,   -- "2026-27" (FY format)
-
-            techno_json  JSON NOT NULL,   -- {param: {value, unit, ...}, ...}
-            is_user_supplied INTEGER DEFAULT 0,  -- 1: user entered, 0: calculated
-            calculated_json JSON,         -- For SAIL: calculated values for comparison
-            calculation_method JSON,      -- {param: method, ...}
-
-            created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
-            updated_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
-            created_by   TEXT,
-
-            PRIMARY KEY (plant_name, unit, fy)
-        )
-    """)
-
-    # 11a. User-defined PDF label → item_name aliases (learned from preview edits)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS pdf_item_alias (
-            plant_name TEXT NOT NULL,
-            pdf_label  TEXT NOT NULL,
-            item_name  TEXT NOT NULL,
-            convert_t  INTEGER DEFAULT 1,  -- 1: tonnes → '000T on extraction
-            PRIMARY KEY (plant_name, pdf_label)
-        )
-    """)
-
-    # 11. Extraction audit log
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS extraction_log (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            logged_at TEXT NOT NULL,
-            plant_name TEXT NOT NULL,
-            report_month TEXT NOT NULL,
-            file_name TEXT,
-            sheet_name TEXT,
-            source_type TEXT,
-            items_extracted INTEGER
-        )
-    """)
-
-    # 11a. To-Do / upcoming jobs — subject, recipient, due date, priority
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS todo_jobs (
-            id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            subject      TEXT NOT NULL,
-            details      TEXT DEFAULT '',
-            recipient    TEXT DEFAULT '',        -- "where to send it" (free text)
-            due_date     TEXT NOT NULL,          -- YYYY-MM-DD
-            priority     TEXT NOT NULL DEFAULT 'medium',  -- 'high' | 'medium' | 'low'
-            status       TEXT NOT NULL DEFAULT 'pending', -- 'pending' | 'done'
-            remark       TEXT DEFAULT '',        -- progress/completion notes, editable any time
-            created_at   TEXT NOT NULL,
-            completed_at TEXT
-        )
-    """)
-    cursor.execute("PRAGMA table_info(todo_jobs)")
-    if "remark" not in [r[1] for r in cursor.fetchall()]:
-        cursor.execute("ALTER TABLE todo_jobs ADD COLUMN remark TEXT DEFAULT ''")
-
-    # 11b. Daily work log — free-text record of work completed each day
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS daily_work_log (
-            id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            work_date    TEXT NOT NULL,          -- YYYY-MM-DD (the day the work was done)
-            description  TEXT NOT NULL,          -- what was done
-            remarks      TEXT DEFAULT '',        -- optional extra notes
-            created_at   TEXT NOT NULL
-        )
-    """)
-
-    # 12. Technopara data — all plants (BSP, DSP, RSP, BSL, ISP), unit-wise JSON
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS techno_data (
-            id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            plant        TEXT NOT NULL,   -- "BSP", "DSP", "RSP", "BSL", "ISP"
-            report_month TEXT NOT NULL,   -- "2026-05" (YYYY-MM)
-            unit         TEXT NOT NULL,   -- "BF-1", "BF_Shop", "SMS-1", "COB-old", etc.
-            techno_json  TEXT NOT NULL,   -- {"month": {param_key: value}, "till_month": {param_key: value}}
-            source_file  TEXT DEFAULT '',
-            created_at   TEXT,
-            UNIQUE(plant, report_month, unit)
-        )
-    """)
-
-    # 13. User accounts — role is NULL until an administrator assigns 'editor'
-    # or 'admin'; a freshly-registered user has no data-entry access at all.
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id            INTEGER PRIMARY KEY AUTOINCREMENT,
-            email         TEXT NOT NULL UNIQUE,
-            password_hash TEXT NOT NULL,
-            name          TEXT DEFAULT '',
-            role          TEXT,                  -- NULL | 'editor' | 'admin'
-            profile_pic   TEXT DEFAULT '',        -- filename under static/profile_pics/
-            allowed_pages TEXT,                   -- NULL = unrestricted (all pages); else JSON array of module keys
-            can_delete    INTEGER NOT NULL DEFAULT 1,  -- 0 = editor may enter/update but not delete
-            created_at    TEXT NOT NULL,
-            updated_at    TEXT
-        )
-    """)
-    cursor.execute("PRAGMA table_info(users)")
-    _users_cols = [r[1] for r in cursor.fetchall()]
-    if "allowed_pages" not in _users_cols:
-        cursor.execute("ALTER TABLE users ADD COLUMN allowed_pages TEXT")
-    if "can_delete" not in _users_cols:
-        cursor.execute("ALTER TABLE users ADD COLUMN can_delete INTEGER NOT NULL DEFAULT 1")
-
-    # 14. Registration whitelist — only emails listed here (and not barred)
-    # may register. Administrators add/remove/bar entries.
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS allowed_emails (
-            email      TEXT PRIMARY KEY,
-            added_by   TEXT,
-            added_at   TEXT NOT NULL,
-            barred     INTEGER NOT NULL DEFAULT 0,
-            barred_by  TEXT,
-            barred_at  TEXT
-        )
-    """)
-
-    # 15. One-time passcodes — used for both registration and any password
-    # change (voluntary or forgotten), per spec: every password set/change
-    # is completed by emailing a passcode, never by old-password alone.
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS otp_codes (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
-            email      TEXT NOT NULL,
-            purpose    TEXT NOT NULL,   -- 'register' | 'reset_password'
-            code_hash  TEXT NOT NULL,
-            expires_at TEXT NOT NULL,
-            used       INTEGER NOT NULL DEFAULT 0,
-            created_at TEXT NOT NULL
-        )
-    """)
-
-    # 16. Activity log — every insert/update/delete performed through a
-    # gated (editor/admin-only) endpoint, with who and when.
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS activity_log (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_email TEXT,
-            user_name  TEXT,
-            action     TEXT NOT NULL,   -- 'insert' | 'update' | 'delete'
-            entity     TEXT,            -- e.g. 'production_table', 'upload-excel'
-            details    TEXT DEFAULT '',
-            timestamp  TEXT NOT NULL
-        )
-    """)
-
-    # 16b. Page-visit log — one row per frontend page navigation (see
-    # frontend/src/components/VisitLogger.js), feeding /admin/site-visits.
-    # Unlike activity_log this also covers anonymous (never-logged-in)
-    # traffic — user_email/user_name are NULL for those rows, and
-    # ip_address is the visitor's real IP (see frontend/server.js — the
-    # Next rewrite proxy doesn't forward it on its own).
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS page_visits (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp  TEXT NOT NULL,
-            ip_address TEXT,
-            user_email TEXT,
-            user_name  TEXT,
-            path       TEXT NOT NULL
-        )
-    """)
-
-    # 16c. Admin notifications — sign-ins and new anonymous visitors, polled
-    # by the navbar bell (frontend/src/components/AdminNotifications.js).
-    # kind is 'sign_in' or 'anon_visit'. See add_admin_notification.
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS admin_notifications (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
-            created_at TEXT NOT NULL,
-            kind       TEXT NOT NULL,
-            user_email TEXT,
-            user_name  TEXT,
-            ip_address TEXT,
-            path       TEXT
-        )
-    """)
-
-    # 17. Page 3 narrative — Production Narrative + Highlights text, kept
-    # separate from page_configs so a save here never touches (or requires
-    # touching) the other 34 pages' rows for the month.
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS page3_narrative (
-            report_month          TEXT PRIMARY KEY,
-            production_narrative  TEXT,
-            highlights            TEXT,
-            updated_at            TEXT
-        )
-    """)
-
-    # 17b. "Key Highlights & Variances" page (KEY_HIGHLIGHTS_PAGE_ID in
-    # main.py) — Major Achievements / Major Shortfalls / Focus Areas Going
-    # Forward, the three narrative sections of that page that can't be
-    # derived from any numeric table (they're a human analyst's read of the
-    # month, not a computed figure). Stored as JSON arrays, one row per
-    # report_month, so the report page reads them back directly rather than
-    # attempting any on-the-fly text generation. Kept in its own table (same
-    # rationale as page3_narrative above) so saving it never risks touching
-    # any other page's data for the month. See page_key_highlights.py and
-    # api_key_highlights.py.
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS key_highlights_narrative (
-            report_month   TEXT PRIMARY KEY,
-            achievements   TEXT,   -- JSON: [{"text": "...", "subs": ["...", ...]}, ...]
-            shortfalls     TEXT,   -- JSON: ["...", "...", ...]
-            focus_areas    TEXT,   -- JSON: [{"title": "...", "description": "..."}, ...]
-            updated_by     TEXT,
-            updated_at     TEXT
-        )
-    """)
-
-    # 17c. "Steel Sales Performance" page (STEEL_SALES_PAGE_ID in main.py,
-    # inserted right after "SAIL Performance - 1 Page Summary") — two lists
-    # of free-text KPI highlight bullets (report-month and YTD-so-far),
-    # modeled on Report_format/RMT_0109_partial.pdf's "<Mon>'YY Key
-    # Performance Parameters" / "<Apr-Mon>'YY Key Performance Parameters"
-    # pages. Same one-row-per-report_month/JSON-column shape as
-    # key_highlights_narrative above and for the same reason: this is a
-    # human-entered monthly bulletin, not derivable from any numeric table,
-    # so it's kept in its own table independent of page_configs. See
-    # page_steel_sales_performance.py and api_steel_sales_highlights.py.
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS steel_sales_highlights (
-            report_month   TEXT PRIMARY KEY,
-            month_items    TEXT,   -- JSON: ["...", "...", ...] - report-month bullets
-            ytd_items      TEXT,   -- JSON: ["...", "...", ...] - Apr-to-report-month bullets
-            updated_by     TEXT,
-            updated_at     TEXT
-        )
-    """)
-
-    # 18. Static Working Volume per SAIL blast furnace (bf_benchmark_registry.
-    # SAIL_BF_UNITS_BY_PLANT — the whole fleet, not just the 3 flagship BFs
-    # the Large BF Benchmark comparison itself uses); monthly operating data
-    # already lives in techno_data, only Working Volume (an engineering spec
-    # that rarely changes) is tracked here.
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS bf_benchmark_sail_meta (
-            plant             TEXT NOT NULL,
-            unit              TEXT NOT NULL,
-            working_volume_m3 REAL,
-            updated_at        TEXT,
-            PRIMARY KEY (plant, unit)
-        )
-    """)
-
-    # 19. Large BF Benchmarking — registry of non-SAIL large BFs an admin/
-    # editor adds for comparison. Soft-deactivate via `active` (mirrors
-    # allowed_emails.barred) — no hard delete. `company` (e.g. "JSW") and
-    # `location` (e.g. "Vijaynagar") are separate so the comparison table can
-    # group columns Company -> Location -> Furnace, matching how SAIL's own
-    # BFs group under plant (Location) -> unit (Furnace), company always
-    # "SAIL". Added after the table already existed in prod — see
-    # scripts/migrate_add_bf_benchmark_location.sql for the live MySQL DDL.
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS bf_benchmark_external_bf (
-            id                INTEGER PRIMARY KEY AUTOINCREMENT,
-            name              TEXT NOT NULL,
-            company           TEXT DEFAULT '',
-            location          TEXT DEFAULT '',
-            working_volume_m3 REAL,
-            active            INTEGER NOT NULL DEFAULT 1,
-            created_at        TEXT NOT NULL,
-            created_by        TEXT DEFAULT ''
-        )
-    """)
-    cursor.execute("PRAGMA table_info(bf_benchmark_external_bf)")
-    if "location" not in [r[1] for r in cursor.fetchall()]:
-        cursor.execute("ALTER TABLE bf_benchmark_external_bf ADD COLUMN location TEXT DEFAULT ''")
-
-    # 20. Large BF Benchmarking — one entered figure set per non-SAIL BF per
-    # Financial Year (non-SAIL BFs only ever publish FY-level figures, not
-    # monthly ones — unlike SAIL's own BFs, which read from techno_data's
-    # monthly records). Despite the column name (kept as-is to avoid a
-    # migration; CHAR(7) already fits both), `report_month` holds an FY
-    # label here, e.g. "2025-26", not a calendar month. param_json holds
-    # {param_key: value} for the dynamic params — new params later are just
-    # another JSON key, no migration needed.
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS bf_benchmark_external_data (
-            id              INTEGER PRIMARY KEY AUTOINCREMENT,
-            external_bf_id  INTEGER NOT NULL,
-            report_month    TEXT NOT NULL,
-            param_json      TEXT NOT NULL DEFAULT '{}',
-            created_at      TEXT,
-            updated_at      TEXT,
-            UNIQUE(external_bf_id, report_month)
-        )
-    """)
-
-    # 21. Cost Trend (Report_format/COST TREND.xlsx, sheets HM/CS/SS) — two
-    # tables mirroring the workbook's two distinct granularities: closed-FY
-    # annual figures (entered once per FY, never revised monthly) and
-    # current-FY monthly figures (month + till_month entered directly, same
-    # "both typed in, not auto-summed" convention as techno_data/Demurrage —
-    # a till_month figure a plant reports isn't always a clean sum of its
-    # own monthly figures). product is 'HM'/'CS'/'SS' (Hot Metal/Crude
-    # Steel/Saleable Steel — the workbook's 3 sheets); cost_type is
-    # 'TOTAL'/'VARIABLE'/'FIXED' (the workbook's 3 blocks per sheet); plant
-    # is BSP/DSP/RSP/BSL/ISP plus the workbook's own 'SAIL' aggregate row
-    # (SAIL 5 ISPs) — entered directly like every other row, not computed,
-    # since the source doesn't state it's a simple average/sum of the 5.
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS cost_trend_annual (
-            fy         TEXT,
-            product    TEXT,
-            cost_type  TEXT,
-            plant      TEXT,
-            value      REAL,
-            PRIMARY KEY (fy, product, cost_type, plant)
-        )
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS cost_trend_monthly (
-            report_month      TEXT,
-            product           TEXT,
-            cost_type         TEXT,
-            plant             TEXT,
-            month_value       REAL,
-            till_month_value  REAL,
-            PRIMARY KEY (report_month, product, cost_type, plant)
-        )
-    """)
-
-    # SAIL Mines Production & Despatch — one shared monthly table across
-    # every section (Iron Ore Production, Sales of Iron Ore, Coal Mines
-    # Production, Washery, Coal Despatch, Flux Production, Flux Despatch).
-    # See page_sail_mines.py's SAIL_MINES_SECTIONS for the section->item
-    # registry and all derived rows (Total, Yield) — those are computed at
-    # read time from these leaf items, never stored. month_plan is entered
-    # for 'production'-kind sections only (APP/%Ful columns); 'flow'-kind
-    # despatch/sales sections leave it NULL (no APP column on those tables).
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS sail_mines_monthly (
-            report_month  TEXT,
-            section       TEXT,
-            item          TEXT,
-            month_actual  REAL,
-            month_plan    REAL,
-            PRIMARY KEY (report_month, section, item)
-        )
-    """)
-
-    # Rail Production & Dispatch from BSP (Report_format/"Rail Prod &
-    # Despatch Report for OMI.pdf") — page 18.5, right after Segment Wise
-    # Production. Entirely manually entered per financial year (Apr-Mar);
-    # the FY containing the report month holds a running Apr-<report month>
-    # cumulative in the same row (same "typed in directly, not auto-summed"
-    # convention as Cost Trend's till_month) — see page_rail_report.py for
-    # the metric registry and the 4 rows computed from these at read time.
-    # note is optional free text riding along a value (e.g. R350HT's "9
-    # Rakes" annotation in the source PDF).
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS rail_prod_despatch (
-            financial_year TEXT,
-            metric         TEXT,
-            value          REAL,
-            note           TEXT,
-            PRIMARY KEY (financial_year, metric)
-        )
-    """)
-
-    # Free-text footer remarks under the Rail Production & Dispatch table —
-    # standing footnotes (not scoped to a FY, unlike special_steel_phys_note)
-    # since they document one-time events (a grade change, a plant going
-    # live) that stay relevant regardless of which month the report is run
-    # for. sort_order = display order; edited via /data-entry/rail-report.
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS rail_prod_despatch_note (
-            sort_order INTEGER PRIMARY KEY,
-            note_text  TEXT NOT NULL
-        )
-    """)
-
-    # "Movement of Key Prices - International" (MARKET_PRICES_PAGE_ID = 2.41)
-    # and "India Macro Economic Indicators" (MACRO_INDICATORS_PAGE_ID = 2.42)
-    # — two new landscape report pages, per direct instruction (2026-09-17),
-    # scraped once from Report_format/work/"DC-2 pages.pdf" (BigMint market
-    # intelligence snapshot) then extended monthly via a dedicated
-    # data-entry page (/data-entry/market-intel) — see page_market_prices.py
-    # / page_macro_indicators.py for the series/metric registries and
-    # scripts/backfill_market_intel.py for the initial scrape. Both tables
-    # are plain long-format (report_month, code, value) — the small, fixed
-    # series/metric lists live in Python (matching page_rail_report.py's
-    # RAW_METRICS convention) rather than a DB master table, since neither
-    # list is expected to grow/change the way e.g. mines_master does.
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS market_price_trend_monthly (
-            report_month TEXT,
-            series_code  TEXT,
-            value        REAL,
-            PRIMARY KEY (report_month, series_code)
-        )
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS macro_indicators_monthly (
-            report_month TEXT,
-            metric_code  TEXT,
-            value        REAL,
-            PRIMARY KEY (report_month, metric_code)
-        )
-    """)
-
-    # Iron Ore Mines Production & Despatch — mine-level detail (11 mines
-    # under JGoM/OGoM/CGoM), a finer grain than sail_mines_monthly's
-    # iron_ore_prod/iron_ore_despatch sections (which stay at group level).
-    # Master tables (groups/mines/materials/end_uses) are DB-backed rather
-    # than a Python registry (unlike plant_registry.py's PLANT_UNITS) so a
-    # mine/material/end-use can be added, renamed, or deactivated later via
-    # a data change, not a code change. mines_production_monthly holds
-    # fresh production only (Lump/Fines — material rows with
-    # has_production=1).
-    #
-    # Despatch Actual and Plan live at DIFFERENT grains (per direct
-    # instruction): Actual is tracked per transport_mode (Rail/Road actually
-    # despatched), but Plan is a single target per material x end_use with
-    # no Rail/Road split (the target doesn't commit to a mode in advance).
-    # So despatch is two tables, not one — mines_despatch_actual_monthly
-    # (report_month, mine_code, material_code, transport_mode, end_use_code)
-    # and mines_despatch_plan_monthly (report_month, mine_code,
-    # material_code, end_use_code — no transport_mode). Both cover ALL five
-    # materials (fresh + legacy Dump Fines/Pellets/Tailings). "Total
-    # Production" (fresh Lump+Fines production + legacy despatch ACTUAL,
-    # per direct instruction) is computed at read time from
-    # mine_materials_master.counts_in_total_production, never stored.
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS mine_groups_master (
-            group_code  TEXT PRIMARY KEY,
-            group_name  TEXT NOT NULL,
-            sort_order  INTEGER NOT NULL
-        )
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS mines_master (
-            mine_code   TEXT PRIMARY KEY,
-            mine_name   TEXT NOT NULL,
-            group_code  TEXT NOT NULL,
-            is_active   INTEGER NOT NULL DEFAULT 1,
-            sort_order  INTEGER NOT NULL
-        )
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS mine_materials_master (
-            material_code                TEXT PRIMARY KEY,
-            material_name                TEXT NOT NULL,
-            material_category            TEXT NOT NULL,
-            has_production                INTEGER NOT NULL DEFAULT 0,
-            counts_in_total_production    INTEGER NOT NULL DEFAULT 0,
-            sort_order                    INTEGER NOT NULL
-        )
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS mine_end_uses_master (
-            end_use_code   TEXT PRIMARY KEY,
-            end_use_name   TEXT NOT NULL,
-            sort_order     INTEGER NOT NULL,
-            tracks_actual  INTEGER NOT NULL DEFAULT 1
-        )
-    """)
-    cursor.execute("PRAGMA table_info(mine_end_uses_master)")
-    if "tracks_actual" not in [r[1] for r in cursor.fetchall()]:
-        cursor.execute("ALTER TABLE mine_end_uses_master ADD COLUMN tracks_actual INTEGER NOT NULL DEFAULT 1")
-    cursor.execute(
-        "INSERT OR IGNORE INTO mine_end_uses_master (end_use_code, end_use_name, sort_order, tracks_actual) "
-        "VALUES ('UNALLOCATED', 'Unallocated', 4, 0)"
-    )
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS mines_production_monthly (
-            report_month  TEXT,
-            mine_code     TEXT,
-            material_code TEXT,
-            qty_actual    REAL,
-            qty_plan      REAL,
-            PRIMARY KEY (report_month, mine_code, material_code)
-        )
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS mines_despatch_actual_monthly (
-            report_month    TEXT,
-            mine_code       TEXT,
-            material_code   TEXT,
-            transport_mode  TEXT,
-            end_use_code    TEXT,
-            qty_actual      REAL,
-            PRIMARY KEY (report_month, mine_code, material_code, transport_mode, end_use_code)
-        )
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS mines_despatch_plan_monthly (
-            report_month    TEXT,
-            mine_code       TEXT,
-            material_code   TEXT,
-            end_use_code    TEXT,
-            qty_plan        REAL,
-            PRIMARY KEY (report_month, mine_code, material_code, end_use_code)
-        )
-    """)
-
-    # Booked Quantity — Sales to 3rd Party (per direct instruction,
-    # 2026-08-26): replaces the old flat "Auction" item on the SAIL Mines
-    # Entry form's Sales of Iron Ore table. Implicitly scoped to the SALES
-    # end-use only (booking a sale doesn't apply to Captive transfers or
-    # Pellet Conversion, so there's no end_use_code column here — unlike
-    # despatch, which needs one). Same Actual/Plan grain split as despatch:
-    # Actual is per transport_mode, Plan is a single target per material
-    # with no Rail/Road split.
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS mines_booked_qty_actual_monthly (
-            report_month    TEXT,
-            mine_code       TEXT,
-            material_code   TEXT,
-            transport_mode  TEXT,
-            qty_actual      REAL,
-            PRIMARY KEY (report_month, mine_code, material_code, transport_mode)
-        )
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS mines_booked_qty_plan_monthly (
-            report_month  TEXT,
-            mine_code     TEXT,
-            material_code TEXT,
-            qty_plan      REAL,
-            PRIMARY KEY (report_month, mine_code, material_code)
-        )
-    """)
-
-    cursor.execute("SELECT COUNT(*) FROM mines_master")
-    if cursor.fetchone()[0] == 0:
-        cursor.executemany(
-            "INSERT INTO mine_groups_master (group_code, group_name, sort_order) VALUES (?, ?, ?)",
-            [
-                ("JGoM", "Jharkhand Group of Mines", 1),
-                ("OGoM", "Orissa Group of Mines", 2),
-                ("CGoM", "Chhattisgarh Group of Mines", 3),
-            ],
-        )
-        cursor.executemany(
-            "INSERT INTO mines_master (mine_code, mine_name, group_code, sort_order) VALUES (?, ?, ?, ?)",
-            [
-                ("KIRIBURU", "Kiriburu", "JGoM", 1),
-                ("MEGHAHATUBURU", "Meghahatuburu", "JGoM", 2),
-                ("GUA", "Gua", "JGoM", 3),
-                ("MANOHARPUR", "Manoharpur", "JGoM", 4),
-                ("BOLANI", "Bolani", "OGoM", 5),
-                ("BARSUA", "Barsua", "OGoM", 6),
-                ("TALDIH", "Taldih", "OGoM", 7),
-                ("KALTA", "Kalta", "OGoM", 8),
-                ("RAJHARA", "Rajhara", "CGoM", 9),
-                ("DALLI", "Dalli", "CGoM", 10),
-                ("ROWGHAT", "Rowghat", "CGoM", 11),
-            ],
-        )
-        cursor.executemany(
-            "INSERT INTO mine_materials_master "
-            "(material_code, material_name, material_category, has_production, counts_in_total_production, sort_order) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            [
-                ("LUMP", "Lump", "FRESH", 1, 1, 1),
-                ("FINES", "Fines", "FRESH", 1, 1, 2),
-                ("DUMP_FINES", "Dump Fines", "LEGACY", 0, 1, 3),
-                ("PELLETS", "Pellets", "LEGACY", 0, 1, 4),
-                ("TAILINGS", "Tailings", "LEGACY", 0, 1, 5),
-            ],
-        )
-        cursor.executemany(
-            "INSERT INTO mine_end_uses_master (end_use_code, end_use_name, sort_order, tracks_actual) VALUES (?, ?, ?, ?)",
-            [
-                ("CAPTIVE", "Captive Plants", 1, 1),
-                ("SALES", "Sales to 3rd Party", 2, 1),
-                ("PELLET_CONV", "Pellet Conversion Agents", 3, 1),
-            ],
-        )
-
-    # "Details of Rakes Detention Plant Wise" (RAKE_DETENTION_* sentinel
-    # pages) — Report_format's "Average Plant Detention Report" (SAIL Rail
-    # Movement Cell). Pure extract, no computation (same convention as
-    # special_steel_phys_perf / page_coal_consumption's OIS-1 table): every
-    # figure here, including the Total Inward/Outward/Overall Wagon summary
-    # rows, is a value someone entered — the source report's own totals are
-    # rake-count-weighted (a figure we don't have), so recomputing them
-    # ourselves risks a silently wrong number in an official-looking report.
-    #
-    # rake_detention_master is the *row registry*, split out from the actual
-    # figures (rake_detention_monthly) the same way special_steel_phys_meta
-    # is split from special_steel_phys_perf — this is the "add a new wagon
-    # type for a plant later" provision: insert a master row, no code
-    # change. commodity/wagon_type/direction are NULL for a section's own
-    # "Total ..."/"Overall Wagon" summary row (is_total=1); is_active lets a
-    # retired wagon type stop appearing on new months without deleting its
-    # history. See page_rake_detention.py and scripts/migrate_add_rake_
-    # detention.sql.
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS rake_detention_master (
-            id                      INTEGER PRIMARY KEY AUTOINCREMENT,
-            plant                   TEXT NOT NULL,
-            section                 TEXT NOT NULL,
-            commodity               TEXT,
-            wagon_type              TEXT,
-            row_label               TEXT NOT NULL,
-            is_total                INTEGER NOT NULL DEFAULT 0,
-            direction               TEXT,
-            freetime_hours          REAL,
-            freetime_effective_from TEXT,
-            sort_order              INTEGER NOT NULL DEFAULT 0,
-            is_active               INTEGER NOT NULL DEFAULT 1
-        )
-    """)
-    # One row per (report_month, master row). A master row with no entry
-    # for a given month simply renders blank (matching the source PDF's
-    # blank not-yet-reported months) — this is also how the "Overall Wagon"
-    # master row alone carries page 4's multi-year trend back to 2021-22
-    # even though the granular commodity/wagon breakdown (pages 1-2) only
-    # realistically exists for recent months.
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS rake_detention_monthly (
-            report_month TEXT NOT NULL,
-            master_id    INTEGER NOT NULL REFERENCES rake_detention_master(id),
-            value_hours  REAL,
-            PRIMARY KEY (report_month, master_id)
-        )
-    """)
-    # "Improvement in Average Detention per Wagon in Hrs" — the source
-    # report's own 3-period (current month / YTD / full FY) CPLY comparison
-    # table, entered directly per its "UPTO <report_month>" heading rather
-    # than derived from rake_detention_monthly (same rake-count-weighting
-    # concern as the Total/Overall rows above).
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS rake_detention_summary (
-            report_month TEXT NOT NULL,
-            period_row   TEXT NOT NULL,
-            plant        TEXT NOT NULL,
-            value        REAL,
-            PRIMARY KEY (report_month, period_row, plant)
-        )
-    """)
-    # Page 4's own "APR-MAR" full-FY average column, per plant per FY — a
-    # 13th figure alongside that row's 12 months, entered directly rather
-    # than averaged from them: the source PDF's own figure doesn't always
-    # equal a straight mean of its (already-rounded) displayed monthly
-    # values (their internal precision runs deeper than what's printed).
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS rake_detention_annual (
-            plant          TEXT NOT NULL,
-            financial_year TEXT NOT NULL,
-            avg_hours      REAL,
-            PRIMARY KEY (plant, financial_year)
-        )
-    """)
-
-    # "Ready Reckoner" (Annexure-1: 5 ISPs / Annexure-2: 3 SSPs) — static
-    # reference content (process-flow diagram + 2 tables per plant) from
-    # Report_format's "Ready Reckoner (Plant wise Details).pdf" / "Ready
-    # Reckoner Special Steel Plant.docx". Deliberately NOT keyed by
-    # report_month like page_configs — this content is the same regardless
-    # of which month's report is open, so it gets its own table and its own
-    # save endpoint (see page_ready_reckoner.py) rather than the generic
-    # per-month /api/data flow. capacity_rows/product_mix_headers/
-    # product_mix_rows are plain JSON data (no HTML/markup/style) — see this
-    # table's own comment just above _READY_RECKONER_COLS for their exact
-    # shape; presentation is applied entirely at render time instead. The
-    # image is a file on disk (backend/static/ready_reckoner/), not
-    # embedded here — PDF generation base64-encodes it at render time (see
-    # page_cover.py's own background-image handling for why: no live
-    # network access at Playwright render time).
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS ready_reckoner_pages (
-            plant_code              TEXT PRIMARY KEY,
-            plant_name               TEXT,
-            plant_group              TEXT NOT NULL,
-            process_flow_image_path  TEXT,
-            capacity_rows            TEXT,
-            product_mix_headers      TEXT,
-            product_mix_rows         TEXT,
-            product_mix_caption      TEXT,
-            sort_order               INTEGER NOT NULL DEFAULT 0,
-            updated_by               TEXT,
-            updated_at               TEXT
-        )
-    """)
-
-    # "Annexure-3 : 5 ISPs Major Units Records" — per-plant, per-major-unit
-    # Daily best-ever production record. Static reference content, same
-    # rationale as ready_reckoner_pages just above: not scoped to any report
-    # month. Annual/Monthly bests are NEVER stored here — they're computed
-    # live from production_table (see page_major_unit_records.py's
-    # best_for_unit) since that's the single source of truth for monthly
-    # actuals; only Daily has no other DB home (production_table is monthly
-    # grain). Seeded from Report_format/Plants Best/{plant}.xlsx via
-    # scripts/backfill_major_unit_daily_records.py; editable going forward
-    # via /data-entry/major-unit-daily (see main.py's /api/major-unit-daily
-    # endpoints).
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS major_unit_daily_record (
-            plant_code      TEXT NOT NULL,
-            unit_label      TEXT NOT NULL,
-            unit_of_measure TEXT,
-            value           REAL,
-            record_date     TEXT,
-            remarks         TEXT,
-            sort_order      INTEGER NOT NULL DEFAULT 0,
-            updated_by      TEXT,
-            updated_at      TEXT,
-            PRIMARY KEY (plant_code, unit_label)
-        )
-    """)
-
-    # Selectable report covers — DDL owned by cover_store (SQLite flavour
-    # here; MySQL in scripts/mysql_schema.sql + migrate_add_cover_pages.sql).
-    import cover_store
-    for _ddl in cover_store.SQLITE_DDL:
-        cursor.execute(_ddl)
-
-    conn.commit()
-    conn.close()
+    """No-op kept for existing callers. The MySQL schema is owned by
+    scripts/mysql_schema.sql (plus scripts/migrate_*.sql), not created
+    lazily at runtime."""
+    return None
 
 def get_ytd_months(report_month: str) -> List[str]:
     """Returns YYYY-MM strings from April of the current FY up to report_month."""
@@ -1271,10 +130,10 @@ def _fs_alias_sum(cursor, tbl: str, month: str, plants: list) -> Optional[float]
     total, found = 0.0, False
 
     if regular:
-        phs = ",".join("?" for _ in regular)
+        phs = ",".join("%s" for _ in regular)
         cursor.execute(
             f"SELECT SUM(month_actual) FROM {tbl} "
-            f"WHERE report_month=? AND plant_name IN ({phs}) AND item_name='Finished Steel'",
+            f"WHERE report_month=%s AND plant_name IN ({phs}) AND item_name='Finished Steel'",
             [month] + regular,
         )
         r = cursor.fetchone()
@@ -1284,7 +143,7 @@ def _fs_alias_sum(cursor, tbl: str, month: str, plants: list) -> Optional[float]
 
     for p in alias:
         cursor.execute(
-            f"SELECT month_actual FROM {tbl} WHERE report_month=? AND plant_name=? AND item_name='Finished Steel'",
+            f"SELECT month_actual FROM {tbl} WHERE report_month=%s AND plant_name=%s AND item_name='Finished Steel'",
             (month, p),
         )
         r = cursor.fetchone()
@@ -1293,7 +152,7 @@ def _fs_alias_sum(cursor, tbl: str, month: str, plants: list) -> Optional[float]
             found = True
         else:
             cursor.execute(
-                f"SELECT month_actual FROM {tbl} WHERE report_month=? AND plant_name=? AND item_name='Saleable Steel'",
+                f"SELECT month_actual FROM {tbl} WHERE report_month=%s AND plant_name=%s AND item_name='Saleable Steel'",
                 (month, p),
             )
             r = cursor.fetchone()
@@ -1310,7 +169,7 @@ def _sail_conversion_actual(cursor, month: str) -> Optional[float]:
     outside the plants' own reported Finished Steel and must be added to the SAIL
     Finished Steel total, not just relied on as a plant-sum fallback."""
     cursor.execute(
-        "SELECT month_actual FROM production_table WHERE report_month=? AND plant_name='SAIL' AND item_name='Conversion'",
+        "SELECT month_actual FROM production_table WHERE report_month=%s AND plant_name='SAIL' AND item_name='Conversion'",
         (month,),
     )
     row = cursor.fetchone()
@@ -1331,20 +190,20 @@ def get_sail_production_actual(month: str, item: str) -> Optional[float]:
             return (result or 0.0) + (conversion or 0.0)
         # Fallback to direct SAIL record
         cursor.execute(
-            "SELECT month_actual FROM production_table WHERE report_month=? AND plant_name='SAIL' AND item_name='Finished Steel'",
+            "SELECT month_actual FROM production_table WHERE report_month=%s AND plant_name='SAIL' AND item_name='Finished Steel'",
             (month,),
         )
         row = cursor.fetchone()
         conn.close()
         return row[0] if row else None
 
-    placeholders = ",".join("?" for _ in PLANTS)
+    placeholders = ",".join("%s" for _ in PLANTS)
     query = f"""
         SELECT SUM(month_actual)
         FROM production_table
-        WHERE report_month = ?
+        WHERE report_month = %s
           AND plant_name IN ({placeholders})
-          AND item_name = ?
+          AND item_name = %s
     """
     cursor.execute(query, [month] + PLANTS + [item])
     row = cursor.fetchone()
@@ -1356,7 +215,7 @@ def get_sail_production_actual(month: str, item: str) -> Optional[float]:
     cursor.execute("""
         SELECT month_actual
         FROM production_table
-        WHERE report_month = ? AND plant_name = 'SAIL' AND item_name = ?
+        WHERE report_month = %s AND plant_name = 'SAIL' AND item_name = %s
     """, (month, item))
     row = cursor.fetchone()
     conn.close()
@@ -1374,20 +233,20 @@ def get_sail_production_plan(month: str, item: str) -> Optional[float]:
             conn.close()
             return result
         cursor.execute(
-            "SELECT month_actual FROM production_plan_table WHERE report_month=? AND plant_name='SAIL' AND item_name='Finished Steel'",
+            "SELECT month_actual FROM production_plan_table WHERE report_month=%s AND plant_name='SAIL' AND item_name='Finished Steel'",
             (month,),
         )
         row = cursor.fetchone()
         conn.close()
         return row[0] if row else None
 
-    placeholders = ",".join("?" for _ in PLANTS)
+    placeholders = ",".join("%s" for _ in PLANTS)
     query = f"""
         SELECT SUM(month_actual)
         FROM production_plan_table
-        WHERE report_month = ?
+        WHERE report_month = %s
           AND plant_name IN ({placeholders})
-          AND item_name = ?
+          AND item_name = %s
     """
     cursor.execute(query, [month] + PLANTS + [item])
     row = cursor.fetchone()
@@ -1399,7 +258,7 @@ def get_sail_production_plan(month: str, item: str) -> Optional[float]:
     cursor.execute("""
         SELECT month_actual
         FROM production_plan_table
-        WHERE report_month = ? AND plant_name = 'SAIL' AND item_name = ?
+        WHERE report_month = %s AND plant_name = 'SAIL' AND item_name = %s
     """, (month, item))
     row = cursor.fetchone()
     conn.close()
@@ -1424,14 +283,14 @@ def get_sail_production_ytd_actual(months: List[str], item: str) -> Optional[flo
         conn.close()
         return total if found else None
 
-    plant_placeholders = ",".join("?" for _ in PLANTS)
-    month_placeholders = ",".join("?" for _ in months)
+    plant_placeholders = ",".join("%s" for _ in PLANTS)
+    month_placeholders = ",".join("%s" for _ in months)
     query = f"""
         SELECT SUM(month_actual)
         FROM production_table
         WHERE report_month IN ({month_placeholders})
           AND plant_name IN ({plant_placeholders})
-          AND item_name = ?
+          AND item_name = %s
     """
     cursor.execute(query, months + PLANTS + [item])
     row = cursor.fetchone()
@@ -1445,7 +304,7 @@ def get_sail_production_ytd_actual(months: List[str], item: str) -> Optional[flo
         FROM production_table
         WHERE report_month IN ({month_placeholders})
           AND plant_name = 'SAIL'
-          AND item_name = ?
+          AND item_name = %s
     """
     cursor.execute(query, months + [item])
     row = cursor.fetchone()
@@ -1470,14 +329,14 @@ def get_sail_production_ytd_plan(months: List[str], item: str) -> Optional[float
         conn.close()
         return total if found else None
 
-    plant_placeholders = ",".join("?" for _ in PLANTS)
-    month_placeholders = ",".join("?" for _ in months)
+    plant_placeholders = ",".join("%s" for _ in PLANTS)
+    month_placeholders = ",".join("%s" for _ in months)
     query = f"""
         SELECT SUM(month_actual)
         FROM production_plan_table
         WHERE report_month IN ({month_placeholders})
           AND plant_name IN ({plant_placeholders})
-          AND item_name = ?
+          AND item_name = %s
     """
     cursor.execute(query, months + PLANTS + [item])
     row = cursor.fetchone()
@@ -1491,7 +350,7 @@ def get_sail_production_ytd_plan(months: List[str], item: str) -> Optional[float
         FROM production_plan_table
         WHERE report_month IN ({month_placeholders})
           AND plant_name = 'SAIL'
-          AND item_name = ?
+          AND item_name = %s
     """
     cursor.execute(query, months + [item])
     row = cursor.fetchone()
@@ -1505,19 +364,18 @@ def save_production_actual(month: str, plant: str, item: str, value: Optional[fl
     conn = connect()
     cursor = conn.cursor()
     old = _row_dict(conn,
-        "SELECT * FROM production_table WHERE report_month=? AND plant_name=? AND item_name=?",
+        "SELECT * FROM production_table WHERE report_month=%s AND plant_name=%s AND item_name=%s",
         (month, plant, item))
     if value is None:
         cursor.execute("""
             DELETE FROM production_table
-            WHERE report_month = ? AND plant_name = ? AND item_name = ?
+            WHERE report_month = %s AND plant_name = %s AND item_name = %s
         """, (month, plant, item))
     else:
         cursor.execute("""
             INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(report_month, plant_name, item_name)
-            DO UPDATE SET month_actual = excluded.month_actual
+            VALUES (%s, %s, %s, %s)
+            AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
         """, (month, plant, item, value))
     conn.commit()
     conn.close()
@@ -1531,19 +389,18 @@ def save_production_plan(month: str, plant: str, item: str, value: Optional[floa
     conn = connect()
     cursor = conn.cursor()
     old = _row_dict(conn,
-        "SELECT * FROM production_plan_table WHERE report_month=? AND plant_name=? AND item_name=?",
+        "SELECT * FROM production_plan_table WHERE report_month=%s AND plant_name=%s AND item_name=%s",
         (month, plant, item))
     if value is None:
         cursor.execute("""
             DELETE FROM production_plan_table
-            WHERE report_month = ? AND plant_name = ? AND item_name = ?
+            WHERE report_month = %s AND plant_name = %s AND item_name = %s
         """, (month, plant, item))
     else:
         cursor.execute("""
             INSERT INTO production_plan_table (report_month, plant_name, item_name, month_actual)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(report_month, plant_name, item_name)
-            DO UPDATE SET month_actual = excluded.month_actual
+            VALUES (%s, %s, %s, %s)
+            AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
         """, (month, plant, item, value))
     conn.commit()
     conn.close()
@@ -1555,7 +412,7 @@ def get_page_config(month: str, page_number: int) -> Optional[dict]:
     init_db()
     conn = connect()
     cursor = conn.cursor()
-    cursor.execute("SELECT page_data FROM page_configs WHERE report_month = ? AND page_number = ?", (month, page_number))
+    cursor.execute("SELECT page_data FROM page_configs WHERE report_month = %s AND page_number = %s", (month, page_number))
     row = cursor.fetchone()
     conn.close()
     return json.loads(row[0]) if row else None
@@ -1565,7 +422,7 @@ def get_all_page_configs(month: str) -> List[dict]:
     init_db()
     conn = connect()
     cursor = conn.cursor()
-    cursor.execute("SELECT page_data FROM page_configs WHERE report_month = ? ORDER BY page_number ASC", (month,))
+    cursor.execute("SELECT page_data FROM page_configs WHERE report_month = %s ORDER BY page_number ASC", (month,))
     rows = cursor.fetchall()
     conn.close()
     return [json.loads(row[0]) for row in rows]
@@ -1577,9 +434,8 @@ def save_page_config(month: str, page_number: int, page_data: dict):
     cursor = conn.cursor()
     cursor.execute("""
         INSERT INTO page_configs (report_month, page_number, page_data)
-        VALUES (?, ?, ?)
-        ON CONFLICT(report_month, page_number)
-        DO UPDATE SET page_data = excluded.page_data
+        VALUES (%s, %s, %s)
+        AS new ON DUPLICATE KEY UPDATE page_data = new.page_data
     """, (month, page_number, json.dumps(page_data)))
     conn.commit()
     conn.close()
@@ -1592,7 +448,7 @@ def get_page3_narrative(month: str) -> Optional[dict]:
     conn = connect()
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT production_narrative, highlights FROM page3_narrative WHERE report_month = ?",
+        "SELECT production_narrative, highlights FROM page3_narrative WHERE report_month = %s",
         (month,)
     )
     row = cursor.fetchone()
@@ -1615,11 +471,10 @@ def save_page3_narrative(month: str, production_narrative: str, highlights: List
     highlights_text = "\n".join(highlights or [])
     cursor.execute("""
         INSERT INTO page3_narrative (report_month, production_narrative, highlights, updated_at)
-        VALUES (?, ?, ?, datetime('now'))
-        ON CONFLICT(report_month)
-        DO UPDATE SET production_narrative = excluded.production_narrative,
-                       highlights = excluded.highlights,
-                       updated_at = excluded.updated_at
+        VALUES (%s, %s, %s, NOW())
+        AS new ON DUPLICATE KEY UPDATE production_narrative = new.production_narrative,
+                       highlights = new.highlights,
+                       updated_at = new.updated_at
     """, (month, production_narrative or "", highlights_text))
     conn.commit()
     conn.close()
@@ -1634,7 +489,7 @@ def get_key_highlights_narrative(month: str) -> Optional[dict]:
     cursor = conn.cursor()
     cursor.execute(
         "SELECT achievements, shortfalls, focus_areas, updated_by, updated_at "
-        "FROM key_highlights_narrative WHERE report_month = ?",
+        "FROM key_highlights_narrative WHERE report_month = %s",
         (month,)
     )
     row = cursor.fetchone()
@@ -1661,13 +516,12 @@ def save_key_highlights_narrative(month: str, achievements: list, shortfalls: li
     cursor.execute("""
         INSERT INTO key_highlights_narrative
             (report_month, achievements, shortfalls, focus_areas, updated_by, updated_at)
-        VALUES (?, ?, ?, ?, ?, datetime('now'))
-        ON CONFLICT(report_month)
-        DO UPDATE SET achievements = excluded.achievements,
-                       shortfalls  = excluded.shortfalls,
-                       focus_areas = excluded.focus_areas,
-                       updated_by  = excluded.updated_by,
-                       updated_at  = excluded.updated_at
+        VALUES (%s, %s, %s, %s, %s, NOW())
+        AS new ON DUPLICATE KEY UPDATE achievements = new.achievements,
+                       shortfalls  = new.shortfalls,
+                       focus_areas = new.focus_areas,
+                       updated_by  = new.updated_by,
+                       updated_at  = new.updated_at
     """, (month, json.dumps(achievements or []), json.dumps(shortfalls or []),
           json.dumps(focus_areas or []), updated_by or ""))
     conn.commit()
@@ -1682,7 +536,7 @@ def get_steel_sales_highlights(month: str) -> Optional[dict]:
     cursor = conn.cursor()
     cursor.execute(
         "SELECT month_items, ytd_items, updated_by, updated_at "
-        "FROM steel_sales_highlights WHERE report_month = ?",
+        "FROM steel_sales_highlights WHERE report_month = %s",
         (month,)
     )
     row = cursor.fetchone()
@@ -1707,12 +561,11 @@ def save_steel_sales_highlights(month: str, month_items: list, ytd_items: list, 
     cursor.execute("""
         INSERT INTO steel_sales_highlights
             (report_month, month_items, ytd_items, updated_by, updated_at)
-        VALUES (?, ?, ?, ?, datetime('now'))
-        ON CONFLICT(report_month)
-        DO UPDATE SET month_items = excluded.month_items,
-                       ytd_items   = excluded.ytd_items,
-                       updated_by  = excluded.updated_by,
-                       updated_at  = excluded.updated_at
+        VALUES (%s, %s, %s, %s, NOW())
+        AS new ON DUPLICATE KEY UPDATE month_items = new.month_items,
+                       ytd_items   = new.ytd_items,
+                       updated_by  = new.updated_by,
+                       updated_at  = new.updated_at
     """, (month, json.dumps(month_items or []), json.dumps(ytd_items or []), updated_by or ""))
     conn.commit()
     conn.close()
@@ -1725,7 +578,7 @@ def save_techno_parameter(month: str, plant: str, parameter: str, unit: str,
     conn = connect()
     cur = conn.cursor()
     cur.execute(
-        "SELECT param_id FROM techno_param WHERE row_label=? AND param_name=?",
+        "SELECT param_id FROM techno_param WHERE row_label=%s AND param_name=%s",
         (plant, parameter),
     )
     row = cur.fetchone()
@@ -1734,10 +587,10 @@ def save_techno_parameter(month: str, plant: str, parameter: str, unit: str,
         return
     conn.execute("""
         INSERT INTO techno_actuals (report_month, param_id, actual, source)
-        VALUES (?, ?, ?, 'manual')
-        ON CONFLICT(report_month, param_id) DO UPDATE SET
-            actual = excluded.actual,
-            source = excluded.source
+        VALUES (%s, %s, %s, 'manual')
+        AS new ON DUPLICATE KEY UPDATE
+            actual = new.actual,
+            source = new.source
     """, (month, row[0], month_val))
     conn.commit()
     conn.close()
@@ -1748,15 +601,15 @@ def clear_special_steel_orders(month: str, plant: str) -> int:
     Called once before a batch insert so stale grades/products don't linger."""
     init_db()
     conn = connect()
-    conn.row_factory = sqlite3.Row
+    conn.row_factory = Row
     old_rows = conn.execute(
-        "SELECT * FROM special_steel_orders WHERE report_month=? AND plant_name=?",
+        "SELECT * FROM special_steel_orders WHERE report_month=%s AND plant_name=%s",
         (month, plant),
     )
     olds = [dict(r) for r in old_rows.fetchall()]
     conn.row_factory = None
     cur = conn.execute(
-        "DELETE FROM special_steel_orders WHERE report_month=? AND plant_name=?",
+        "DELETE FROM special_steel_orders WHERE report_month=%s AND plant_name=%s",
         (month, plant),
     )
     deleted = cur.rowcount
@@ -1779,18 +632,17 @@ def save_special_steel_entry(month: str, plant: str, product: str, quality_grade
     init_db()
     conn = connect()
     old = _row_dict(conn,
-        "SELECT * FROM special_steel_orders WHERE report_month=? AND plant_name=? AND product=? AND quality_grade=? AND section=?",
+        "SELECT * FROM special_steel_orders WHERE report_month=%s AND plant_name=%s AND product=%s AND quality_grade=%s AND section=%s",
         (month, plant, product, quality_grade, section or ""))
     conn.execute("""
         INSERT INTO special_steel_orders
             (report_month, plant_name, product, quality_grade, section,
              sort_order, order_qty, actual_despatch)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(report_month, plant_name, product, quality_grade, section)
-        DO UPDATE SET
-            sort_order      = excluded.sort_order,
-            order_qty       = excluded.order_qty,
-            actual_despatch = excluded.actual_despatch
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        AS new ON DUPLICATE KEY UPDATE
+            sort_order      = new.sort_order,
+            order_qty       = new.order_qty,
+            actual_despatch = new.actual_despatch
     """, (month, plant, product, quality_grade, section or "",
           sort_order, order_qty, actual_despatch))
     conn.commit()
@@ -1807,13 +659,12 @@ def save_stock_entry(stock_month: str, plant: str, item_type: str,
     init_db()
     conn = connect()
     old = _row_dict(conn,
-        "SELECT * FROM stock_table WHERE stock_month=? AND plant_name=? AND item_type=? AND stock_type=?",
+        "SELECT * FROM stock_table WHERE stock_month=%s AND plant_name=%s AND item_type=%s AND stock_type=%s",
         (stock_month, plant, item_type, stock_type))
     conn.execute("""
         INSERT INTO stock_table (stock_month, plant_name, item_type, stock_type, stock)
-        VALUES (?, ?, ?, ?, ?)
-        ON CONFLICT(stock_month, plant_name, item_type, stock_type)
-        DO UPDATE SET stock = excluded.stock
+        VALUES (%s, %s, %s, %s, %s)
+        AS new ON DUPLICATE KEY UPDATE stock = new.stock
     """, (stock_month, plant, item_type, stock_type, stock))
     conn.commit()
     conn.close()
@@ -1833,21 +684,20 @@ def save_ipt_entry(month: str, item: str, from_plant: str, to_plant: str,
     init_db()
     conn = connect()
     old = _row_dict(conn,
-        "SELECT * FROM ipt_table WHERE report_month=? AND item=? AND from_plant=? AND to_plant=?",
+        "SELECT * FROM ipt_table WHERE report_month=%s AND item=%s AND from_plant=%s AND to_plant=%s",
         (month, item, from_plant, to_plant))
     conn.execute("""
         INSERT INTO ipt_table
             (report_month, item, from_plant, to_plant, unit, sort_order,
              plan, actual, plan_tonnage, actual_tonnage)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(report_month, item, from_plant, to_plant)
-        DO UPDATE SET
-            unit = excluded.unit,
-            sort_order = excluded.sort_order,
-            plan = excluded.plan,
-            actual = excluded.actual,
-            plan_tonnage = excluded.plan_tonnage,
-            actual_tonnage = excluded.actual_tonnage
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        AS new ON DUPLICATE KEY UPDATE
+            unit = new.unit,
+            sort_order = new.sort_order,
+            plan = new.plan,
+            actual = new.actual,
+            plan_tonnage = new.plan_tonnage,
+            actual_tonnage = new.actual_tonnage
     """, (month, item, from_plant, to_plant, unit, sort_order,
           plan, actual, plan_tonnage, actual_tonnage))
     conn.commit()
@@ -1863,10 +713,10 @@ def delete_ipt_entry(month: str, item: str, from_plant: str, to_plant: str) -> i
     init_db()
     conn = connect()
     old = _row_dict(conn,
-        "SELECT * FROM ipt_table WHERE report_month=? AND item=? AND from_plant=? AND to_plant=?",
+        "SELECT * FROM ipt_table WHERE report_month=%s AND item=%s AND from_plant=%s AND to_plant=%s",
         (month, item, from_plant, to_plant))
     cur = conn.execute(
-        "DELETE FROM ipt_table WHERE report_month=? AND item=? AND from_plant=? AND to_plant=?",
+        "DELETE FROM ipt_table WHERE report_month=%s AND item=%s AND from_plant=%s AND to_plant=%s",
         (month, item, from_plant, to_plant),
     )
     deleted = cur.rowcount
@@ -1895,14 +745,14 @@ def list_breakdown_entries(plant: Optional[str] = None, fy: Optional[str] = None
     sql = "SELECT * FROM breakdown_table WHERE 1=1"
     args = []
     if plant:
-        sql += " AND plant=?"; args.append(plant)
+        sql += " AND plant=%s"; args.append(plant)
     if unit_type:
-        sql += " AND unit_type=?"; args.append(unit_type)
+        sql += " AND unit_type=%s"; args.append(unit_type)
     if unit_name:
-        sql += " AND unit_name=?"; args.append(unit_name)
+        sql += " AND unit_name=%s"; args.append(unit_name)
     sql += " ORDER BY start_ts DESC, id DESC"
     prev_factory = conn.row_factory
-    conn.row_factory = sqlite3.Row
+    conn.row_factory = Row
     try:
         cur = conn.execute(sql, args)
         rows = [dict(r) for r in cur.fetchall()]
@@ -1928,7 +778,7 @@ def save_breakdown_entry(plant: str, unit_type: str, unit_name: str, sms_subtag:
         INSERT INTO breakdown_table
             (plant, unit_type, unit_name, sms_subtag, start_ts, end_ts, is_ongoing,
              cause, hours_lost_override, capital_repair_id, created_by, created_at, updated_by, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """, (plant, unit_type, unit_name, sms_subtag, start_ts, end_ts, int(is_ongoing),
           cause, hours_lost_override, capital_repair_id, created_by, now, created_by, now))
     conn.commit()
@@ -1949,7 +799,7 @@ def update_breakdown_entry(breakdown_id: int, updated_by: str, **fields) -> bool
     from datetime import datetime
     init_db()
     conn = connect()
-    old = _row_dict(conn, "SELECT * FROM breakdown_table WHERE id=?", (breakdown_id,))
+    old = _row_dict(conn, "SELECT * FROM breakdown_table WHERE id=%s", (breakdown_id,))
     if old is None:
         conn.close()
         return False
@@ -1959,15 +809,15 @@ def update_breakdown_entry(breakdown_id: int, updated_by: str, **fields) -> bool
     for k, v in fields.items():
         if k not in allowed:
             continue
-        sets.append(f"{k}=?")
+        sets.append(f"{k}=%s")
         args.append(int(v) if k == "is_ongoing" else v)
     if not sets:
         conn.close()
         return True
-    sets.append("updated_by=?"); args.append(updated_by)
-    sets.append("updated_at=?"); args.append(datetime.now().isoformat())
+    sets.append("updated_by=%s"); args.append(updated_by)
+    sets.append("updated_at=%s"); args.append(datetime.now().isoformat())
     args.append(breakdown_id)
-    conn.execute(f"UPDATE breakdown_table SET {', '.join(sets)} WHERE id=?", args)
+    conn.execute(f"UPDATE breakdown_table SET {', '.join(sets)} WHERE id=%s", args)
     conn.commit()
     conn.close()
     new = {**old, **{k: v for k, v in fields.items() if k in allowed}}
@@ -1979,11 +829,11 @@ def delete_breakdown_entry(breakdown_id: int) -> bool:
     """Delete one breakdown event, recording its prior state. Returns False if not found."""
     init_db()
     conn = connect()
-    old = _row_dict(conn, "SELECT * FROM breakdown_table WHERE id=?", (breakdown_id,))
+    old = _row_dict(conn, "SELECT * FROM breakdown_table WHERE id=%s", (breakdown_id,))
     if old is None:
         conn.close()
         return False
-    conn.execute("DELETE FROM breakdown_table WHERE id=?", (breakdown_id,))
+    conn.execute("DELETE FROM breakdown_table WHERE id=%s", (breakdown_id,))
     conn.commit()
     conn.close()
     activity_context.record(f"breakdown_table/{old['plant']}/{old['unit_name']}/{breakdown_id}", old, None)
@@ -1997,12 +847,12 @@ def list_capacity_entries(plant: Optional[str] = None, item: Optional[str] = Non
     sql = "SELECT * FROM item_capacity_table WHERE 1=1"
     args = []
     if plant:
-        sql += " AND plant_name=?"; args.append(plant)
+        sql += " AND plant_name=%s"; args.append(plant)
     if item:
-        sql += " AND item_name=?"; args.append(item)
+        sql += " AND item_name=%s"; args.append(item)
     sql += " ORDER BY plant_name, item_name, effective_month DESC"
     prev_factory = conn.row_factory
-    conn.row_factory = sqlite3.Row
+    conn.row_factory = Row
     try:
         cur = conn.execute(sql, args)
         rows = [dict(r) for r in cur.fetchall()]
@@ -2021,7 +871,7 @@ def get_effective_capacity(plant: str, item: str, month: str) -> Optional[float]
     try:
         cur = conn.execute(
             "SELECT annual_capacity FROM item_capacity_table "
-            "WHERE plant_name=? AND item_name=? AND effective_month<=? "
+            "WHERE plant_name=%s AND item_name=%s AND effective_month<=%s "
             "ORDER BY effective_month DESC LIMIT 1",
             (plant, item, month),
         )
@@ -2034,7 +884,7 @@ def get_effective_capacity(plant: str, item: str, month: str) -> Optional[float]
 def save_capacity_entry(plant: str, item: str, effective_month: str,
                          annual_capacity: float, reason: str, created_by: str) -> int:
     """Create one capacity entry. Returns the new row id. Raises
-    sqlite3.IntegrityError if (plant, item, effective_month) already exists —
+    IntegrityError if (plant, item, effective_month) already exists —
     callers should surface that as "an entry for this month already exists,
     edit it instead"."""
     from datetime import datetime
@@ -2046,7 +896,7 @@ def save_capacity_entry(plant: str, item: str, effective_month: str,
             INSERT INTO item_capacity_table
                 (plant_name, item_name, effective_month, annual_capacity, reason,
                  created_by, created_at, updated_by, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (plant, item, effective_month, annual_capacity, reason,
               created_by, now, created_by, now))
         conn.commit()
@@ -2063,12 +913,12 @@ def save_capacity_entry(plant: str, item: str, effective_month: str,
 def update_capacity_entry(entry_id: int, updated_by: str, **fields) -> bool:
     """Update any subset of item_name/plant_name/effective_month/annual_capacity/
     reason on one capacity entry. Returns False if the row doesn't exist.
-    Raises sqlite3.IntegrityError on a resulting (plant, item, effective_month)
+    Raises IntegrityError on a resulting (plant, item, effective_month)
     clash with another row."""
     from datetime import datetime
     init_db()
     conn = connect()
-    old = _row_dict(conn, "SELECT * FROM item_capacity_table WHERE id=?", (entry_id,))
+    old = _row_dict(conn, "SELECT * FROM item_capacity_table WHERE id=%s", (entry_id,))
     if old is None:
         conn.close()
         return False
@@ -2077,16 +927,16 @@ def update_capacity_entry(entry_id: int, updated_by: str, **fields) -> bool:
     for k, v in fields.items():
         if k not in allowed:
             continue
-        sets.append(f"{k}=?")
+        sets.append(f"{k}=%s")
         args.append(v)
     if not sets:
         conn.close()
         return True
-    sets.append("updated_by=?"); args.append(updated_by)
-    sets.append("updated_at=?"); args.append(datetime.now().isoformat())
+    sets.append("updated_by=%s"); args.append(updated_by)
+    sets.append("updated_at=%s"); args.append(datetime.now().isoformat())
     args.append(entry_id)
     try:
-        conn.execute(f"UPDATE item_capacity_table SET {', '.join(sets)} WHERE id=?", args)
+        conn.execute(f"UPDATE item_capacity_table SET {', '.join(sets)} WHERE id=%s", args)
         conn.commit()
     finally:
         conn.close()
@@ -2099,11 +949,11 @@ def delete_capacity_entry(entry_id: int) -> bool:
     """Delete one capacity entry, recording its prior state. Returns False if not found."""
     init_db()
     conn = connect()
-    old = _row_dict(conn, "SELECT * FROM item_capacity_table WHERE id=?", (entry_id,))
+    old = _row_dict(conn, "SELECT * FROM item_capacity_table WHERE id=%s", (entry_id,))
     if old is None:
         conn.close()
         return False
-    conn.execute("DELETE FROM item_capacity_table WHERE id=?", (entry_id,))
+    conn.execute("DELETE FROM item_capacity_table WHERE id=%s", (entry_id,))
     conn.commit()
     conn.close()
     activity_context.record(f"item_capacity_table/{old['plant_name']}/{old['item_name']}/{entry_id}", old, None)
@@ -2145,21 +995,21 @@ def get_or_create_techno_param(group_code: str, section: str, row_label: str,
     cur = conn.cursor()
     cur.execute("""
         INSERT INTO techno_param (param_name, row_label, unit, sort_order)
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT(param_name, row_label) DO UPDATE SET
-            unit       = CASE WHEN excluded.unit != '' THEN excluded.unit ELSE unit END,
-            sort_order = CASE WHEN excluded.sort_order > 0 THEN excluded.sort_order ELSE sort_order END
+        VALUES (%s, %s, %s, %s)
+        AS new ON DUPLICATE KEY UPDATE
+            unit       = CASE WHEN new.unit != '' THEN new.unit ELSE unit END,
+            sort_order = CASE WHEN new.sort_order > 0 THEN new.sort_order ELSE sort_order END
     """, (param_name, entity_label, unit, sort_order))
     cur.execute(
-        "SELECT param_id FROM techno_param WHERE param_name=? AND row_label=?",
+        "SELECT param_id FROM techno_param WHERE param_name=%s AND row_label=%s",
         (param_name, entity_label),
     )
     pid = cur.fetchone()[0]
     cur.execute("""
         INSERT INTO techno_param_group (param_id, group_code, sort_order)
-        VALUES (?, ?, ?)
-        ON CONFLICT(param_id, group_code) DO UPDATE SET
-            sort_order = CASE WHEN excluded.sort_order > 0 THEN excluded.sort_order ELSE sort_order END
+        VALUES (%s, %s, %s)
+        AS new ON DUPLICATE KEY UPDATE
+            sort_order = CASE WHEN new.sort_order > 0 THEN new.sort_order ELSE sort_order END
     """, (pid, group_code, sort_order))
     conn.commit()
     conn.close()
@@ -2205,11 +1055,11 @@ def save_techno_data_from_extraction(plant: str, report_month: str, extracted_ro
 
     cursor.execute("""
         INSERT INTO techno_data (plant, report_month, unit, techno_json, source_file, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-        ON CONFLICT(plant, report_month, unit) DO UPDATE SET
-            techno_json = excluded.techno_json,
-            source_file = excluded.source_file,
-            created_at = excluded.created_at
+        VALUES (%s, %s, %s, %s, %s, %s)
+        AS new ON DUPLICATE KEY UPDATE
+            techno_json = new.techno_json,
+            source_file = new.source_file,
+            created_at = new.created_at
     """, (plant, report_month, unit, json.dumps(techno_json), source_file, now))
 
     conn.commit()
@@ -2227,11 +1077,11 @@ def save_techno_json(plant: str, report_month: str, unit: str,
     now = datetime.now().isoformat()
     cursor.execute("""
         INSERT INTO techno_data (plant, report_month, unit, techno_json, source_file, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-        ON CONFLICT(plant, report_month, unit) DO UPDATE SET
-            techno_json = excluded.techno_json,
-            source_file = excluded.source_file,
-            created_at  = excluded.created_at
+        VALUES (%s, %s, %s, %s, %s, %s)
+        AS new ON DUPLICATE KEY UPDATE
+            techno_json = new.techno_json,
+            source_file = new.source_file,
+            created_at  = new.created_at
     """, (plant, report_month, unit, json.dumps(techno_json), source_file, now))
     conn.commit()
     conn.close()
@@ -2255,15 +1105,15 @@ def save_techno_value(month: str, param_id: int, actual: Optional[float],
         conn = connect()
         conn.execute("""
             INSERT INTO techno_actuals (report_month, param_id, actual, till_month_actual, source)
-            VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT(report_month, param_id) DO UPDATE SET
-                actual            = excluded.actual,
-                till_month_actual = COALESCE(excluded.till_month_actual, till_month_actual),
-                source            = excluded.source
+            VALUES (%s, %s, %s, %s, %s)
+            AS new ON DUPLICATE KEY UPDATE
+                actual            = new.actual,
+                till_month_actual = COALESCE(new.till_month_actual, till_month_actual),
+                source            = new.source
         """, (month, param_id, actual, till_month_actual, source))
         conn.commit()
         conn.close()
-    except sqlite3.OperationalError:
+    except OperationalError:
         # techno_actuals table doesn't exist - skip
         pass
 
@@ -2281,8 +1131,8 @@ def save_techno_target(fy: str, param_id: int, target: Optional[float]):
     conn = connect()
     conn.execute("""
         INSERT INTO techno_target (fy, param_id, target)
-        VALUES (?, ?, ?)
-        ON CONFLICT(fy, param_id) DO UPDATE SET target = excluded.target
+        VALUES (%s, %s, %s)
+        AS new ON DUPLICATE KEY UPDATE target = new.target
     """, (fy, param_id, target))
     conn.commit()
     conn.close()
@@ -2296,7 +1146,7 @@ def log_page_visit(ip_address: str, user: Optional[dict], path: str) -> None:
     conn = connect()
     conn.execute("""
         INSERT INTO page_visits (timestamp, ip_address, user_email, user_name, path)
-        VALUES (?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s)
     """, (
         datetime.now(timezone.utc).isoformat(),
         ip_address or None,
@@ -2335,14 +1185,14 @@ def _add_admin_notification(kind, ip_address, user, path) -> None:
         if kind == "anon_visit":
             since = (now - timedelta(minutes=ANON_VISIT_NOTIFY_WINDOW_MINUTES)).isoformat()
             row = conn.execute(
-                "SELECT 1 FROM admin_notifications WHERE kind = 'anon_visit' AND ip_address = ? AND created_at >= ? LIMIT 1",
+                "SELECT 1 FROM admin_notifications WHERE kind = 'anon_visit' AND ip_address = %s AND created_at >= %s LIMIT 1",
                 (ip_address or None, since),
             ).fetchone()
             if row:
                 return
         conn.execute("""
             INSERT INTO admin_notifications (created_at, kind, user_email, user_name, ip_address, path)
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s)
         """, (
             now.isoformat(),
             kind,
@@ -2360,11 +1210,11 @@ def list_admin_notifications(limit: int = 30) -> List[Dict[str, Any]]:
     """Newest-first admin notification events (see add_admin_notification)."""
     init_db()
     conn = connect()
-    conn.row_factory = sqlite3.Row
+    conn.row_factory = Row
     try:
         rows = conn.execute(
             "SELECT id, created_at, kind, user_email, user_name, ip_address, path "
-            "FROM admin_notifications ORDER BY id DESC LIMIT ?",
+            "FROM admin_notifications ORDER BY id DESC LIMIT %s",
             (int(limit),),
         ).fetchall()
         return [dict(r) for r in rows]
@@ -2409,7 +1259,7 @@ def production_month_status(report_month: str) -> dict:
     conn = connect()
     try:
         cur = conn.cursor()
-        cur.execute("SELECT plant_name, source_type, file_name FROM extraction_log WHERE report_month = ?",
+        cur.execute("SELECT plant_name, source_type, file_name FROM extraction_log WHERE report_month = %s",
                     (report_month,))
         return _production_month_status(report_month, cur.fetchall())
     finally:
@@ -2430,7 +1280,7 @@ def log_extraction(plant: str, report_month: str, file_name: str, sheet_name: st
         conn = connect()
     conn.execute("""
         INSERT INTO extraction_log (logged_at, plant_name, report_month, file_name, sheet_name, source_type, items_extracted)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
     """, (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), plant, report_month, file_name, sheet_name, source_type, items_extracted))
     if owns_conn:
         conn.commit()
@@ -2442,7 +1292,7 @@ def get_pdf_item_aliases(plant: str) -> Dict[str, Any]:
     init_db()
     conn = connect()
     rows = conn.execute("""
-        SELECT pdf_label, item_name, convert_t FROM pdf_item_alias WHERE plant_name = ?
+        SELECT pdf_label, item_name, convert_t FROM pdf_item_alias WHERE plant_name = %s
     """, (plant,)).fetchall()
     conn.close()
     return {r[0]: (r[1], r[2]) for r in rows}
@@ -2458,13 +1308,12 @@ def save_pdf_item_alias(plant: str, pdf_label: str, item_name: str, convert_t: i
     init_db()
     conn = connect()
     old = _row_dict(conn,
-        "SELECT * FROM pdf_item_alias WHERE plant_name=? AND pdf_label=?",
+        "SELECT * FROM pdf_item_alias WHERE plant_name=%s AND pdf_label=%s",
         (plant, pdf_label))
     conn.execute("""
         INSERT INTO pdf_item_alias (plant_name, pdf_label, item_name, convert_t)
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT(plant_name, pdf_label)
-        DO UPDATE SET item_name = excluded.item_name, convert_t = excluded.convert_t
+        VALUES (%s, %s, %s, %s)
+        AS new ON DUPLICATE KEY UPDATE item_name = new.item_name, convert_t = new.convert_t
     """, (plant, pdf_label, item_name, convert_t))
     conn.commit()
     conn.close()
@@ -2479,13 +1328,13 @@ def get_extraction_logs(limit: int = 60, plant: Optional[str] = None,
     show only its own entries from this shared log table."""
     init_db()
     conn = connect()
-    conn.row_factory = sqlite3.Row
+    conn.row_factory = Row
     clauses, params = [], []
     if plant:
-        clauses.append("plant_name = ?")
+        clauses.append("plant_name = %s")
         params.append(plant)
     if source_type:
-        clauses.append("source_type = ?")
+        clauses.append("source_type = %s")
         params.append(source_type)
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     params.append(limit)
@@ -2494,7 +1343,7 @@ def get_extraction_logs(limit: int = 60, plant: Optional[str] = None,
         FROM extraction_log
         {where}
         ORDER BY id DESC
-        LIMIT ?
+        LIMIT %s
     """, params).fetchall()
     conn.close()
     return [dict(r) for r in rows]
@@ -2520,11 +1369,10 @@ def insert_techno_furnace_data(plant: str, furnace: str, report_month: str, data
 
     cursor.execute("""
         INSERT INTO techno_furnace_data (plant, furnace, report_month, data, created_at, updated_at)
-        VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
-        ON CONFLICT(plant, furnace, report_month)
-        DO UPDATE SET
-            data = excluded.data,
-            updated_at = datetime('now')
+        VALUES (%s, %s, %s, %s, NOW(), NOW())
+        AS new ON DUPLICATE KEY UPDATE
+            data = new.data,
+            updated_at = NOW()
     """, (plant, furnace, report_month, json.dumps(data)))
 
     conn.commit()
@@ -2539,14 +1387,14 @@ def get_techno_furnace_data(plant: str, report_month: str, furnace: str = "") ->
     """
     init_db()
     conn = connect()
-    conn.row_factory = sqlite3.Row
+    conn.row_factory = Row
     cursor = conn.cursor()
 
     if furnace:
         cursor.execute("""
             SELECT furnace, data
             FROM techno_furnace_data
-            WHERE plant = ? AND report_month = ? AND furnace = ?
+            WHERE plant = %s AND report_month = %s AND furnace = %s
         """, [plant, report_month, furnace])
         row = cursor.fetchone()
         conn.close()
@@ -2557,7 +1405,7 @@ def get_techno_furnace_data(plant: str, report_month: str, furnace: str = "") ->
         cursor.execute("""
             SELECT furnace, data
             FROM techno_furnace_data
-            WHERE plant = ? AND report_month = ?
+            WHERE plant = %s AND report_month = %s
             ORDER BY furnace
         """, [plant, report_month])
         rows = cursor.fetchall()
@@ -2586,12 +1434,11 @@ def insert_techno_plant_data(plant: str, report_month: str, data: Dict[str, Any]
 
     cursor.execute("""
         INSERT INTO techno_plant_data (plant, report_month, data, calculation_details, created_at, updated_at)
-        VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
-        ON CONFLICT(plant, report_month)
-        DO UPDATE SET
-            data = excluded.data,
-            calculation_details = excluded.calculation_details,
-            updated_at = datetime('now')
+        VALUES (%s, %s, %s, %s, NOW(), NOW())
+        AS new ON DUPLICATE KEY UPDATE
+            data = new.data,
+            calculation_details = new.calculation_details,
+            updated_at = NOW()
     """, (plant, report_month, json.dumps(data), json.dumps(calculation_details or {})))
 
     conn.commit()
@@ -2606,13 +1453,13 @@ def get_techno_plant_data(plant: str, report_month: str) -> Dict[str, Any]:
     """
     init_db()
     conn = connect()
-    conn.row_factory = sqlite3.Row
+    conn.row_factory = Row
     cursor = conn.cursor()
 
     cursor.execute("""
         SELECT data, calculation_details
         FROM techno_plant_data
-        WHERE plant = ? AND report_month = ?
+        WHERE plant = %s AND report_month = %s
     """, [plant, report_month])
 
     row = cursor.fetchone()
@@ -2642,12 +1489,11 @@ def insert_techno_sail_consolidated(report_month: str, data: Dict[str, float],
 
     cursor.execute("""
         INSERT INTO techno_sail_consolidated (report_month, data, calculation_method, last_updated)
-        VALUES (?, ?, ?, datetime('now'))
-        ON CONFLICT(report_month)
-        DO UPDATE SET
-            data = excluded.data,
-            calculation_method = excluded.calculation_method,
-            last_updated = datetime('now')
+        VALUES (%s, %s, %s, NOW())
+        AS new ON DUPLICATE KEY UPDATE
+            data = new.data,
+            calculation_method = new.calculation_method,
+            last_updated = NOW()
     """, (report_month, json.dumps(data), json.dumps(calculation_method or {})))
 
     conn.commit()
@@ -2662,13 +1508,13 @@ def get_techno_sail_consolidated(report_month: str) -> Dict[str, Any]:
     """
     init_db()
     conn = connect()
-    conn.row_factory = sqlite3.Row
+    conn.row_factory = Row
     cursor = conn.cursor()
 
     cursor.execute("""
         SELECT data, calculation_method
         FROM techno_sail_consolidated
-        WHERE report_month = ?
+        WHERE report_month = %s
     """, [report_month])
 
     row = cursor.fetchone()
@@ -2715,16 +1561,16 @@ def _raw_upsert_techno_data(plant: str, report_month: str, unit: str, techno_jso
     if owns_conn:
         conn = connect()
     old = _row_dict(conn,
-        "SELECT techno_json, source_file FROM techno_data WHERE plant=? AND report_month=? AND unit=?",
+        "SELECT techno_json, source_file FROM techno_data WHERE plant=%s AND report_month=%s AND unit=%s",
         (plant, report_month, unit))
     cursor = conn.cursor()
     cursor.execute("""
         INSERT INTO techno_data (plant, report_month, unit, techno_json, source_file, created_at)
-        VALUES (?, ?, ?, ?, ?, datetime('now'))
-        ON CONFLICT(plant, report_month, unit) DO UPDATE SET
-            techno_json = excluded.techno_json,
-            source_file = excluded.source_file,
-            created_at  = datetime('now')
+        VALUES (%s, %s, %s, %s, %s, NOW())
+        AS new ON DUPLICATE KEY UPDATE
+            techno_json = new.techno_json,
+            source_file = new.source_file,
+            created_at  = NOW()
     """, (plant, report_month, unit, json.dumps(techno_json), source_file))
     if owns_conn:
         conn.commit()
@@ -2816,7 +1662,7 @@ def _maybe_recompute_derived_params(plant: str, report_month: str, unit: str, co
         try:
             cur = conn.cursor()
             cur.execute(
-                "SELECT source_file FROM techno_data WHERE plant=? AND report_month=? AND unit=?",
+                "SELECT source_file FROM techno_data WHERE plant=%s AND report_month=%s AND unit=%s",
                 (plant, report_month, unit),
             )
             row = cur.fetchone()
@@ -2899,7 +1745,7 @@ def merge_upsert_techno_data(plant: str, report_month: str, unit: str, new_techn
         conn = connect()
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT techno_json FROM techno_data WHERE plant=? AND report_month=? AND unit=?",
+        "SELECT techno_json FROM techno_data WHERE plant=%s AND report_month=%s AND unit=%s",
         [plant, report_month, unit],
     )
     row = cursor.fetchone()
@@ -2932,7 +1778,7 @@ def get_production_actual_value(plant: str, item_name: str, report_month: str) -
     conn = connect()
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT month_actual FROM production_table WHERE plant_name=? AND item_name=? AND report_month=?",
+        "SELECT month_actual FROM production_table WHERE plant_name=%s AND item_name=%s AND report_month=%s",
         (plant, item_name, report_month),
     )
     row = cursor.fetchone()
@@ -2951,10 +1797,10 @@ def get_production_actual_for_months(plant: str, item_name: str, months: List[st
     init_db()
     conn = connect()
     cursor = conn.cursor()
-    placeholders = ",".join("?" * len(months))
+    placeholders = ",".join(["%s"] * len(months))
     cursor.execute(
         f"SELECT report_month, month_actual FROM production_table "
-        f"WHERE plant_name = ? AND item_name = ? AND report_month IN ({placeholders})",
+        f"WHERE plant_name = %s AND item_name = %s AND report_month IN ({placeholders})",
         [plant, item_name] + months,
     )
     out = {rm: v for rm, v in cursor.fetchall() if v is not None}
@@ -2983,10 +1829,10 @@ def enrich_rows_with_db_production(rows: List[Dict[str, Any]], plant: str, repor
     months = {r.get("report_month") or report_month for r in rows}
     conn = connect()
     cursor = conn.cursor()
-    placeholders = ",".join("?" * len(months))
+    placeholders = ",".join(["%s"] * len(months))
     cursor.execute(
         f"SELECT report_month, item_name, month_actual FROM production_table "
-        f"WHERE plant_name=? AND report_month IN ({placeholders})",
+        f"WHERE plant_name=%s AND report_month IN ({placeholders})",
         (plant, *months),
     )
     current = {(rm, item): val for rm, item, val in cursor.fetchall()}
@@ -3021,24 +1867,24 @@ def get_techno_data(plant: str, report_month: str, unit: str = None, conn=None) 
 
     `conn`: see merge_upsert_techno_data's docstring. When reusing a passed-in
     connection, its row_factory is saved and restored afterward rather than
-    being permanently switched to sqlite3.Row, since a shared connection may
+    being permanently switched to Row, since a shared connection may
     be reused by other callers (plain tuple rows) later in the same batch."""
     init_db()
     owns_conn = conn is None
     if owns_conn:
         conn = connect()
     prev_factory = conn.row_factory
-    conn.row_factory = sqlite3.Row
+    conn.row_factory = Row
     cursor = conn.cursor()
 
     if unit:
         cursor.execute(
-            "SELECT unit, techno_json FROM techno_data WHERE plant = ? AND report_month = ? AND unit = ?",
+            "SELECT unit, techno_json FROM techno_data WHERE plant = %s AND report_month = %s AND unit = %s",
             [plant, report_month, unit]
         )
     else:
         cursor.execute(
-            "SELECT unit, techno_json FROM techno_data WHERE plant = ? AND report_month = ? ORDER BY unit",
+            "SELECT unit, techno_json FROM techno_data WHERE plant = %s AND report_month = %s ORDER BY unit",
             [plant, report_month]
         )
 
@@ -3063,11 +1909,11 @@ def get_sail_techno_actuals(report_month: str) -> Dict[str, Any]:
     """
     init_db()
     conn = connect()
-    conn.row_factory = sqlite3.Row
+    conn.row_factory = Row
     cursor = conn.cursor()
 
     cursor.execute(
-        "SELECT unit, techno_json FROM techno_data WHERE plant = 'SAIL' AND report_month = ? ORDER BY unit",
+        "SELECT unit, techno_json FROM techno_data WHERE plant = 'SAIL' AND report_month = %s ORDER BY unit",
         [report_month]
     )
     rows = cursor.fetchall()
@@ -3094,12 +1940,11 @@ def save_sail_techno_actuals(report_month: str, unit: str, techno_json: Dict,
 
     cursor.execute("""
         INSERT INTO techno_data (plant, report_month, unit, techno_json, source_file, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-        ON CONFLICT(plant, report_month, unit)
-        DO UPDATE SET
-            techno_json = excluded.techno_json,
-            source_file = excluded.source_file,
-            created_at = excluded.created_at
+        VALUES (%s, %s, %s, %s, %s, %s)
+        AS new ON DUPLICATE KEY UPDATE
+            techno_json = new.techno_json,
+            source_file = new.source_file,
+            created_at = new.created_at
     """, ("SAIL", report_month, unit, json.dumps(techno_json), source_file, now))
 
     # Store calculation details separately if provided
@@ -3120,7 +1965,7 @@ def get_techno_months(plant: str = None) -> List[str]:
     cursor = conn.cursor()
     if plant:
         cursor.execute(
-            "SELECT DISTINCT report_month FROM techno_data WHERE plant = ? ORDER BY report_month DESC",
+            "SELECT DISTINCT report_month FROM techno_data WHERE plant = %s ORDER BY report_month DESC",
             [plant]
         )
     else:
@@ -3154,12 +1999,12 @@ def get_techno_plan(plant: str, fy: str, unit: str = "") -> Dict[str, Any]:
 def _get_techno_plan_cached(plant: str, fy: str, unit: str = "") -> Dict[str, Any]:
     init_db()
     conn = connect()
-    conn.row_factory = sqlite3.Row
+    conn.row_factory = Row
     cur = conn.cursor()
 
     if unit:
         cur.execute(
-            "SELECT techno_json, is_user_supplied, calculated_json FROM techno_plan_fy WHERE plant_name = ? AND fy = ? AND unit = ?",
+            "SELECT techno_json, is_user_supplied, calculated_json FROM techno_plan_fy WHERE plant_name = %s AND fy = %s AND unit = %s",
             (plant, fy, unit)
         )
         row = cur.fetchone()
@@ -3176,7 +2021,7 @@ def _get_techno_plan_cached(plant: str, fy: str, unit: str = "") -> Dict[str, An
         return {'data': {}, 'is_user_supplied': False, 'calculated': {}}
     else:
         cur.execute(
-            "SELECT unit, techno_json, is_user_supplied, calculated_json FROM techno_plan_fy WHERE plant_name = ? AND fy = ? ORDER BY unit",
+            "SELECT unit, techno_json, is_user_supplied, calculated_json FROM techno_plan_fy WHERE plant_name = %s AND fy = %s ORDER BY unit",
             (plant, fy)
         )
         rows = cur.fetchall()
@@ -3206,7 +2051,7 @@ def save_techno_plan(plant: str, fy: str, unit: str, techno_json: Dict,
     init_db()
     conn = connect()
     old = _row_dict(conn,
-        "SELECT techno_json, is_user_supplied, calculated_json, calculation_method FROM techno_plan_fy WHERE plant_name=? AND unit=? AND fy=?",
+        "SELECT techno_json, is_user_supplied, calculated_json, calculation_method FROM techno_plan_fy WHERE plant_name=%s AND unit=%s AND fy=%s",
         (plant, unit, fy))
     cur = conn.cursor()
     from datetime import datetime
@@ -3215,14 +2060,13 @@ def save_techno_plan(plant: str, fy: str, unit: str, techno_json: Dict,
     cur.execute("""
         INSERT INTO techno_plan_fy
             (plant_name, unit, fy, techno_json, is_user_supplied, calculated_json, calculation_method, created_by, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(plant_name, unit, fy)
-        DO UPDATE SET
-            techno_json = excluded.techno_json,
-            is_user_supplied = excluded.is_user_supplied,
-            calculated_json = excluded.calculated_json,
-            calculation_method = excluded.calculation_method,
-            updated_at = excluded.updated_at
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        AS new ON DUPLICATE KEY UPDATE
+            techno_json = new.techno_json,
+            is_user_supplied = new.is_user_supplied,
+            calculated_json = new.calculated_json,
+            calculation_method = new.calculation_method,
+            updated_at = new.updated_at
     """, (plant, unit, fy, json.dumps(techno_json), int(is_user_supplied),
           json.dumps(calculated_json or {}), json.dumps(calculation_method or {}), created_by, now, now))
     conn.commit()
@@ -3254,10 +2098,10 @@ def get_techno_plant_plan(plant: str, fy: str) -> Dict[str, Any]:
 def _get_techno_plant_plan_cached(plant: str, fy: str) -> Dict[str, Any]:
     init_db()
     conn = connect()
-    conn.row_factory = sqlite3.Row
+    conn.row_factory = Row
     cur = conn.cursor()
     cur.execute(
-        "SELECT techno_json, is_user_supplied, calculated_json, calculation_method FROM techno_plan_fy WHERE plant_name = ? AND fy = ? AND unit = 'Shop'",
+        "SELECT techno_json, is_user_supplied, calculated_json, calculation_method FROM techno_plan_fy WHERE plant_name = %s AND fy = %s AND unit = 'Shop'",
         (plant, fy)
     )
     row = cur.fetchone()
@@ -3293,10 +2137,10 @@ def get_sail_techno_plan(fy: str) -> Dict[str, Any]:
 def _get_sail_techno_plan_cached(fy: str) -> Dict[str, Any]:
     init_db()
     conn = connect()
-    conn.row_factory = sqlite3.Row
+    conn.row_factory = Row
     cur = conn.cursor()
     cur.execute(
-        "SELECT techno_json, is_user_supplied, calculated_json, calculation_method FROM techno_plan_fy WHERE plant_name = 'SAIL' AND fy = ? AND unit = 'Shop'",
+        "SELECT techno_json, is_user_supplied, calculated_json, calculation_method FROM techno_plan_fy WHERE plant_name = 'SAIL' AND fy = %s AND unit = 'Shop'",
         (fy,)
     )
     row = cur.fetchone()
@@ -3330,7 +2174,7 @@ def list_techno_plan_fys(plant: str = None) -> List[str]:
 
     if plant:
         cursor.execute(
-            "SELECT DISTINCT fy FROM techno_plan_fy WHERE plant_name = ? ORDER BY fy DESC",
+            "SELECT DISTINCT fy FROM techno_plan_fy WHERE plant_name = %s ORDER BY fy DESC",
             (plant,)
         )
     else:
@@ -3364,10 +2208,10 @@ def get_cost_trend_annual(product: str, fys: List[str]) -> Dict[str, Any]:
     cur = conn.cursor()
     out = {fy: {ct: {} for ct in COST_TREND_COST_TYPES} for fy in fys}
     if fys:
-        ph = ",".join("?" * len(fys))
+        ph = ",".join(["%s"] * len(fys))
         cur.execute(
             f"SELECT fy, cost_type, plant, value FROM cost_trend_annual "
-            f"WHERE product=? AND fy IN ({ph})",
+            f"WHERE product=%s AND fy IN ({ph})",
             (product, *fys),
         )
         for fy, cost_type, plant, value in cur.fetchall():
@@ -3387,9 +2231,8 @@ def save_cost_trend_annual(fy: str, product: str, entries: List[Dict[str, Any]])
     for e in entries:
         cur.execute("""
             INSERT INTO cost_trend_annual (fy, product, cost_type, plant, value)
-            VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT(fy, product, cost_type, plant)
-            DO UPDATE SET value = excluded.value
+            VALUES (%s, %s, %s, %s, %s)
+            AS new ON DUPLICATE KEY UPDATE value = new.value
         """, (fy, product, e["cost_type"], e["plant"], e.get("value")))
         saved += 1
     conn.commit()
@@ -3405,10 +2248,10 @@ def get_cost_trend_monthly(product: str, report_months: List[str]) -> Dict[str, 
     cur = conn.cursor()
     out = {rm: {ct: {} for ct in COST_TREND_COST_TYPES} for rm in report_months}
     if report_months:
-        ph = ",".join("?" * len(report_months))
+        ph = ",".join(["%s"] * len(report_months))
         cur.execute(
             f"SELECT report_month, cost_type, plant, month_value, till_month_value "
-            f"FROM cost_trend_monthly WHERE product=? AND report_month IN ({ph})",
+            f"FROM cost_trend_monthly WHERE product=%s AND report_month IN ({ph})",
             (product, *report_months),
         )
         for rm, cost_type, plant, mv, tmv in cur.fetchall():
@@ -3432,9 +2275,8 @@ def save_cost_trend_monthly(report_month: str, product: str, entries: List[Dict[
     for e in entries:
         cur.execute("""
             INSERT INTO cost_trend_monthly (report_month, product, cost_type, plant, month_value, till_month_value)
-            VALUES (?, ?, ?, ?, ?, ?)
-            ON CONFLICT(report_month, product, cost_type, plant)
-            DO UPDATE SET month_value = excluded.month_value, till_month_value = excluded.till_month_value
+            VALUES (%s, %s, %s, %s, %s, %s)
+            AS new ON DUPLICATE KEY UPDATE month_value = new.month_value, till_month_value = new.till_month_value
         """, (report_month, product, e["cost_type"], e["plant"], e.get("month_value"), e.get("till_month_value")))
         saved += 1
     conn.commit()
@@ -3460,9 +2302,8 @@ def save_cost_trend_monthly_field(report_month: str, product: str, entries: List
     for e in entries:
         cur.execute(f"""
             INSERT INTO cost_trend_monthly (report_month, product, cost_type, plant, {field})
-            VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT(report_month, product, cost_type, plant)
-            DO UPDATE SET {field} = excluded.{field}
+            VALUES (%s, %s, %s, %s, %s)
+            AS new ON DUPLICATE KEY UPDATE {field} = new.{field}
         """, (report_month, product, e["cost_type"], e["plant"], e.get("value")))
         saved += 1
     conn.commit()
@@ -3479,7 +2320,7 @@ def get_sail_mines_monthly(report_months: List[str]) -> Dict[str, Any]:
     cur = conn.cursor()
     out = {m: {} for m in report_months}
     if report_months:
-        ph = ",".join("?" * len(report_months))
+        ph = ",".join(["%s"] * len(report_months))
         cur.execute(
             f"SELECT report_month, section, item, month_actual, month_plan "
             f"FROM sail_mines_monthly WHERE report_month IN ({ph})",
@@ -3502,9 +2343,8 @@ def save_sail_mines_monthly(report_month: str, entries: List[Dict[str, Any]]) ->
     for e in entries:
         cur.execute("""
             INSERT INTO sail_mines_monthly (report_month, section, item, month_actual, month_plan)
-            VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT(report_month, section, item)
-            DO UPDATE SET month_actual = excluded.month_actual, month_plan = excluded.month_plan
+            VALUES (%s, %s, %s, %s, %s)
+            AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual, month_plan = new.month_plan
         """, (report_month, e["section"], e["item"], e.get("actual"), e.get("plan")))
         saved += 1
     conn.commit()
@@ -3561,7 +2401,7 @@ def get_mines_production_despatch_monthly(report_month: str, mine_code: str) -> 
 
     production = {}
     cur.execute(
-        "SELECT material_code, qty_actual, qty_plan FROM mines_production_monthly WHERE report_month=? AND mine_code=?",
+        "SELECT material_code, qty_actual, qty_plan FROM mines_production_monthly WHERE report_month=%s AND mine_code=%s",
         (report_month, mine_code),
     )
     for material_code, actual, plan in cur.fetchall():
@@ -3570,7 +2410,7 @@ def get_mines_production_despatch_monthly(report_month: str, mine_code: str) -> 
     despatch = {}
     cur.execute(
         "SELECT material_code, transport_mode, end_use_code, qty_actual "
-        "FROM mines_despatch_actual_monthly WHERE report_month=? AND mine_code=?",
+        "FROM mines_despatch_actual_monthly WHERE report_month=%s AND mine_code=%s",
         (report_month, mine_code),
     )
     for material_code, mode, end_use, actual in cur.fetchall():
@@ -3579,7 +2419,7 @@ def get_mines_production_despatch_monthly(report_month: str, mine_code: str) -> 
     despatch_plan = {}
     cur.execute(
         "SELECT material_code, end_use_code, qty_plan "
-        "FROM mines_despatch_plan_monthly WHERE report_month=? AND mine_code=?",
+        "FROM mines_despatch_plan_monthly WHERE report_month=%s AND mine_code=%s",
         (report_month, mine_code),
     )
     for material_code, end_use, plan in cur.fetchall():
@@ -3588,7 +2428,7 @@ def get_mines_production_despatch_monthly(report_month: str, mine_code: str) -> 
     booked_qty = {}
     cur.execute(
         "SELECT material_code, transport_mode, qty_actual "
-        "FROM mines_booked_qty_actual_monthly WHERE report_month=? AND mine_code=?",
+        "FROM mines_booked_qty_actual_monthly WHERE report_month=%s AND mine_code=%s",
         (report_month, mine_code),
     )
     for material_code, mode, actual in cur.fetchall():
@@ -3596,7 +2436,7 @@ def get_mines_production_despatch_monthly(report_month: str, mine_code: str) -> 
 
     booked_qty_plan = {}
     cur.execute(
-        "SELECT material_code, qty_plan FROM mines_booked_qty_plan_monthly WHERE report_month=? AND mine_code=?",
+        "SELECT material_code, qty_plan FROM mines_booked_qty_plan_monthly WHERE report_month=%s AND mine_code=%s",
         (report_month, mine_code),
     )
     for material_code, plan in cur.fetchall():
@@ -3635,18 +2475,16 @@ def save_mines_production_despatch_monthly(
     for e in production_entries:
         cur.execute("""
             INSERT INTO mines_production_monthly (report_month, mine_code, material_code, qty_actual, qty_plan)
-            VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT(report_month, mine_code, material_code)
-            DO UPDATE SET qty_actual = excluded.qty_actual, qty_plan = excluded.qty_plan
+            VALUES (%s, %s, %s, %s, %s)
+            AS new ON DUPLICATE KEY UPDATE qty_actual = new.qty_actual, qty_plan = new.qty_plan
         """, (report_month, mine_code, e["material_code"], e.get("actual"), e.get("plan")))
         saved += 1
     for e in despatch_entries:
         cur.execute("""
             INSERT INTO mines_despatch_actual_monthly
                 (report_month, mine_code, material_code, transport_mode, end_use_code, qty_actual)
-            VALUES (?, ?, ?, ?, ?, ?)
-            ON CONFLICT(report_month, mine_code, material_code, transport_mode, end_use_code)
-            DO UPDATE SET qty_actual = excluded.qty_actual
+            VALUES (%s, %s, %s, %s, %s, %s)
+            AS new ON DUPLICATE KEY UPDATE qty_actual = new.qty_actual
         """, (
             report_month, mine_code, e["material_code"], e["transport_mode"], e["end_use_code"], e.get("actual"),
         ))
@@ -3655,26 +2493,23 @@ def save_mines_production_despatch_monthly(
         cur.execute("""
             INSERT INTO mines_despatch_plan_monthly
                 (report_month, mine_code, material_code, end_use_code, qty_plan)
-            VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT(report_month, mine_code, material_code, end_use_code)
-            DO UPDATE SET qty_plan = excluded.qty_plan
+            VALUES (%s, %s, %s, %s, %s)
+            AS new ON DUPLICATE KEY UPDATE qty_plan = new.qty_plan
         """, (report_month, mine_code, e["material_code"], e["end_use_code"], e.get("plan")))
         saved += 1
     for e in booked_qty_entries:
         cur.execute("""
             INSERT INTO mines_booked_qty_actual_monthly
                 (report_month, mine_code, material_code, transport_mode, qty_actual)
-            VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT(report_month, mine_code, material_code, transport_mode)
-            DO UPDATE SET qty_actual = excluded.qty_actual
+            VALUES (%s, %s, %s, %s, %s)
+            AS new ON DUPLICATE KEY UPDATE qty_actual = new.qty_actual
         """, (report_month, mine_code, e["material_code"], e["transport_mode"], e.get("actual")))
         saved += 1
     for e in booked_qty_plan_entries:
         cur.execute("""
             INSERT INTO mines_booked_qty_plan_monthly (report_month, mine_code, material_code, qty_plan)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(report_month, mine_code, material_code)
-            DO UPDATE SET qty_plan = excluded.qty_plan
+            VALUES (%s, %s, %s, %s)
+            AS new ON DUPLICATE KEY UPDATE qty_plan = new.qty_plan
         """, (report_month, mine_code, e["material_code"], e.get("plan")))
         saved += 1
     conn.commit()
@@ -3725,7 +2560,7 @@ def get_iron_ore_group_rollup_monthly(report_months: List[str]) -> Dict[str, Any
     if not report_months:
         conn.close()
         return out
-    ph = ",".join("?" * len(report_months))
+    ph = ",".join(["%s"] * len(report_months))
 
     prod_actual, prod_plan = {}, {}
     cur.execute(f"""
@@ -3822,7 +2657,7 @@ def get_iron_ore_despatch_mix(report_months: List[str]) -> Dict[str, float]:
     if not report_months:
         conn.close()
         return out
-    ph = ",".join("?" * len(report_months))
+    ph = ",".join(["%s"] * len(report_months))
     cur.execute(f"""
         SELECT end_use_code, SUM(qty_actual)
         FROM mines_despatch_actual_monthly
@@ -3861,7 +2696,7 @@ def get_iron_ore_sales_group_rollup_monthly(report_months: List[str]) -> Dict[st
     if not report_months:
         conn.close()
         return out
-    ph = ",".join("?" * len(report_months))
+    ph = ",".join(["%s"] * len(report_months))
 
     booked_actual = {}
     cur.execute(f"""
@@ -3948,7 +2783,7 @@ def get_iron_ore_mines_series(report_months: List[str]) -> Dict[str, Any]:
     if not report_months:
         conn.close()
         return out
-    ph = ",".join("?" * len(report_months))
+    ph = ",".join(["%s"] * len(report_months))
 
     cur.execute(f"""
         SELECT p.report_month, p.mine_code, mm.group_code, p.material_code,
@@ -4029,11 +2864,11 @@ def save_ss_phys_meta(rows):
         cur.execute("""
             INSERT INTO special_steel_phys_meta
                 (plant, series, capacity_kt, best_actual_kt, best_year, remark, sort_order)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(plant, series) DO UPDATE SET
-                capacity_kt = excluded.capacity_kt, best_actual_kt = excluded.best_actual_kt,
-                best_year = excluded.best_year, remark = excluded.remark,
-                sort_order = excluded.sort_order
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            AS new ON DUPLICATE KEY UPDATE
+                capacity_kt = new.capacity_kt, best_actual_kt = new.best_actual_kt,
+                best_year = new.best_year, remark = new.remark,
+                sort_order = new.sort_order
         """, (r["plant"], r["series"], r.get("capacity_kt"), r.get("best_actual_kt"),
               r.get("best_year"), r.get("remark"), int(r.get("sort_order") or 0)))
     conn.commit()
@@ -4051,15 +2886,14 @@ def save_ss_phys_perf(rows):
     for r in rows:
         key = (r["financial_year"], r["plant"], r["series"], r["metric"])
         if r.get("value_kt") is None:
-            cur.execute("DELETE FROM special_steel_phys_perf WHERE financial_year=? AND plant=? "
-                        "AND series=? AND metric=?", key)
+            cur.execute("DELETE FROM special_steel_phys_perf WHERE financial_year=%s AND plant=%s "
+                        "AND series=%s AND metric=%s", key)
         else:
             cur.execute("""
                 INSERT INTO special_steel_phys_perf
                     (financial_year, plant, series, metric, value_kt)
-                VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT(financial_year, plant, series, metric)
-                DO UPDATE SET value_kt = excluded.value_kt
+                VALUES (%s, %s, %s, %s, %s)
+                AS new ON DUPLICATE KEY UPDATE value_kt = new.value_kt
             """, (*key, r["value_kt"]))
         saved += 1
     conn.commit()
@@ -4073,7 +2907,7 @@ def get_ss_phys_notes(financial_year):
     conn = connect()
     cur = conn.cursor()
     cur.execute("SELECT sort_order, note_text FROM special_steel_phys_note "
-                "WHERE financial_year=? ORDER BY sort_order", (financial_year,))
+                "WHERE financial_year=%s ORDER BY sort_order", (financial_year,))
     rows = cur.fetchall()
     conn.close()
     return [(so, t) for so, t in rows]
@@ -4084,13 +2918,13 @@ def save_ss_phys_notes(financial_year, rows):
     init_db()
     conn = connect()
     cur = conn.cursor()
-    cur.execute("DELETE FROM special_steel_phys_note WHERE financial_year=?", (financial_year,))
+    cur.execute("DELETE FROM special_steel_phys_note WHERE financial_year=%s", (financial_year,))
     for r in rows:
         text = (r.get("note_text") or "").strip()
         if not text:
             continue
         cur.execute("INSERT INTO special_steel_phys_note (financial_year, sort_order, note_text) "
-                    "VALUES (?, ?, ?)", (financial_year, int(r.get("sort_order") or 0), text))
+                    "VALUES (%s, %s, %s)", (financial_year, int(r.get("sort_order") or 0), text))
     conn.commit()
     conn.close()
     return len(rows)
@@ -4103,7 +2937,7 @@ def get_ss_ipt_requirement(financial_year):
     cur = conn.cursor()
     cur.execute("""
         SELECT item, from_plant, to_plant, plan_kt, sort_order
-        FROM special_steel_ipt_requirement WHERE financial_year=?
+        FROM special_steel_ipt_requirement WHERE financial_year=%s
         ORDER BY sort_order, item, from_plant, to_plant
     """, (financial_year,))
     rows = [{"item": i, "from_plant": f, "to_plant": t, "plan_kt": p, "sort_order": so or 0}
@@ -4139,14 +2973,13 @@ def save_ss_ipt_requirement(financial_year, rows):
             continue
         oi, of, ot = r.get("orig_item"), r.get("orig_from_plant"), r.get("orig_to_plant")
         if oi and (oi != item or of != frm or ot != to):
-            cur.execute("DELETE FROM special_steel_ipt_requirement WHERE financial_year=? "
-                        "AND item=? AND from_plant=? AND to_plant=?", (financial_year, oi, of, ot))
+            cur.execute("DELETE FROM special_steel_ipt_requirement WHERE financial_year=%s "
+                        "AND item=%s AND from_plant=%s AND to_plant=%s", (financial_year, oi, of, ot))
         cur.execute("""
             INSERT INTO special_steel_ipt_requirement
                 (financial_year, item, from_plant, to_plant, plan_kt, sort_order)
-            VALUES (?, ?, ?, ?, ?, ?)
-            ON CONFLICT(financial_year, item, from_plant, to_plant)
-            DO UPDATE SET plan_kt = excluded.plan_kt, sort_order = excluded.sort_order
+            VALUES (%s, %s, %s, %s, %s, %s)
+            AS new ON DUPLICATE KEY UPDATE plan_kt = new.plan_kt, sort_order = new.sort_order
         """, (financial_year, item, frm, to, r.get("plan_kt"), int(r.get("sort_order") or 0)))
         saved += 1
     conn.commit()
@@ -4158,8 +2991,8 @@ def delete_ss_ipt_requirement(financial_year, item, from_plant, to_plant):
     init_db()
     conn = connect()
     cur = conn.cursor()
-    cur.execute("DELETE FROM special_steel_ipt_requirement WHERE financial_year=? AND item=? "
-                "AND from_plant=? AND to_plant=?", (financial_year, item, from_plant, to_plant))
+    cur.execute("DELETE FROM special_steel_ipt_requirement WHERE financial_year=%s AND item=%s "
+                "AND from_plant=%s AND to_plant=%s", (financial_year, item, from_plant, to_plant))
     conn.commit()
     conn.close()
 
@@ -4175,7 +3008,7 @@ def get_rail_report_data(fys: List[str]) -> Dict[str, Dict[str, Dict[str, Any]]]
     cur = conn.cursor()
     out = {fy: {} for fy in fys}
     if fys:
-        ph = ",".join("?" * len(fys))
+        ph = ",".join(["%s"] * len(fys))
         cur.execute(f"SELECT financial_year, metric, value, note FROM rail_prod_despatch "
                     f"WHERE financial_year IN ({ph})", fys)
         for fy, metric, value, note in cur.fetchall():
@@ -4192,9 +3025,9 @@ def save_rail_report_data(rows: List[Dict[str, Any]]) -> int:
     for r in rows:
         cur.execute("""
             INSERT INTO rail_prod_despatch (financial_year, metric, value, note)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(financial_year, metric) DO UPDATE SET
-                value = excluded.value, note = excluded.note
+            VALUES (%s, %s, %s, %s)
+            AS new ON DUPLICATE KEY UPDATE
+                value = new.value, note = new.note
         """, (r["financial_year"], r["metric"], r.get("value"), r.get("note")))
     conn.commit()
     conn.close()
@@ -4222,7 +3055,7 @@ def save_rail_report_notes(rows: List[Dict[str, Any]]) -> int:
         text = (r.get("note_text") or "").strip()
         if not text:
             continue
-        cur.execute("INSERT INTO rail_prod_despatch_note (sort_order, note_text) VALUES (?, ?)",
+        cur.execute("INSERT INTO rail_prod_despatch_note (sort_order, note_text) VALUES (%s, %s)",
                     (int(r.get("sort_order") or 0), text))
     conn.commit()
     conn.close()
@@ -4240,7 +3073,7 @@ def get_market_price_trend(report_months: List[str]) -> Dict[str, Dict[str, floa
     cur = conn.cursor()
     out = {m: {} for m in report_months}
     if report_months:
-        ph = ",".join("?" * len(report_months))
+        ph = ",".join(["%s"] * len(report_months))
         cur.execute(f"SELECT report_month, series_code, value FROM market_price_trend_monthly "
                     f"WHERE report_month IN ({ph})", report_months)
         for rm, series, value in cur.fetchall():
@@ -4257,8 +3090,8 @@ def save_market_price_trend(rows: List[Dict[str, Any]]) -> int:
     for r in rows:
         cur.execute("""
             INSERT INTO market_price_trend_monthly (report_month, series_code, value)
-            VALUES (?, ?, ?)
-            ON CONFLICT(report_month, series_code) DO UPDATE SET value = excluded.value
+            VALUES (%s, %s, %s)
+            AS new ON DUPLICATE KEY UPDATE value = new.value
         """, (r["report_month"], r["series_code"], r.get("value")))
     conn.commit()
     conn.close()
@@ -4276,7 +3109,7 @@ def get_macro_indicators(report_months: List[str]) -> Dict[str, Dict[str, float]
     cur = conn.cursor()
     out = {m: {} for m in report_months}
     if report_months:
-        ph = ",".join("?" * len(report_months))
+        ph = ",".join(["%s"] * len(report_months))
         cur.execute(f"SELECT report_month, metric_code, value FROM macro_indicators_monthly "
                     f"WHERE report_month IN ({ph})", report_months)
         for rm, metric, value in cur.fetchall():
@@ -4293,8 +3126,8 @@ def save_macro_indicators(rows: List[Dict[str, Any]]) -> int:
     for r in rows:
         cur.execute("""
             INSERT INTO macro_indicators_monthly (report_month, metric_code, value)
-            VALUES (?, ?, ?)
-            ON CONFLICT(report_month, metric_code) DO UPDATE SET value = excluded.value
+            VALUES (%s, %s, %s)
+            AS new ON DUPLICATE KEY UPDATE value = new.value
         """, (r["report_month"], r["metric_code"], r.get("value")))
     conn.commit()
     conn.close()
@@ -4321,7 +3154,7 @@ def get_rake_detention_master(plants: Optional[List[str]] = None, active_only: b
     cur = conn.cursor()
     where, args = [], []
     if plants:
-        where.append(f"plant IN ({','.join('?' * len(plants))})")
+        where.append(f"plant IN ({','.join(['%s'] * len(plants))})")
         args.extend(plants)
     if active_only:
         where.append("is_active = 1")
@@ -4384,10 +3217,10 @@ def save_rake_detention_master_row(row: Dict[str, Any]) -> int:
     if row.get("id"):
         cur.execute("""
             UPDATE rake_detention_master SET
-                plant = ?, section = ?, commodity = ?, wagon_type = ?, row_label = ?,
-                is_total = ?, direction = ?, freetime_hours = ?, freetime_effective_from = ?,
-                sort_order = ?, is_active = ?
-            WHERE id = ?
+                plant = %s, section = %s, commodity = %s, wagon_type = %s, row_label = %s,
+                is_total = %s, direction = %s, freetime_hours = %s, freetime_effective_from = %s,
+                sort_order = %s, is_active = %s
+            WHERE id = %s
         """, (
             row["plant"], row["section"], row.get("commodity"), row.get("wagon_type"), row["row_label"],
             int(bool(row.get("is_total"))), row.get("direction"), row.get("freetime_hours"),
@@ -4400,7 +3233,7 @@ def save_rake_detention_master_row(row: Dict[str, Any]) -> int:
             INSERT INTO rake_detention_master
                 (plant, section, commodity, wagon_type, row_label, is_total, direction,
                  freetime_hours, freetime_effective_from, sort_order, is_active)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             row["plant"], row["section"], row.get("commodity"), row.get("wagon_type"), row["row_label"],
             int(bool(row.get("is_total"))), row.get("direction"), row.get("freetime_hours"),
@@ -4421,7 +3254,7 @@ def deactivate_rake_detention_master_row(master_id: int) -> None:
     init_db()
     conn = connect()
     cur = conn.cursor()
-    cur.execute("UPDATE rake_detention_master SET is_active = 0 WHERE id = ?", (master_id,))
+    cur.execute("UPDATE rake_detention_master SET is_active = 0 WHERE id = %s", (master_id,))
     conn.commit()
     conn.close()
 
@@ -4431,10 +3264,10 @@ def get_rake_detention_monthly(report_month: str, master_ids: Optional[List[int]
     init_db()
     conn = connect()
     cur = conn.cursor()
-    sql = "SELECT master_id, value_hours FROM rake_detention_monthly WHERE report_month = ?"
+    sql = "SELECT master_id, value_hours FROM rake_detention_monthly WHERE report_month = %s"
     args = [report_month]
     if master_ids:
-        sql += f" AND master_id IN ({','.join('?' * len(master_ids))})"
+        sql += f" AND master_id IN ({','.join(['%s'] * len(master_ids))})"
         args.extend(master_ids)
     cur.execute(sql, args)
     out = {mid: val for mid, val in cur.fetchall()}
@@ -4450,8 +3283,8 @@ def save_rake_detention_monthly(report_month: str, rows: List[Dict[str, Any]]) -
     for r in rows:
         cur.execute("""
             INSERT INTO rake_detention_monthly (report_month, master_id, value_hours)
-            VALUES (?, ?, ?)
-            ON CONFLICT(report_month, master_id) DO UPDATE SET value_hours = excluded.value_hours
+            VALUES (%s, %s, %s)
+            AS new ON DUPLICATE KEY UPDATE value_hours = new.value_hours
         """, (report_month, r["master_id"], r.get("value_hours")))
     conn.commit()
     conn.close()
@@ -4468,7 +3301,7 @@ def get_rake_detention_trend(master_ids: List[int]) -> Dict[int, Dict[str, float
     cur = conn.cursor()
     out: Dict[int, Dict[str, float]] = {mid: {} for mid in master_ids}
     if master_ids:
-        ph = ",".join("?" * len(master_ids))
+        ph = ",".join(["%s"] * len(master_ids))
         cur.execute(
             f"SELECT master_id, report_month, value_hours FROM rake_detention_monthly "
             f"WHERE master_id IN ({ph})", master_ids,
@@ -4485,7 +3318,7 @@ def get_rake_detention_summary(report_month: str) -> Dict[str, Dict[str, float]]
     conn = connect()
     cur = conn.cursor()
     cur.execute(
-        "SELECT period_row, plant, value FROM rake_detention_summary WHERE report_month = ?",
+        "SELECT period_row, plant, value FROM rake_detention_summary WHERE report_month = %s",
         (report_month,),
     )
     out: Dict[str, Dict[str, float]] = {}
@@ -4503,8 +3336,8 @@ def save_rake_detention_summary(report_month: str, rows: List[Dict[str, Any]]) -
     for r in rows:
         cur.execute("""
             INSERT INTO rake_detention_summary (report_month, period_row, plant, value)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(report_month, period_row, plant) DO UPDATE SET value = excluded.value
+            VALUES (%s, %s, %s, %s)
+            AS new ON DUPLICATE KEY UPDATE value = new.value
         """, (report_month, r["period_row"], r["plant"], r.get("value")))
     conn.commit()
     conn.close()
@@ -4518,7 +3351,7 @@ def get_rake_detention_annual(plants: List[str], fys: List[str]) -> Dict[str, Di
     cur = conn.cursor()
     out = {p: {} for p in plants}
     if plants and fys:
-        ph_p, ph_f = ",".join("?" * len(plants)), ",".join("?" * len(fys))
+        ph_p, ph_f = ",".join(["%s"] * len(plants)), ",".join(["%s"] * len(fys))
         cur.execute(
             f"SELECT plant, financial_year, avg_hours FROM rake_detention_annual "
             f"WHERE plant IN ({ph_p}) AND financial_year IN ({ph_f})", plants + fys,
@@ -4537,8 +3370,8 @@ def save_rake_detention_annual(rows: List[Dict[str, Any]]) -> int:
     for r in rows:
         cur.execute("""
             INSERT INTO rake_detention_annual (plant, financial_year, avg_hours)
-            VALUES (?, ?, ?)
-            ON CONFLICT(plant, financial_year) DO UPDATE SET avg_hours = excluded.avg_hours
+            VALUES (%s, %s, %s)
+            AS new ON DUPLICATE KEY UPDATE avg_hours = new.avg_hours
         """, (r["plant"], r["financial_year"], r.get("avg_hours")))
     conn.commit()
     conn.close()
@@ -4610,7 +3443,7 @@ def get_ready_reckoner_page(plant_code: str) -> Optional[dict]:
     conn = connect()
     cur = conn.cursor()
     cur.execute(
-        f"SELECT {','.join(_READY_RECKONER_COLS)} FROM ready_reckoner_pages WHERE plant_code = ?",
+        f"SELECT {','.join(_READY_RECKONER_COLS)} FROM ready_reckoner_pages WHERE plant_code = %s",
         (plant_code,),
     )
     row = cur.fetchone()
@@ -4628,10 +3461,10 @@ def upsert_ready_reckoner_master(row: Dict[str, Any]) -> None:
     cur = conn.cursor()
     cur.execute("""
         INSERT INTO ready_reckoner_pages (plant_code, plant_name, plant_group, sort_order)
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT(plant_code) DO UPDATE SET
-            plant_name = excluded.plant_name, plant_group = excluded.plant_group,
-            sort_order = excluded.sort_order
+        VALUES (%s, %s, %s, %s)
+        AS new ON DUPLICATE KEY UPDATE
+            plant_name = new.plant_name, plant_group = new.plant_group,
+            sort_order = new.sort_order
     """, (row["plant_code"], row.get("plant_name"), row["plant_group"], int(row.get("sort_order") or 0)))
     conn.commit()
     conn.close()
@@ -4660,25 +3493,25 @@ def save_ready_reckoner_content(
     import datetime as _dt
     sets, args = [], []
     if capacity_rows is not None:
-        sets.append("capacity_rows = ?")
+        sets.append("capacity_rows = %s")
         args.append(json.dumps(capacity_rows))
     if product_mix_headers is not None:
-        sets.append("product_mix_headers = ?")
+        sets.append("product_mix_headers = %s")
         args.append(json.dumps(product_mix_headers))
     if product_mix_rows is not None:
-        sets.append("product_mix_rows = ?")
+        sets.append("product_mix_rows = %s")
         args.append(json.dumps(product_mix_rows))
     if product_mix_caption is not None:
-        sets.append("product_mix_caption = ?")
+        sets.append("product_mix_caption = %s")
         args.append(product_mix_caption)
     if not sets:
         return
-    sets += ["updated_by = ?", "updated_at = ?"]
+    sets += ["updated_by = %s", "updated_at = %s"]
     args += [updated_by, _dt.datetime.now().isoformat(timespec="seconds"), plant_code]
     init_db()
     conn = connect()
     cur = conn.cursor()
-    cur.execute(f"UPDATE ready_reckoner_pages SET {', '.join(sets)} WHERE plant_code = ?", args)
+    cur.execute(f"UPDATE ready_reckoner_pages SET {', '.join(sets)} WHERE plant_code = %s", args)
     conn.commit()
     conn.close()
 
@@ -4693,8 +3526,8 @@ def save_ready_reckoner_image(plant_code: str, image_path: str, updated_by: str)
     cur = conn.cursor()
     cur.execute("""
         UPDATE ready_reckoner_pages
-        SET process_flow_image_path = ?, updated_by = ?, updated_at = ?
-        WHERE plant_code = ?
+        SET process_flow_image_path = %s, updated_by = %s, updated_at = %s
+        WHERE plant_code = %s
     """, (image_path, updated_by, _dt.datetime.now().isoformat(timespec="seconds"), plant_code))
     conn.commit()
     conn.close()
@@ -4716,7 +3549,7 @@ def get_major_unit_daily_records(plant_code: str) -> List[dict]:
     cur = conn.cursor()
     cur.execute(
         f"SELECT {','.join(_MAJOR_UNIT_DAILY_COLS)} FROM major_unit_daily_record "
-        f"WHERE plant_code = ? ORDER BY sort_order",
+        f"WHERE plant_code = %s ORDER BY sort_order",
         (plant_code,),
     )
     rows = [dict(zip(_MAJOR_UNIT_DAILY_COLS, r)) for r in cur.fetchall()]
@@ -4755,12 +3588,12 @@ def save_major_unit_daily_record(plant_code: str, unit_label: str, value: Option
         INSERT INTO major_unit_daily_record
             (plant_code, unit_label, unit_of_measure, value, record_date,
              remarks, sort_order, updated_by, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(plant_code, unit_label) DO UPDATE SET
-            unit_of_measure = excluded.unit_of_measure, value = excluded.value,
-            record_date = excluded.record_date, remarks = excluded.remarks,
-            sort_order = excluded.sort_order, updated_by = excluded.updated_by,
-            updated_at = excluded.updated_at
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        AS new ON DUPLICATE KEY UPDATE
+            unit_of_measure = new.unit_of_measure, value = new.value,
+            record_date = new.record_date, remarks = new.remarks,
+            sort_order = new.sort_order, updated_by = new.updated_by,
+            updated_at = new.updated_at
     """, (plant_code, unit_label, unit_of_measure, value, record_date, remarks,
           sort_order, updated_by, _dt.datetime.now().isoformat(timespec="seconds")))
     conn.commit()

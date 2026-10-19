@@ -12,45 +12,14 @@ dbengine's pool, so DB selection and pooling stay in one place.
 """
 from contextlib import contextmanager
 
-import pymysql
-
 import dbengine
 
-IntegrityError = pymysql.err.IntegrityError
-OperationalError = pymysql.err.OperationalError
+IntegrityError = dbengine.IntegrityError
+OperationalError = dbengine.OperationalError
 
 
-class Row:
-    """Result row: row[0], row['col'] (case-insensitive fallback), iteration
-    over values, len(), keys() and dict(row)."""
-    __slots__ = ("_keys", "_values", "_lower")
-
-    def __init__(self, keys, values):
-        self._keys = keys
-        self._values = values
-        self._lower = None
-
-    def __getitem__(self, key):
-        if isinstance(key, (int, slice)):
-            return self._values[key]
-        try:
-            return self._values[self._keys.index(key)]
-        except ValueError:
-            if self._lower is None:
-                self._lower = [k.lower() for k in self._keys]
-            return self._values[self._lower.index(key.lower())]
-
-    def keys(self):
-        return list(self._keys)
-
-    def __iter__(self):
-        return iter(self._values)
-
-    def __len__(self):
-        return len(self._values)
-
-    def __repr__(self):
-        return f"Row({dict(zip(self._keys, self._values))!r})"
+# Same class as the rows db.connect() returns with row_factory set.
+Row = dbengine.Row
 
 
 class Cursor:

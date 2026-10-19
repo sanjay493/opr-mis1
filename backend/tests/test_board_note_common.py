@@ -189,31 +189,32 @@ def test_fs_mou_none_when_a_month_is_missing(mysql_db):
     assert bnc.fs_mou(cur, ["2026-07", "2026-08"], ["BSP"]) is None
 
 
-def _cursor_without_mou_table():
+@pytest.fixture
+def cursor_without_mou_table(mysql_db):
     # The v1 table always exists; make it "missing" by dropping it, and put it
-    # back (from its own SHOW CREATE TABLE) when the test is done.
+    # back (from its own SHOW CREATE TABLE) when the test is done. Drop and
+    # restore sit in one try/finally so a failing test can't leave the table
+    # missing for later tests.
     with tx() as ddl:
         ddl.execute("SHOW CREATE TABLE mou_plan_table")
         create_sql = ddl.fetchone()[1]
-        ddl.execute("DROP TABLE mou_plan_table")
-    _RESTORE.append(create_sql)
-    return db.connect().cursor()
-
-
-_RESTORE = []
-
-
-@pytest.fixture(autouse=False)
-def _restore_mou_table():
-    yield
-    while _RESTORE:
+    conn = None
+    try:
         with tx() as ddl:
-            ddl.execute(_RESTORE.pop())
+            ddl.execute("DROP TABLE mou_plan_table")
+        conn = db.connect()
+        yield conn.cursor()
+    finally:
+        if conn is not None:
+            conn.close()
+        with tx() as ddl:
+            ddl.execute("SHOW TABLES LIKE 'mou_plan_table'")
+            if ddl.fetchone() is None:
+                ddl.execute(create_sql)
 
 
-def test_fs_mou_none_when_table_missing(mysql_db, _restore_mou_table):
-    cur = _cursor_without_mou_table()
-    assert bnc.fs_mou(cur, ["2026-07"], ["BSP"]) is None
+def test_fs_mou_none_when_table_missing(cursor_without_mou_table):
+    assert bnc.fs_mou(cursor_without_mou_table, ["2026-07"], ["BSP"]) is None
 
 
 def test_sail_mou_plants_are_all_eight():

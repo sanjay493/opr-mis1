@@ -9,9 +9,10 @@ only clears is_active, so a month that already used a photo keeps its file.
 The month's cover (design + photo) lives in report_cover_settings; a month
 with no row keeps the Classic cover (page_cover.py).
 
-All SQL is sqlite-dialect through db.connect() (dbengine translates it for
-MySQL). _connect and PHOTO_DIR are module attributes so tests can point
-them at a temp SQLite file / folder.
+All SQL is native MySQL through db.connect(); the tables are created by
+scripts/mysql_schema.sql (+ scripts/migrate_add_cover_pages.sql).
+_connect and PHOTO_DIR are module attributes so tests can point them
+elsewhere.
 """
 import io
 import os
@@ -39,28 +40,6 @@ THUMB_LONG_SIDE = 400
 MAX_PIXELS = 50_000_000
 _FULL_QUALITY = 82
 _THUMB_QUALITY = 78
-
-SQLITE_DDL = [
-    """CREATE TABLE IF NOT EXISTS cover_photos (
-        id             INTEGER PRIMARY KEY AUTOINCREMENT,
-        filename       TEXT    NOT NULL,
-        thumb_filename TEXT    NOT NULL,
-        original_name  TEXT    NOT NULL,
-        width          INTEGER,
-        height         INTEGER,
-        uploaded_by    TEXT,
-        uploaded_at    TEXT,
-        is_active      INTEGER NOT NULL DEFAULT 1
-    )""",
-    """CREATE TABLE IF NOT EXISTS report_cover_settings (
-        report_month TEXT PRIMARY KEY,
-        design       TEXT NOT NULL,
-        photo_mode   TEXT NOT NULL DEFAULT 'random',
-        photo_id     INTEGER,
-        updated_by   TEXT,
-        updated_at   TEXT
-    )""",
-]
 
 _PHOTO_COLS = ("id", "filename", "thumb_filename", "original_name", "width", "height",
                "uploaded_by", "uploaded_at", "is_active")
@@ -155,7 +134,7 @@ def add_photo(data: bytes, original_name: str, uploaded_by: str) -> dict:
     try:
         new_id = _execute(
             "INSERT INTO cover_photos (filename, thumb_filename, original_name, width, height,"
-            " uploaded_by, uploaded_at, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, 1)",
+            " uploaded_by, uploaded_at, is_active) VALUES (%s, %s, %s, %s, %s, %s, %s, 1)",
             (fname, tname, name[:255], width, height, uploaded_by, _now()),
         )
     except Exception:
@@ -169,7 +148,7 @@ def add_photo(data: bytes, original_name: str, uploaded_by: str) -> dict:
 
 
 def get_photo(photo_id: int):
-    rows = _query(f"SELECT {', '.join(_PHOTO_COLS)} FROM cover_photos WHERE id = ?", (int(photo_id),))
+    rows = _query(f"SELECT {', '.join(_PHOTO_COLS)} FROM cover_photos WHERE id = %s", (int(photo_id),))
     return _photo_dict(rows[0]) if rows else None
 
 
@@ -188,7 +167,7 @@ def list_photos() -> list:
 def deactivate_photo(photo_id: int) -> bool:
     if get_photo(photo_id) is None:
         return False
-    _execute("UPDATE cover_photos SET is_active = 0 WHERE id = ?", (int(photo_id),))
+    _execute("UPDATE cover_photos SET is_active = 0 WHERE id = %s", (int(photo_id),))
     return True
 
 
@@ -222,7 +201,7 @@ def _usable(photo_id) -> bool:
 
 
 def get_setting(month: str):
-    rows = _query(f"SELECT {', '.join(_SETTING_COLS)} FROM report_cover_settings WHERE report_month = ?",
+    rows = _query(f"SELECT {', '.join(_SETTING_COLS)} FROM report_cover_settings WHERE report_month = %s",
                   (check_month(month),))
     if not rows:
         return None
@@ -244,8 +223,8 @@ def save_setting(month: str, design: str, photo_mode: str = "random", photo_id=N
         ids = _active_photo_ids()
         photo_id = random.choice(ids) if ids else None
     _execute(
-        "INSERT OR REPLACE INTO report_cover_settings"
-        " (report_month, design, photo_mode, photo_id, updated_by, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+        "REPLACE INTO report_cover_settings"
+        " (report_month, design, photo_mode, photo_id, updated_by, updated_at) VALUES (%s, %s, %s, %s, %s, %s)",
         (month, design, photo_mode, int(photo_id) if photo_id is not None else None, updated_by, _now()),
     )
     return get_setting(month)

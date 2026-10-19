@@ -11,8 +11,6 @@ Report_format/
 backend/backups/
 
 # Databases
-mis_reports.db
-backend/mis_reports.db
 *.db
 
 # Python cache

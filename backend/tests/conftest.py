@@ -145,7 +145,6 @@ def mysql_db(_mysql_test_schema, monkeypatch):
     # dbengine reads these module-level values at connect time; the pool may
     # hold connections opened against another database, so drop them.
     monkeypatch.setenv("MYSQL_DB", name)
-    monkeypatch.setattr(dbengine, "DB_ENGINE", "mysql")
     for key, val in (("host", cfg["host"]), ("port", cfg["port"]), ("user", cfg["user"]),
                      ("password", cfg["password"]), ("database", name)):
         monkeypatch.setitem(dbengine._MYSQL_CFG, key, val)

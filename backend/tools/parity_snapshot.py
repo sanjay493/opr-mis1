@@ -348,9 +348,7 @@ def _select_database(db_name: str):
         raise SystemExit(f"refusing to snapshot the live database {LIVE_DB!r}; "
                          f"use a restored copy such as mis_reports_baseline")
     os.environ["MYSQL_DB"] = db_name
-    os.environ["DB_ENGINE"] = "mysql"
     import dbengine
-    dbengine.DB_ENGINE = "mysql"
     if dbengine._MYSQL_CFG["database"] != db_name:
         dbengine._MYSQL_CFG["database"] = db_name
         dbengine._pool_clear()
