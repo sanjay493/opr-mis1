@@ -12,6 +12,8 @@ dbengine's pool, so DB selection and pooling stay in one place.
 """
 from contextlib import contextmanager
 
+import itertools
+
 import pymysql
 
 import dbengine
@@ -29,12 +31,20 @@ class Cursor:
 
     def __init__(self, raw_cursor):
         self._cur = raw_cursor
+        # Set once a statement leaves session state behind (SET, GET_LOCK,
+        # TEMPORARY TABLE), so the connection is closed instead of pooled.
+        self.session_dirty = False
+
+    def _note_session_state(self, sql):
+        if dbengine._SESSION_STATE_RE.search(sql):
+            self.session_dirty = True
 
     # Params are always passed (an empty tuple when there are none), so
     # pymysql always %-formats and a literal % is always written %%.
     # ProgrammingError (e.g. a missing table) is raised as OperationalError,
     # as dbengine does, so `except OperationalError` catches it.
     def execute(self, sql, params=()):
+        self._note_session_state(sql)
         try:
             self._cur.execute(sql, tuple(params))
         except pymysql.err.ProgrammingError as e:
@@ -42,6 +52,7 @@ class Cursor:
         return self
 
     def executemany(self, sql, seq_of_params):
+        self._note_session_state(sql)
         try:
             self._cur.executemany(sql, [tuple(p) for p in seq_of_params])
         except pymysql.err.ProgrammingError as e:
@@ -92,6 +103,33 @@ def _shared_cursor(raw):
         cur.close()
 
 
+_savepoint_ids = itertools.count(1)
+
+
+def _shared_tx(raw):
+    """tx() inside rollback_tx(): the shared transaction is never committed,
+    so a SAVEPOINT stands in for it. On an exception the block's own
+    statements are rolled back to the savepoint; earlier work stays."""
+    name = f"repo_tx_{next(_savepoint_ids)}"
+    cur = raw.cursor()
+    try:
+        cur.execute(f"SAVEPOINT {name}")
+        try:
+            yield Cursor(cur)
+        except BaseException:
+            try:
+                cur.execute(f"ROLLBACK TO SAVEPOINT {name}")
+            except Exception:  # noqa: BLE001 - e.g. an implicit commit (DDL) dropped it
+                pass
+            raise
+        try:
+            cur.execute(f"RELEASE SAVEPOINT {name}")
+        except pymysql.err.OperationalError:
+            pass                    # savepoint already gone (implicit commit)
+    finally:
+        cur.close()
+
+
 def _acquire():
     raw = dbengine._pool_acquire() if dbengine._POOL_ENABLED else None
     return raw if raw is not None else dbengine._open_raw()
@@ -108,11 +146,13 @@ def cursor():
     raw = _acquire()
     poolable = True
     try:
-        cur = raw.cursor()
+        cur = Cursor(raw.cursor())
         try:
-            yield Cursor(cur)
+            yield cur
         finally:
-            cur.close()
+            if cur.session_dirty:
+                poolable = False
+            cur._cur.close()
     except BaseException:
         poolable = False
         raise
@@ -122,17 +162,19 @@ def cursor():
 
 @contextmanager
 def tx():
-    """Cursor in a transaction: commit on success, rollback on exception."""
+    """Cursor in a transaction: commit on success, rollback on exception.
+    Inside rollback_tx() it is a SAVEPOINT instead: an exception rolls back
+    only this block's statements."""
     shared = dbengine._shared_raw.get()
     if shared is not None:          # inside rollback_tx(): never commits
-        yield from _shared_cursor(shared)
+        yield from _shared_tx(shared)
         return
     raw = _acquire()
     poolable = True
     try:
-        cur = raw.cursor()
+        cur = Cursor(raw.cursor())
         try:
-            yield Cursor(cur)
+            yield cur
             raw.commit()
         except BaseException:
             try:
@@ -141,7 +183,9 @@ def tx():
                 poolable = False
             raise
         finally:
-            cur.close()
+            if cur.session_dirty:
+                poolable = False
+            cur._cur.close()
     finally:
         dbengine._pool_release(raw, poolable)
 

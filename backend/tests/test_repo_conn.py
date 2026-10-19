@@ -119,3 +119,77 @@ def test_missing_table_raises_operational_error(mysql_db):
     with pytest.raises(rc.OperationalError):
         with rc.tx() as cur:
             cur.executemany("INSERT INTO no_such_table_xyz VALUES (%s)", [(1,)])
+
+
+# ── Carry-overs: session-dirty connections and shared-mode tx() ────────────
+
+def _idle_raws():
+    import dbengine
+    return [r for r, _ in dbengine._pool_idle]
+
+
+@pytest.mark.parametrize("ctx", ["cursor", "tx"])
+@pytest.mark.parametrize("stmt", [
+    "SET @repo_conn_x = 1",
+    "SELECT GET_LOCK('repo_conn_test_lock', 0)",
+    "CREATE TEMPORARY TABLE repo_conn_tmp (a INT)",
+])
+def test_session_state_sql_makes_connection_unpoolable(mysql_db, monkeypatch, ctx, stmt):
+    import dbengine
+    monkeypatch.setattr(dbengine, "_POOL_ENABLED", True)
+    dbengine._pool_clear()
+    with getattr(rc, ctx)() as cur:
+        raw = cur._cur.connection
+        cur.execute(stmt)
+    assert raw not in _idle_raws()
+
+
+@pytest.mark.parametrize("ctx", ["cursor", "tx"])
+def test_session_state_sql_in_executemany_makes_connection_unpoolable(mysql_db, monkeypatch, ctx):
+    import dbengine
+    monkeypatch.setattr(dbengine, "_POOL_ENABLED", True)
+    dbengine._pool_clear()
+    with getattr(rc, ctx)() as cur:
+        raw = cur._cur.connection
+        cur.executemany("SET @repo_conn_y = %s", [(1,)])
+    assert raw not in _idle_raws()
+
+
+def test_plain_sql_connection_is_pooled(mysql_db, monkeypatch):
+    import dbengine
+    monkeypatch.setattr(dbengine, "_POOL_ENABLED", True)
+    dbengine._pool_clear()
+    with rc.cursor() as cur:
+        raw = cur._cur.connection
+        cur.execute("SELECT 1")
+    assert raw in _idle_raws()
+
+
+def test_shared_mode_tx_failure_undoes_only_its_own_statements(mysql_db):
+    ins = "INSERT INTO mou_plan_table VALUES (%s, %s, %s, %s)"
+    with rc.rollback_tx() as outer:
+        outer.execute(ins, ("2026-04", "BSP", "Hot Metal", 1.0))
+        with rc.tx() as cur:
+            cur.execute(ins, ("2026-04", "DSP", "Hot Metal", 2.0))
+        with pytest.raises(RuntimeError):
+            with rc.tx() as cur:
+                cur.execute(ins, ("2026-04", "RSP", "Hot Metal", 3.0))
+                raise RuntimeError("boom")
+        outer.execute("SELECT plant_name FROM mou_plan_table ORDER BY plant_name")
+        assert [r[0] for r in outer.fetchall()] == ["BSP", "DSP"]
+    assert _count() == 0
+
+
+def test_shared_mode_nested_tx_failure_keeps_outer_tx_statements(mysql_db):
+    ins = "INSERT INTO mou_plan_table VALUES (%s, %s, %s, %s)"
+    with rc.rollback_tx() as outer:
+        with rc.tx() as cur:
+            cur.execute(ins, ("2026-04", "BSP", "Hot Metal", 1.0))
+            with pytest.raises(RuntimeError):
+                with rc.tx() as inner:
+                    inner.execute(ins, ("2026-04", "RSP", "Hot Metal", 3.0))
+                    raise RuntimeError("boom")
+            cur.execute(ins, ("2026-04", "DSP", "Hot Metal", 2.0))
+        outer.execute("SELECT plant_name FROM mou_plan_table ORDER BY plant_name")
+        assert [r[0] for r in outer.fetchall()] == ["BSP", "DSP"]
+    assert _count() == 0
