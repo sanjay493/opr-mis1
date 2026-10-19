@@ -5,6 +5,7 @@ Unit displayed: Tonnes  (DB stores '000 T → multiply × 1000, round to integer
 """
 import math
 import db
+from repo import production as rp
 
 # ── per-plant DB item specs ──────────────────────────────────────────────────
 # actuals table
@@ -47,7 +48,7 @@ _ROWS  = ["BSP", "DSP", "RSP", "BSL", "ISP", "5 Plants", "ASP", "SSP", "VISL", "
 # ── DB helpers ───────────────────────────────────────────────────────────────
 
 def _fetch(cur, tbl, plant, item, month):
-    table = "production_table" if tbl == "act" else "production_plan_table"
+    table = "actual" if tbl == "act" else "abp"
     if isinstance(item, tuple) and len(item) == 3 and item[1] == "-":
         minuend_item, _, subtrahend_item = item
         minuend = _fetch(cur, tbl, plant, minuend_item, month)
@@ -58,19 +59,11 @@ def _fetch(cur, tbl, plant, item, month):
     if isinstance(item, list):
         total, found = 0.0, False
         for it in item:
-            cur.execute(
-                f"SELECT month_actual FROM {table} WHERE plant_name=%s AND item_name=%s AND report_month=%s",
-                (plant, it, month),
-            )
-            r = cur.fetchone()
+            r = rp.value_row(cur, table, month, plant, it)
             if r and r[0] is not None:
                 total += r[0]; found = True
         return total if found else None
-    cur.execute(
-        f"SELECT month_actual FROM {table} WHERE plant_name=%s AND item_name=%s AND report_month=%s",
-        (plant, item, month),
-    )
-    r = cur.fetchone()
+    r = rp.value_row(cur, table, month, plant, item)
     return r[0] if r and r[0] is not None else None
 
 

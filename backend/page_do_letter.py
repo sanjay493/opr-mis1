@@ -41,6 +41,7 @@ import io
 
 import db
 import page4
+from repo import production as rp
 from constants import FIVE_PLANTS as _5P
 
 _TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "do_letter_templates")
@@ -84,22 +85,11 @@ def _gr(cur_v, prev_v):
 
 def _fetch_item_month(cur, item: str, month: str, plants: list) -> dict:
     """{plant: value} for one item/month — only plants with a non-NULL value."""
-    phs = ",".join("%s" for _ in plants)
-    cur.execute(
-        f"SELECT plant_name, month_actual FROM production_table "
-        f"WHERE item_name=%s AND report_month=%s AND plant_name IN ({phs})",
-        [item, month] + plants,
-    )
-    return {p: v for p, v in cur.fetchall() if v is not None}
+    return {p: v for p, v in rp.item_month_by_plant(cur, item, month, plants) if v is not None}
 
 
 def _fetch_conversion(cur, month: str):
-    cur.execute(
-        "SELECT month_actual FROM production_table "
-        "WHERE report_month=%s AND plant_name='SAIL' AND item_name='Conversion'",
-        (month,),
-    )
-    r = cur.fetchone()
+    r = rp.value_row(cur, "actual", month, "SAIL", "Conversion")
     return r[0] if r and r[0] is not None else None
 
 
@@ -283,14 +273,8 @@ def _all_time_totals(cur, item, plants):
     excluded rather than compared as a (potentially much lower) partial
     sum, so an incomplete historical month can never falsely look like a
     record or knock a real record off the podium."""
-    phs = ",".join("%s" for _ in plants)
-    cur.execute(
-        f"SELECT report_month, plant_name, month_actual FROM production_table "
-        f"WHERE item_name=%s AND plant_name IN ({phs})",
-        [item] + plants,
-    )
     by_month = {}
-    for rm, p, v in cur.fetchall():
+    for rm, p, v in rp.item_all_months_by_plant(cur, item, plants):
         if v is not None:
             by_month.setdefault(rm, {})[p] = v
     return {rm: sum(vals.values()) for rm, vals in by_month.items() if len(vals) == len(plants)}

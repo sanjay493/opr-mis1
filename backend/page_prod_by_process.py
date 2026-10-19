@@ -8,6 +8,7 @@ Unit: Tonnes  (DB stores '000 T — multiply × 1000)
 import html
 import math
 import db
+from repo import production as rp
 from page4 import _p4_ytd_sum, _p4_conv_actuals
 from page_at_a_glance import _declutter_1d
 
@@ -59,21 +60,11 @@ def _fetch(cur, plant: str, item, month: str):
     if isinstance(item, list):
         tot, ok = 0.0, False
         for it in item:
-            cur.execute(
-                "SELECT month_actual FROM production_table "
-                "WHERE plant_name=%s AND item_name=%s AND report_month=%s",
-                (plant, it, month),
-            )
-            r = cur.fetchone()
+            r = rp.value_row(cur, "actual", month, plant, it)
             if r and r[0] is not None:
                 tot += r[0]; ok = True
         return tot if ok else None
-    cur.execute(
-        "SELECT month_actual FROM production_table "
-        "WHERE plant_name=%s AND item_name=%s AND report_month=%s",
-        (plant, item, month),
-    )
-    r = cur.fetchone()
+    r = rp.value_row(cur, "actual", month, plant, item)
     return r[0] if r and r[0] is not None else None
 
 
@@ -217,25 +208,11 @@ def _semis_ytd(cur, months: list) -> float:
     Finished Steel — matching that convention here too so this page's
     Semis for Sale always agrees with that one instead of quietly running
     ~43,000 T under it every month (ASP's own missing share)."""
-    ph_m = ",".join(["%s"] * len(months))
-    ph_p = ",".join(["%s"] * len(_FIVE))
-    cur.execute(
-        f"SELECT COALESCE(SUM(month_actual),0) FROM production_table "
-        f"WHERE report_month IN ({ph_m}) AND plant_name IN ({ph_p}) "
-        f"AND item_name='Saleable Semis'",
-        (*months, *_FIVE),
-    )
-    r = cur.fetchone()
+    r = rp.five_plant_saleable_semis(cur, months, _FIVE)
     five_plant = float(r[0]) if r and r[0] is not None else 0.0
 
-    cur.execute(
-        f"SELECT report_month, item_name, month_actual FROM production_table "
-        f"WHERE report_month IN ({ph_m}) AND plant_name='ASP' "
-        f"AND item_name IN ('Saleable Steel','Finished Steel')",
-        months,
-    )
     asp_by_month = {}
-    for rm, item, val in cur.fetchall():
+    for rm, item, val in rp.asp_saleable_finished_by_month(cur, months):
         asp_by_month.setdefault(rm, {})[item] = val
     asp_semis = sum(
         d["Saleable Steel"] - d["Finished Steel"]
@@ -272,12 +249,7 @@ def _ipt_transfer_ytd(cur, months: list) -> float:
     )
     ipt_t = float(cur.fetchone()[0] or 0.0)
 
-    cur.execute(
-        f"SELECT COALESCE(SUM(month_actual),0) FROM production_table "
-        f"WHERE report_month IN ({ph_m}) AND plant_name='DSP' AND item_name='Bottom Pouring Ingot'",
-        months,
-    )
-    ingot = float(cur.fetchone()[0] or 0.0)
+    ingot = float(rp.dsp_bottom_pouring_ingot_sum(cur, months)[0] or 0.0)
 
     return ipt_t / 1000.0 + ingot
 

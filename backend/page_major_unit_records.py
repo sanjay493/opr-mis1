@@ -57,6 +57,7 @@ import html
 import re
 
 import db
+from repo import production as rp
 
 ISP_PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP"]
 
@@ -231,15 +232,8 @@ def best_for_unit(cur, plant: str, item_names: list, is_rate: bool, upto_month: 
     if not item_names:
         return empty
 
-    ph = ",".join(["%s"] * len(item_names))
-    cur.execute(f"""
-        SELECT report_month, SUM(month_actual)
-        FROM production_table
-        WHERE plant_name = %s AND item_name IN ({ph})
-          AND (%s IS NULL OR report_month <= %s)
-        GROUP BY report_month
-    """, [plant] + item_names + [upto_month, upto_month])
-    monthly = {rm: v for rm, v in cur.fetchall() if v is not None}
+    monthly = {rm: v for rm, v in rp.plant_items_monthly_sum_upto(cur, plant, item_names, upto_month)
+               if v is not None}
     if not monthly:
         return empty
 

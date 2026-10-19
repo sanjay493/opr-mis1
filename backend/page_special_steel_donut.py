@@ -124,7 +124,7 @@ import math
 import datetime as _dt
 import db
 from constants import ALL_PLANTS
-from db import _fs_alias_sum, _sail_conversion_actual
+from repo import production as rp
 from page_special_steel import _get_abp_sum, _SSPS_PLANTS
 from page_special_steel_trend import _sum_actual
 
@@ -185,7 +185,7 @@ def _prod_item_sum(cur, months: list, entity: str, item: str, is_plan: bool = Fa
     ASP/VISL's ordinary-steel production into a row now labeled "SSP" would
     overstate it and mismatch the despatch-side Spl. FS/Spl. Semis figures
     below (_special_fin_semis_split), which were already SSP-only."""
-    table = "production_plan_table" if is_plan else "production_table"
+    table = "abp" if is_plan else "actual"   # repo.production measure
     if entity == "SAIL":
         plants = ALL_PLANTS
     elif entity == "SSPs":
@@ -196,8 +196,8 @@ def _prod_item_sum(cur, months: list, entity: str, item: str, is_plan: bool = Fa
     if item == "Finished Steel":
         total, found = 0.0, False
         for m in months:
-            v = _fs_alias_sum(cur, table, m, plants)
-            c = None if (is_plan or entity != "SAIL") else _sail_conversion_actual(cur, m)
+            v = rp.fs_alias_sum(cur, table, m, plants)
+            c = None if (is_plan or entity != "SAIL") else rp.sail_conversion_actual(cur, m)
             if v is not None or c is not None:
                 total += (v or 0.0) + (c or 0.0)
                 found = True
@@ -206,14 +206,7 @@ def _prod_item_sum(cur, months: list, entity: str, item: str, is_plan: bool = Fa
     direct_plants = [p for p in plants if item != "Saleable Semis" or p not in _SSPS_PLANTS]
     total, found = 0.0, False
     if direct_plants:
-        ph_m = ",".join(["%s"] * len(months))
-        ph_p = ",".join(["%s"] * len(direct_plants))
-        cur.execute(f"""
-            SELECT COALESCE(SUM(month_actual),0), COUNT(*)
-            FROM {table}
-            WHERE report_month IN ({ph_m}) AND plant_name IN ({ph_p}) AND item_name=%s
-        """, (*months, *direct_plants, item))
-        t, c = cur.fetchone()
+        t, c = rp.sum_count_row(cur, table, months, direct_plants, item)
         if c > 0:
             total += t
             found = True
@@ -228,6 +221,7 @@ def _prod_item_sum(cur, months: list, entity: str, item: str, is_plan: bool = Fa
 
 
 def _ssps_semis_residual(cur, table: str, months: list, plants: list) -> float:
+    # table: repo.production measure ('actual' | 'abp')
     """Saleable Steel minus Finished Steel, summed over `plants` (a subset
     of ASP/VISL/SSP) and `months`, in '000T (the caller applies the x1000
     Tonnes conversion). None of the three ever record a 'Saleable Semis'
@@ -239,18 +233,11 @@ def _ssps_semis_residual(cur, table: str, months: list, plants: list) -> float:
     there when no dedicated Finished Steel row exists — the residual is
     then correctly ~0 for that plant/month, not negative). Clamped at 0
     overall so a data gap in one table/month doesn't flip the sign."""
-    ph_m = ",".join(["%s"] * len(months))
-    ph_p = ",".join(["%s"] * len(plants))
-    cur.execute(f"""
-        SELECT COALESCE(SUM(month_actual),0)
-        FROM {table}
-        WHERE report_month IN ({ph_m}) AND plant_name IN ({ph_p}) AND item_name='Saleable Steel'
-    """, (*months, *plants))
-    saleable = cur.fetchone()[0] or 0.0
+    saleable = rp.saleable_steel_sum_row(cur, table, months, plants)[0] or 0.0
 
     finished = 0.0
     for m in months:
-        v = _fs_alias_sum(cur, table, m, plants)
+        v = rp.fs_alias_sum(cur, table, m, plants)
         finished += v or 0.0
 
     return max(saleable - finished, 0.0)
@@ -281,14 +268,7 @@ def _desp_item_sum(cur, months: list, entity: str, item: str):
     else:
         plants = [entity]
 
-    ph_m = ",".join(["%s"] * len(months))
-    ph_p = ",".join(["%s"] * len(plants))
-    cur.execute(f"""
-        SELECT COALESCE(SUM(month_actual),0), COUNT(*)
-        FROM production_table
-        WHERE report_month IN ({ph_m}) AND plant_name IN ({ph_p}) AND item_name=%s
-    """, (*months, *plants, item))
-    t, c = cur.fetchone()
+    t, c = rp.sum_count_row(cur, "actual", months, plants, item)
     return (t * 1000) if c > 0 else None
 
 

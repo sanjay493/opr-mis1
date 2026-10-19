@@ -4,6 +4,7 @@ Page 5: SAIL + BSP + DSP + RSP
 Page 6: BSL + ISP + ASP + SSP + VISP
 """
 import db
+from repo import production as rp
 
 # ---------------------------------------------------------------------------
 # Plant / item structure
@@ -178,12 +179,8 @@ PAGE6_PLANTS = [
 # ---------------------------------------------------------------------------
 
 def _one(cur, table, plant, item, month):
-    tbl = "production_table" if table == "act" else "production_plan_table"
-    cur.execute(
-        f"SELECT month_actual FROM {tbl} WHERE plant_name=%s AND item_name=%s AND report_month=%s",
-        (plant, item, month),
-    )
-    r = cur.fetchone()
+    tbl = "actual" if table == "act" else "abp"
+    r = rp.value_row(cur, tbl, month, plant, item)
     return r[0] if r and r[0] is not None else None
 
 
@@ -245,7 +242,7 @@ _ITEM_DERIVED_DIFF = {
 
 def _get_single(cur, table, plant, item, month):
     """Single plant, single item. SSP/VISL fall back to Saleable Steel for Finished Steel."""
-    tbl = "production_table" if table == "act" else "production_plan_table"
+    tbl = "actual" if table == "act" else "abp"
 
     # Plan table may use different item names for certain plant/item combos
     if table != "act":
@@ -253,27 +250,15 @@ def _get_single(cur, table, plant, item, month):
         if alias_items:
             return _sum_items(cur, table, plant, alias_items, month)
 
-    cur.execute(
-        f"SELECT month_actual FROM {tbl} WHERE plant_name=%s AND item_name=%s AND report_month=%s",
-        (plant, item, month),
-    )
-    r = cur.fetchone()
+    r = rp.value_row(cur, tbl, month, plant, item)
     if r and r[0] is not None:
         return r[0]
     for alt in _ITEM_ALT_NAMES.get((plant, item), []):
-        cur.execute(
-            f"SELECT month_actual FROM {tbl} WHERE plant_name=%s AND item_name=%s AND report_month=%s",
-            (plant, alt, month),
-        )
-        r = cur.fetchone()
+        r = rp.value_row(cur, tbl, month, plant, alt)
         if r and r[0] is not None:
             return r[0]
     if item == "Finished Steel" and plant in _FS_ALIAS:
-        cur.execute(
-            f"SELECT month_actual FROM {tbl} WHERE plant_name=%s AND item_name='Saleable Steel' AND report_month=%s",
-            (plant, month),
-        )
-        r = cur.fetchone()
+        r = rp.value_row(cur, tbl, month, plant, "Saleable Steel")
         return r[0] if r and r[0] is not None else None
     diff = _ITEM_DERIVED_DIFF.get((plant, item))
     if diff:
@@ -520,13 +505,7 @@ def _fy_months_p6(fy_start_year: int) -> list:
 
 
 def _fetch_monthly_item(cur, plant: str, item: str, months: list) -> dict:
-    ph = ",".join("%s" for _ in months)
-    cur.execute(
-        f"SELECT report_month, month_actual FROM production_table "
-        f"WHERE plant_name=%s AND item_name=%s AND report_month IN ({ph})",
-        (plant, item, *months),
-    )
-    return {rm: v for rm, v in cur.fetchall() if v is not None}
+    return {rm: v for rm, v in rp.month_values(cur, "actual", plant, item, months) if v is not None}
 
 
 def _sum_over(item_dict: dict, months: list):

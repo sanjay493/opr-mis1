@@ -5,6 +5,7 @@ Unit: '000 Tonnes.
 """
 import math
 import db
+from repo import production as rp
 
 
 def _fmt(v):
@@ -23,12 +24,8 @@ def _igr(cur_v, prev_v):
 def _one(cur, table, plant, item, month):
     if not item:
         return None
-    tbl = "production_table" if table == "act" else "production_plan_table"
-    cur.execute(
-        f"SELECT month_actual FROM {tbl} WHERE plant_name=%s AND item_name=%s AND report_month=%s",
-        (plant, item, month)
-    )
-    r = cur.fetchone()
+    tbl = "actual" if table == "act" else "abp"
+    r = rp.value_row(cur, tbl, month, plant, item)
     return r[0] if r and r[0] is not None else None
 
 def _ann(cur, plant, item, fy):

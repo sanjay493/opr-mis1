@@ -45,6 +45,7 @@ current FY (not in the source table) comes from the live computation.
 """
 import db
 from constants import ALL_PLANTS as _SAIL_8
+from repo import production as rp
 
 _FIVE_ISPS = ["BSP", "DSP", "RSP", "BSL", "ISP"]
 _FS_ALIAS_PLANTS = frozenset({"SSP", "VISL"})
@@ -232,27 +233,14 @@ def generate_sail8_trend_annexure(report_month: str) -> dict:
 
     conn = db.connect()
     cur = conn.cursor()
-    ph_i = ",".join("%s" for _ in item_names)
-    ph_p = ",".join("%s" for _ in _SAIL_8)
-    cur.execute(
-        f"SELECT plant_name, item_name, report_month, month_actual FROM production_table "
-        f"WHERE item_name IN ({ph_i}) AND plant_name IN ({ph_p}) AND report_month <= %s",
-        item_names + _SAIL_8 + [report_month],
-    )
     data = {}
-    for plant, item, rm, val in cur.fetchall():
+    for plant, item, rm, val in rp.items_plants_upto(cur, item_names, _SAIL_8, report_month):
         if val is None:
             continue
         data.setdefault(item, {}).setdefault(plant, {})[rm] = val
 
-    ph_d = ",".join("%s" for _ in direct_items)
-    cur.execute(
-        f"SELECT item_name, report_month, month_actual FROM production_table "
-        f"WHERE item_name IN ({ph_d}) AND plant_name='SAIL' AND report_month <= %s",
-        direct_items + [report_month],
-    )
     sail_direct = {}
-    for item, rm, val in cur.fetchall():
+    for item, rm, val in rp.items_sail_upto(cur, direct_items, report_month):
         if val is not None:
             sail_direct.setdefault(item, {})[rm] = val
     conn.close()

@@ -21,6 +21,7 @@ re-hardcoding a 3rd/4th copy of any of it.
 from typing import Dict, List, Optional
 
 import db as _db
+from repo import production as _rp
 import page_techno as _pt
 import techno_cumulative as _tc
 
@@ -214,13 +215,7 @@ def _shop_period_weights(plant: str, shop: str, months: List[str]) -> Dict[str, 
     if items:
         conn = _db.connect()
         cur = conn.cursor()
-        ph_m = ",".join(["%s"] * len(months))
-        ph_i = ",".join(["%s"] * len(items))
-        cur.execute(
-            f"SELECT report_month, month_actual FROM production_table "
-            f"WHERE plant_name=%s AND item_name IN ({ph_i}) AND report_month IN ({ph_m})",
-            [plant, *items, *months])
-        for rm, v in cur.fetchall():
+        for rm, v in _rp.plant_items_month_values(cur, plant, items, months):
             if v is not None:
                 own[rm] = own.get(rm, 0.0) + float(v)
         conn.close()
@@ -444,14 +439,8 @@ def _shop_period_own_cs(plant: str, shop: str, months: List[str]) -> Dict[str, f
     conn = _db.connect()
     try:
         cur = conn.cursor()
-        ph_m = ",".join(["%s"] * len(months))
-        ph_i = ",".join(["%s"] * len(items))
-        cur.execute(
-            f"SELECT report_month, month_actual FROM production_table "
-            f"WHERE plant_name=%s AND item_name IN ({ph_i}) AND report_month IN ({ph_m})",
-            [plant, *items, *months])
         out: Dict[str, float] = {}
-        for rm, v in cur.fetchall():
+        for rm, v in _rp.plant_items_month_values(cur, plant, items, months):
             if v is not None:
                 out[rm] = out.get(rm, 0.0) + float(v)
         return out

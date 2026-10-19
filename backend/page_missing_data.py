@@ -47,6 +47,7 @@ import sys
 from pathlib import Path
 
 import db
+from repo import production as rp
 
 _TP_DIR = str(Path(__file__).parent / "techno_project")
 if _TP_DIR not in sys.path:
@@ -121,7 +122,7 @@ def _techno_data_presence(report_month: str) -> dict:
 
 
 def generate_missing_data(report_month: str) -> dict:
-    prod_plants = _distinct_plants("production_table", "report_month", report_month)
+    prod_plants = rp.actual_plants_for_month(report_month)
     ss_plants = _distinct_plants("special_steel_orders", "report_month", report_month)
     stock_plants = _distinct_plants("stock_table", "stock_month", report_month)
     power_plants = _distinct_plants("power_data_table", "report_month", report_month)

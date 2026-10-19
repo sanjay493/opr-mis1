@@ -1,6 +1,7 @@
 import calendar
 import db
 from constants import FIVE_PLANTS as _5P
+from repo import production as rp
 
 PAGE4_ITEMS = [
     {
@@ -68,7 +69,7 @@ CAPACITY_DB_ITEMS = {"Hot Metal", "Total Crude Steel", "Saleable Steel", "Finish
 MOU_DB_ITEMS = frozenset({"Hot Metal", "Total Crude Steel", "Saleable Steel", "Pig Iron", "Finished Steel"})
 
 # _p4_get's `table` argument -> DB table. "plan" is APP; "mou" is the MoU target.
-_TABLES = {"act": "production_table", "plan": "production_plan_table", "mou": "mou_plan_table"}
+_TABLES = {"act": "actual", "plan": "abp", "mou": "mou"}   # -> repo.production measure
 
 def _days_in_month(month_str: str) -> int:
     try:
@@ -109,19 +110,11 @@ _FS_ALIAS = frozenset({"SSP", "VISL"})
 def _p4_query_one(cur, table, month, plant, db_item):
     """Single plant, single month. SSP/VISL fall back to Saleable Steel for Finished Steel."""
     tbl = _TABLES[table]
-    cur.execute(
-        f"SELECT month_actual FROM {tbl} WHERE report_month=%s AND plant_name=%s AND item_name=%s",
-        (month, plant, db_item),
-    )
-    row = cur.fetchone()
+    row = rp.value_row(cur, tbl, month, plant, db_item)
     if row and row[0] is not None:
         return row[0]
     if db_item == "Finished Steel" and plant in _FS_ALIAS:
-        cur.execute(
-            f"SELECT month_actual FROM {tbl} WHERE report_month=%s AND plant_name=%s AND item_name='Saleable Steel'",
-            (month, plant),
-        )
-        row = cur.fetchone()
+        row = rp.value_row(cur, tbl, month, plant, "Saleable Steel")
         return row[0] if row and row[0] is not None else None
     return None
 
@@ -139,13 +132,7 @@ def _p4_query_sum(cur, table, month, plants, db_item):
                 total += v
                 found = True
         return total if found else None
-    tbl = _TABLES[table]
-    phs = ",".join("%s" for _ in plants)
-    cur.execute(
-        f"SELECT SUM(month_actual) FROM {tbl} WHERE report_month=%s AND plant_name IN ({phs}) AND item_name=%s",
-        [month] + list(plants) + [db_item],
-    )
-    row = cur.fetchone()
+    row = rp.sum_plants_row(cur, _TABLES[table], month, plants, db_item)
     return row[0] if row and row[0] is not None else None
 
 
@@ -337,12 +324,7 @@ def _p4_conv_actuals(cur, month: str):
     ytd_prev = db.get_ytd_months(prev)
 
     def fetch(m):
-        cur.execute(
-            "SELECT month_actual FROM production_table "
-            "WHERE report_month=%s AND plant_name='SAIL' AND item_name='Conversion'",
-            (m,)
-        )
-        r = cur.fetchone()
+        r = rp.value_row(cur, "actual", m, "SAIL", "Conversion")
         return r[0] if r and r[0] is not None else None
 
     def ytd_sum(months):

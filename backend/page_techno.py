@@ -27,6 +27,7 @@ SAIL row computation (MAJOR page + Summary page te_table):
 """
 from decimal import Decimal, ROUND_HALF_UP
 import db
+from repo import production as rp
 from techno_cumulative import compute_cumulative_preview, compute_cumulative_from_values
 from bf_benchmark_registry import compute_fuel_rate
 
@@ -397,17 +398,9 @@ def calculate_sail_actuals(report_month: str) -> dict:
             def _get_weight(plant, rm, item, months_list=None):
                 """Get production weight for a plant. Single month or sum over months_list."""
                 if months_list:
-                    ph = ",".join(["%s"] * len(months_list))
-                    cur.execute(
-                        f"SELECT SUM(month_actual) FROM production_table WHERE plant_name=%s AND item_name=%s AND report_month IN ({ph})",
-                        [plant, item] + months_list
-                    )
+                    row = rp.sum_months_row(cur, "actual", plant, item, months_list)
                 else:
-                    cur.execute(
-                        "SELECT month_actual FROM production_table WHERE plant_name=%s AND item_name=%s AND report_month=%s",
-                        (plant, item, rm)
-                    )
-                row = cur.fetchone()
+                    row = rp.value_row(cur, "actual", rm, plant, item)
                 return (row[0] or 0) if row else 0
 
             # Calculate each parameter
@@ -564,11 +557,7 @@ def calculate_sail_actuals_strict(report_month: str) -> dict:
                         pass
 
         def _get_weight(plant, item):
-            cur.execute(
-                "SELECT month_actual FROM production_table WHERE plant_name=%s AND item_name=%s AND report_month=%s",
-                (plant, item, report_month),
-            )
-            row = cur.fetchone()
+            row = rp.value_row(cur, "actual", report_month, plant, item)
             return (row[0] or 0) if row else 0
 
         values = {}
@@ -824,18 +813,9 @@ def compute_sail_targets(fy: str) -> dict:
         [f"{fy_start}-{m:02d}" for m in range(4, 13)] +
         [f"{fy_start + 1}-{m:02d}" for m in range(1, 4)]
     )
-    ph = ",".join(["%s"] * len(months))
-    cur.execute(f"""
-        SELECT plant_name, item_name, SUM(month_actual)
-        FROM production_plan_table
-        WHERE report_month IN ({ph})
-          AND item_name IN ('Hot Metal', 'Total Crude Steel')
-          AND plant_name IN ('BSP','DSP','RSP','BSL','ISP')
-        GROUP BY plant_name, item_name
-    """, months)
     hm_wt = {}
     cs_wt = {}
-    for plant, item, val in cur.fetchall():
+    for plant, item, val in rp.plan_hm_cs_by_plant_item(cur, months):
         if val and val > 0:
             (hm_wt if item == "Hot Metal" else cs_wt)[plant] = val
 
@@ -1270,13 +1250,7 @@ def generate_major_techno_from_db(report_month: str, exclude_labels: set = None)
     conn3 = db.connect()
     cur3 = conn3.cursor()
     try:
-        ph3 = ",".join(["%s"] * len(_weight_months))
-        cur3.execute(
-            f"SELECT plant_name, report_month, month_actual FROM production_table "
-            f"WHERE report_month IN ({ph3}) AND item_name='Total Crude Steel'",
-            _weight_months,
-        )
-        for _pn, _rm, _val in cur3.fetchall():
+        for _pn, _rm, _val in rp.item_by_plant_month(cur3, "Total Crude Steel", _weight_months):
             _cs_monthly.setdefault(_pn, {})[_rm] = _val
     finally:
         conn3.close()
@@ -1286,13 +1260,7 @@ def generate_major_techno_from_db(report_month: str, exclude_labels: set = None)
     conn4 = db.connect()
     cur4 = conn4.cursor()
     try:
-        ph4 = ",".join(["%s"] * len(_weight_months))
-        cur4.execute(
-            f"SELECT plant_name, report_month, month_actual FROM production_table "
-            f"WHERE report_month IN ({ph4}) AND item_name='Hot Metal'",
-            _weight_months,
-        )
-        for _pn, _rm, _val in cur4.fetchall():
+        for _pn, _rm, _val in rp.item_by_plant_month(cur4, "Hot Metal", _weight_months):
             _hm_monthly.setdefault(_pn, {})[_rm] = _val
     finally:
         conn4.close()
@@ -1322,15 +1290,8 @@ def generate_major_techno_from_db(report_month: str, exclude_labels: set = None)
         conn5 = db.connect()
         cur5 = conn5.cursor()
         try:
-            ph5m = ",".join(["%s"] * len(_weight_months))
-            ph5i = ",".join(["%s"] * len(_shop_items))
-            cur5.execute(
-                f"SELECT plant_name, item_name, report_month, month_actual FROM production_table "
-                f"WHERE report_month IN ({ph5m}) AND item_name IN ({ph5i})",
-                [*_weight_months, *_shop_items],
-            )
             _item_monthly = {}
-            for _pn, _item, _rm, _val in cur5.fetchall():
+            for _pn, _item, _rm, _val in rp.items_by_plant_month(cur5, _shop_items, _weight_months):
                 if _val is not None:
                     _item_monthly.setdefault((_pn, _item), {})[_rm] = _val
         finally:
@@ -1949,16 +1910,9 @@ def generate_major_techno_verification(report_month: str) -> dict:
     conn = db.connect()
     cur = conn.cursor()
     try:
-        ph = ",".join(["%s"] * len(ytd))
-        cur.execute(
-            f"SELECT plant_name, report_month, month_actual FROM production_table "
-            f"WHERE report_month IN ({ph}) AND item_name='Hot Metal'", ytd)
-        for pn, rm, val in cur.fetchall():
+        for pn, rm, val in rp.item_by_plant_month(cur, "Hot Metal", ytd):
             _hm_monthly.setdefault(pn, {})[rm] = val
-        cur.execute(
-            f"SELECT plant_name, report_month, month_actual FROM production_table "
-            f"WHERE report_month IN ({ph}) AND item_name='Total Crude Steel'", ytd)
-        for pn, rm, val in cur.fetchall():
+        for pn, rm, val in rp.item_by_plant_month(cur, "Total Crude Steel", ytd):
             _cs_monthly.setdefault(pn, {})[rm] = val
     finally:
         conn.close()
@@ -1973,14 +1927,8 @@ def generate_major_techno_verification(report_month: str) -> dict:
         conn = db.connect()
         cur = conn.cursor()
         try:
-            ph_m = ",".join(["%s"] * len(ytd))
-            ph_i = ",".join(["%s"] * len(_shop_items))
-            cur.execute(
-                f"SELECT plant_name, item_name, report_month, month_actual FROM production_table "
-                f"WHERE report_month IN ({ph_m}) AND item_name IN ({ph_i})",
-                [*ytd, *_shop_items])
             _item_monthly = {}
-            for pn, item, rm, val in cur.fetchall():
+            for pn, item, rm, val in rp.items_by_plant_month(cur, _shop_items, ytd):
                 if val is not None:
                     _item_monthly.setdefault((pn, item), {})[rm] = val
         finally:

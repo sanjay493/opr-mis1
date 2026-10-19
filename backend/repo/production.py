@@ -785,3 +785,607 @@ def hot_metal_by_plant(cur, report_month, months=None):
             [report_month],
         )
     return cur.fetchall()
+
+
+def sum_plants_row(cur, measure: Measure, month, plants, item):
+    """fetchone() of SUM(month_actual) over `plants` for one month/item."""
+    phs = ",".join("%s" for _ in plants)
+    cur.execute(
+        f"SELECT SUM(month_actual) FROM {_table(measure)} WHERE report_month=%s AND plant_name IN ({phs}) AND item_name=%s",
+        [month] + list(plants) + [item],
+    )
+    return cur.fetchone()
+
+
+def month_values(cur, measure: Measure, plant, item, months):
+    """fetchall() of (report_month, month_actual) for one plant/item over `months`."""
+    ph = ",".join("%s" for _ in months)
+    cur.execute(
+        f"SELECT report_month, month_actual FROM {_table(measure)} "
+        f"WHERE plant_name=%s AND item_name=%s AND report_month IN ({ph})",
+        (plant, item, *months),
+    )
+    return cur.fetchall()
+
+
+# ── page3_highlights.py ─────────────────────────────────────────────────────
+
+def item_month_totals_upto(cur, item_names, plants, month):
+    """fetchall() of (item_name, report_month, SUM) over plants, months <= month."""
+    ph_items = ",".join(["%s"] * len(item_names))
+    ph_plants = ",".join(["%s"] * len(plants))
+    cur.execute(f"""
+            SELECT item_name, report_month, SUM(month_actual) AS total
+            FROM production_table
+            WHERE item_name IN ({ph_items}) AND plant_name IN ({ph_plants})
+              AND report_month <= %s
+            GROUP BY item_name, report_month
+        """, list(item_names) + list(plants) + [month])
+    return cur.fetchall()
+
+
+def sail_conversion_totals_upto(cur, month):
+    """fetchall() of (report_month, SUM) of SAIL 'Conversion', months <= month."""
+    cur.execute("""
+            SELECT report_month, SUM(month_actual) AS total
+            FROM production_table
+            WHERE item_name='Conversion' AND plant_name='SAIL' AND report_month <= %s
+            GROUP BY report_month
+        """, (month,))
+    return cur.fetchall()
+
+
+def sum_months_row(cur, measure: Measure, plant, item, months):
+    """fetchone() of SUM(month_actual) for one plant/item over `months`."""
+    ph = ",".join(["%s"] * len(months))
+    cur.execute(
+        f"SELECT SUM(month_actual) FROM {_table(measure)} "
+        f"WHERE plant_name=%s AND item_name=%s AND report_month IN ({ph})",
+        (plant, item, *months),
+    )
+    return cur.fetchone()
+
+
+def item_plants_range(cur, measure: Measure, item, plants, start, end):
+    """fetchall() of (plant_name, report_month, month_actual) for one item,
+    `plants`, start <= report_month <= end."""
+    phs = ",".join("%s" for _ in plants)
+    cur.execute(
+        f"SELECT plant_name, report_month, month_actual FROM {_table(measure)} "
+        f"WHERE item_name=%s AND plant_name IN ({phs}) "
+        f"AND report_month>=%s AND report_month<=%s",
+        [item] + list(plants) + [start, end],
+    )
+    return cur.fetchall()
+
+
+def item_plant_range(cur, measure: Measure, item, plant, start, end):
+    """fetchall() of (report_month, month_actual) for one item/plant,
+    start <= report_month <= end."""
+    cur.execute(
+        f"SELECT report_month, month_actual FROM {_table(measure)} "
+        "WHERE item_name=%s AND plant_name=%s "
+        "AND report_month>=%s AND report_month<=%s",
+        [item, plant, start, end],
+    )
+    return cur.fetchall()
+
+
+def item_month_by_plant(cur, item, month, plants):
+    """fetchall() of (plant_name, month_actual) actuals for one item/month."""
+    phs = ",".join("%s" for _ in plants)
+    cur.execute(
+        f"SELECT plant_name, month_actual FROM production_table "
+        f"WHERE item_name=%s AND report_month=%s AND plant_name IN ({phs})",
+        [item, month] + list(plants),
+    )
+    return cur.fetchall()
+
+
+def item_all_months_by_plant(cur, item, plants):
+    """fetchall() of (report_month, plant_name, month_actual) actuals, all months."""
+    phs = ",".join("%s" for _ in plants)
+    cur.execute(
+        f"SELECT report_month, plant_name, month_actual FROM production_table "
+        f"WHERE item_name=%s AND plant_name IN ({phs})",
+        [item] + list(plants),
+    )
+    return cur.fetchall()
+
+
+# ── page_finished_steel_report.py ───────────────────────────────────────────
+
+def item_alias_rows(cur, aliases, months=None):
+    """fetchall() of (report_month, plant_name, item_name, month_actual) for
+    any of `aliases`, optionally limited to `months`, ORDER BY report_month."""
+    alias_phs = ",".join("%s" for _ in aliases)
+    if months is not None:
+        month_phs = ",".join("%s" for _ in months)
+        cur.execute(f"""
+                SELECT report_month, plant_name, item_name, month_actual
+                FROM production_table
+                WHERE item_name IN ({alias_phs}) AND report_month IN ({month_phs})
+                ORDER BY report_month
+            """, list(aliases) + list(months))
+    else:
+        cur.execute(f"""
+                SELECT report_month, plant_name, item_name, month_actual
+                FROM production_table
+                WHERE item_name IN ({alias_phs})
+                ORDER BY report_month
+            """, list(aliases))
+    return cur.fetchall()
+
+
+def item_alias_report_months(cur, aliases):
+    """fetchall() of DISTINCT well-formed report_month for any of `aliases`."""
+    alias_phs = ",".join("%s" for _ in aliases)
+    cur.execute(f"""
+        SELECT DISTINCT report_month FROM production_table
+        WHERE item_name IN ({alias_phs})
+          AND report_month REGEXP '^[0-9][0-9][0-9][0-9]-[0-9][0-9]$'
+    """, list(aliases))
+    return cur.fetchall()
+
+
+# ── page_major_unit_records.py ──────────────────────────────────────────────
+
+def plant_items_monthly_sum_upto(cur, plant, item_names, upto_month):
+    """fetchall() of (report_month, SUM) over item_names for a plant, months
+    <= upto_month (all months when upto_month is None)."""
+    ph = ",".join(["%s"] * len(item_names))
+    cur.execute(f"""
+        SELECT report_month, SUM(month_actual)
+        FROM production_table
+        WHERE plant_name = %s AND item_name IN ({ph})
+          AND (%s IS NULL OR report_month <= %s)
+        GROUP BY report_month
+    """, [plant] + list(item_names) + [upto_month, upto_month])
+    return cur.fetchall()
+
+
+# ── page_records.py (record statistics; SQL moved verbatim) ─────────────────
+
+def _records_ph(lst):
+    return ','.join(['%s'] * len(lst))
+
+
+def _fy_pos_expr():
+    """report_month's position within its financial year: 0 = April … 11 = March."""
+    return ("CASE WHEN CAST(SUBSTR(report_month,6,2) AS SIGNED) >= 4 "
+            "THEN CAST(SUBSTR(report_month,6,2) AS SIGNED) - 4 "
+            "ELSE CAST(SUBSTR(report_month,6,2) AS SIGNED) + 8 END")
+
+
+def _fy_expr():
+    return ("CASE WHEN CAST(SUBSTR(report_month,6,2) AS SIGNED)>=4 "
+            "THEN CAST(SUBSTR(report_month,1,4) AS SIGNED) "
+            "ELSE CAST(SUBSTR(report_month,1,4) AS SIGNED)-1 END")
+
+
+def _q_expr():
+    return ("CASE "
+            "WHEN CAST(SUBSTR(report_month,6,2) AS SIGNED) IN (4,5,6)    THEN 1 "
+            "WHEN CAST(SUBSTR(report_month,6,2) AS SIGNED) IN (7,8,9)    THEN 2 "
+            "WHEN CAST(SUBSTR(report_month,6,2) AS SIGNED) IN (10,11,12) THEN 3 "
+            "ELSE 4 END")
+
+
+def _days_expr():
+    """Days in report_month's calendar month — used to weight rate items
+    (Oven Pushing (nos/day), COB#* battery counts) by days-in-month when
+    combining months into a quarter/half/FY/CY, instead of summing an
+    already-daily-average figure like it was tonnage."""
+    return ("CASE CAST(SUBSTR(report_month,6,2) AS SIGNED) "
+            "WHEN 1 THEN 31 WHEN 3 THEN 31 WHEN 5 THEN 31 WHEN 7 THEN 31 "
+            "WHEN 8 THEN 31 WHEN 10 THEN 31 WHEN 12 THEN 31 "
+            "WHEN 4 THEN 30 WHEN 6 THEN 30 WHEN 9 THEN 30 WHEN 11 THEN 30 "
+            "ELSE CASE WHEN CAST(SUBSTR(report_month,1,4) AS SIGNED) %% 4 = 0 "
+            "AND (CAST(SUBSTR(report_month,1,4) AS SIGNED) %% 100 != 0 "
+            "OR CAST(SUBSTR(report_month,1,4) AS SIGNED) %% 400 = 0) "
+            "THEN 29 ELSE 28 END END")
+
+
+_H_EXPR = ("CASE WHEN CAST(SUBSTR(report_month,6,2) AS SIGNED) BETWEEN 4 AND 9 "
+           "THEN 1 ELSE 2 END")
+
+# Period buckets for records_bucket_cells(): [(sql_expr, alias), ...]
+_RECORDS_BUCKETS = {
+    "quarter": lambda: [(_q_expr(), 'qnum'), (_fy_expr(), 'fy_start')],
+    "half":    lambda: [(_H_EXPR, 'hnum'), (_fy_expr(), 'fy_start')],
+    "fy":      lambda: [(_fy_expr(), 'fy_start')],
+    "cy":      lambda: [('SUBSTR(report_month,1,4)', 'yr')],
+}
+
+
+def records_scope(plants, items=None, upto_month=None):
+    """(where, args) selecting `plants` (and `items`, when given; and months
+    <= upto_month, when given) for the records queries below. Opaque to
+    callers: pass it straight back to them."""
+    ph = _records_ph(plants)
+    if items is None:
+        where = f"plant_name IN ({ph})"
+        args = list(plants)
+    else:
+        where = f"item_name IN ({_records_ph(items)}) AND plant_name IN ({ph})"
+        args = list(items) + list(plants)
+    if upto_month:
+        where += " AND report_month <= %s"
+        args = args + [upto_month]
+    return where, args
+
+
+def records_bucket_cells(cur, scope, bucket):
+    """fetchall() of (item_name, *bucket columns, plant_name, report_month,
+    v, days) per (item, period bucket, plant, month). bucket: 'quarter'
+    (qnum, fy_start) | 'half' (hnum, fy_start) | 'fy' (fy_start) | 'cy' (yr)."""
+    where, args = scope
+    bucket_exprs = _RECORDS_BUCKETS[bucket]()
+    sel = ", ".join(f"{e} AS {a}" for e, a in bucket_exprs)
+    grp = ", ".join(a for _e, a in bucket_exprs)
+    cur.execute(f"""
+        SELECT item_name, {sel}, plant_name, report_month,
+               SUM(month_actual)   AS v,
+               MAX({_days_expr()}) AS days
+        FROM production_table
+        WHERE {where}
+        GROUP BY item_name, {grp}, plant_name, report_month
+    """, list(args))
+    return cur.fetchall()
+
+
+def records_calendar_month_totals(cur, scope):
+    """fetchall() of (item_name, mon_num, report_month, total), ordered by
+    item, month number, total DESC."""
+    where, args = scope
+    cur.execute(f"""
+        SELECT item_name,
+               CAST(SUBSTR(report_month,6,2) AS SIGNED) AS mon_num,
+               report_month,
+               SUM(month_actual) AS total
+        FROM production_table
+        WHERE {where}
+        GROUP BY item_name, report_month
+        ORDER BY item_name, mon_num, total DESC
+    """, args)
+    return cur.fetchall()
+
+
+def records_latest_month(cur):
+    """Latest well-formed report_month in production_table."""
+    cur.execute("""
+        SELECT MAX(report_month) FROM production_table
+        WHERE report_month REGEXP '^[0-9][0-9][0-9][0-9]-[0-9][0-9]$'
+    """)
+    return cur.fetchone()[0]
+
+
+def records_plants_items_in(cur, plants):
+    """fetchall() of DISTINCT item_name over `plants` (always the IN form)."""
+    ph = _records_ph(plants)
+    cur.execute(
+        f"SELECT DISTINCT item_name FROM production_table WHERE plant_name IN ({ph})",
+        list(plants))
+    return cur.fetchall()
+
+
+def records_fy_window_cells(cur, scope, s_pos, e_pos):
+    """fetchall() of (item_name, fy_start, plant_name, report_month, v, days)
+    for months whose FY position (0 = Apr) is within [s_pos, e_pos]."""
+    where, args = scope
+    cur.execute(f"""
+        SELECT item_name, {_fy_expr()} AS fy_start, plant_name, report_month,
+               SUM(month_actual)     AS v,
+               MAX({_days_expr()})   AS days
+        FROM production_table
+        WHERE {where} AND ({_fy_pos_expr()}) BETWEEN %s AND %s
+        GROUP BY item_name, fy_start, plant_name, report_month
+    """, list(args) + [s_pos, e_pos])
+    return cur.fetchall()
+
+
+# ── page_prod_by_process.py ─────────────────────────────────────────────────
+
+def five_plant_saleable_semis(cur, months, plants):
+    """fetchone() of COALESCE(SUM) of 'Saleable Semis' over months x plants."""
+    ph_m = ",".join(["%s"] * len(months))
+    ph_p = ",".join(["%s"] * len(plants))
+    cur.execute(
+        f"SELECT COALESCE(SUM(month_actual),0) FROM production_table "
+        f"WHERE report_month IN ({ph_m}) AND plant_name IN ({ph_p}) "
+        f"AND item_name='Saleable Semis'",
+        (*months, *plants),
+    )
+    return cur.fetchone()
+
+
+def asp_saleable_finished_by_month(cur, months):
+    """fetchall() of (report_month, item_name, month_actual) for ASP's
+    Saleable Steel and Finished Steel."""
+    ph_m = ",".join(["%s"] * len(months))
+    cur.execute(
+        f"SELECT report_month, item_name, month_actual FROM production_table "
+        f"WHERE report_month IN ({ph_m}) AND plant_name='ASP' "
+        f"AND item_name IN ('Saleable Steel','Finished Steel')",
+        months,
+    )
+    return cur.fetchall()
+
+
+def dsp_bottom_pouring_ingot_sum(cur, months):
+    """fetchone() of COALESCE(SUM) of DSP 'Bottom Pouring Ingot' over months."""
+    ph_m = ",".join(["%s"] * len(months))
+    cur.execute(
+        f"SELECT COALESCE(SUM(month_actual),0) FROM production_table "
+        f"WHERE report_month IN ({ph_m}) AND plant_name='DSP' AND item_name='Bottom Pouring Ingot'",
+        months,
+    )
+    return cur.fetchone()
+
+
+# ── page_production_trend.py ────────────────────────────────────────────────
+
+def items_plants_all_months(cur, items, plants):
+    """fetchall() of (plant_name, item_name, report_month, month_actual)."""
+    phs_items = ",".join("%s" for _ in items)
+    phs_plants = ",".join("%s" for _ in plants)
+    cur.execute(
+        f"SELECT plant_name, item_name, report_month, month_actual FROM production_table "
+        f"WHERE item_name IN ({phs_items}) AND plant_name IN ({phs_plants})",
+        list(items) + list(plants),
+    )
+    return cur.fetchall()
+
+
+def item_plants_all_months(cur, item, plants):
+    """fetchall() of (plant_name, report_month, month_actual) for one item."""
+    aphs = ",".join("%s" for _ in plants)
+    cur.execute(
+        f"SELECT plant_name, report_month, month_actual FROM production_table "
+        f"WHERE item_name=%s AND plant_name IN ({aphs})",
+        [item] + list(plants),
+    )
+    return cur.fetchall()
+
+
+def items_plant_all_months(cur, items, plant):
+    """fetchall() of (item_name, report_month, month_actual) for one plant."""
+    phs_items = ",".join("%s" for _ in items)
+    cur.execute(
+        f"SELECT item_name, report_month, month_actual FROM production_table "
+        f"WHERE item_name IN ({phs_items}) AND plant_name=%s",
+        list(items) + [plant],
+    )
+    return cur.fetchall()
+
+
+# ── page_sail8_trend_annexure.py ────────────────────────────────────────────
+
+def items_plants_upto(cur, items, plants, month):
+    """fetchall() of (plant_name, item_name, report_month, month_actual),
+    report_month <= month."""
+    ph_i = ",".join("%s" for _ in items)
+    ph_p = ",".join("%s" for _ in plants)
+    cur.execute(
+        f"SELECT plant_name, item_name, report_month, month_actual FROM production_table "
+        f"WHERE item_name IN ({ph_i}) AND plant_name IN ({ph_p}) AND report_month <= %s",
+        list(items) + list(plants) + [month],
+    )
+    return cur.fetchall()
+
+
+def items_sail_upto(cur, items, month):
+    """fetchall() of (item_name, report_month, month_actual) for the stored
+    SAIL rows, report_month <= month."""
+    ph_d = ",".join("%s" for _ in items)
+    cur.execute(
+        f"SELECT item_name, report_month, month_actual FROM production_table "
+        f"WHERE item_name IN ({ph_d}) AND plant_name='SAIL' AND report_month <= %s",
+        list(items) + [month],
+    )
+    return cur.fetchall()
+
+
+# ── page_secretary_review.py ────────────────────────────────────────────────
+
+def latest_hot_metal_month_row(cur):
+    """fetchone() of the latest month with a non-NULL Hot Metal actual."""
+    cur.execute("SELECT MAX(report_month) FROM production_table "
+                "WHERE item_name='Hot Metal' AND month_actual IS NOT NULL")
+    return cur.fetchone()
+
+
+def mou_items_for_month(cur, month):
+    """fetchall() of DISTINCT item_name with a non-NULL MoU value for month."""
+    cur.execute("SELECT DISTINCT item_name FROM mou_plan_table "
+                "WHERE report_month=%s AND month_actual IS NOT NULL", (month,))
+    return cur.fetchall()
+
+
+# ── page_special_steel_trend.py ─────────────────────────────────────────────
+
+def ssp_saleable_despatch_count_row(cur, months):
+    """fetchone() of COUNT(*) of SSP 'Saleable Steel Despatch' rows in months."""
+    ph = ",".join(["%s"] * len(months))
+    cur.execute(f"""
+                SELECT COUNT(*) FROM production_table
+                WHERE report_month IN ({ph}) AND plant_name='SSP'
+                  AND item_name='Saleable Steel Despatch'
+            """, (*months,))
+    return cur.fetchone()
+
+
+# ── page_missing_data.py ────────────────────────────────────────────────────
+
+def actual_plants_for_month(report_month):
+    """{plant_name} with any production_table row for the month."""
+    with rc.cursor() as cur:
+        cur.execute("SELECT DISTINCT plant_name FROM production_table WHERE report_month = %s",
+                    [report_month])
+        return {r[0] for r in cur.fetchall()}
+
+
+def fs_alias_sum(cur, measure: Measure, month, plants):
+    """_fs_alias_sum by measure: SAIL-style Finished Steel sum over `plants`
+    for one month (SSP/VISL fall back to Saleable Steel)."""
+    return _fs_alias_sum(cur, _table(measure), month, plants)
+
+
+def sail_conversion_actual(cur, month):
+    """SAIL-level 'Conversion' actual for a month (see _sail_conversion_actual)."""
+    return _sail_conversion_actual(cur, month)
+
+
+# ── page_special_steel.py ───────────────────────────────────────────────────
+
+def ytd_sum_row(cur, ytd_months, plant, item):
+    """fetchone() of COALESCE(SUM) for one plant/item over ytd_months (actual)."""
+    ph = ",".join(["%s"] * len(ytd_months))
+    cur.execute(f"""
+        SELECT COALESCE(SUM(month_actual),0)
+        FROM production_table
+        WHERE report_month IN ({ph}) AND plant_name=%s AND item_name=%s
+    """, (*ytd_months, plant, item))
+    return cur.fetchone()
+
+
+def ssp_despatch_minus_carbon_000t(cur, months, item="Saleable Steel Despatch"):
+    """(SSP `item` total, SSP Finished Carbon Steel Despatch total) over
+    months, '000 T (COALESCE'd to 0)."""
+    ph = ",".join(["%s"] * len(months))
+    cur.execute(f"""
+        SELECT COALESCE(SUM(month_actual),0) FROM production_table
+        WHERE report_month IN ({ph}) AND plant_name='SSP' AND item_name=%s
+    """, (*months, item))
+    total = (cur.fetchone() or [0])[0]
+    cur.execute(f"""
+        SELECT COALESCE(SUM(month_actual),0) FROM production_table
+        WHERE report_month IN ({ph}) AND plant_name='SSP' AND item_name='Finished Carbon Steel Despatch'
+    """, (*months,))
+    carbon = (cur.fetchone() or [0])[0]
+    return total, carbon
+
+
+# ── page_special_steel_donut.py ─────────────────────────────────────────────
+
+def sum_count_row(cur, measure: Measure, months, plants, item):
+    """fetchone() of (COALESCE(SUM),0), COUNT(*)) over months x plants for item."""
+    ph_m = ",".join(["%s"] * len(months))
+    ph_p = ",".join(["%s"] * len(plants))
+    cur.execute(f"""
+            SELECT COALESCE(SUM(month_actual),0), COUNT(*)
+            FROM {_table(measure)}
+            WHERE report_month IN ({ph_m}) AND plant_name IN ({ph_p}) AND item_name=%s
+        """, (*months, *plants, item))
+    return cur.fetchone()
+
+
+def saleable_steel_sum_row(cur, measure: Measure, months, plants):
+    """fetchone() of COALESCE(SUM) of 'Saleable Steel' over months x plants."""
+    ph_m = ",".join(["%s"] * len(months))
+    ph_p = ",".join(["%s"] * len(plants))
+    cur.execute(f"""
+        SELECT COALESCE(SUM(month_actual),0)
+        FROM {_table(measure)}
+        WHERE report_month IN ({ph_m}) AND plant_name IN ({ph_p}) AND item_name='Saleable Steel'
+    """, (*months, *plants))
+    return cur.fetchone()
+
+
+# ── page_special_steel_physical.py ──────────────────────────────────────────
+
+def plant_item_sum_counts(cur, measure: Measure, plants, items, months):
+    """fetchall() of (plant_name, item_name, COALESCE(SUM), COUNT(DISTINCT
+    report_month)) over non-NULL rows in plants x items x months."""
+    ph_p = ",".join(["%s"] * len(plants))
+    ph_i = ",".join(["%s"] * len(items))
+    ph_m = ",".join(["%s"] * len(months))
+    cur.execute(
+        f"SELECT plant_name, item_name, COALESCE(SUM(month_actual), 0), "
+        f"       COUNT(DISTINCT report_month) "
+        f"FROM {_table(measure)} "
+        f"WHERE plant_name IN ({ph_p}) AND item_name IN ({ph_i}) AND report_month IN ({ph_m}) "
+        f"  AND month_actual IS NOT NULL "
+        f"GROUP BY plant_name, item_name",
+        [*plants, *items, *months],
+    )
+    return cur.fetchall()
+
+
+def plant_item_rows_from(cur, measure: Measure, plants, items, from_month):
+    """fetchall() of (report_month, plant_name, item_name, month_actual), non-NULL,
+    report_month >= from_month."""
+    ph_p = ",".join(["%s"] * len(plants))
+    ph_i = ",".join(["%s"] * len(items))
+    cur.execute(
+        f"SELECT report_month, plant_name, item_name, month_actual FROM {_table(measure)} "
+        f"WHERE plant_name IN ({ph_p}) AND item_name IN ({ph_i}) "
+        f"  AND month_actual IS NOT NULL AND report_month >= %s",
+        [*plants, *items, from_month],
+    )
+    return cur.fetchall()
+
+
+# ── page_techno.py / page_techno_records.py ────────────────────────────────
+
+def plan_hm_cs_by_plant_item(cur, months):
+    """fetchall() of (plant_name, item_name, SUM ABP) for Hot Metal and Total
+    Crude Steel over months, 5 ISPs."""
+    ph = ",".join(["%s"] * len(months))
+    cur.execute(f"""
+        SELECT plant_name, item_name, SUM(month_actual)
+        FROM production_plan_table
+        WHERE report_month IN ({ph})
+          AND item_name IN ('Hot Metal', 'Total Crude Steel')
+          AND plant_name IN ('BSP','DSP','RSP','BSL','ISP')
+        GROUP BY plant_name, item_name
+    """, months)
+    return cur.fetchall()
+
+
+def item_by_plant_month(cur, item, months):
+    """fetchall() of (plant_name, report_month, month_actual) actuals for one
+    item over months, every plant."""
+    ph = ",".join(["%s"] * len(months))
+    cur.execute(
+        f"SELECT plant_name, report_month, month_actual FROM production_table "
+        f"WHERE report_month IN ({ph}) AND item_name=%s",
+        list(months) + [item],
+    )
+    return cur.fetchall()
+
+
+def items_by_plant_month(cur, items, months):
+    """fetchall() of (plant_name, item_name, report_month, month_actual)
+    actuals for items over months, every plant."""
+    ph_m = ",".join(["%s"] * len(months))
+    ph_i = ",".join(["%s"] * len(items))
+    cur.execute(
+        f"SELECT plant_name, item_name, report_month, month_actual FROM production_table "
+        f"WHERE report_month IN ({ph_m}) AND item_name IN ({ph_i})",
+        [*months, *items],
+    )
+    return cur.fetchall()
+
+
+def hm_cs_signature_row(cur, months):
+    """fetchone() of (COUNT(*), SUM) of Hot Metal + Total Crude Steel actuals
+    over months (page_techno_records' cache signature)."""
+    ph = ",".join(["%s"] * len(months))
+    return cur.execute(f"SELECT COUNT(*), SUM(month_actual) FROM production_table "
+                       f"WHERE report_month IN ({ph}) AND item_name IN ('Hot Metal','Total Crude Steel')",
+                       months).fetchone()
+
+
+# ── techno_cumulative.py / techno_period.py ────────────────────────────────
+
+def plant_items_month_values(cur, plant, items, months):
+    """fetchall() of (report_month, month_actual) actuals for one plant, any
+    of `items`, over months (one row per matching item)."""
+    ph_m = ",".join(["%s"] * len(months))
+    ph_i = ",".join(["%s"] * len(items))
+    cur.execute(
+        f"SELECT report_month, month_actual FROM production_table "
+        f"WHERE plant_name=%s AND item_name IN ({ph_i}) AND report_month IN ({ph_m})",
+        [plant, *items, *months])
+    return cur.fetchall()

@@ -5,6 +5,8 @@ Handles furnace-wise and plant-level HM production lookups
 
 from typing import Optional
 
+from repo import production as rp
+
 
 def get_hm_production_for_furnace(plant: str, furnace: str, report_month: str) -> Optional[float]:
     """
@@ -29,12 +31,7 @@ def get_hm_production_for_furnace(plant: str, furnace: str, report_month: str) -
     ]
 
     for item_name in possible_names:
-        cursor.execute("""
-            SELECT month_actual FROM production_table
-            WHERE plant_name = %s AND item_name = %s AND report_month = %s
-        """, [plant, item_name, report_month])
-
-        result = cursor.fetchone()
+        result = rp.value_row(cursor, "actual", report_month, plant, item_name)
         if result:
             conn.close()
             return float(result[0])
@@ -53,12 +50,7 @@ def get_plant_hm_production(plant: str, report_month: str) -> Optional[float]:
     conn = db.connect()
     cursor = conn.cursor()
 
-    cursor.execute("""
-        SELECT month_actual FROM production_table
-        WHERE plant_name = %s AND item_name = 'Hot Metal' AND report_month = %s
-    """, [plant, report_month])
-
-    result = cursor.fetchone()
+    result = rp.value_row(cursor, "actual", report_month, plant, "Hot Metal")
     conn.close()
 
     return float(result[0]) if result else None
@@ -108,22 +100,12 @@ def get_furnace_production_variants(plant: str, report_month: str, base_name: st
     ]
 
     for i, pattern in enumerate(patterns):
-        cursor.execute("""
-            SELECT month_actual FROM production_table
-            WHERE plant_name = %s AND item_name = %s AND report_month = %s
-        """, [plant, pattern, report_month])
-
-        result = cursor.fetchone()
+        result = rp.value_row(cursor, "actual", report_month, plant, pattern)
         if result:
             variants[list(variants.keys())[i]] = float(result[0])
 
     # Get plant total
-    cursor.execute("""
-        SELECT month_actual FROM production_table
-        WHERE plant_name = %s AND item_name = 'Hot Metal' AND report_month = %s
-    """, [plant, report_month])
-
-    result = cursor.fetchone()
+    result = rp.value_row(cursor, "actual", report_month, plant, "Hot Metal")
     if result:
         variants['Plant Total HM'] = float(result[0])
 

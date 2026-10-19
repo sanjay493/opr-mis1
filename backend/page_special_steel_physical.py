@@ -37,6 +37,7 @@ Stored figures are '000 T; this page displays Tonnes (× 1000).
 """
 import db
 import hardcoded_loader
+from repo import production as rp
 
 HISTORY_START_FY_YEAR = 2016  # first history column (16-17); 14-15/15-16 dropped — overflowed the PDF table
 
@@ -107,43 +108,25 @@ def _growth(cur, prev):
 
 def _prod_sum(cur, table: str, months: list) -> dict:
     """{(plant_db, item): (sum(month_actual), n_months_present)} over `months`,
-    restricted to the special-steel plants + series items."""
+    restricted to the special-steel plants + series items.
+    table: repo.production measure ('actual' | 'abp')."""
     if not months:
         return {}
     plants = list(_PLANT_DB.values())
     items = list(_SERIES_ITEM.values())
-    ph_p = ",".join(["%s"] * len(plants))
-    ph_i = ",".join(["%s"] * len(items))
-    ph_m = ",".join(["%s"] * len(months))
-    cur.execute(
-        f"SELECT plant_name, item_name, COALESCE(SUM(month_actual), 0), "
-        f"       COUNT(DISTINCT report_month) "
-        f"FROM {table} "
-        f"WHERE plant_name IN ({ph_p}) AND item_name IN ({ph_i}) AND report_month IN ({ph_m}) "
-        f"  AND month_actual IS NOT NULL "
-        f"GROUP BY plant_name, item_name",
-        [*plants, *items, *months],
-    )
-    return {(p, i): (v, n) for p, i, v, n in cur.fetchall()}
+    return {(p, i): (v, n) for p, i, v, n in rp.plant_item_sum_counts(cur, table, plants, items, months)}
 
 
 def _prod_fy_sums(cur, table: str, from_fy_start: int) -> dict:
     """{(plant_db, item, fy_start): (sum(month_actual), n_months_present)} for
     every financial year (Apr–Mar) from `from_fy_start` onward, restricted to
     the special-steel plants + series items. One query, bucketed by FY in
-    Python — feeds the History columns and the Best-Achieved all-time max."""
+    Python — feeds the History columns and the Best-Achieved all-time max.
+    table: repo.production measure ('actual' | 'abp')."""
     plants = list(_PLANT_DB.values())
     items = list(_SERIES_ITEM.values())
-    ph_p = ",".join(["%s"] * len(plants))
-    ph_i = ",".join(["%s"] * len(items))
-    cur.execute(
-        f"SELECT report_month, plant_name, item_name, month_actual FROM {table} "
-        f"WHERE plant_name IN ({ph_p}) AND item_name IN ({ph_i}) "
-        f"  AND month_actual IS NOT NULL AND report_month >= %s",
-        [*plants, *items, f"{from_fy_start}-04"],
-    )
     agg = {}  # (plant, item, fy_start) -> [sum, {months}]
-    for rm, p, item, val in cur.fetchall():
+    for rm, p, item, val in rp.plant_item_rows_from(cur, table, plants, items, f"{from_fy_start}-04"):
         y, mo = int(rm[:4]), int(rm[5:7])
         fy_start = y if mo >= 4 else y - 1
         if fy_start < from_fy_start:
@@ -186,11 +169,11 @@ def generate_special_steel_physical(report_month: str) -> dict:
     conn = db.connect()
     cur = conn.cursor()
     try:
-        db_fy = _prod_fy_sums(cur, "production_table", 2000)
-        db_cur_fy_app = _prod_sum(cur, "production_plan_table", _fy_months(cur_start))
-        db_ytd_act = _prod_sum(cur, "production_table", ytd_months)
-        db_ytd_cply = _prod_sum(cur, "production_table", cply_months)
-        db_ytd_app = _prod_sum(cur, "production_plan_table", ytd_months)
+        db_fy = _prod_fy_sums(cur, "actual", 2000)
+        db_cur_fy_app = _prod_sum(cur, "abp", _fy_months(cur_start))
+        db_ytd_act = _prod_sum(cur, "actual", ytd_months)
+        db_ytd_cply = _prod_sum(cur, "actual", cply_months)
+        db_ytd_app = _prod_sum(cur, "abp", ytd_months)
     finally:
         conn.close()
 

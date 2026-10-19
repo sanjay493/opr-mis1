@@ -15,6 +15,7 @@ import os
 # A single-plant group sums only that plant; an aggregate sums all listed plants.
 from constants import ALL_PLANTS as _SAIL_8
 import db
+from repo import production as rp
 
 _PIG_IRON_CFG = {
     "display": "Pig Iron",
@@ -347,8 +348,6 @@ def _generate_rows_for_config(report_month: str, config: dict) -> list:
     show_all = config.get("show_all_rows", False)
 
     all_plants = sorted({p for _, pl in groups for p in pl})
-    phs = ",".join("%s" for _ in all_plants)
-
     min_act  = f"{cur_fy - 10}-04"
     max_act  = f"{cur_fy + 1}-03"
     plan_min = f"{cur_fy}-04"
@@ -357,14 +356,8 @@ def _generate_rows_for_config(report_month: str, config: dict) -> list:
     conn = db.connect()
     cur  = conn.cursor()
 
-    cur.execute(
-        f"SELECT plant_name, report_month, month_actual FROM production_table "
-        f"WHERE item_name=%s AND plant_name IN ({phs}) "
-        f"AND report_month>=%s AND report_month<=%s",
-        [db_item] + all_plants + [min_act, max_act],
-    )
     act_data = {p: {} for p in all_plants}
-    for plant, rm, val in cur.fetchall():
+    for plant, rm, val in rp.item_plants_range(cur, "actual", db_item, all_plants, min_act, max_act):
         if plant in act_data:
             act_data[plant][rm] = val
 
@@ -373,70 +366,41 @@ def _generate_rows_for_config(report_month: str, config: dict) -> list:
     if db_item == "Finished Steel":
         alias_in_query = [p for p in all_plants if p in _FS_ALIAS]
         if alias_in_query:
-            aphs = ",".join("%s" for _ in alias_in_query)
-            cur.execute(
-                f"SELECT plant_name, report_month, month_actual FROM production_table "
-                f"WHERE item_name='Saleable Steel' AND plant_name IN ({aphs}) "
-                f"AND report_month>=%s AND report_month<=%s",
-                alias_in_query + [min_act, max_act],
-            )
-            for plant, rm, val in cur.fetchall():
+            for plant, rm, val in rp.item_plants_range(cur, "actual", "Saleable Steel",
+                                                       alias_in_query, min_act, max_act):
                 if plant in act_data and rm not in act_data[plant]:
                     act_data[plant][rm] = val
 
-    cur.execute(
-        f"SELECT plant_name, report_month, month_actual FROM production_plan_table "
-        f"WHERE item_name=%s AND plant_name IN ({phs}) "
-        f"AND report_month>=%s AND report_month<=%s",
-        [db_item] + all_plants + [plan_min, plan_max],
-    )
     plan_data = {p: {} for p in all_plants}
-    for plant, rm, val in cur.fetchall():
+    for plant, rm, val in rp.item_plants_range(cur, "abp", db_item, all_plants, plan_min, plan_max):
         if plant in plan_data:
             plan_data[plant][rm] = val
 
     if db_item == "Finished Steel":
         alias_in_query = [p for p in all_plants if p in _FS_ALIAS]
         if alias_in_query:
-            aphs = ",".join("%s" for _ in alias_in_query)
-            cur.execute(
-                f"SELECT plant_name, report_month, month_actual FROM production_plan_table "
-                f"WHERE item_name='Saleable Steel' AND plant_name IN ({aphs}) "
-                f"AND report_month>=%s AND report_month<=%s",
-                alias_in_query + [plan_min, plan_max],
-            )
-            for plant, rm, val in cur.fetchall():
+            for plant, rm, val in rp.item_plants_range(cur, "abp", "Saleable Steel",
+                                                       alias_in_query, plan_min, plan_max):
                 if plant in plan_data and rm not in plan_data[plant]:
                     plan_data[plant][rm] = val
 
     sail_act_direct  = {}
     sail_plan_direct = {}
     if show_all:
-        cur.execute(
-            "SELECT report_month, month_actual FROM production_table "
-            "WHERE item_name=%s AND plant_name='SAIL' "
-            "AND report_month>=%s AND report_month<=%s",
-            [db_item, min_act, max_act],
-        )
-        sail_act_direct = {rm: val for rm, val in cur.fetchall() if val is not None}
-        cur.execute(
-            "SELECT report_month, month_actual FROM production_plan_table "
-            "WHERE item_name=%s AND plant_name='SAIL' "
-            "AND report_month>=%s AND report_month<=%s",
-            [db_item, plan_min, plan_max],
-        )
-        sail_plan_direct = {rm: val for rm, val in cur.fetchall() if val is not None}
+        sail_act_direct = {rm: val for rm, val in
+                           rp.item_plant_range(cur, "actual", db_item, "SAIL", min_act, max_act)
+                           if val is not None}
+        sail_plan_direct = {rm: val for rm, val in
+                            rp.item_plant_range(cur, "abp", db_item, "SAIL", plan_min, plan_max)
+                            if val is not None}
 
     conv_from = config.get("sail_conversion_from")
     sail_conv = {}
     if conv_from:
-        cur.execute(
-            "SELECT report_month, month_actual FROM production_table "
-            "WHERE item_name='Conversion' AND plant_name='SAIL' "
-            "AND report_month>=%s AND report_month<=%s",
-            [max(conv_from, min_act), max_act],
-        )
-        sail_conv = {rm: val for rm, val in cur.fetchall() if val is not None}
+        sail_conv = {rm: val for rm, val in
+                     rp.item_plant_range(cur, "actual", "Conversion", "SAIL",
+                                         max(conv_from, min_act), max_act)
+                     if val is not None}
 
     conn.close()
 

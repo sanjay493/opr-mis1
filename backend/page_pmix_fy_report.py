@@ -226,12 +226,12 @@ _SAIL_ROLLUP = [
 _FS_PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP"]
 
 
-def compute_pmix_fy_rows(cur, month, table="production_table"):
+def compute_pmix_fy_rows(cur, month, table="actual"):
     """One month's worth of rows for this report's "Pmix'yy-yy ACT" sheet,
     in display order (called once per FY month, then grouped into
     quarters/cumulative). Mapped here, independently of the JPC report's
     Pmix sheet, though the rows currently match it. table=
-    "production_plan_table" gives the same rows from the ABP (the Board
+    "abp" (production_plan_table) gives the same rows from the ABP (the Board
     Note's Annexure-V uses both). Each row:
         {"kind": "header"|"data", "label": str, "value": float|None, "bold": bool}
     """

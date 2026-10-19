@@ -34,6 +34,7 @@ Weight source per month:
 from typing import Dict, Optional
 
 import db as _db
+from repo import production as _rp
 from plant_registry import PLANT_UNITS
 
 # param_key -> (method, weight_basis). Add new parameters here.
@@ -152,12 +153,8 @@ def _plant_production(plant: str, item: str, months) -> Dict[str, float]:
     """{month: production} for a plant-level item from production_table."""
     conn = _db.connect()
     cur = conn.cursor()
-    ph = ",".join(["%s"] * len(months))
-    cur.execute(
-        f"SELECT report_month, month_actual FROM production_table "
-        f"WHERE plant_name=%s AND item_name=%s AND report_month IN ({ph})",
-        [plant, item, *months])
-    weights = {m: v for m, v in cur.fetchall() if v is not None and v > 0}
+    weights = {m: v for m, v in _rp.month_values(cur, "actual", plant, item, months)
+               if v is not None and v > 0}
     conn.close()
     return weights
 
@@ -188,17 +185,11 @@ def _unit_production(plant: str, unit: str, months,
 
     conn = _db.connect()
     cur = conn.cursor()
-    ph_m = ",".join(["%s"] * len(months))
-    ph_i = ",".join(["%s"] * len(candidates))
-    cur.execute(
-        f"SELECT report_month, month_actual FROM production_table "
-        f"WHERE plant_name=%s AND item_name IN ({ph_i}) AND report_month IN ({ph_m})",
-        [plant, *candidates, *months])
     # A month recorded as 0 is kept as weight 0 (the furnace was down), not
     # treated as missing: a weighted average then leaves that month out
     # instead of falling back to a simple average over every month.
     weights: Dict[str, float] = {}
-    for m, v in cur.fetchall():
+    for m, v in _rp.plant_items_month_values(cur, plant, candidates, months):
         if v is not None and v >= 0:
             weights[m] = max(v, weights.get(m, 0.0))
     conn.close()

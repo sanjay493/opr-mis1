@@ -24,6 +24,7 @@ import re
 import math
 import datetime as _dt
 import db
+from repo import production as rp
 
 
 # ── grade clubbing ──────────────────────────────────────────────────────────
@@ -265,21 +266,11 @@ def _fetch_cply_ytd(cur, cply_ytd_months, plant, product):
     return {(r[0], r[1]): r[2] for r in cur.fetchall()}
 
 def _get_prod(cur, month, plant, item):
-    cur.execute(
-        "SELECT month_actual FROM production_table"
-        " WHERE report_month=%s AND plant_name=%s AND item_name=%s",
-        (month, plant, item))
-    r = cur.fetchone()
+    r = rp.value_row(cur, "actual", month, plant, item)
     return r[0] if r and r[0] is not None else None
 
 def _get_prod_ytd(cur, ytd_months, plant, item):
-    ph = ",".join(["%s"] * len(ytd_months))
-    cur.execute(f"""
-        SELECT COALESCE(SUM(month_actual),0)
-        FROM production_table
-        WHERE report_month IN ({ph}) AND plant_name=%s AND item_name=%s
-    """, (*ytd_months, plant, item))
-    r = cur.fetchone()
+    r = rp.ytd_sum_row(cur, ytd_months, plant, item)
     return r[0] if r and r[0] else None
 
 
@@ -300,17 +291,7 @@ def _ssps_special_steel(cur, months, item="Saleable Steel Despatch"):
     despatch is what actually leaves the plant.
     production_table stores '000T; this page is in T -> ×1000, same
     convention as ss_cur/ss_abp_fy below."""
-    ph = ",".join(["%s"] * len(months))
-    cur.execute(f"""
-        SELECT COALESCE(SUM(month_actual),0) FROM production_table
-        WHERE report_month IN ({ph}) AND plant_name='SSP' AND item_name=%s
-    """, (*months, item))
-    total = (cur.fetchone() or [0])[0]
-    cur.execute(f"""
-        SELECT COALESCE(SUM(month_actual),0) FROM production_table
-        WHERE report_month IN ({ph}) AND plant_name='SSP' AND item_name='Finished Carbon Steel Despatch'
-    """, (*months,))
-    carbon = (cur.fetchone() or [0])[0]
+    total, carbon = rp.ssp_despatch_minus_carbon_000t(cur, months, item)
     return (total - carbon) * 1000
 
 

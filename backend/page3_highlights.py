@@ -29,6 +29,7 @@ import datetime as _dt
 
 import db
 from constants import ALL_PLANTS
+from repo import production as rp
 
 # Headline + bullet lines combined, across every section included. Tune this
 # to whatever actually fits in Page 3's fixed layout alongside the
@@ -98,29 +99,15 @@ def generate_page3_highlights(month: str) -> list:
     conn = db.connect()
     cur = conn.cursor()
     try:
-        ph_items, ph_plants = _ph(item_names), _ph(ALL_PLANTS)
-        cur.execute(f"""
-            SELECT item_name, report_month, SUM(month_actual) AS total
-            FROM production_table
-            WHERE item_name IN ({ph_items}) AND plant_name IN ({ph_plants})
-              AND report_month <= %s
-            GROUP BY item_name, report_month
-        """, item_names + ALL_PLANTS + [month])
         monthly = {n: {} for n in item_names}
-        for item, rm, total in cur.fetchall():
+        for item, rm, total in rp.item_month_totals_upto(cur, item_names, ALL_PLANTS, month):
             if total is None or item not in monthly:
                 continue
             monthly[item][rm] = monthly[item].get(rm, 0.0) + total
 
         # Finished Steel also includes the SAIL-level "Conversion" figure —
         # see db.get_sail_production_actual / _sail_conversion_actual.
-        cur.execute("""
-            SELECT report_month, SUM(month_actual) AS total
-            FROM production_table
-            WHERE item_name='Conversion' AND plant_name='SAIL' AND report_month <= %s
-            GROUP BY report_month
-        """, (month,))
-        for rm, total in cur.fetchall():
+        for rm, total in rp.sail_conversion_totals_upto(cur, month):
             if total is None:
                 continue
             monthly['Finished Steel'][rm] = monthly['Finished Steel'].get(rm, 0.0) + total

@@ -12,6 +12,7 @@ page per item with every plant group shown at once.
 """
 import db
 from constants import ALL_PLANTS
+from repo import production as rp
 
 SAIL_5 = ["BSP", "DSP", "RSP", "BSL", "ISP"]
 SAIL_8 = ALL_PLANTS  # ['BSP', 'DSP', 'RSP', 'BSL', 'ISP', 'ASP', 'SSP', 'VISL']
@@ -64,43 +65,25 @@ def get_trend_data(basis: str, group: str) -> dict:
     plants, group_label, use_sail_direct = resolved
 
     db_items = [it for it, _ in TREND_ITEMS]
-    phs_items = ",".join("%s" for _ in db_items)
-    phs_plants = ",".join("%s" for _ in plants)
 
     conn = db.connect()
     cur = conn.cursor()
-    cur.execute(
-        f"SELECT plant_name, item_name, report_month, month_actual FROM production_table "
-        f"WHERE item_name IN ({phs_items}) AND plant_name IN ({phs_plants})",
-        db_items + plants,
-    )
     data = {it: {} for it in db_items}
-    for plant, item, rm, val in cur.fetchall():
+    for plant, item, rm, val in rp.items_plants_all_months(cur, db_items, plants):
         if val is None:
             continue
         data[item].setdefault(plant, {})[rm] = val
 
     alias_plants = [p for p in plants if p in _FS_ALIAS_PLANTS]
     if alias_plants:
-        aphs = ",".join("%s" for _ in alias_plants)
-        cur.execute(
-            f"SELECT plant_name, report_month, month_actual FROM production_table "
-            f"WHERE item_name='Saleable Steel' AND plant_name IN ({aphs})",
-            alias_plants,
-        )
-        for plant, rm, val in cur.fetchall():
+        for plant, rm, val in rp.item_plants_all_months(cur, "Saleable Steel", alias_plants):
             if val is None:
                 continue
             data["Finished Steel"].setdefault(plant, {}).setdefault(rm, val)
 
     sail_direct = {}
     if use_sail_direct:
-        cur.execute(
-            f"SELECT item_name, report_month, month_actual FROM production_table "
-            f"WHERE item_name IN ({phs_items}) AND plant_name='SAIL'",
-            db_items,
-        )
-        for item, rm, val in cur.fetchall():
+        for item, rm, val in rp.items_plant_all_months(cur, db_items, "SAIL"):
             if val is not None:
                 sail_direct.setdefault(item, {})[rm] = val
     conn.close()

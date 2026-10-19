@@ -96,6 +96,7 @@ than silently removed.
 """
 import json as _json
 import db
+from repo import production as rp
 from bf_benchmark_registry import SAIL_BFS, PARAM_BY_KEY, KEY_ALIASES, compute_fuel_rate
 from page_key_parameters import (
     _COKE_UNITS, _SP_UNIT_MAP, _first_present_val, _round, _days_in_month,
@@ -208,13 +209,8 @@ def _production_table_tonnes(plant: str, months: list) -> dict:
     conn = db.connect()
     cur = conn.cursor()
     try:
-        ph = ",".join(["%s"] * len(months))
-        cur.execute(
-            f"SELECT report_month, month_actual FROM production_table "
-            f"WHERE plant_name=%s AND item_name=%s AND report_month IN ({ph})",
-            (plant, item, *months),
-        )
-        return {rm: v * 1000 for rm, v in cur.fetchall() if v is not None}
+        return {rm: v * 1000 for rm, v in rp.month_values(cur, "actual", plant, item, months)
+                if v is not None}
     finally:
         conn.close()
 
@@ -236,13 +232,7 @@ def _production_plan_annual_tonnes(plant: str, fy_months: list) -> float:
     conn = db.connect()
     cur = conn.cursor()
     try:
-        ph = ",".join(["%s"] * len(fy_months))
-        cur.execute(
-            f"SELECT SUM(month_actual) FROM production_plan_table "
-            f"WHERE plant_name=%s AND item_name=%s AND report_month IN ({ph})",
-            (plant, item, *fy_months),
-        )
-        r = cur.fetchone()
+        r = rp.sum_months_row(cur, "abp", plant, item, fy_months)
         return r[0] * 1000 if r and r[0] is not None else None
     finally:
         conn.close()

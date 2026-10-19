@@ -4002,19 +4002,15 @@ async def save_production_entry(request: ProductionEntryRequest):
             paired_item, total_item = pair
             paired_entry = entry_map.get(paired_item)
             for value_type, table, save_fn in (
-                ("actual_value", "production_table", db.save_production_actual),
-                ("plan_value", "production_plan_table", db.save_production_plan),
+                ("actual_value", "actual", db.save_production_actual),
+                ("plan_value", "abp", db.save_production_plan),
             ):
                 entered_val = getattr(entry, value_type)
                 if entered_val is None:
                     continue
                 if paired_entry is not None and getattr(paired_entry, value_type) is not None:
                     continue  # explicit value for both sides — respect it, don't derive
-                cur.execute(
-                    f"SELECT month_actual FROM {table} WHERE plant_name=%s AND report_month=%s AND item_name=%s",
-                    ("BSP", request.month, total_item),
-                )
-                row = cur.fetchone()
+                row = rp.value_row(cur, table, request.month, "BSP", total_item)
                 if row is None or row[0] is None:
                     continue
                 derived = round(row[0] - entered_val, 3)

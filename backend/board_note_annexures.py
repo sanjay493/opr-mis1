@@ -402,15 +402,15 @@ def annexure_iv(cur, P) -> dict:
     sums = {}
     for key, months, kinds in cols:
         if "plan" in kinds:
-            sums[(key, "plan")] = _pmix_sum(cur, months, "production_plan_table", cache)
+            sums[(key, "plan")] = _pmix_sum(cur, months, "abp", cache)
         if "act" in kinds or "cply" in kinds:
-            sums[(key, "act")] = _pmix_sum(cur, months, "production_table", cache)
+            sums[(key, "act")] = _pmix_sum(cur, months, "actual", cache)
 
     def val(key, kind, block, i):
         rows = sums.get((key, kind), {}).get(block) or []
         return rows[i][1] if i < len(rows) else None
 
-    ref = _pmix_sum(cur, [P["months"][0]], "production_table", cache)
+    ref = _pmix_sum(cur, [P["months"][0]], "actual", cache)
     groups = []
     for block, spec in _V_ROWS.items():
         rows_ref = ref.get(block) or []

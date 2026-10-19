@@ -23,6 +23,7 @@ from datetime import date
 
 import db
 import page_techno as pt
+from repo import production as rp
 
 PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP"]
 
@@ -80,9 +81,7 @@ def _signature(fy: int):
     try:
         t = conn.execute(f"SELECT COUNT(*), MAX(id), MAX(created_at) FROM techno_data WHERE report_month IN ({ph})",
                          months).fetchone()
-        p = conn.execute(f"SELECT COUNT(*), SUM(month_actual) FROM production_table "
-                         f"WHERE report_month IN ({ph}) AND item_name IN ('Hot Metal','Total Crude Steel')",
-                         months).fetchone()
+        p = rp.hm_cs_signature_row(conn.cursor(), months)
     finally:
         conn.close()
     return tuple(t) + (p[0], round(float(p[1] or 0), 3))

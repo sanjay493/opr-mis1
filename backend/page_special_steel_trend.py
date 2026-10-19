@@ -26,6 +26,7 @@ import calendar
 import datetime as _dt
 import math
 import db
+from repo import production as rp
 from page_special_steel import _ssps_special_steel
 
 _PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP"]
@@ -115,12 +116,7 @@ def _sum_actual(cur, months: list, entity: str):
     total, has_any = 0.0, False
     for p in _entity_plants(entity):
         if p in (_SSPS, "SSPs"):
-            cur.execute(f"""
-                SELECT COUNT(*) FROM production_table
-                WHERE report_month IN ({ph}) AND plant_name='SSP'
-                  AND item_name='Saleable Steel Despatch'
-            """, (*months,))
-            (c,) = cur.fetchone()
+            (c,) = rp.ssp_saleable_despatch_count_row(cur, months)
             if c > 0:
                 has_any = True
                 total += _ssps_special_steel(cur, months)
@@ -137,11 +133,7 @@ def _sum_actual(cur, months: list, entity: str):
 
 
 def _saleable_item(cur, month, plant, item_name):
-    cur.execute("""
-        SELECT month_actual FROM production_table
-        WHERE report_month=%s AND plant_name=%s AND item_name=%s
-    """, (month, plant, item_name))
-    r = cur.fetchone()
+    r = rp.value_row(cur, "actual", month, plant, item_name)
     return r[0] if r and r[0] is not None else None  # '000T
 
 

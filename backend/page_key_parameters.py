@@ -57,6 +57,7 @@ import calendar as _calendar
 import json as _json
 
 import db
+from repo import production as rp
 
 PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP"]
 
@@ -140,15 +141,8 @@ def _fetch_production(ytd_months: list) -> dict:
     conn = db.connect()
     cur = conn.cursor()
     try:
-        ph_p = ",".join(["%s"] * len(PLANTS))
-        ph_m = ",".join(["%s"] * len(ytd_months))
-        cur.execute(
-            f"SELECT plant_name, item_name, report_month, month_actual FROM production_table "
-            f"WHERE report_month IN ({ph_m}) AND plant_name IN ({ph_p})",
-            [*ytd_months, *PLANTS],
-        )
         out = {}
-        for p, item, m, v in cur.fetchall():
+        for p, item, m, v in rp.rows_for_months_plants(cur, "actual", list(ytd_months), list(PLANTS)):
             if v is not None:
                 out.setdefault((p, item), {})[m] = v
         return out

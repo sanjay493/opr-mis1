@@ -7,6 +7,7 @@ Used by the /api/production-records endpoint.
 """
 import db
 from page_production_fy_export import is_rate_item
+from repo import production as rp
 
 ITEMS = ['Total Sinter', 'Hot Metal', 'Total Crude Steel',
          'Saleable Steel', 'Pig Iron', 'Finished Steel']
@@ -34,10 +35,6 @@ _Q_LABELS = {1: 'Q1', 2: 'Q2', 3: 'Q3', 4: 'Q4'}
 _H_LABELS = {1: 'H1', 2: 'H2'}
 
 
-def _ph(lst):
-    return ','.join(['%s'] * len(lst))
-
-
 def _mon_label(ym):
     m = int(ym[5:7])
     return f"{_MON[m]}'{ym[2:4]}"
@@ -47,45 +44,9 @@ def _fy_label(fy_start):
     return f"{fy_start}-{str(fy_start + 1)[2:]}"
 
 
-def _fy_pos_expr():
-    """report_month's position within its financial year: 0 = April … 11 = March."""
-    return ("CASE WHEN CAST(SUBSTR(report_month,6,2) AS SIGNED) >= 4 "
-            "THEN CAST(SUBSTR(report_month,6,2) AS SIGNED) - 4 "
-            "ELSE CAST(SUBSTR(report_month,6,2) AS SIGNED) + 8 END")
-
-
 def _pos_to_mon(pos: int) -> int:
     """FY position (0 = Apr) -> calendar month number (1-12)."""
     return pos + 4 if pos < 9 else pos - 8
-
-
-def _fy_expr():
-    return ("CASE WHEN CAST(SUBSTR(report_month,6,2) AS SIGNED)>=4 "
-            "THEN CAST(SUBSTR(report_month,1,4) AS SIGNED) "
-            "ELSE CAST(SUBSTR(report_month,1,4) AS SIGNED)-1 END")
-
-
-def _q_expr():
-    return ("CASE "
-            "WHEN CAST(SUBSTR(report_month,6,2) AS SIGNED) IN (4,5,6)    THEN 1 "
-            "WHEN CAST(SUBSTR(report_month,6,2) AS SIGNED) IN (7,8,9)    THEN 2 "
-            "WHEN CAST(SUBSTR(report_month,6,2) AS SIGNED) IN (10,11,12) THEN 3 "
-            "ELSE 4 END")
-
-
-def _days_expr():
-    """Days in report_month's calendar month — used to weight rate items
-    (Oven Pushing (nos/day), COB#* battery counts) by days-in-month when
-    combining months into a quarter/half/FY/CY, instead of summing an
-    already-daily-average figure like it was tonnage."""
-    return ("CASE CAST(SUBSTR(report_month,6,2) AS SIGNED) "
-            "WHEN 1 THEN 31 WHEN 3 THEN 31 WHEN 5 THEN 31 WHEN 7 THEN 31 "
-            "WHEN 8 THEN 31 WHEN 10 THEN 31 WHEN 12 THEN 31 "
-            "WHEN 4 THEN 30 WHEN 6 THEN 30 WHEN 9 THEN 30 WHEN 11 THEN 30 "
-            "ELSE CASE WHEN CAST(SUBSTR(report_month,1,4) AS SIGNED) %% 4 = 0 "
-            "AND (CAST(SUBSTR(report_month,1,4) AS SIGNED) %% 100 != 0 "
-            "OR CAST(SUBSTR(report_month,1,4) AS SIGNED) %% 400 = 0) "
-            "THEN 29 ELSE 28 END END")
 
 
 def _cells_period_value(item, plant_cells):
@@ -99,29 +60,20 @@ def _cells_period_value(item, plant_cells):
     return sum(w[2] for w in plant_cells.values())
 
 
-def _bucketed_period_values(cur, items: list, where: str, args: list,
-                            bucket_exprs: list, required_months: int) -> dict:
+def _bucketed_period_values(cur, items: list, scope, bucket: str,
+                            required_months: int) -> dict:
     """{(item_name, *bucket): value} for every (item, period bucket) whose
     window has exactly `required_months` distinct report_months.
 
-    bucket_exprs: [(sql_expr, alias), ...] — the columns that define a period
-    (e.g. quarter number + fy_start, or just a calendar year). Values are
+    scope: rp.records_scope(...). bucket: the period columns, see
+    rp.records_bucket_cells ('quarter' -> (qnum, fy_start), 'half' ->
+    (hnum, fy_start), 'fy' -> (fy_start,), 'cy' -> (yr,)). Values are
     combined per `_cells_period_value` (rate-item aware)."""
     item_set = set(items)
-    sel = ", ".join(f"{e} AS {a}" for e, a in bucket_exprs)
-    grp = ", ".join(a for _e, a in bucket_exprs)
-    n = len(bucket_exprs)
-    cur.execute(f"""
-        SELECT item_name, {sel}, plant_name, report_month,
-               SUM(month_actual)   AS v,
-               MAX({_days_expr()}) AS days
-        FROM production_table
-        WHERE {where}
-        GROUP BY item_name, {grp}, plant_name, report_month
-    """, list(args))
 
     acc = {}  # (item, bucket_tuple) -> {'months': set, 'plants': {plant: [wsum, wdays, total]}}
-    for row in cur.fetchall():
+    for row in rp.records_bucket_cells(cur, scope, bucket):
+        n = len(row) - 5
         item, bucket = row[0], tuple(row[1:1 + n])
         plant, rm, v, days = row[1 + n], row[2 + n], row[3 + n], row[4 + n]
         if item not in item_set or v is None:
@@ -151,7 +103,7 @@ def _item_sort_key():
         return lambda n: n
 
 
-def _compute_group_records(cur, items: list, where: str, args: list) -> dict:
+def _compute_group_records(cur, items: list, scope) -> dict:
     """Best/2nd-best by calendar month, FY quarter, FY half, and top-5 FY /
     calendar-year, for one scope (a plant group or a single plant/unit) and
     item list — extracted out of generate_records()'s per-group loop body so
@@ -173,18 +125,8 @@ def _compute_group_records(cur, items: list, where: str, args: list) -> dict:
 
     # ── Calendar month: top 2 per (item, month number). The global
     #    best/2nd-best month are always contained in this set. ───────
-    cur.execute(f"""
-        SELECT item_name,
-               CAST(SUBSTR(report_month,6,2) AS SIGNED) AS mon_num,
-               report_month,
-               SUM(month_actual) AS total
-        FROM production_table
-        WHERE {where}
-        GROUP BY item_name, report_month
-        ORDER BY item_name, mon_num, total DESC
-    """, args)
     all_months = {}
-    for item, mon_num, rm, total in cur.fetchall():
+    for item, mon_num, rm, total in rp.records_calendar_month_totals(cur, scope):
         cal = grp['cal_months'].get(item)
         if cal is None or total is None:
             continue
@@ -209,13 +151,9 @@ def _compute_group_records(cur, items: list, where: str, args: list) -> dict:
     # plant's own days-in-month-weighted mean over the period — the SAIL
     # nos/day, not a per-plant average. Only complete periods (3 / 6 / 12
     # months present) count. ───────────────────────────────────────────
-    _H_EXPR = ("CASE WHEN CAST(SUBSTR(report_month,6,2) AS SIGNED) BETWEEN 4 AND 9 "
-               "THEN 1 ELSE 2 END")
-
     q_buckets = {}
     for (item, qnum, fy_start), value in _bucketed_period_values(
-            cur, items, where, args,
-            [(_q_expr(), 'qnum'), (_fy_expr(), 'fy_start')], 3).items():
+            cur, items, scope, 'quarter', 3).items():
         q_buckets.setdefault((item, qnum), []).append(
             {'period': _fy_label(fy_start), 'fy_start': fy_start, 'total': value})
     for (item, qnum), rows in q_buckets.items():
@@ -224,8 +162,7 @@ def _compute_group_records(cur, items: list, where: str, args: list) -> dict:
 
     h_buckets = {}
     for (item, hnum, fy_start), value in _bucketed_period_values(
-            cur, items, where, args,
-            [(_H_EXPR, 'hnum'), (_fy_expr(), 'fy_start')], 6).items():
+            cur, items, scope, 'half', 6).items():
         h_buckets.setdefault((item, hnum), []).append(
             {'period': _fy_label(fy_start), 'fy_start': fy_start, 'total': value})
     for (item, hnum), rows in h_buckets.items():
@@ -234,7 +171,7 @@ def _compute_group_records(cur, items: list, where: str, args: list) -> dict:
 
     fy_buckets = {}
     for (item, fy_start), value in _bucketed_period_values(
-            cur, items, where, args, [(_fy_expr(), 'fy_start')], 12).items():
+            cur, items, scope, 'fy', 12).items():
         fy_buckets.setdefault(item, []).append(
             {'period': _fy_label(fy_start), 'total': value})
     for item, rows in fy_buckets.items():
@@ -243,8 +180,7 @@ def _compute_group_records(cur, items: list, where: str, args: list) -> dict:
 
     cy_buckets = {}
     for (item, yr), value in _bucketed_period_values(
-            cur, items, where, args,
-            [('SUBSTR(report_month,1,4)', 'yr')], 12).items():
+            cur, items, scope, 'cy', 12).items():
         cy_buckets.setdefault(item, []).append({'period': yr, 'total': value})
     for item, rows in cy_buckets.items():
         rows.sort(key=lambda r: r['total'], reverse=True)
@@ -284,11 +220,7 @@ def _compute_group_records(cur, items: list, where: str, args: list) -> dict:
 def _latest_production_month(cur) -> str:
     """Latest month with production data — lets callers flag records that
     were set just now (period ending at/near this month)."""
-    cur.execute("""
-        SELECT MAX(report_month) FROM production_table
-        WHERE report_month REGEXP '^[0-9][0-9][0-9][0-9]-[0-9][0-9]$'
-    """)
-    return cur.fetchone()[0]
+    return rp.records_latest_month(cur)
 
 
 def generate_records() -> dict:
@@ -299,25 +231,20 @@ def generate_records() -> dict:
         result = {}
         groups = [('sail5', SAIL5), ('all8', ALL8)] + [(p, [p]) for p in ALL8]
         for group_name, plants in groups:
-            ph = _ph(plants)
             # Group scopes keep the summary items (unit-level items don't sum
             # meaningfully across plants); single-plant scopes cover every
             # unit/item that plant has ever reported (BF#1, SMS-2, URM …).
             if len(plants) == 1:
-                cur.execute(
-                    "SELECT DISTINCT item_name FROM production_table WHERE plant_name=%s",
-                    plants)
                 items = sorted(
-                    (r[0] for r in cur.fetchall() if r[0] not in LEGACY_ITEM_NAMES),
+                    (r[0] for r in rp.distinct_items(cur, "actual", plants[0])
+                     if r[0] not in LEGACY_ITEM_NAMES),
                     key=sort_key)
-                where = f"plant_name IN ({ph})"
-                args  = list(plants)
+                scope = rp.records_scope(plants)
             else:
                 items = ITEMS
-                where = f"item_name IN ({_ph(ITEMS)}) AND plant_name IN ({ph})"
-                args  = ITEMS + plants
+                scope = rp.records_scope(plants, ITEMS)
 
-            result[group_name] = _compute_group_records(cur, items, where, args)
+            result[group_name] = _compute_group_records(cur, items, scope)
 
         result['latest_month'] = _latest_production_month(cur)
         return result
@@ -359,7 +286,7 @@ _BEST_PERIOD_SCOPES = {
 }
 
 
-def _compute_best_period(cur, items: list, where: str, args: list,
+def _compute_best_period(cur, items: list, scope,
                          s_pos: int, e_pos: int, top_n: int) -> dict:
     """Top-`top_n` financial years by production over the FY-relative month
     window [s_pos, e_pos] (0 = Apr … 11 = Mar), per item. Only FYs whose
@@ -372,18 +299,9 @@ def _compute_best_period(cur, items: list, where: str, args: list,
     items with no complete window omitted."""
     window_len = e_pos - s_pos + 1
     item_set = set(items)
-    cur.execute(f"""
-        SELECT item_name, {_fy_expr()} AS fy_start, plant_name, report_month,
-               SUM(month_actual)     AS v,
-               MAX({_days_expr()})   AS days
-        FROM production_table
-        WHERE {where} AND ({_fy_pos_expr()}) BETWEEN %s AND %s
-        GROUP BY item_name, fy_start, plant_name, report_month
-    """, list(args) + [s_pos, e_pos])
-
     # (item, fy_start) -> {'months': set, 'plants': {plant: [wsum, wdays, total]}}
     acc: dict = {}
-    for item, fy_start, plant, rm, v, days in cur.fetchall():
+    for item, fy_start, plant, rm, v, days in rp.records_fy_window_cells(cur, scope, s_pos, e_pos):
         if item not in item_set or v is None:
             continue
         d = acc.setdefault((item, fy_start), {'months': set(), 'plants': {}})
@@ -444,18 +362,13 @@ def generate_best_period(start_mon: int, end_mon: int, scope: str = 'sail5',
     try:
         results = {}
         for col_key, plants in columns:
-            ph = _ph(plants)
             if items_mode == 'all':
-                cur.execute(
-                    f"SELECT DISTINCT item_name FROM production_table WHERE plant_name IN ({ph})",
-                    list(plants))
-                items = sorted((r[0] for r in cur.fetchall()), key=sort_key)
+                items = sorted((r[0] for r in rp.records_plants_items_in(cur, plants)), key=sort_key)
             else:
                 items = MAJOR_ITEMS
-            where = f"item_name IN ({_ph(items)}) AND plant_name IN ({ph})"
-            args = list(items) + list(plants)
+            scope = rp.records_scope(plants, items)
             results[col_key] = _compute_best_period(
-                cur, items, where, args, s_pos, e_pos, top_n)
+                cur, items, scope, s_pos, e_pos, top_n)
 
         window_months = [_MON[_pos_to_mon(p)] for p in range(s_pos, e_pos + 1)]
         return {
@@ -492,13 +405,8 @@ def generate_group_records(items: list = HIGHLIGHT_ITEMS, upto_month: str = None
     try:
         result = {}
         for group_name, plants in [('sail5', SAIL5), ('all8', ALL8)]:
-            ph = _ph(plants)
-            where = f"item_name IN ({_ph(items)}) AND plant_name IN ({ph})"
-            args  = items + plants
-            if upto_month:
-                where += " AND report_month <= %s"
-                args = args + [upto_month]
-            result[group_name] = _compute_group_records(cur, items, where, args)
+            scope = rp.records_scope(plants, items, upto_month)
+            result[group_name] = _compute_group_records(cur, items, scope)
 
         latest = _latest_production_month(cur)
         result['latest_month'] = min(latest, upto_month) if (latest and upto_month) else (upto_month or latest)

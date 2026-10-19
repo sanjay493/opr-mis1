@@ -35,6 +35,7 @@ from openpyxl.utils import get_column_letter
 
 import db
 from constants import FIVE_PLANTS as _5P
+from repo import production as rp
 from page_techno import generate_summary_te_table
 
 _MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -133,21 +134,16 @@ def _sales_note(cur, month):
 # ── Table B: Production ─────────────────────────────────────────────────
 
 def _p_one(cur, table, plant, item, month):
-    tbl = "production_table" if table == "act" else "production_plan_table"
-    cur.execute(f"SELECT month_actual FROM {tbl} WHERE report_month=%s AND plant_name=%s AND item_name=%s",
-                (month, plant, item))
-    r = cur.fetchone()
+    tbl = "actual" if table == "act" else "abp"
+    r = rp.value_row(cur, tbl, month, plant, item)
     return r[0] if r and r[0] is not None else None
 
 
 def _p_sum(cur, table, plants, item, month):
     if not plants:
         return None
-    tbl = "production_table" if table == "act" else "production_plan_table"
-    phs = ",".join("%s" for _ in plants)
-    cur.execute(f"SELECT SUM(month_actual) FROM {tbl} WHERE report_month=%s AND plant_name IN ({phs}) AND item_name=%s",
-                [month] + list(plants) + [item])
-    r = cur.fetchone()
+    tbl = "actual" if table == "act" else "abp"
+    r = rp.sum_plants_row(cur, tbl, month, plants, item)
     return r[0] if r and r[0] is not None else None
 
 

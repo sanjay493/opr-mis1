@@ -19,6 +19,7 @@ from openpyxl.utils import get_column_letter
 
 import db
 from constants import FIVE_PLANTS as _5P
+from repo import production as rp
 
 _MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -34,24 +35,21 @@ def _mlabel(ym: str) -> str:
 _FS_ALIAS = frozenset({"SSP", "VISL"})   # no dedicated "Finished Steel" row
 
 
-# table: production_table (actuals) or mou_plan_table (MoU targets) --
-# both keyed by report_month / plant_name / item_name, in '000 T.
-_TABLES = ("production_table", "mou_plan_table", "production_plan_table")
+# table: a repo.production measure -- "actual" (production_table), "mou"
+# (mou_plan_table, MoU targets) or "abp" (production_plan_table) -- all keyed
+# by report_month / plant_name / item_name, in '000 T.
+_TABLES = ("actual", "mou", "abp")
 
 
-def _one(cur, plant, item, month, table="production_table"):
+def _one(cur, plant, item, month, table="actual"):
     if not item:
         return None
     assert table in _TABLES
-    cur.execute(
-        f"SELECT month_actual FROM {table} WHERE plant_name=%s AND item_name=%s AND report_month=%s",
-        (plant, item, month),
-    )
-    r = cur.fetchone()
+    r = rp.value_row(cur, table, month, plant, item)
     return r[0] if r and r[0] is not None else None
 
 
-def _one_of(cur, plant, items, month, table="production_table"):
+def _one_of(cur, plant, items, month, table="actual"):
     """First matching item_name that has a value — for concepts stored under
     different item_names depending which extractor version wrote them (e.g.
     ASP's Plates: 'PLATES' vs 'Plate Mill')."""
@@ -62,7 +60,7 @@ def _one_of(cur, plant, items, month, table="production_table"):
     return None
 
 
-def _fs(cur, plant, month, table="production_table"):
+def _fs(cur, plant, month, table="actual"):
     """'Finished Steel', SSP/VISL falling back to Saleable Steel (matches
     page4.py's convention — those two plants have no dedicated FS row)."""
     v = _one(cur, plant, "Finished Steel", month, table)
@@ -71,7 +69,7 @@ def _fs(cur, plant, month, table="production_table"):
     return v
 
 
-def _sum(cur, combos, month, table="production_table"):
+def _sum(cur, combos, month, table="actual"):
     """combos: [(plant, item), ...]. Sums whatever is found; None if nothing found."""
     total, found = 0.0, False
     for plant, item in combos:
@@ -462,9 +460,9 @@ _MOU_PLANT_ROWS = {
 }
 
 
-def _mou_value(cur, db_item, plant, month, table="production_table"):
+def _mou_value(cur, db_item, plant, month, table="actual"):
     """One MoU-sheet cell: the actual (production_table) or, with
-    table="mou_plan_table", the MoU target, under the same plant rules."""
+    table="mou" (mou_plan_table), the MoU target, under the same plant rules."""
     if plant == "5 Plants":
         # None of the 5 core plants need the SSP/VISL Finished-Steel alias.
         return _sum(cur, [(p, db_item) for p in _5P], month, table)
@@ -510,7 +508,7 @@ def _build_mou_sheet(ws, cur, month, cply_month):
         first = True
         for plant in _MOU_PLANT_ROWS[db_item]:
             act = _mou_value(cur, db_item, plant, month)
-            mou = _mou_value(cur, db_item, plant, month, "mou_plan_table")
+            mou = _mou_value(cur, db_item, plant, month, "mou")
             mou = None if mou is None else round(mou, 3)
             cply = _mou_value(cur, db_item, plant, cply_month)
             bold = plant in ("5 Plants", "SAIL")

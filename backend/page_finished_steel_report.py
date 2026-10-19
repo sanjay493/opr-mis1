@@ -15,6 +15,7 @@ import io
 
 import db
 from constants import ALL_PLANTS as _SAIL_8
+from repo import production as rp
 
 _PLANT_ORDER = ["BSP", "DSP", "RSP", "BSL", "ISP", "ASP", "SSP", "VISL", "SAIL"]
 
@@ -54,26 +55,10 @@ def _item_pivot(item: str, months: list = None) -> dict:
     added). Items differ in how many units report: Oven Pushing / Sinter /
     Hot Metal / Pig Iron ~5, Crude Steel ~7, Finished / Saleable Steel ~8."""
     aliases = _ITEM_ALIASES[resolve_item(item)]
-    alias_phs = ",".join("%s" for _ in aliases)
     conn = db.connect()
     cur = conn.cursor()
     try:
-        if months is not None:
-            month_phs = ",".join("%s" for _ in months)
-            cur.execute(f"""
-                SELECT report_month, plant_name, item_name, month_actual
-                FROM production_table
-                WHERE item_name IN ({alias_phs}) AND report_month IN ({month_phs})
-                ORDER BY report_month
-            """, list(aliases) + list(months))
-        else:
-            cur.execute(f"""
-                SELECT report_month, plant_name, item_name, month_actual
-                FROM production_table
-                WHERE item_name IN ({alias_phs})
-                ORDER BY report_month
-            """, list(aliases))
-        rows = cur.fetchall()
+        rows = rp.item_alias_rows(cur, aliases, months)
     finally:
         conn.close()
 
@@ -121,16 +106,10 @@ def list_finished_steel_fys(item: str = DEFAULT_ITEM) -> list:
     """Financial years that have at least one figure for `item`.
     -> [{"fy_start": 2026, "label": "2026-27"}, ...] (newest first)."""
     aliases = _ITEM_ALIASES[resolve_item(item)]
-    alias_phs = ",".join("%s" for _ in aliases)
     conn = db.connect()
     cur = conn.cursor()
-    cur.execute(f"""
-        SELECT DISTINCT report_month FROM production_table
-        WHERE item_name IN ({alias_phs})
-          AND report_month REGEXP '^[0-9][0-9][0-9][0-9]-[0-9][0-9]$'
-    """, list(aliases))
     fy_starts = set()
-    for (m,) in cur.fetchall():
+    for (m,) in rp.item_alias_report_months(cur, aliases):
         year, month = int(m[:4]), int(m[5:7])
         fy_starts.add(year if month >= 4 else year - 1)
     conn.close()

@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 import board_note_common as bnc
 import db
 import page4
+from repo import production as rp
 import page_secretary_review_texts as pst
 import page_techno as pt
 import secretary_review_pptx as sp
@@ -33,9 +34,7 @@ def latest_month():
     conn = db.connect()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT MAX(report_month) FROM production_table "
-                    "WHERE item_name='Hot Metal' AND month_actual IS NOT NULL")
-        row = cur.fetchone()
+        row = rp.latest_hot_metal_month_row(cur)
         return row[0] if row and row[0] else None
     finally:
         conn.close()
@@ -49,9 +48,7 @@ def plan_basis(cur, month):
     """'mou' when mou_plan_table has rows for the month for every deck item,
     else 'app'."""
     try:
-        cur.execute("SELECT DISTINCT item_name FROM mou_plan_table "
-                    "WHERE report_month=%s AND month_actual IS NOT NULL", (month,))
-        have = {r[0] for r in cur.fetchall()}
+        have = {r[0] for r in rp.mou_items_for_month(cur, month)}
     except Exception:
         return "app"
     return "mou" if all(db_item in have for _, db_item in ITEMS) else "app"
