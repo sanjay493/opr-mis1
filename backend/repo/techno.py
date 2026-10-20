@@ -955,3 +955,43 @@ def plan_rows_for_fy(cur, fy):
         (fy,)
     )
     return cur.fetchall()
+
+
+# ── Registry tables (plant_registry.seed_plant_registry,
+#    techno_registry.migrate_units; neither is called anywhere, and these
+#    tables are not in the MySQL schema) ─────────────────────────────────────
+
+def insert_ignore_plant_unit(cur, plant_code, unit_type, unit_name, display_label, is_shop, sort_order):
+    """INSERT IGNORE one plant_units row on the caller's cursor; the caller
+    reads cur.rowcount and commits. plant_registry.seed_plant_registry."""
+    cur.execute("""
+            INSERT IGNORE INTO plant_units
+                (plant_code, unit_type, unit_name, display_label, is_shop, is_active, sort_order)
+            VALUES (%s, %s, %s, %s, %s, 1, %s)
+        """, (plant_code, unit_type, unit_name, display_label, is_shop, sort_order))
+
+
+def insert_ignore_param_type(cur, unit_type, param_name, unit_of_meas, agg_method, sort_order):
+    """INSERT IGNORE one techno_param_types row on the caller's cursor; the
+    caller reads cur.rowcount and commits. plant_registry.seed_plant_registry."""
+    cur.execute("""
+            INSERT IGNORE INTO techno_param_types
+                (unit_type, param_name, unit_of_meas, agg_method, sort_order)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (unit_type, param_name, unit_of_meas, agg_method, sort_order))
+
+
+def param_master_unit_rows(cur):
+    """fetchall() of (param_id, group_code, section, unit) from
+    techno_param_master. techno_registry.migrate_units."""
+    cur.execute("SELECT param_id, group_code, section, unit FROM techno_param_master")
+    return cur.fetchall()
+
+
+def update_param_master_unit(cur, unit, param_id):
+    """Set one techno_param_master row's unit on the caller's cursor; the
+    caller commits. techno_registry.migrate_units."""
+    cur.execute(
+                "UPDATE techno_param_master SET unit=%s WHERE param_id=%s",
+                (unit, param_id),
+            )

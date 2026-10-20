@@ -8,6 +8,7 @@ unit type with their aggregation rules for computing shop averages.
 Designed for scalability: adding a new plant or a new unit is a single row here
 and the rest of the system picks it up automatically.
 """
+from repo import techno as rt  # seed_plant_registry's SQL
 
 # ---------------------------------------------------------------------------
 # Unit type codes (short, stable identifiers used as DB keys)
@@ -243,20 +244,12 @@ def seed_plant_registry(conn):
             display_label = f"{plant_code} Plant Shop"
         else:
             display_label = f"{plant_code} {unit_name}"
-        cur.execute("""
-            INSERT IGNORE INTO plant_units
-                (plant_code, unit_type, unit_name, display_label, is_shop, is_active, sort_order)
-            VALUES (%s, %s, %s, %s, %s, 1, %s)
-        """, (plant_code, unit_type, unit_name, display_label, is_shop, sort_order))
+        rt.insert_ignore_plant_unit(cur, plant_code, unit_type, unit_name, display_label, is_shop, sort_order)
         units_added += cur.rowcount
 
     param_types_added = 0
     for unit_type, param_name, unit_of_meas, agg_method, sort_order in PARAM_TYPES:
-        cur.execute("""
-            INSERT IGNORE INTO techno_param_types
-                (unit_type, param_name, unit_of_meas, agg_method, sort_order)
-            VALUES (%s, %s, %s, %s, %s)
-        """, (unit_type, param_name, unit_of_meas, agg_method, sort_order))
+        rt.insert_ignore_param_type(cur, unit_type, param_name, unit_of_meas, agg_method, sort_order)
         param_types_added += cur.rowcount
 
     conn.commit()

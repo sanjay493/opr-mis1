@@ -553,3 +553,36 @@ def update_worklog_entry(conn, fields, values, entry_id):
 def delete_worklog_entry(conn, entry_id):
     """The cursor (rowcount); the caller commits."""
     return conn.execute("DELETE FROM daily_work_log WHERE id=%s", (entry_id,))
+
+
+# ── Admin backup / restore (api_admin_backup), on the caller's cursor ───────
+# The named-lock pair runs on the dedicated connection api_admin_backup
+# holds for the whole backup / restore: GET_LOCK is connection-scoped, so the
+# lock lives exactly as long as that connection (released explicitly, then
+# the connection is closed). Both statements mark the connection non-poolable
+# in dbengine, as before.
+
+def table_name_rows(cur):
+    """fetchall() of SHOW TABLES. api_admin_backup._live_table_counts."""
+    cur.execute("SHOW TABLES")
+    return cur.fetchall()
+
+
+def table_count_row(cur, table):
+    """fetchone() of (COUNT(*),) for one table (a name SHOW TABLES returned).
+    api_admin_backup._live_table_counts."""
+    cur.execute(f"SELECT COUNT(*) FROM `{table}`")
+    return cur.fetchone()
+
+
+def get_lock_row(cur, name):
+    """fetchone() of (GET_LOCK(name, 0),): 1 when this connection now holds
+    the lock. api_admin_backup._acquire_admin_lock."""
+    cur.execute("SELECT GET_LOCK(%s, 0)", (name,))
+    return cur.fetchone()
+
+
+def release_lock(cur, name):
+    """RELEASE_LOCK(name) on the holding connection.
+    api_admin_backup._release_admin_lock."""
+    cur.execute("SELECT RELEASE_LOCK(%s)", (name,))

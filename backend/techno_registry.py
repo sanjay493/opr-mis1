@@ -12,6 +12,7 @@ Usage in extractors:
 
 Run migrate_units(conn) once after adding this module to fix existing DB rows.
 """
+from repo import techno as rt  # migrate_units' SQL
 
 # ── Canonical unit strings ────────────────────────────────────────────────────
 # Import UNIT and use UNIT.KG_THM etc. — never write raw unit strings.
@@ -208,17 +209,13 @@ def migrate_units(conn) -> int:
     Returns the number of rows updated.
     """
     cur = conn.cursor()
-    cur.execute("SELECT param_id, group_code, section, unit FROM techno_param_master")
-    rows = cur.fetchall()
+    rows = rt.param_master_unit_rows(cur)
 
     updated = 0
     for param_id, group_code, section, raw_unit in rows:
         canon = canonical_unit(raw_unit or "", group_code, section)
         if canon != (raw_unit or ""):
-            cur.execute(
-                "UPDATE techno_param_master SET unit=%s WHERE param_id=%s",
-                (canon, param_id),
-            )
+            rt.update_param_master_unit(cur, canon, param_id)
             updated += 1
 
     conn.commit()

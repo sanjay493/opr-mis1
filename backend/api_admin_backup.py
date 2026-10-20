@@ -29,6 +29,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 import auth
 import db
+from repo import ops as rop
 
 router = APIRouter(prefix="/api/admin/backups", tags=["admin-backup"], dependencies=[Depends(auth.require_admin)])
 
@@ -233,12 +234,10 @@ def _live_table_counts() -> dict:
     conn = db.connect()
     try:
         cur = conn.cursor()
-        cur.execute("SHOW TABLES")
-        tables = [r[0] for r in cur.fetchall()]
+        tables = [r[0] for r in rop.table_name_rows(cur)]
         counts = {}
         for t in tables:
-            cur.execute(f"SELECT COUNT(*) FROM `{t}`")
-            counts[t] = cur.fetchone()[0]
+            counts[t] = rop.table_count_row(cur, t)[0]
         return counts
     finally:
         conn.close()
@@ -274,8 +273,7 @@ def _acquire_admin_lock():
     RELEASE_LOCK before that)."""
     conn = db.connect()
     cur = conn.cursor()
-    cur.execute("SELECT GET_LOCK(%s, 0)", (_LOCK_NAME,))
-    if cur.fetchone()[0] != 1:
+    if rop.get_lock_row(cur, _LOCK_NAME)[0] != 1:
         conn.close()
         raise HTTPException(
             status_code=409,
@@ -287,7 +285,7 @@ def _acquire_admin_lock():
 def _release_admin_lock(conn) -> None:
     try:
         cur = conn.cursor()
-        cur.execute("SELECT RELEASE_LOCK(%s)", (_LOCK_NAME,))
+        rop.release_lock(cur, _LOCK_NAME)
     finally:
         conn.close()
 
