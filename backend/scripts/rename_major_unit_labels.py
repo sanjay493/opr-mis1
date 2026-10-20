@@ -18,6 +18,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import db
+from repo import misc as rmisc
 
 # (plant_code, old_label, new_label)
 RENAMES = [
@@ -45,19 +46,9 @@ def main():
     cur = conn.cursor()
     try:
         for plant_code, old_label, new_label in RENAMES:
-            cur.execute(
-                "SELECT value, record_date, updated_by, updated_at "
-                "FROM major_unit_daily_record WHERE plant_code = %s AND unit_label = %s",
-                (plant_code, new_label),
-            )
-            existing_new = cur.fetchone()
+            existing_new = rmisc.major_unit_daily_label_row(cur, plant_code, new_label)
             if existing_new is not None:
-                cur.execute(
-                    "SELECT value, record_date, updated_by, updated_at "
-                    "FROM major_unit_daily_record WHERE plant_code = %s AND unit_label = %s",
-                    (plant_code, old_label),
-                )
-                existing_old = cur.fetchone()
+                existing_old = rmisc.major_unit_daily_label_row(cur, plant_code, old_label)
                 if existing_old is None:
                     print(f"{plant_code}: '{new_label}' already renamed, nothing under "
                           f"'{old_label}' left — OK")
@@ -65,11 +56,7 @@ def main():
                     print(f"{plant_code}: CONFLICT — both '{old_label}' {existing_old} "
                           f"and '{new_label}' {existing_new} exist. Skipped; resolve by hand.")
                 continue
-            cur.execute(
-                "UPDATE major_unit_daily_record SET unit_label = %s "
-                "WHERE plant_code = %s AND unit_label = %s",
-                (new_label, plant_code, old_label),
-            )
+            rmisc.rename_major_unit_label(cur, new_label, plant_code, old_label)
             conn.commit()
             print(f"{plant_code}: '{old_label}' -> '{new_label}' "
                   f"({cur.rowcount} row(s))")

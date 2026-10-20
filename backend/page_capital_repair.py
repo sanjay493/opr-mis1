@@ -19,6 +19,7 @@ import re
 from datetime import date, timedelta
 
 import db
+from repo import breakdown as rbd
 
 CR_PAGES = {
     36: "BSP",
@@ -173,14 +174,7 @@ def generate_capital_repair(plant: str, fy: str = "2026-27", report_month: str |
     conn = db.connect()
     cur = conn.cursor()
     try:
-        cur.execute("""
-            SELECT id, shop, equipment, activity, schedule_days, period, actual,
-                   actual_start, actual_end, actual_ongoing
-            FROM capital_repair_table
-            WHERE plant=%s AND fy=%s
-            ORDER BY sort_order ASC, id ASC
-        """, (plant, fy))
-        rows = cur.fetchall()
+        rows = rbd.cr_report_rows(cur, plant, fy)
 
         # Sections are runs of CONSECUTIVE rows sharing a shop, in the
         # user's saved order (the data-entry page can reorder rows by drag
@@ -310,14 +304,7 @@ def generate_capital_repair_calendar(plant: str, fy: str) -> dict:
     conn = db.connect()
     cur = conn.cursor()
     try:
-        cur.execute("""
-            SELECT shop, equipment, activity, period, actual,
-                   actual_start, actual_end, actual_ongoing, schedule_days
-            FROM capital_repair_table
-            WHERE plant=%s AND fy=%s
-            ORDER BY sort_order ASC, id ASC
-        """, (plant, fy))
-        rows = cur.fetchall()
+        rows = rbd.cr_calendar_rows(cur, plant, fy)
     finally:
         conn.close()
 

@@ -38,6 +38,7 @@ import json
 import re
 
 import db
+from repo import misc as rmisc
 
 # PDF's Table 1a item label -> production_table's own item_name.
 _ITEM_DB_NAME = {
@@ -57,12 +58,7 @@ def _load_row(report_month: str):
     conn = db.connect()
     cur = conn.cursor()
     try:
-        cur.execute("""
-            SELECT report_month, data_json, source_file FROM steel_sector_performance_table
-            WHERE report_month <= %s
-            ORDER BY report_month DESC LIMIT 1
-        """, (report_month,))
-        row = cur.fetchone()
+        row = rmisc.steel_sector_latest_row(cur, report_month)
     finally:
         conn.close()
     if not row:
@@ -132,8 +128,7 @@ def _series_from_archive(table_key: str, label_match, floor_month: str) -> dict:
     conn = db.connect()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT data_json FROM steel_sector_performance_table ORDER BY report_month")
-        archives = [json.loads(r[0]) for r in cur.fetchall() if r[0]]
+        archives = [json.loads(r[0]) for r in rmisc.steel_sector_data_json_rows(cur) if r[0]]
     finally:
         conn.close()
 

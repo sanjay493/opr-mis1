@@ -18,6 +18,7 @@ import re
 import board_note_common as bnc
 import db
 import secretary_review_text as srt
+from repo import breakdown as rbd
 from secretary_review_layout import BD_GROUPS, BD_PLANTS, BLOCKS, PLANTS, period_labels
 
 BD_MIN_HOURS = 48
@@ -176,25 +177,15 @@ def cr_line(row, upto):
 
 def _fetch_breakdowns(cur, month):
     s, e = _bounds(month)
-    cur.execute(
-        "SELECT plant, unit_type, unit_name, start_ts, end_ts, is_ongoing, cause, hours_lost_override "
-        "FROM breakdown_table WHERE capital_repair_id IS NULL AND start_ts < %s "
-        "AND (end_ts IS NULL OR end_ts >= %s OR is_ongoing = 1)",
-        (e.strftime("%Y-%m-%d"), s.strftime("%Y-%m-%d")),
-    )
+    rows = rbd.open_breakdown_rows(cur, e.strftime("%Y-%m-%d"), s.strftime("%Y-%m-%d"))
     cols = ("plant", "unit_type", "unit_name", "start_ts", "end_ts", "is_ongoing", "cause", "hours_lost_override")
-    return [dict(zip(cols, r)) for r in cur.fetchall()]
+    return [dict(zip(cols, r)) for r in rows]
 
 
 def _fetch_cr(cur, plant, fy_label, upto):
-    cur.execute(
-        "SELECT shop, equipment, actual_start, actual_end, actual_ongoing FROM capital_repair_table "
-        "WHERE plant=%s AND fy=%s AND actual_start IS NOT NULL AND actual_start <> '' AND actual_start <= %s "
-        "ORDER BY actual_start",
-        (plant, fy_label, upto.isoformat()),
-    )
+    rows = rbd.cr_started_rows(cur, plant, fy_label, upto.isoformat())
     cols = ("shop", "equipment", "actual_start", "actual_end", "actual_ongoing")
-    return [dict(zip(cols, r)) for r in cur.fetchall()]
+    return [dict(zip(cols, r)) for r in rows]
 
 
 def highlight_text(cur, scope, labels):

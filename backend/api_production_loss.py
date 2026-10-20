@@ -27,7 +27,9 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 
 import db as _db
+from repo import breakdown as rbd
 from repo import capacity as _cap_repo
+from repo import misc as rmisc
 from repo import production as rp
 from production_loss_analysis import ITEM_NAMES, MILL_ALIASES, build_report, _norm
 
@@ -50,15 +52,10 @@ def _production_value(measure: str, plant: str, month: str, item_name: str) -> O
 def _cr_rows_for_plant(plant: str):
     conn = _db.connect()
     try:
-        cur = conn.execute("""
-            SELECT id, shop, equipment, activity, unit_type, unit_name, sms_subtag,
-                   actual_start, actual_end, actual_ongoing, planned_days, period, schedule_days
-            FROM capital_repair_table
-            WHERE plant=%s
-        """, (plant,))
+        rows = rbd.cr_rows_for_plant(conn, plant)
         cols = ["id", "shop", "equipment", "activity", "unit_type", "unit_name", "sms_subtag",
                 "actual_start", "actual_end", "actual_ongoing", "planned_days", "abp_period", "schedule_days"]
-        return [dict(zip(cols, r)) for r in cur.fetchall()]
+        return [dict(zip(cols, r)) for r in rows]
     finally:
         conn.close()
 
@@ -66,15 +63,10 @@ def _cr_rows_for_plant(plant: str):
 def _bd_rows_for_plant(plant: str):
     conn = _db.connect()
     try:
-        cur = conn.execute("""
-            SELECT id, unit_type, unit_name, sms_subtag, start_ts, end_ts, is_ongoing, cause,
-                   hours_lost_override, capital_repair_id
-            FROM breakdown_table
-            WHERE plant=%s
-        """, (plant,))
+        rows = rbd.breakdown_rows_for_plant(conn, plant)
         cols = ["id", "unit_type", "unit_name", "sms_subtag", "start_ts", "end_ts", "is_ongoing", "cause",
                 "hours_lost_override", "capital_repair_id"]
-        return [dict(zip(cols, r)) for r in cur.fetchall()]
+        return [dict(zip(cols, r)) for r in rows]
     finally:
         conn.close()
 
@@ -101,8 +93,7 @@ def _unit_weights(plant: str) -> dict:
     plant storing them in '000 T, like ISP, works the same)."""
     conn = _db.connect()
     try:
-        rows = conn.execute("SELECT unit_label, value FROM major_unit_daily_record WHERE plant_code=%s",
-                            (plant,)).fetchall()
+        rows = rmisc.major_unit_daily_values(conn, plant)
     finally:
         conn.close()
     out = {"BF": {}, "SMS": {}, "MILL": {}}

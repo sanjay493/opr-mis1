@@ -24,6 +24,7 @@ from pydantic import BaseModel
 import bd_cr_link
 import db as _db
 from plant_registry import UNIT_TYPES, is_valid_unit
+from repo import breakdown as rbd
 
 router = APIRouter(prefix="/api/breakdown", tags=["breakdown"])
 
@@ -60,10 +61,7 @@ def _actual_crs(plant: str) -> list:
     """The plant's capital repairs that have actual dates (linkable)."""
     conn = _db.connect()
     try:
-        cur = conn.execute(
-            f"SELECT {', '.join(_CR_COLS)} FROM capital_repair_table "
-            "WHERE plant=%s AND actual_start IS NOT NULL AND actual_start<>''", (plant,))
-        return [dict(zip(_CR_COLS, r)) for r in cur.fetchall()]
+        return [dict(zip(_CR_COLS, r)) for r in rbd.cr_actual_rows(conn, _CR_COLS, plant)]
     finally:
         conn.close()
 
@@ -73,7 +71,7 @@ def _validate_cr_link(plant: str, cr_id: Optional[int]):
         return
     conn = _db.connect()
     try:
-        row = conn.execute("SELECT plant FROM capital_repair_table WHERE id=%s", (cr_id,)).fetchone()
+        row = rbd.cr_plant_row(conn, cr_id)
     finally:
         conn.close()
     if row is None:

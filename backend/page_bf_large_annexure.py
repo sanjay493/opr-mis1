@@ -96,6 +96,7 @@ than silently removed.
 """
 import json as _json
 import db
+from repo import misc as rmisc
 from repo import production as rp
 from repo import techno as rt
 from bf_benchmark_registry import SAIL_BFS, PARAM_BY_KEY, KEY_ALIASES, compute_fuel_rate
@@ -417,11 +418,7 @@ def _sail_static_working_volume(plant, unit):
     conn = db.connect()
     cur = conn.cursor()
     try:
-        cur.execute(
-            "SELECT working_volume_m3 FROM bf_benchmark_sail_meta WHERE plant=%s AND unit=%s",
-            (plant, unit),
-        )
-        r = cur.fetchone()
+        r = rmisc.bf_sail_working_volume_row(cur, plant, unit)
         return r[0] if r else None
     finally:
         conn.close()

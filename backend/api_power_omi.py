@@ -21,6 +21,7 @@ sys.path.insert(0, str(Path(__file__).parent / "excel_extractors"))
 from excel_extractor_power_omi import extract_power_omi  # noqa: E402
 
 import db  # noqa: E402
+from repo import misc as rmisc  # noqa: E402
 
 router = APIRouter(prefix="/api/power-omi", tags=["power-omi"])
 
@@ -33,12 +34,7 @@ def _existing_conflicts(records: list) -> list:
     conflicts = []
     try:
         for rec in records:
-            cur.execute(
-                "SELECT value FROM power_data_table "
-                "WHERE report_month = %s AND plant_name = %s AND item_name = %s",
-                (rec["report_month"], rec["plant_name"], rec["item_name"]),
-            )
-            row = cur.fetchone()
+            row = rmisc.power_value_row(cur, rec["report_month"], rec["plant_name"], rec["item_name"])
             if row and row[0] is not None:
                 conflicts.append(rec)
     finally:
@@ -111,11 +107,7 @@ async def insert_power_omi(payload: dict):
     saved = 0
     try:
         for rec in records:
-            cur.execute("""
-                INSERT INTO power_data_table (report_month, plant_name, item_name, value)
-                VALUES (%s, %s, %s, %s)
-                AS new ON DUPLICATE KEY UPDATE value = new.value
-            """, (rec["report_month"], rec["plant_name"], rec["item_name"], rec["value"]))
+            rmisc.upsert_power_value(cur, rec["report_month"], rec["plant_name"], rec["item_name"], rec["value"])
             saved += 1
         conn.commit()
     finally:

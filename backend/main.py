@@ -23,6 +23,8 @@ from repo import special_steel as rss
 from repo import stock as rst
 from repo import ipt as ript
 from repo import text as rtx
+from repo import breakdown as rbd
+from repo import misc as rmisc
 from constants import ALL_PLANTS as _FS_SAIL_8
 from constants import PAGE_MODULES
 from models import PDFRequest, ProductionEntry, ProductionEntryRequest, ProductionRangeSaveRequest, SpecialSteelSaveRequest, SpecialSteelAbpSaveRequest, Page3NarrativeRequest, CostTrendAnnualSaveRequest, CostTrendMonthlySaveRequest, SailMinesSaveRequest, MinesProductionDespatchSaveRequest
@@ -4842,14 +4844,7 @@ async def steel_sector_performance_confirm(payload: dict):
     conn = db.connect()
     cur = conn.cursor()
     try:
-        cur.execute("""
-            INSERT INTO steel_sector_performance_table (report_month, data_json, source_file, created_at)
-            VALUES (%s, %s, %s, %s)
-            AS new ON DUPLICATE KEY UPDATE
-                data_json = new.data_json,
-                source_file = new.source_file,
-                created_at = new.created_at
-        """, (month, json.dumps(payload), source_file, now))
+        rmisc.upsert_steel_sector_performance(cur, month, json.dumps(payload), source_file, now)
         conn.commit()
     finally:
         conn.close()
@@ -6234,21 +6229,13 @@ async def api_ss_ipt_req_delete(payload: dict):
 def get_capital_repair_entries(plant: str = Query(...), fy: str = Query(...)):
     conn = db.connect()
     cur  = conn.cursor()
-    cur.execute("""
-        SELECT id, shop, equipment, activity, schedule_days, period, actual,
-               unit_type, unit_name, sms_subtag, actual_start, actual_end,
-               actual_ongoing, planned_days
-        FROM capital_repair_table
-        WHERE plant=%s AND fy=%s
-        ORDER BY sort_order ASC, id ASC
-    """, (plant, fy))
     rows = [
         {"id": r[0], "shop": r[1], "equipment": r[2], "activity": r[3],
          "schedule_days": r[4], "period": r[5], "actual": r[6] or "",
          "unit_type": r[7], "unit_name": r[8], "sms_subtag": r[9],
          "actual_start": r[10], "actual_end": r[11],
          "actual_ongoing": bool(r[12]), "planned_days": r[13]}
-        for r in cur.fetchall()
+        for r in rbd.cr_entry_rows(cur, plant, fy)
     ]
     conn.close()
     return {"plant": plant, "fy": fy, "rows": rows}
@@ -6343,8 +6330,7 @@ async def save_capital_repair_entry(payload: dict):
 
     conn = db.connect()
     cur  = conn.cursor()
-    cur.execute("SELECT plant FROM capital_repair_table WHERE id=%s", (row_id,))
-    row = cur.fetchone()
+    row = rbd.cr_plant_row(cur, row_id)
     if not row:
         conn.close()
         raise HTTPException(status_code=404, detail="Capital repair row not found")
@@ -6374,8 +6360,7 @@ async def save_capital_repair_entry(payload: dict):
         # A row whose Actual exists only as older free text (no structured
         # dates behind it) must not be wiped just because the row was saved
         # for another field - that lost 5 BSP actuals on 2026-09-26.
-        cur.execute("SELECT actual, actual_start FROM capital_repair_table WHERE id=%s", (row_id,))
-        prev_actual, prev_start = cur.fetchone()
+        prev_actual, prev_start = rbd.cr_actual_and_start_row(cur, row_id)
         if not prev_start and (prev_actual or "").strip():
             actual = prev_actual
 
@@ -6383,16 +6368,9 @@ async def save_capital_repair_entry(payload: dict):
     # second CR in the FY) - only the ones actually sent are updated.
     plan_updates = {f: (payload.get(f) or "").strip() for f in _CR_PLAN_FIELDS if f in payload}
 
-    old = db._row_dict(conn,
-        "SELECT unit_type, unit_name, sms_subtag, actual_start, actual_end, actual_ongoing, planned_days, actual, "
-        + ", ".join(_CR_PLAN_FIELDS) + " FROM capital_repair_table WHERE id=%s", (row_id,))
+    old = rbd.cr_entry_old(conn, _CR_PLAN_FIELDS, row_id)
     plan_sql = "".join(f", {f}=%s" for f in plan_updates)
-    cur.execute(f"""
-        UPDATE capital_repair_table
-        SET unit_type=%s, unit_name=%s, sms_subtag=%s, actual_start=%s, actual_end=%s,
-            actual_ongoing=%s, planned_days=%s, actual=%s{plan_sql}
-        WHERE id=%s
-    """, (unit_type, unit_name, sms_subtag, actual_start, actual_end,
+    rbd.update_cr_entry(cur, plan_sql, (unit_type, unit_name, sms_subtag, actual_start, actual_end,
           int(actual_ongoing), planned_days, actual, *plan_updates.values(), row_id))
     conn.commit()
     conn.close()
@@ -6408,16 +6386,8 @@ async def save_capital_repair_entry(payload: dict):
 _CR_PLAN_FIELDS = ("shop", "equipment", "activity", "schedule_days", "period")
 
 
-def _cr_renumber(cur, plant: str, fy: str, ids: list) -> None:
-    for i, rid in enumerate(ids):
-        cur.execute("UPDATE capital_repair_table SET sort_order=%s WHERE id=%s AND plant=%s AND fy=%s",
-                    (i, rid, plant, fy))
-
-
-def _cr_ordered_ids(cur, plant: str, fy: str) -> list:
-    cur.execute("SELECT id FROM capital_repair_table WHERE plant=%s AND fy=%s ORDER BY sort_order ASC, id ASC",
-                (plant, fy))
-    return [r[0] for r in cur.fetchall()]
+_cr_renumber = rbd.cr_renumber
+_cr_ordered_ids = rbd.cr_ordered_ids
 
 
 @app.post("/api/capital-repair-row")
@@ -6436,9 +6406,7 @@ async def add_capital_repair_row(payload: dict):
     cur = conn.cursor()
     src = {}
     if copy_from is not None:
-        src = db._row_dict(conn,
-            "SELECT shop, equipment, activity, unit_type, unit_name, sms_subtag "
-            "FROM capital_repair_table WHERE id=%s AND plant=%s AND fy=%s", (copy_from, plant, fy))
+        src = rbd.cr_copy_source(conn, copy_from, plant, fy)
         if not src:
             conn.close()
             raise HTTPException(status_code=404, detail="Row to copy not found")
@@ -6447,12 +6415,7 @@ async def add_capital_repair_row(payload: dict):
            "activity": src.get("activity") or "", "schedule_days": "", "period": "", "actual": "",
            "unit_type": src.get("unit_type"), "unit_name": src.get("unit_name"),
            "sms_subtag": src.get("sms_subtag")}
-    cur.execute("""
-        INSERT INTO capital_repair_table
-            (plant, fy, shop, equipment, activity, schedule_days, period, actual,
-             unit_type, unit_name, sms_subtag, actual_ongoing, sort_order)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 0, 0)
-    """, tuple(new.values()))
+    rbd.insert_cr_row(cur, tuple(new.values()))
     new_id = cur.lastrowid
     ids = [i for i in _cr_ordered_ids(cur, plant, fy) if i != new_id]
     pos = ids.index(copy_from) + 1 if copy_from in ids else len(ids)
@@ -6469,11 +6432,11 @@ async def add_capital_repair_row(payload: dict):
 async def delete_capital_repair_row(row_id: int):
     conn = db.connect()
     cur = conn.cursor()
-    old = db._row_dict(conn, "SELECT * FROM capital_repair_table WHERE id=%s", (row_id,))
+    old = rbd.cr_row_dict(conn, row_id)
     if not old:
         conn.close()
         raise HTTPException(status_code=404, detail="Capital repair row not found")
-    cur.execute("DELETE FROM capital_repair_table WHERE id=%s", (row_id,))
+    rbd.delete_cr_row(cur, row_id)
     _cr_renumber(cur, old["plant"], old["fy"], _cr_ordered_ids(cur, old["plant"], old["fy"]))
     conn.commit()
     conn.close()

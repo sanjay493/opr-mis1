@@ -9,10 +9,10 @@ only clears is_active, so a month that already used a photo keeps its file.
 The month's cover (design + photo) lives in report_cover_settings; a month
 with no row keeps the Classic cover (page_cover.py).
 
-All SQL is native MySQL through db.connect(); the tables are created by
-scripts/mysql_schema.sql (+ scripts/migrate_add_cover_pages.sql).
-_connect and PHOTO_DIR are module attributes so tests can point them
-elsewhere.
+The SQL lives in repo/misc.py (one connection and commit per call); the
+tables are created by scripts/mysql_schema.sql (+ scripts/
+migrate_add_cover_pages.sql). PHOTO_DIR is a module attribute so tests can
+point it elsewhere.
 """
 import io
 import os
@@ -25,7 +25,7 @@ from datetime import datetime
 from PIL import Image, ImageOps
 
 import cover_designs
-import db
+from repo import misc as rmisc
 
 _BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
 PHOTO_DIR = os.path.join(_BACKEND_DIR, "cover_photos")
@@ -41,38 +41,11 @@ MAX_PIXELS = 50_000_000
 _FULL_QUALITY = 82
 _THUMB_QUALITY = 78
 
-_PHOTO_COLS = ("id", "filename", "thumb_filename", "original_name", "width", "height",
-               "uploaded_by", "uploaded_at", "is_active")
+_PHOTO_COLS = rmisc.COVER_PHOTO_COLS
 
 
 class CoverError(ValueError):
     """A user-facing problem with an upload or a cover choice (HTTP 400)."""
-
-
-def _connect():
-    db.init_db()
-    return db.connect()
-
-
-def _query(sql: str, args=()) -> list:
-    conn = _connect()
-    try:
-        cur = conn.cursor()
-        cur.execute(sql, args)
-        return cur.fetchall()
-    finally:
-        conn.close()
-
-
-def _execute(sql: str, args=()):
-    conn = _connect()
-    try:
-        cur = conn.cursor()
-        cur.execute(sql, args)
-        conn.commit()
-        return cur.lastrowid
-    finally:
-        conn.close()
 
 
 def _now() -> str:
@@ -132,11 +105,7 @@ def add_photo(data: bytes, original_name: str, uploaded_by: str) -> dict:
             f.write(content)
     name = os.path.basename((original_name or "").replace("\\", "/")) or "photo.jpg"
     try:
-        new_id = _execute(
-            "INSERT INTO cover_photos (filename, thumb_filename, original_name, width, height,"
-            " uploaded_by, uploaded_at, is_active) VALUES (%s, %s, %s, %s, %s, %s, %s, 1)",
-            (fname, tname, name[:255], width, height, uploaded_by, _now()),
-        )
+        new_id = rmisc.insert_cover_photo(fname, tname, name[:255], width, height, uploaded_by, _now())
     except Exception:
         for path in paths:
             try:
@@ -148,14 +117,13 @@ def add_photo(data: bytes, original_name: str, uploaded_by: str) -> dict:
 
 
 def get_photo(photo_id: int):
-    rows = _query(f"SELECT {', '.join(_PHOTO_COLS)} FROM cover_photos WHERE id = %s", (int(photo_id),))
+    rows = rmisc.cover_photo_rows(int(photo_id))
     return _photo_dict(rows[0]) if rows else None
 
 
 def list_photos() -> list:
-    rows = _query(f"SELECT {', '.join(_PHOTO_COLS)} FROM cover_photos WHERE is_active = 1 ORDER BY id DESC")
-    usage = {int(pid): int(n) for pid, n in _query(
-        "SELECT photo_id, COUNT(*) FROM report_cover_settings WHERE photo_id IS NOT NULL GROUP BY photo_id")}
+    rows = rmisc.active_cover_photo_rows_newest_first()
+    usage = {int(pid): int(n) for pid, n in rmisc.cover_photo_usage_rows()}
     out = []
     for row in rows:
         d = _photo_dict(row)
@@ -167,7 +135,7 @@ def list_photos() -> list:
 def deactivate_photo(photo_id: int) -> bool:
     if get_photo(photo_id) is None:
         return False
-    _execute("UPDATE cover_photos SET is_active = 0 WHERE id = %s", (int(photo_id),))
+    rmisc.deactivate_cover_photo(int(photo_id))
     return True
 
 
@@ -177,7 +145,7 @@ def photo_path(photo: dict, size: str = "full") -> str:
 
 # ── Per-month cover choice ───────────────────────────────────────────────────
 PHOTO_MODES = ("library", "random")
-_SETTING_COLS = ("report_month", "design", "photo_mode", "photo_id", "updated_by", "updated_at")
+_SETTING_COLS = rmisc.COVER_SETTING_COLS
 _MONTH_RE = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
 
 
@@ -189,7 +157,7 @@ def check_month(month: str) -> str:
 
 def _active_photo_ids() -> list:
     """Active photos whose file is still on disk."""
-    rows = _query(f"SELECT {', '.join(_PHOTO_COLS)} FROM cover_photos WHERE is_active = 1")
+    rows = rmisc.active_cover_photo_rows()
     return [p["id"] for p in map(_photo_dict, rows) if os.path.exists(photo_path(p))]
 
 
@@ -201,8 +169,7 @@ def _usable(photo_id) -> bool:
 
 
 def get_setting(month: str):
-    rows = _query(f"SELECT {', '.join(_SETTING_COLS)} FROM report_cover_settings WHERE report_month = %s",
-                  (check_month(month),))
+    rows = rmisc.cover_setting_rows(check_month(month))
     if not rows:
         return None
     d = dict(zip(_SETTING_COLS, rows[0]))
@@ -222,11 +189,8 @@ def save_setting(month: str, design: str, photo_mode: str = "random", photo_id=N
     elif not _usable(photo_id):
         ids = _active_photo_ids()
         photo_id = random.choice(ids) if ids else None
-    _execute(
-        "REPLACE INTO report_cover_settings"
-        " (report_month, design, photo_mode, photo_id, updated_by, updated_at) VALUES (%s, %s, %s, %s, %s, %s)",
-        (month, design, photo_mode, int(photo_id) if photo_id is not None else None, updated_by, _now()),
-    )
+    rmisc.replace_cover_setting(month, design, photo_mode, int(photo_id) if photo_id is not None else None,
+                                updated_by, _now())
     return get_setting(month)
 
 

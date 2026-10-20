@@ -37,6 +37,7 @@ from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 import db as _db
+from repo import misc as rmisc
 import page_bf_benchmark_export as _export
 from page_key_parameters import _COKE_UNITS
 import bf_benchmark_registry as _registry
@@ -145,8 +146,7 @@ async def get_params():
     page's size-based (Large/Medium/Small) selector is built from this."""
     conn = _db.connect()
     cur = conn.cursor()
-    cur.execute("SELECT plant, unit, working_volume_m3 FROM bf_benchmark_sail_meta")
-    wv_by_key = {f"{p}:{u}": wv for p, u, wv in cur.fetchall()}
+    wv_by_key = {f"{p}:{u}": wv for p, u, wv in rmisc.bf_sail_working_volume_rows(cur)}
     conn.close()
 
     sail_bfs_all = [
@@ -175,19 +175,10 @@ async def get_params():
 async def list_external_bfs(active_only: bool = Query(False)):
     conn = _db.connect()
     cur = conn.cursor()
-    sql = (
-        "SELECT b.id, b.name, b.company, b.location, b.working_volume_m3, b.active, b.created_at, "
-        "(SELECT MAX(d.report_month) FROM bf_benchmark_external_data d WHERE d.external_bf_id=b.id) "
-        "FROM bf_benchmark_external_bf b"
-    )
-    if active_only:
-        sql += " WHERE b.active=1"
-    sql += " ORDER BY b.name"
-    cur.execute(sql)
     rows = [
         {"id": r[0], "name": r[1], "company": r[2], "location": r[3], "working_volume_m3": r[4],
          "active": bool(r[5]), "created_at": r[6], "latest_fy": r[7]}
-        for r in cur.fetchall()
+        for r in rmisc.external_bf_list_rows(cur, active_only)
     ]
     conn.close()
     return {"external_bfs": rows}
@@ -200,10 +191,7 @@ async def add_external_bf(body: ExternalBFCreate):
         raise HTTPException(400, "name is required")
     conn = _db.connect()
     cur = conn.cursor()
-    cur.execute(
-        "INSERT INTO bf_benchmark_external_bf (name, company, location, active, created_at) VALUES (%s, %s, %s, 1, %s)",
-        (name, body.company.strip(), body.location.strip(), _now()),
-    )
+    rmisc.insert_external_bf(cur, name, body.company.strip(), body.location.strip(), _now())
     conn.commit()
     new_id = cur.lastrowid
     conn.close()
@@ -214,8 +202,7 @@ async def add_external_bf(body: ExternalBFCreate):
 async def update_external_bf(bf_id: int, body: ExternalBFUpdate):
     conn = _db.connect()
     cur = conn.cursor()
-    cur.execute("SELECT id FROM bf_benchmark_external_bf WHERE id=%s", (bf_id,))
-    if not cur.fetchone():
+    if not rmisc.external_bf_id_row(cur, bf_id):
         conn.close()
         raise HTTPException(404, "Non-SAIL BF not found.")
 
@@ -232,7 +219,7 @@ async def update_external_bf(bf_id: int, body: ExternalBFUpdate):
         fields.append("active=%s"); params.append(1 if body.active else 0)
     if fields:
         params.append(bf_id)
-        cur.execute(f"UPDATE bf_benchmark_external_bf SET {', '.join(fields)} WHERE id=%s", params)
+        rmisc.update_external_bf(cur, fields, params)
         conn.commit()
     conn.close()
     return {"status": "ok"}
@@ -248,11 +235,7 @@ async def get_external_entry(bf_id: int, fy: str = Query(...)):
     _validate_fy(fy)
     conn = _db.connect()
     cur = conn.cursor()
-    cur.execute(
-        "SELECT param_json FROM bf_benchmark_external_data WHERE external_bf_id=%s AND report_month=%s",
-        (bf_id, fy),
-    )
-    row = cur.fetchone()
+    row = rmisc.external_bf_data_row(cur, bf_id, fy)
     conn.close()
     param_data = json.loads(row[0]) if row and row[0] else {}
     return {"external_bf_id": bf_id, "fy": fy, "param_data": param_data}
@@ -263,16 +246,11 @@ async def save_external_entry(bf_id: int, body: EntrySaveRequest):
     _validate_fy(body.fy)
     conn = _db.connect()
     cur = conn.cursor()
-    cur.execute("SELECT id FROM bf_benchmark_external_bf WHERE id=%s", (bf_id,))
-    if not cur.fetchone():
+    if not rmisc.external_bf_id_row(cur, bf_id):
         conn.close()
         raise HTTPException(404, "Non-SAIL BF not found.")
 
-    cur.execute(
-        "SELECT param_json FROM bf_benchmark_external_data WHERE external_bf_id=%s AND report_month=%s",
-        (bf_id, body.fy),
-    )
-    row = cur.fetchone()
+    row = rmisc.external_bf_data_row(cur, bf_id, body.fy)
     merged = json.loads(row[0]) if row and row[0] else {}
     # Non-null values win; existing non-null kept if the new value is null
     # (mirrors db.merge_upsert_techno_data's convention elsewhere in the app)
@@ -283,17 +261,9 @@ async def save_external_entry(bf_id: int, body: EntrySaveRequest):
 
     now = _now()
     if row:
-        cur.execute(
-            "UPDATE bf_benchmark_external_data SET param_json=%s, updated_at=%s "
-            "WHERE external_bf_id=%s AND report_month=%s",
-            (json.dumps(merged), now, bf_id, body.fy),
-        )
+        rmisc.update_external_bf_data(cur, json.dumps(merged), now, bf_id, body.fy)
     else:
-        cur.execute(
-            "INSERT INTO bf_benchmark_external_data (external_bf_id, report_month, param_json, created_at, updated_at) "
-            "VALUES (%s, %s, %s, %s, %s)",
-            (bf_id, body.fy, json.dumps(merged), now, now),
-        )
+        rmisc.insert_external_bf_data(cur, bf_id, body.fy, json.dumps(merged), now)
     conn.commit()
     conn.close()
     return {"status": "ok", "param_data": merged}
@@ -311,10 +281,9 @@ async def save_external_entry(bf_id: int, body: EntrySaveRequest):
 async def list_sail_meta():
     conn = _db.connect()
     cur = conn.cursor()
-    cur.execute("SELECT plant, unit, working_volume_m3, updated_at FROM bf_benchmark_sail_meta ORDER BY plant, unit")
     rows = [
         {"plant": p, "unit": u, "working_volume_m3": wv, "updated_at": ts}
-        for p, u, wv, ts in cur.fetchall()
+        for p, u, wv, ts in rmisc.bf_sail_meta_rows(cur)
     ]
     conn.close()
     return {"sail_meta": rows, "units_by_plant": SAIL_BF_UNITS_BY_PLANT}
@@ -331,11 +300,7 @@ async def set_sail_meta(body: SailMetaRequest):
     conn = _db.connect()
     cur = conn.cursor()
     now = _now()
-    cur.execute(
-        "INSERT INTO bf_benchmark_sail_meta (plant, unit, working_volume_m3, updated_at) VALUES (%s, %s, %s, %s) "
-        "AS new ON DUPLICATE KEY UPDATE working_volume_m3=new.working_volume_m3, updated_at=new.updated_at",
-        (plant, unit, body.working_volume_m3, now),
-    )
+    rmisc.upsert_bf_sail_meta(cur, plant, unit, body.working_volume_m3, now)
     conn.commit()
     conn.close()
     return {"status": "ok"}
@@ -344,8 +309,7 @@ async def set_sail_meta(body: SailMetaRequest):
 def _sail_working_volumes() -> Dict[str, Optional[float]]:
     conn = _db.connect()
     cur = conn.cursor()
-    cur.execute("SELECT plant, unit, working_volume_m3 FROM bf_benchmark_sail_meta")
-    result = {f"{p}:{u}": wv for p, u, wv in cur.fetchall()}
+    result = {f"{p}:{u}": wv for p, u, wv in rmisc.bf_sail_working_volume_rows(cur)}
     conn.close()
     return result
 
@@ -421,11 +385,7 @@ def _external_bf_values(bf_id: int, fy_label: str) -> "tuple[bool, Dict[str, Opt
     themselves publish figures, so the stored value already needs none."""
     conn = _db.connect()
     cur = conn.cursor()
-    cur.execute(
-        "SELECT param_json FROM bf_benchmark_external_data WHERE external_bf_id=%s AND report_month=%s",
-        (bf_id, fy_label),
-    )
-    row = cur.fetchone()
+    row = rmisc.external_bf_data_row(cur, bf_id, fy_label)
     conn.close()
     if not row:
         return False, {}
@@ -467,12 +427,8 @@ def build_compare(body: CompareRequest) -> Dict:
     if body.external_bf_ids:
         conn = _db.connect()
         cur = conn.cursor()
-        ph = ",".join(["%s"] * len(body.external_bf_ids))
-        cur.execute(
-            f"SELECT id, name, company, location, working_volume_m3 FROM bf_benchmark_external_bf WHERE id IN ({ph})",
-            body.external_bf_ids,
-        )
-        ext_meta = {r[0]: {"name": r[1], "company": r[2], "location": r[3], "working_volume_m3": r[4]} for r in cur.fetchall()}
+        ext_meta = {r[0]: {"name": r[1], "company": r[2], "location": r[3], "working_volume_m3": r[4]}
+                    for r in rmisc.external_bf_meta_rows(cur, body.external_bf_ids)}
         conn.close()
         for bf_id in body.external_bf_ids:
             if bf_id not in ext_meta:

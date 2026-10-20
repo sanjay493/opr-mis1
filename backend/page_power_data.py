@@ -15,8 +15,8 @@ available cumulative snapshot at-or-before the selected month) actually
 depends on which month is selected.
 """
 import db
+from repo import misc as rmisc
 
-_UNIT_TABLE = "power_data_table"
 
 _PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP", "SSP", "VISP", "CFP", "SAIL"]
 
@@ -74,13 +74,7 @@ def generate_power_data(report_month: str) -> dict:
     conn = db.connect()
     cur = conn.cursor()
     try:
-        ph = ",".join(["%s"] * len(fy_months))
-        cur.execute(
-            f"SELECT report_month, plant_name, item_name, value FROM {_UNIT_TABLE} "
-            f"WHERE report_month IN ({ph})",
-            fy_months,
-        )
-        all_rows = cur.fetchall()
+        all_rows = rmisc.power_rows_for_months(cur, fy_months)
     finally:
         conn.close()
 

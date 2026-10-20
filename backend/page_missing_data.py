@@ -54,6 +54,7 @@ from repo import stock as rst
 from repo import ipt as ript
 from repo import cost_trend as rct
 from repo import mines as rmn
+from repo import misc as rmisc
 from repo import text as rtx
 
 _TP_DIR = str(Path(__file__).parent / "techno_project")
@@ -70,24 +71,6 @@ _EPI_KEYS = set(ENVIRO_KEY_UNITS)          # sp_co2_emission, sp_water_consumpti
 _COAL_KEYS = set(COAL_KEY_UNITS)           # indigenous_pcc, indigenous_mcc, imported_hard_coal, imported_soft_coal
 
 _UPLOADS_PAGE = {"label": "Coal / CO2 / Power Uploads", "link": "/data-entry/uploads"}
-
-
-def _rows(sql: str, params: list) -> list:
-    conn = db.connect()
-    cur = conn.cursor()
-    try:
-        cur.execute(sql, params)
-        return cur.fetchall()
-    finally:
-        conn.close()
-
-
-def _distinct_plants(table: str, month_col: str, report_month: str) -> set:
-    return {r[0] for r in _rows(f"SELECT DISTINCT plant_name FROM {table} WHERE {month_col} = %s", [report_month])}
-
-
-def _any_row(table: str, month_col: str, report_month: str) -> bool:
-    return bool(_rows(f"SELECT 1 FROM {table} WHERE {month_col} = %s LIMIT 1", [report_month]))
 
 
 def _plant_check(label: str, present_set: set, data_entry: list) -> list:
@@ -137,7 +120,7 @@ def generate_missing_data(report_month: str) -> dict:
     prod_plants = rp.actual_plants_for_month(report_month)
     ss_plants = rss.plants_for_month(report_month)
     stock_plants = rst.plants_for_month(report_month)
-    power_plants = _distinct_plants("power_data_table", "report_month", report_month)
+    power_plants = {r[0] for r in rmisc.power_plants_for_month(report_month)}
     techno = _techno_data_presence(report_month)
 
     sections = [
@@ -251,7 +234,7 @@ def generate_missing_data(report_month: str) -> dict:
             "report_pages": "2.1–2.3",
             "checks": [{
                 "label": "PIB Release",
-                "present": _any_row("steel_sector_performance_table", "report_month", report_month),
+                "present": rmisc.steel_sector_any_row(report_month),
                 "data_entry": [{"label": "Steel Sector Performance", "link": "/data-entry/steel-sector-performance"}],
             }],
         },
