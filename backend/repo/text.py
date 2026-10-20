@@ -28,6 +28,7 @@ from typing import Any, Dict, List, Optional
 
 from dbengine import connect
 from repo import conn as rc
+from secretary_review_layout import BLOCKS as _SECRETARY_BLOCKS
 
 
 # ── Moved from db.py ─────────────────────────────────────────────────────────
@@ -416,9 +417,9 @@ def delete_do_letter_remark(cur, report_month, item_name, plant_name):
 # key_highlights     key_highlights_narrative  report_month    achievements | shortfalls |  -
 #                                                              focus_areas
 # steel_sales        steel_sales_highlights    report_month    month_items | ytd_items      -
-# secretary_review   secretary_review_text     report_month    block key (BLOCKS)           -
-# board_note         board_note_manual_text    "<fy>:Q<n>"     field (FIELDS)               plant
-# do_letter          do_letter_remark_table    report_month    "remark"                     plant, item
+# secretary_review   secretary_review_text     report_month    block key (layout BLOCKS)    -
+# board_note         board_note_manual_text    "<fy>:Q<n>"     BOARD_NOTE_FIELDS            plant (required)
+# do_letter          do_letter_remark_table    report_month    "remark"                     plant, item (required)
 # sail_sales_note    sail_sales_note_table     report_month    "note"                       -
 # rail_note          rail_prod_despatch_note   (ignored)       sort_order, as a string      -
 # ss_phys_note       special_steel_phys_note   financial_year  sort_order, as a string      -
@@ -432,12 +433,20 @@ def delete_do_letter_remark(cur, report_month, item_name, plant_name):
 # the board_note / do_letter / rail_note / ss_phys_note row (those tables
 # never store blanks) and is stored as '' elsewhere.
 
+# board_note's fields (re-exported as board_note_manual_text.FIELDS).
+BOARD_NOTE_FIELDS = ("additional_highlights", "why_narrative")
+
+# block_key is validated for every scope that has a fixed key set:
+# secretary_review against secretary_review_layout.BLOCKS (the same set
+# api_secretary_review accepts) and board_note against BOARD_NOTE_FIELDS (the
+# only fields board_note_q1-q4 read). rail_note / ss_phys_note keys are
+# sort_order numbers, so any integer string is accepted there.
 SCOPES = {
     "page3_narrative": ("page3_narrative", ("production_narrative", "highlights")),
     "key_highlights": ("key_highlights_narrative", ("achievements", "shortfalls", "focus_areas")),
     "steel_sales": ("steel_sales_highlights", ("month_items", "ytd_items")),
-    "secretary_review": ("secretary_review_text", None),
-    "board_note": ("board_note_manual_text", None),
+    "secretary_review": ("secretary_review_text", tuple(k for k, _, _ in _SECRETARY_BLOCKS)),
+    "board_note": ("board_note_manual_text", BOARD_NOTE_FIELDS),
     "do_letter": ("do_letter_remark_table", ("remark",)),
     "sail_sales_note": ("sail_sales_note_table", ("note",)),
     "rail_note": ("rail_prod_despatch_note", None),
@@ -451,6 +460,18 @@ def _check(scope, block_key):
     keys = SCOPES[scope][1]
     if keys is not None and block_key not in keys:
         raise ValueError(f"unknown block_key {block_key!r} for scope {scope!r}")
+
+
+# Scopes whose rows are keyed by plant (and item): put() refuses to write
+# without them rather than storing a row no reader would ever find.
+_REQUIRED = {"board_note": ("plant",), "do_letter": ("plant", "item")}
+
+
+def _check_keys(scope, plant, item):
+    given = {"plant": plant, "item": item}
+    for name in _REQUIRED.get(scope, ()):
+        if not given[name]:
+            raise ValueError(f"scope {scope!r} needs {name!r}")
 
 
 def _board_period(period):
@@ -509,13 +530,17 @@ def get(scope: str, period: str, block_key: str, plant=None, item=None) -> Optio
     if scope == "sail_sales_note":
         with rc.cursor() as cur:
             row = sail_sales_note_row(cur, period)
-        return row[0] if row else None
+        # A blank note reads as None, as page_one_page_report._sales_note.
+        return row[0] if row and row[0] else None
     return dict(_get_notes(scope, period)).get(int(block_key))
 
 
 def put(scope: str, period: str, block_key: str, text: str, user, plant=None, item=None) -> None:
-    """Save one block's text (see the map above for each scope's rules)."""
+    """Save one block's text (see the map above for each scope's rules).
+    Raises ValueError for an unknown scope / block_key, or when board_note
+    has no `plant` or do_letter lacks `plant` or `item`."""
     _check(scope, block_key)
+    _check_keys(scope, plant, item)
     text = "" if text is None else str(text)
     if scope == "page3_narrative":
         saved = get_page3_narrative(period) or {"production_narrative": "", "highlights": []}

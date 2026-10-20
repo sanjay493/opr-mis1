@@ -345,6 +345,45 @@ def test_text_scope_map_and_unknown_scope(mysql_db):
         rtx.put("page3_narrative", "2026-08", "nope", "x", "e@x")
 
 
+def test_text_put_requires_plant_and_item(mysql_db):
+    """board_note needs `plant`; do_letter needs `plant` and `item`. A
+    missing one raises before anything is written."""
+    with pytest.raises(ValueError):
+        rtx.put("board_note", "2026-27:Q2", "why_narrative", "x", "e@x")
+    with pytest.raises(ValueError):
+        rtx.put("do_letter", "2026-08", "remark", "x", "e@x", item="Crude Steel")
+    with pytest.raises(ValueError):
+        rtx.put("do_letter", "2026-08", "remark", "x", "e@x", plant="RSP")
+    assert _rows("SELECT * FROM board_note_manual_text") == []
+    assert _rows("SELECT * FROM do_letter_remark_table") == []
+
+
+def test_text_get_sail_sales_note_blank_is_none(mysql_db):
+    """A blank stored note reads as None, as page_one_page_report._sales_note
+    does."""
+    import page_one_page_report as p1
+    rtx.put("sail_sales_note", "2026-08", "note", "", "e@x")
+    assert _rows("SELECT report_month, note FROM sail_sales_note_table") == [("2026-08", "")]
+    assert rtx.get("sail_sales_note", "2026-08", "note") is None
+    with rc.cursor() as cur:
+        assert p1._sales_note(cur, "2026-08") is None
+
+
+def test_text_block_keys_validated_for_secretary_review_and_board_note(mysql_db):
+    from secretary_review_layout import BLOCKS
+    import board_note_manual_text as bnm
+    assert rtx.SCOPES["secretary_review"][1] == tuple(k for k, _, _ in BLOCKS)
+    assert rtx.SCOPES["board_note"][1] == bnm.FIELDS
+    for call in (lambda: rtx.get("secretary_review", "2026-09", "nope"),
+                 lambda: rtx.put("secretary_review", "2026-09", "nope", "x", "e@x"),
+                 lambda: rtx.get("board_note", "2026-27:Q2", "nope", plant="BSP"),
+                 lambda: rtx.put("board_note", "2026-27:Q2", "nope", "x", "e@x", plant="BSP")):
+        with pytest.raises(ValueError):
+            call()
+    assert _rows("SELECT * FROM secretary_review_text") == []
+    assert _rows("SELECT * FROM board_note_manual_text") == []
+
+
 # ── repo.ops: auth flow through the gate ─────────────────────────────────────
 
 def _cookie(resp):

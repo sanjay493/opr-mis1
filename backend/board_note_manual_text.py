@@ -9,9 +9,9 @@ leave a stale empty row behind (same convention as do_letter_remark_table).
 get_manual_text / save_manual_text live in repo/text.py (re-exported here).
 """
 
-from repo.text import get_manual_text, save_manual_text  # noqa: F401
+from repo.text import BOARD_NOTE_FIELDS, get_manual_text, save_manual_text  # noqa: F401
 
-FIELDS = ("additional_highlights", "why_narrative")
+FIELDS = BOARD_NOTE_FIELDS
 
 
 def additional_highlight_lines(manual: dict, plant: str) -> list:
