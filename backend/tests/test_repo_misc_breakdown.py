@@ -7,6 +7,7 @@ caller-side wiring (connection, cursor, commit) is covered as well as the
 repo function itself. "Spy" = connect() wrapped to count commits and record,
 after each write statement, how many rows another connection sees."""
 import io
+import os
 
 import pytest
 from fastapi import HTTPException
@@ -398,8 +399,10 @@ def test_major_unit_ready_reckoner_and_rail_saves(tc):
 
 # ── repo.ops: admin backup lock and table counts (never the real endpoints) ─
 
-def test_admin_backup_lock_and_live_counts(mysql_db):
+def test_admin_backup_lock_and_live_counts(mysql_db, monkeypatch):
     import api_admin_backup as aab
+    # GET_LOCK names are server-wide: never take the production lock name.
+    monkeypatch.setattr(aab, "_LOCK_NAME", f"mis_admin_backup_restore_test_{os.getpid()}")
     rbd.save_breakdown_entry("BSP", "BF", "BF-4", None, "2026-08-01 10:00", None, True, "x", None, "t@x")
     counts = aab._live_table_counts()
     assert counts["breakdown_table"] == 1 and counts["capital_repair_table"] == 0

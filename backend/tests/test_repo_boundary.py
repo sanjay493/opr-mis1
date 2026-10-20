@@ -21,13 +21,19 @@ from pathlib import Path
 BACKEND = Path(__file__).resolve().parent.parent
 
 SQL_RE = re.compile(r"\b(SELECT|INSERT|UPDATE|DELETE)\b.+\b(FROM|INTO|SET)\b", re.DOTALL)
+# Statements the R4 pattern can't see (no FROM / INTO / SET after the verb,
+# or a verb it doesn't list). Case-insensitive: these are rare enough in
+# prose that any hit deserves a look.
+SQL_EXTRA_RE = re.compile(r"\b(REPLACE\s+INTO|SHOW\s+TABLES|GET_LOCK|RELEASE_LOCK|INSERT\s+IGNORE)\b",
+                          re.IGNORECASE)
+PATTERNS = (SQL_RE, SQL_EXTRA_RE)
 
 EXCLUDED_DIRS = {"repo", "tests", "scripts", "tools", "venv", "__pycache__"}
 
 # (path relative to backend/, text the matched string starts with) -> reason.
 # An entry excuses exactly that string, nothing else in the file. Keep minimal.
 ALLOW = {
-    ("api_admin_backup.py", "INSERT INTO `(\w+)` VALUES (.*);"):
+    ("api_admin_backup.py", r"INSERT INTO `(\w+)` VALUES (.*);"):
         "a regex that counts rows in a mysqldump file (_INSERT_LINE_RE); "
         "it parses dump text and is never executed",
 }
@@ -95,11 +101,14 @@ def find_sql(path):
     hits = []
     seen = set()
     for lineno, text in _string_constants(tree):
-        m = SQL_RE.search(text)
-        if m and lineno not in seen:
-            seen.add(lineno)
+        for pattern in PATTERNS:
+            m = pattern.search(text)
+            if not m:
+                continue
             snippet = " ".join(text[m.start():m.start() + 80].split())
-            hits.append((lineno, snippet))
+            if (lineno, snippet) not in seen:
+                seen.add((lineno, snippet))
+                hits.append((lineno, snippet))
     return hits
 
 
@@ -130,11 +139,24 @@ def test_scanner_detects_sql_and_ignores_prose(tmp_path):
         "        UPDATE {t}\n"
         '        SET a = %s""", (2,))\n'
         '    msg = "select a from b"\n'
-        '    label = "INSERT"\n',
+        '    label = "INSERT"\n'
+        '    cur.execute("SELECT a, " + ", ".join(t) + " FROM b", ())\n'
+        '    cur.execute("select get_lock(%s, 0)", ("x",))\n'
+        '    cur.execute("SHOW TABLES")\n'
+        '    cur.execute("replace into t (a) values (%s)", (1,))\n'
+        '    note = "replace the tables shown"\n',
         encoding="utf-8",
     )
     hits = find_sql(p)
-    assert [h[0] for h in hits] == [5, 7], hits
+    assert sorted(h[0] for h in hits) == [5, 7, 12, 13, 14, 15], hits
+
+
+def test_hits_on_one_line_are_kept_per_snippet(tmp_path):
+    """Two statements whose strings start on the same line are both reported
+    (dedupe is on (line, snippet), not line alone)."""
+    p = tmp_path / "m.py"
+    p.write_text('x = ("SELECT a FROM b", "DELETE FROM c")\n', encoding="utf-8")
+    assert [s for _, s in find_sql(p)] == ["SELECT a FROM b", "DELETE FROM c"]
 
 
 def test_allow_list_entries_still_match():
