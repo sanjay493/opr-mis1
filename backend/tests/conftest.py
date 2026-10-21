@@ -149,12 +149,14 @@ def _apply_sql_files(cur, files):
             pass
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def mysql_v2_db():
-    """A throwaway `mis_reports_test_v2_<pid>` schema built from
-    scripts/v2/schema_v2.sql + seed_cal_month.sql (the v2 DDL). Yields an
-    autocommit pymysql connection to it; dropped afterwards. Not wired into
-    the app's DB layer (the app still runs on v1 until Task 7)."""
+    """A throwaway `mis_reports_test_v2_<pid>` schema built ONCE per run from
+    scripts/v2/schema_v2.sql + seed_cal_month.sql (the v2 DDL, slow to apply).
+    Yields an autocommit pymysql connection to it; dropped at the end. Tests
+    that write must isolate themselves (test_schema_v2's `tx` fixture rolls
+    every write back). Not wired into the app's DB layer (the app still runs
+    on v1 until Task 7)."""
     cfg = _test_cfg()
     name = f"{_TEST_DB_PREFIX}v2_{os.getpid()}"
     _assert_test_schema(name)

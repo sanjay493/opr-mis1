@@ -5,6 +5,7 @@ Applied to a throwaway `mis_reports_test_v2_<pid>` schema (conftest
 v1 -> v2 table map at the top of schema_v2.sql against the exact v1 DDL
 (tests/fixtures/schema_v1.sql), which Task 6's migration consumes.
 """
+import json
 import re
 from datetime import date
 from pathlib import Path
@@ -279,3 +280,64 @@ def test_report_text_key_is_unique_without_plant_or_item(tx):
         cur.execute(board, ("DSP",))
         with pytest.raises(pymysql.err.IntegrityError):
             cur.execute(board, ("BSP",))
+
+
+def test_report_month_columns_reference_cal_month(mysql_v2_db):
+    """Every report_month is an FK to cal_month, except the extraction log
+    (a deliberate non-FK: v1 holds '2099-01' there)."""
+    fks = _fk_targets(mysql_v2_db)
+    cols = _columns_named(mysql_v2_db, ("report_month",)) - {("cal_month", "report_month")}
+    assert len(cols) >= 20
+    missing = sorted(c for c in cols if ("cal_month", "report_month") not in fks.get(c, ()))
+    assert missing == [("extraction_log", "report_month")]
+
+
+def test_page_config_rejects_invalid_json(tx):
+    with tx.cursor() as cur:
+        cur.execute("INSERT INTO page_config (report_month, page_number, page_data) "
+                    "VALUES ('2026-08', 1, %s)", ('{"b": 1, "a": [1.0, 2]}',))
+        cur.execute("SELECT page_data FROM page_config WHERE page_number = 1")
+        assert cur.fetchone()[0] == '{"b": 1, "a": [1.0, 2]}'  # text kept as written
+        with pytest.raises(pymysql.err.OperationalError):  # CHECK ck_page_config_json
+            cur.execute("INSERT INTO page_config (report_month, page_number, page_data) "
+                        "VALUES ('2026-08', 2, '{not json')")
+
+
+def test_deleting_capital_repair_leaves_breakdown_link(tx):
+    """breakdown.capital_repair_id is a deliberate non-FK: as in v1, deleting
+    the linked capital repair leaves the id in place (no block, no SET NULL)."""
+    with tx.cursor() as cur:
+        _seed_plants(cur, "BSP")
+        cur.execute("INSERT INTO plant_unit (plant_code, unit_code) VALUES ('BSP', 'BF-4')")
+        unit_id = cur.lastrowid
+        cur.execute("INSERT INTO capital_repair (plant_code, fy, unit_id) VALUES ('BSP', '2026-27', %s)",
+                    (unit_id,))
+        cr_id = cur.lastrowid
+        cur.execute("INSERT INTO breakdown (plant_code, unit_type, unit_id, start_ts, cause, capital_repair_id) "
+                    "VALUES ('BSP', 'BF', %s, '2026-08-02', 'relining', %s)", (unit_id, cr_id))
+        bd_id = cur.lastrowid
+        cur.execute("DELETE FROM capital_repair WHERE id = %s", (cr_id,))
+        cur.execute("SELECT capital_repair_id FROM breakdown WHERE id = %s", (bd_id,))
+        assert cur.fetchone()[0] == cr_id
+
+
+def test_techno_key_order_rule_matches_mysql_json(tx):
+    """The documented rebuild order (period, LENGTH(param_key), param_key on the
+    _bin column) is the key order MySQL's JSON type gave the v1 blobs."""
+    keys = ["coke_rate", "Coke_Rate", "a", "B", "zz", "hm_prod", "b", "average_volatile_matter_in_coal_blend"]
+    with tx.cursor() as cur:
+        cur.execute("SELECT JSON_KEYS(CAST(%s AS JSON))", (json.dumps({k: 1 for k in keys}),))
+        mysql_order = json.loads(cur.fetchone()[0])
+        _seed_plants(cur, "BSP")
+        cur.execute("INSERT INTO plant_unit (plant_code, unit_code) VALUES ('BSP', 'SP-1')")
+        unit_id = cur.lastrowid
+        cur.execute("INSERT INTO techno_upload (report_month, plant_code, unit_id) VALUES ('2026-08', 'BSP', %s)",
+                    (unit_id,))
+        cur.executemany("INSERT INTO techno_value (report_month, plant_code, unit_id, period, param_key, num) "
+                        "VALUES ('2026-08', 'BSP', %s, %s, %s, 1)",
+                        [(unit_id, p, k) for k in keys for p in ("till_month", "month")])
+        cur.execute("SELECT period, param_key FROM techno_value "
+                    "ORDER BY period, LENGTH(param_key), param_key")
+        rows = cur.fetchall()
+    assert [k for p, k in rows if p == "month"] == mysql_order
+    assert [p for p, _ in rows] == ["month"] * len(keys) + ["till_month"] * len(keys)

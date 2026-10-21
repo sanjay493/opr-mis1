@@ -15,6 +15,8 @@
 -- * Every table has a PK, and every plant / item / unit / month reference is a
 --   declared FK (ON DELETE RESTRICT unless stated). Indexes that exist only to
 --   back an FK are created implicitly by InnoDB and are not listed here.
+--   Deliberate non-FKs, each explained on its table: extraction_log.plant_name
+--   and report_month, breakdown.capital_repair_id.
 -- * Period keys stay strings: report_month CHAR(7) 'YYYY-MM' (FK cal_month on
 --   the fact tables), fy CHAR(7) 'YYYY-YY' (no FK: there is no FY table and
 --   cal_month.fy is not unique). extraction_log keeps a free report_month.
@@ -28,12 +30,15 @@
 --
 -- -----------------------------------------------------------------------------
 -- TIMESTAMPS
--- This file defines column TYPES only. A DATETIME holds what the app writes,
--- as wall-clock time in the MySQL session time zone, which is IST (the app
--- uses NOW()). The v1 timestamps are VARCHARs in mixed formats (UTC ISO with
--- '+00:00', local ISO with microseconds, 'YYYY-MM-DD HH:MM:SS', 'YYYY-MM-DDTHH:MM:SS').
--- Converting them and rendering each column back in its original string
--- format is the repo/v2codec.py of Task 6 (ruling R5), not this file.
+-- This file defines column TYPES only. A DATETIME holds what the app writes
+-- (some writers use NOW() in the MySQL session time zone, others pass
+-- Python-formatted strings). The v1 timestamps are VARCHARs in mixed formats
+-- (UTC ISO with '+00:00', naive local ISO with microseconds,
+-- 'YYYY-MM-DD HH:MM:SS', 'YYYY-MM-DDTHH:MM:SS'). Which zone each DATETIME
+-- column means (UTC for the '+00:00' columns vs naive local time for the
+-- others), how the v1 strings convert, and how each column renders back in
+-- its original string format are decided per column in Task 6 by
+-- repo/v2codec.py (ruling R5), not in this file.
 -- v1 VARCHAR timestamps become DATETIME(6), because most carry microseconds.
 -- v1 columns that were already DATETIME stay DATETIME.
 --
@@ -406,8 +411,11 @@ CREATE TABLE techno_upload (
 --   other    num NULL, raw = the JSON value: a string, an object, or an
 --            explicit JSON null (stored as the JSON literal null, not SQL NULL,
 --            so an explicit null key stays distinct from a missing key)
--- Rebuilding a blob's dict order is Task 7's job (v1 returned MySQL JSON
--- key order).
+-- Key order: v1 returned each blob in the normalised order of the MySQL JSON
+-- type, which sorts object keys by byte length, then bytewise. param_key is
+-- utf8mb4_0900_bin, so ORDER BY period, LENGTH(param_key), param_key
+-- rebuilds that order exactly ('month' sorts before 'till_month' both as an
+-- ENUM and by length). No seq column is needed.
 CREATE TABLE techno_value (
     report_month CHAR(7)      NOT NULL,
     plant_code   VARCHAR(8)   NOT NULL,
@@ -423,8 +431,9 @@ CREATE TABLE techno_value (
     KEY idx_techno_value_unit_month (plant_code, unit_id, report_month),
     CONSTRAINT fk_techno_value_upload FOREIGN KEY (report_month, plant_code, unit_id)
         REFERENCES techno_upload (report_month, plant_code, unit_id) ON DELETE CASCADE,
-    -- implied by fk_techno_value_upload, declared so every plant_code / unit_id
+    -- implied by fk_techno_value_upload, declared so every report_month / plant_code / unit_id
     -- column carries its own FK
+    CONSTRAINT fk_techno_value_month FOREIGN KEY (report_month) REFERENCES cal_month (report_month),
     CONSTRAINT fk_techno_value_plant FOREIGN KEY (plant_code) REFERENCES plant (plant_code),
     CONSTRAINT fk_techno_value_unit  FOREIGN KEY (plant_code, unit_id) REFERENCES plant_unit (plant_code, unit_id),
     CONSTRAINT ck_techno_value_one_form CHECK ((num IS NULL) <> (raw IS NULL)),
@@ -483,7 +492,7 @@ CREATE TABLE report_text (
     block_key   VARCHAR(48)  NOT NULL,
     plant_code  VARCHAR(8)   NULL,
     item_id     SMALLINT     NULL,
-    seq         SMALLINT     NOT NULL DEFAULT 0,
+    seq         INT          NOT NULL DEFAULT 0,
     text        MEDIUMTEXT   NULL,
     updated_by  VARCHAR(190) NULL,
     updated_at  DATETIME     NULL,
@@ -966,9 +975,12 @@ CREATE TABLE capital_repair (
 -- (70 / 68 rows). A DATETIME would turn '2026-08-02' into '2026-08-02 00:00',
 -- which v1 also holds as a distinct value. The API validates only
 -- "at least YYYY-MM-DD" and the repo compares them as strings.
--- capital_repair_id: ON DELETE SET NULL. v1 has no FK and leaves the id
--- dangling when a linked capital repair is deleted (no dangling id exists
--- in the v1 data).
+-- capital_repair_id is a DELIBERATE NON-FK (like extraction_log). In v1,
+-- deleting a capital repair leaves the linked breakdown id dangling, and
+-- that dangling id is behaviour: open_breakdown_rows filters
+-- capital_repair_id IS NULL, and secretary-review / production-loss output
+-- treats any non-NULL id as linked. An FK would either block the delete
+-- (RESTRICT) or clear the link (SET NULL), and both change that output.
 CREATE TABLE breakdown (
     id                  BIGINT       NOT NULL AUTO_INCREMENT,
     plant_code          VARCHAR(8)   NOT NULL,
@@ -992,10 +1004,11 @@ CREATE TABLE breakdown (
     -- repo.breakdown.open_breakdown_rows (start_ts < X), list_breakdown_entries
     -- (ORDER BY start_ts DESC, id DESC)
     KEY idx_breakdown_start (start_ts),
+    -- repo.breakdown.open_breakdown_rows (capital_repair_id IS NULL), the
+    -- capital-repair link lookups of bd_cr_link / production_loss_analysis
+    KEY idx_breakdown_capital_repair (capital_repair_id),
     CONSTRAINT fk_breakdown_plant FOREIGN KEY (plant_code) REFERENCES plant (plant_code),
-    CONSTRAINT fk_breakdown_unit  FOREIGN KEY (plant_code, unit_id) REFERENCES plant_unit (plant_code, unit_id),
-    CONSTRAINT fk_breakdown_capital_repair FOREIGN KEY (capital_repair_id) REFERENCES capital_repair (id)
-        ON DELETE SET NULL
+    CONSTRAINT fk_breakdown_unit  FOREIGN KEY (plant_code, unit_id) REFERENCES plant_unit (plant_code, unit_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- v1 major_unit_daily_record. unit_label -> unit_id (the label is the
