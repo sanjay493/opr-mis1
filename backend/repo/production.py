@@ -48,7 +48,8 @@ def values(months: Iterable[str], plants: Iterable[str] | None,
            measure: Measure) -> dict[tuple[str, str, str], float | None]:
     """{(report_month, plant_name, item_name): month_actual} for the given
     months, plants and items (None = all plants / all items). A missing key
-    means there is no row; a NULL value is a present key with None."""
+    means there is no row; a NULL value is a present key with None. The
+    dict's order is unspecified (the SQL has no ORDER BY)."""
     table = _table(measure)
     months = list(months)
     plants = None if plants is None else list(plants)
@@ -168,7 +169,12 @@ def _cells_value(cells, month, plant, item):
 def cell(cur, measure: Measure, month, plant, item):
     """value_row(), served from the active report_context when it covers
     `month`: (month_actual,) when the row exists (month_actual may be
-    None), else None. Outside a context it is value_row() on `cur`."""
+    None), else None. Outside a context it is value_row() on `cur`.
+
+    Read-only helper. Inside a context it ignores `cur` and reads the
+    committed snapshot the context loaded (never `cur`'s own uncommitted
+    writes); a repo write switches the context off for the rest of the
+    request, after which it reads on `cur` again."""
     _table(measure)
     cells = _bulk(measure, (month,))
     if cells is None:
@@ -179,7 +185,12 @@ def cell(cur, measure: Measure, month, plant, item):
 
 def sum_plants_cell(cur, measure: Measure, month, plants, item):
     """sum_plants_row(), served from the active report_context when it
-    covers `month`: (SUM,) with SUM None when no non-NULL row matched."""
+    covers `month`: (SUM,) with SUM None when no non-NULL row matched.
+
+    Read-only helper. Inside a context it ignores `cur` and reads the
+    committed snapshot the context loaded (never `cur`'s own uncommitted
+    writes); a repo write switches the context off for the rest of the
+    request, after which it reads on `cur` again."""
     _table(measure)
     cells = _bulk(measure, (month,))
     if cells is None:
@@ -189,7 +200,12 @@ def sum_plants_cell(cur, measure: Measure, month, plants, item):
 
 def sum_months_cell(cur, measure: Measure, plant, item, months):
     """sum_months_row(), served from the active report_context when it
-    covers every month: (SUM,) with SUM None when no non-NULL row matched."""
+    covers every month: (SUM,) with SUM None when no non-NULL row matched.
+
+    Read-only helper. Inside a context it ignores `cur` and reads the
+    committed snapshot the context loaded (never `cur`'s own uncommitted
+    writes); a repo write switches the context off for the rest of the
+    request, after which it reads on `cur` again."""
     _table(measure)
     cells = _bulk(measure, months)
     if cells is None:

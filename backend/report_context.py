@@ -20,9 +20,13 @@ bulk work. The context knows nothing about SQL; each repo module passes
 its own loader (ctx.load(name, loader)).
 
 Writes: every repo write calls repo.version.bump() first, which calls
-invalidate_current(): the active context drops everything it loaded and
-reloads on the next read, so a request never reads its own stale bulk
-data. Inside the preview dry run (repo.conn.rollback_tx) no context is
+invalidate_current(): context serving is switched OFF for the rest of the
+request, for the whole chain of contexts (the outermost activate() /
+ensure() and everything nested in it, including contexts hidden by
+suspend()), and the loaded data is dropped. Later reads run their SQL
+on the caller's own cursor / connection, so a request never reads stale
+bulk data, nor a snapshot that misses the write's own uncommitted rows.
+Inside the preview dry run (repo.conn.rollback_tx) no context is
 served (current() is None): reads there must see that connection's
 uncommitted state.
 
@@ -39,6 +43,17 @@ import unicodedata
 import dbengine
 
 _current = contextvars.ContextVar("report_context", default=None)
+# State shared by every context of one request: created by the outermost
+# activate() / ensure(), inherited by nested ones and by suspend() blocks.
+_chain = contextvars.ContextVar("report_context_chain", default=None)
+
+
+class _Chain:
+    __slots__ = ("disabled", "contexts")
+
+    def __init__(self):
+        self.disabled = False     # set by a write: no context serves any more
+        self.contexts = []        # every context created in this chain
 
 
 def fold(name):
@@ -118,9 +133,13 @@ class ReportContext:
 
 
 def current():
-    """The active context, or None (none active, or inside the dry run)."""
+    """The active context, or None (none active, inside the dry run, or a
+    write has disabled serving for this request)."""
     ctx = _current.get()
     if ctx is None or dbengine._shared_raw.get() is not None:
+        return None
+    chain = _chain.get()
+    if chain is not None and chain.disabled:
         return None
     return ctx
 
@@ -134,11 +153,35 @@ def covering(months):
 
 
 def invalidate_current() -> None:
-    """Called by every repo write (repo.version.bump): drop the active
-    context's bulk data so the next read reloads it."""
+    """Called by every repo write (repo.version.bump): disable context
+    serving for the rest of the request (every context in the chain, also
+    those hidden by suspend()) and drop their loaded data."""
+    chain = _chain.get()
+    if chain is not None:
+        chain.disabled = True
+        for ctx in chain.contexts:
+            ctx.invalidate()
     ctx = _current.get()
     if ctx is not None:
         ctx.invalidate()
+
+
+@contextmanager
+def _enter(ctx):
+    """Make ctx the active context, joining (or starting) the request chain."""
+    chain = _chain.get()
+    chain_token = None
+    if chain is None:
+        chain = _Chain()
+        chain_token = _chain.set(chain)
+    chain.contexts.append(ctx)
+    token = _current.set(ctx)
+    try:
+        yield ctx
+    finally:
+        _current.reset(token)
+        if chain_token is not None:
+            _chain.reset(chain_token)
 
 
 @contextmanager
@@ -162,12 +205,8 @@ def ensure():
     if active is not None:
         yield active
         return
-    ctx = ReportContext(None)
-    token = _current.set(ctx)
-    try:
+    with _enter(ReportContext(None)) as ctx:
         yield ctx
-    finally:
-        _current.reset(token)
 
 
 @contextmanager
@@ -179,9 +218,5 @@ def activate(report_month: str):
     if active is not None and active.report_month == report_month:
         yield active
         return
-    ctx = ReportContext(report_month)
-    token = _current.set(ctx)
-    try:
+    with _enter(ReportContext(report_month)) as ctx:
         yield ctx
-    finally:
-        _current.reset(token)

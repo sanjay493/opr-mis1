@@ -114,19 +114,36 @@ def _snapshot():
     return out
 
 
-def _same(a, b):
-    """Equal, bit for bit and type for type (1.0 != 1, NaN-free data). A
-    fetchone() row compares as the tuple of its values (a repo.conn cursor
-    returns Row, a db.connect() cursor a tuple; callers only index it)."""
+# Results whose dict order is not part of the contract: values() / blobs()
+# run SQL without ORDER BY (their docstrings say the order is unspecified).
+# Every other dict (get_techno_data's units in ORDER BY unit order, the JSON
+# inside) must match in key order too.
+_UNORDERED = {"values", "values-f", "blobs", "blobs-f"}
+
+
+def _same(a, b, ordered=True):
+    """Equal, bit for bit and type for type (1.0 != 1, NaN-free data), dict
+    key order included when `ordered`. A fetchone() row compares as the
+    tuple of its values (a repo.conn cursor returns Row, a db.connect()
+    cursor a tuple; callers only index it)."""
     if isinstance(a, Row):
         a = tuple(a)
     if isinstance(b, Row):
         b = tuple(b)
     if isinstance(a, dict):
-        return isinstance(b, dict) and a.keys() == b.keys() and all(_same(a[k], b[k]) for k in a)
+        if not isinstance(b, dict) or a.keys() != b.keys():
+            return False
+        if ordered and list(a) != list(b):
+            return False
+        return all(_same(a[k], b[k], ordered) for k in a)
     if isinstance(a, (tuple, list)):
-        return type(a) is type(b) and len(a) == len(b) and all(_same(x, y) for x, y in zip(a, b))
+        return type(a) is type(b) and len(a) == len(b) and all(_same(x, y, ordered) for x, y in zip(a, b))
     return type(a) is type(b) and a == b
+
+
+def _diffs(single, bulk):
+    return [k for k in single
+            if not _same(single[k], bulk[k], ordered=(k if isinstance(k, str) else k[0]) not in _UNORDERED)]
 
 
 def test_bulk_equals_single(mysql_db, query_count):
@@ -138,7 +155,7 @@ def test_bulk_equals_single(mysql_db, query_count):
         bulk = _snapshot()
     assert ctx.loads == 2                          # production + capacity, once each
     assert query_count[0] < sql_queries / 5        # only months outside the window use SQL
-    diffs = [k for k in single if not _same(single[k], bulk[k])]
+    diffs = _diffs(single, bulk)
     assert not diffs, diffs[:10]
     # The seed really exercises the cases the bulk path must reproduce.
     assert any(v is not None and tuple(v) == (None,) for k, v in single.items() if k[0] == "cell")  # NULL row
@@ -170,17 +187,66 @@ def test_page4_same_with_and_without_shared_context(mysql_db):
     assert shared == alone
 
 
-def test_write_invalidates_active_context(mysql_db):
+def _cell(cur, month=MONTH):
+    r = rp.cell(cur, "actual", month, "BSP", "Hot Metal")
+    return None if r is None else tuple(r)
+
+
+def test_write_disables_active_context(mysql_db, query_count):
+    """After a write inside activate(), the context serves nothing for the
+    rest of the request: reads run SQL on the caller's cursor and see the
+    write (also its own uncommitted rows on that cursor)."""
+    # (A fresh read cursor after each write: a pooled read connection keeps
+    # its REPEATABLE READ snapshot, with or without a context.)
     rp.upsert("actual", [(MONTH, "BSP", "Hot Metal", 1.5)])
     with report_context.activate(MONTH) as ctx:
         with rc.cursor() as cur:
-            assert rp.cell(cur, "actual", MONTH, "BSP", "Hot Metal") == (1.5,)
-            rp.upsert("actual", [(MONTH, "BSP", "Hot Metal", 2.5)])
-            assert rp.cell(cur, "actual", MONTH, "BSP", "Hot Metal") == (2.5,)
-            rp.save_production_actual(MONTH, "BSP", "Hot Metal", None)     # delete
-            assert rp.cell(cur, "actual", MONTH, "BSP", "Hot Metal") is None
+            assert _cell(cur) == (1.5,)
+            assert ctx.loads == 1
+        rp.upsert("actual", [(MONTH, "BSP", "Hot Metal", 2.5)])
+        assert report_context.current() is None and report_context.covering([MONTH]) is None
+        with rc.cursor() as cur:
+            q0 = query_count[0]
+            assert _cell(cur) == (2.5,)
+            assert query_count[0] == q0 + 1                 # plain SQL, no reload
+        rp.save_production_actual(MONTH, "BSP", "Hot Metal", None)     # delete
+        with rc.cursor() as cur:
+            assert _cell(cur) is None
         assert rp.get_sail_production_actual(MONTH, "Hot Metal") is None
-    assert ctx.loads == 3                         # reloaded after each write
+        with rc.tx() as cur:                                # own uncommitted write
+            rp.upsert_row(cur, "actual", MONTH, "BSP", "Hot Metal", 7.5)
+            assert _cell(cur) == (7.5,)
+        with report_context.activate(MONTH):                # same chain: still off
+            assert report_context.current() is None
+        with report_context.activate("2016-03"):            # nested month: off too
+            assert report_context.current() is None
+    assert ctx.loads == 1
+    with report_context.activate(MONTH) as fresh:           # a new request serves again
+        assert report_context.current() is fresh
+
+
+def test_write_under_suspend_disables_outer_context(mysql_db):
+    """A write inside suspend() (or a nested context) switches off the outer
+    context too: after the block, reads still run SQL and see the write."""
+    rp.upsert("actual", [(MONTH, "BSP", "Hot Metal", 1.5)])
+    with report_context.activate(MONTH) as ctx:
+        with rc.cursor() as cur:
+            assert _cell(cur) == (1.5,)                     # outer context loaded
+        with report_context.suspend():
+            rp.upsert("actual", [(MONTH, "BSP", "Hot Metal", 3.5)])
+        assert report_context.current() is None
+        with rc.cursor() as cur:
+            assert _cell(cur) == (3.5,)
+        assert rp.get_sail_production_actual(MONTH, "Hot Metal") == 3.5
+        assert ctx.loads == 1
+    with report_context.activate(MONTH):
+        with rc.cursor() as cur:
+            assert _cell(cur) == (3.5,)
+        with report_context.activate("2016-03"):            # write in a nested context
+            rp.upsert("actual", [(MONTH, "BSP", "Hot Metal", 4.5)])
+        assert report_context.current() is None
+        with rc.cursor() as cur:
+            assert _cell(cur) == (4.5,)
 
 
 def test_write_invalidates_memo(mysql_db):
@@ -188,7 +254,8 @@ def test_write_invalidates_memo(mysql_db):
         assert ctx.memo(("k",), lambda: 1) == 1
         assert ctx.memo(("k",), lambda: 2) == 1
         rp.upsert("abp", [(MONTH, "BSP", "Hot Metal", 1.0)])
-        assert ctx.memo(("k",), lambda: 3) == 3
+        assert report_context.current() is None      # serving (and its memo) off
+        assert ctx.memo(("k",), lambda: 3) == 3      # the dropped memo recomputes
 
 
 def test_lazy_load_and_window(mysql_db, query_count):
@@ -340,7 +407,7 @@ def test_techno_bulk_equals_single(mysql_db, query_count):
         bulk = _techno_snapshot()
     assert ctx.loads == 2                          # techno + production
     assert query_count[0] < sql_queries / 2
-    diffs = [k for k in single if not _same(single[k], bulk[k])]
+    diffs = _diffs(single, bulk)
     assert not diffs, diffs[:10]
     assert any(len(v[0]) > 2 for k, v in single.items() if k[0] == "all")
     # Each read gets its own objects: mutating one never reaches the next.

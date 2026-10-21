@@ -81,7 +81,12 @@ def _units_from_bulk(plant, report_month, unit=None):
 
 def json_cell(cur, plant, report_month, unit):
     """json_row(), served from the active report_context when it covers
-    report_month: (techno_json text,) or None."""
+    report_month: (techno_json text,) or None.
+
+    Read-only helper. Inside a context it ignores `cur` and reads the
+    committed snapshot the context loaded (never `cur`'s own uncommitted
+    writes); a repo write switches the context off for the rest of the
+    request, after which it reads on `cur` again."""
     bulk = _bulk((report_month,))
     if bulk is None:
         return json_row(cur, plant, report_month, unit)
@@ -98,7 +103,8 @@ def blobs(months: Iterable[str], plants: Iterable[str] | None = None,
     and units (None = all). Each value is exactly what get_techno_data returns
     for that unit: the stored JSON as-is (a row holding only "month" has no
     "till_month" key; JSON null stays None; ints stay int), or {} when the
-    stored JSON does not parse. A missing key means there is no row."""
+    stored JSON does not parse. A missing key means there is no row. The
+    dict's order is unspecified (the SQL has no ORDER BY)."""
     months = list(months)
     plants = None if plants is None else list(plants)
     units = None if units is None else list(units)
