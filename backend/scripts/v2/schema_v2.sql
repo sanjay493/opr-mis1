@@ -16,7 +16,8 @@
 --   declared FK (ON DELETE RESTRICT unless stated). Indexes that exist only to
 --   back an FK are created implicitly by InnoDB and are not listed here.
 -- * Period keys stay strings: report_month CHAR(7) 'YYYY-MM' (FK cal_month on
---   the fact tables), fy CHAR(7) 'YYYY-YY'.
+--   the fact tables), fy CHAR(7) 'YYYY-YY' (no FK: there is no FY table and
+--   cal_month.fy is not unique). extraction_log keeps a free report_month.
 -- * Column names are uniform: plant_code, fy, created_at / updated_at,
 --   created_by / updated_by. v1 column renames are noted on each table.
 -- * Booleans are TINYINT(1). Dates are DATE. Instants are DATETIME.
