@@ -5,6 +5,7 @@ Unit displayed: Tonnes  (DB stores '000 T → multiply × 1000, round to integer
 """
 import math
 import db
+import report_context
 from repo import production as rp
 
 # ── per-plant DB item specs ──────────────────────────────────────────────────
@@ -59,11 +60,11 @@ def _fetch(cur, tbl, plant, item, month):
     if isinstance(item, list):
         total, found = 0.0, False
         for it in item:
-            r = rp.value_row(cur, table, month, plant, it)
+            r = rp.cell(cur, table, month, plant, it)
             if r and r[0] is not None:
                 total += r[0]; found = True
         return total if found else None
-    r = rp.value_row(cur, table, month, plant, item)
+    r = rp.cell(cur, table, month, plant, item)
     return r[0] if r and r[0] is not None else None
 
 
@@ -125,6 +126,13 @@ def _gr(curr, prev):
 # ── main public function ─────────────────────────────────────────────────────
 
 def generate_concast_data(report_month: str) -> dict:
+    # Per-month production reads are served from the report_context bulk
+    # load (the request's, or one of its own when called alone).
+    with report_context.activate(report_month):
+        return _generate_concast_data(report_month)
+
+
+def _generate_concast_data(report_month: str) -> dict:
     ytd_months      = db.get_ytd_months(report_month)
     all_fy          = db.get_fy_months(report_month)
     prev_month      = db.get_cply_month(report_month)

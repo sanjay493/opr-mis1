@@ -5,6 +5,7 @@ Unit: '000 Tonnes.
 """
 import math
 import db
+import report_context
 from repo import production as rp
 
 
@@ -25,7 +26,7 @@ def _one(cur, table, plant, item, month):
     if not item:
         return None
     tbl = "actual" if table == "act" else "abp"
-    r = rp.value_row(cur, tbl, month, plant, item)
+    r = rp.cell(cur, tbl, month, plant, item)
     return r[0] if r and r[0] is not None else None
 
 def _ann(cur, plant, item, fy):
@@ -133,6 +134,13 @@ def _add_rowspans(rows):
 
 
 def generate_segment_wise(report_month: str) -> dict:
+    # Per-month production reads are served from the report_context bulk
+    # load (the request's, or one of its own when called alone).
+    with report_context.activate(report_month):
+        return _generate_segment_wise(report_month)
+
+
+def _generate_segment_wise(report_month: str) -> dict:
     prev_month = db.get_cply_month(report_month)
     fy         = db.get_fy_months(report_month)
     ytd        = db.get_ytd_months(report_month)

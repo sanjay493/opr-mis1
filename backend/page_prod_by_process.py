@@ -8,6 +8,7 @@ Unit: Tonnes  (DB stores '000 T — multiply × 1000)
 import html
 import math
 import db
+import report_context
 from repo import production as rp
 from repo import ipt as ript
 from page4 import _p4_ytd_sum, _p4_conv_actuals
@@ -61,11 +62,11 @@ def _fetch(cur, plant: str, item, month: str):
     if isinstance(item, list):
         tot, ok = 0.0, False
         for it in item:
-            r = rp.value_row(cur, "actual", month, plant, it)
+            r = rp.cell(cur, "actual", month, plant, it)
             if r and r[0] is not None:
                 tot += r[0]; ok = True
         return tot if ok else None
-    r = rp.value_row(cur, "actual", month, plant, item)
+    r = rp.cell(cur, "actual", month, plant, item)
     return r[0] if r and r[0] is not None else None
 
 
@@ -651,6 +652,13 @@ def _flow_sankey_svg(cur, report_month: str) -> str:
 # ── public API ────────────────────────────────────────────────────────────────
 
 def generate_prod_by_process(report_month: str) -> dict:
+    # Per-month production reads are served from the report_context bulk
+    # load (the request's, or one of its own when called alone).
+    with report_context.activate(report_month):
+        return _generate_prod_by_process(report_month)
+
+
+def _generate_prod_by_process(report_month: str) -> dict:
     prev_month      = db.get_cply_month(report_month)
     ytd_months      = db.get_ytd_months(report_month)
     prev_ytd_months = db.get_ytd_months(prev_month)
