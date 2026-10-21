@@ -17,6 +17,7 @@ import time
 import pymysql
 
 import dbengine
+import report_context
 from repo import conn as rc
 
 _NO_TABLE = 1146          # ER_NO_SUCH_TABLE
@@ -50,7 +51,12 @@ def bump(cur) -> None:
 
     Inside repo.conn.rollback_tx (the preview dry run) it does nothing: the
     dry run's writes are always rolled back, so there is nothing to
-    invalidate, and it must not hold the data_version row lock."""
+    invalidate, and it must not hold the data_version row lock.
+
+    It also drops the active report_context's bulk data (a write inside a
+    request that is building pages must not leave that request reading
+    its own stale bulk load)."""
+    report_context.invalidate_current()
     if in_dry_run():
         return
     try:

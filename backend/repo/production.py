@@ -15,8 +15,10 @@ in page / api / extractor modules, moved here verbatim.
 from typing import Any, Dict, Iterable, List, Literal, Optional
 
 import activity_context
+import report_context
 from constants import ALL_PLANTS as PLANTS
 from dbengine import connect
+from report_context import fold
 from repo import version as _ver
 from repo import conn as rc
 from repo.conn import row_dict as _row_dict
@@ -53,6 +55,14 @@ def values(months: Iterable[str], plants: Iterable[str] | None,
     items = None if items is None else list(items)
     if not months or plants == [] or items == []:
         return {}
+    cells = _bulk(measure, months)
+    if cells is not None:
+        mset = set(months)
+        pset = None if plants is None else {fold(p) for p in plants}
+        iset = None if items is None else {fold(i) for i in items}
+        return {(m, plant, item): v
+                for (m, fp, fi), (plant, item, v) in cells.items()
+                if m in mset and (pset is None or fp in pset) and (iset is None or fi in iset)}
     where = [_in("report_month", months)]
     params = list(months)
     if plants is not None:
@@ -96,6 +106,108 @@ def delete(measure: Measure, month: str, plant: str, items: Iterable[str] | None
     with rc.tx() as cur:
         _ver.bump(cur)
         cur.execute(sql, params)
+
+
+# ── report_context bulk load ────────────────────────────────────────────────
+# Inside report_context.activate(), reads whose months all fall in the
+# context's window are served from one load of every measure's rows for
+# that window; anything else runs its SQL as before. The served functions
+# reproduce their SQL exactly:
+#   - names match as MySQL's utf8mb4_0900_ai_ci does (report_context.fold);
+#   - an absent key is "no row", a None value is a row holding NULL;
+#   - SUM(month_actual) is MySQL's: NULLs skipped, NULL when nothing is
+#     left, else 0.0 + v1 + v2 + ... in the order InnoDB reads the rows
+#     (report_month, then plant_name, for every query shape served here:
+#     the PRIMARY KEY and idx_prod_item_month both yield that order).
+
+_BULK_SQL = " UNION ALL ".join(
+    f"SELECT '{measure}', report_month, plant_name, item_name, month_actual "
+    f"FROM {table} WHERE report_month BETWEEN %s AND %s"
+    for measure, table in _TABLE.items())
+
+
+def _bulk_load(first, last):
+    """{measure: {(report_month, fold(plant), fold(item)): (plant, item, value)}}
+    for every row with first <= report_month <= last, all three measures."""
+    out = {measure: {} for measure in _TABLE}
+    with rc.cursor() as cur:
+        cur.execute(_BULK_SQL, (first, last) * len(_TABLE))
+        for r in cur.fetchall():
+            out[r[0]][(r[1], fold(r[2]), fold(r[3]))] = (r[2], r[3], r[4])
+    return out
+
+
+def _bulk(measure, months):
+    """The active context's cells for `measure` when its window covers
+    every month in `months`, else None (the caller runs its SQL)."""
+    ctx = report_context.covering(months)
+    if ctx is None:
+        return None
+    return ctx.load("production", _bulk_load)[measure]
+
+
+def _cells_sum(cells, months, plants, item):
+    """MySQL SUM(month_actual) over months x plants for one item, from cells."""
+    fi = fold(item)
+    fplants = sorted({fold(p) for p in plants})
+    total = None
+    for m in sorted(set(months)):
+        for fp in fplants:
+            hit = cells.get((m, fp, fi))
+            if hit is not None and hit[2] is not None:
+                total = (0.0 if total is None else total) + hit[2]
+    return total
+
+
+def _cells_value(cells, month, plant, item):
+    """month_actual of one row (None when absent or NULL)."""
+    hit = cells.get((month, fold(plant), fold(item)))
+    return None if hit is None else hit[2]
+
+
+def cell(cur, measure: Measure, month, plant, item):
+    """value_row(), served from the active report_context when it covers
+    `month`: (month_actual,) when the row exists (month_actual may be
+    None), else None. Outside a context it is value_row() on `cur`."""
+    _table(measure)
+    cells = _bulk(measure, (month,))
+    if cells is None:
+        return value_row(cur, measure, month, plant, item)
+    hit = cells.get((month, fold(plant), fold(item)))
+    return None if hit is None else (hit[2],)
+
+
+def sum_plants_cell(cur, measure: Measure, month, plants, item):
+    """sum_plants_row(), served from the active report_context when it
+    covers `month`: (SUM,) with SUM None when no non-NULL row matched."""
+    _table(measure)
+    cells = _bulk(measure, (month,))
+    if cells is None:
+        return sum_plants_row(cur, measure, month, plants, item)
+    return (_cells_sum(cells, (month,), plants, item),)
+
+
+def _fs_alias_sum_cells(cells, month: str, plants: list) -> Optional[float]:
+    """_fs_alias_sum from cells (same arithmetic, same order)."""
+    regular = [p for p in plants if p not in _FS_ALIAS_PLANTS]
+    alias = [p for p in plants if p in _FS_ALIAS_PLANTS]
+    total, found = 0.0, False
+    if regular:
+        s = _cells_sum(cells, (month,), regular, "Finished Steel")
+        if s is not None:
+            total += s
+            found = True
+    for p in alias:
+        v = _cells_value(cells, month, p, "Finished Steel")
+        if v is not None:
+            total += v
+            found = True
+        else:
+            v = _cells_value(cells, month, p, "Saleable Steel")
+            if v is not None:
+                total += v
+                found = True
+    return total if found else None
 
 
 # ── SAIL aggregates and single-row saves (moved from db.py) ────────────────
@@ -163,8 +275,42 @@ def _sail_conversion_actual(cursor, month: str) -> Optional[float]:
     return row[0] if row and row[0] is not None else None
 
 
+def _sail_month_cells(cells, month, item, with_conversion):
+    """get_sail_production_actual (with_conversion) / _plan from cells."""
+    if item == "Finished Steel":
+        result = _fs_alias_sum_cells(cells, month, PLANTS)
+        conversion = _cells_value(cells, month, "SAIL", "Conversion") if with_conversion else None
+        if result is not None or conversion is not None:
+            return (result or 0.0) + (conversion or 0.0) if with_conversion else result
+        return _cells_value(cells, month, "SAIL", "Finished Steel")
+    total = _cells_sum(cells, (month,), PLANTS, item)
+    if total is not None:
+        return total
+    return _cells_value(cells, month, "SAIL", item)
+
+
+def _sail_ytd_cells(cells, months, item, with_conversion):
+    """get_sail_production_ytd_actual (with_conversion) / _plan from cells."""
+    if item == "Finished Steel":
+        total, found = 0.0, False
+        for m in months:
+            v = _fs_alias_sum_cells(cells, m, PLANTS)
+            c = _cells_value(cells, m, "SAIL", "Conversion") if with_conversion else None
+            if v is not None or c is not None:
+                total += (v or 0.0) + (c or 0.0) if with_conversion else v
+                found = True
+        return total if found else None
+    total = _cells_sum(cells, months, PLANTS, item)
+    if total is not None:
+        return total
+    return _cells_sum(cells, months, ["SAIL"], item)
+
+
 def get_sail_production_actual(month: str, item: str) -> Optional[float]:
     """Calculates the sum of actuals across active plants. Falls back to explicit 'SAIL' record if none found."""
+    cells = _bulk("actual", (month,))
+    if cells is not None:
+        return _sail_month_cells(cells, month, item, with_conversion=True)
     conn = connect()
     cursor = conn.cursor()
 
@@ -209,6 +355,9 @@ def get_sail_production_actual(month: str, item: str) -> Optional[float]:
 
 def get_sail_production_plan(month: str, item: str) -> Optional[float]:
     """Calculates the sum of plans across active plants. Falls back to explicit 'SAIL' record if none found."""
+    cells = _bulk("abp", (month,))
+    if cells is not None:
+        return _sail_month_cells(cells, month, item, with_conversion=False)
     conn = connect()
     cursor = conn.cursor()
 
@@ -253,6 +402,9 @@ def get_sail_production_ytd_actual(months: List[str], item: str) -> Optional[flo
     """Sums the actuals across active plants over a list of months (YTD). Falls back to 'SAIL' if no plant records exist."""
     if not months:
         return None
+    cells = _bulk("actual", months)
+    if cells is not None:
+        return _sail_ytd_cells(cells, months, item, with_conversion=True)
     conn = connect()
     cursor = conn.cursor()
 
@@ -299,6 +451,9 @@ def get_sail_production_ytd_plan(months: List[str], item: str) -> Optional[float
     """Sums the plans across active plants over a list of months (YTD). Falls back to 'SAIL' if no plant records exist."""
     if not months:
         return None
+    cells = _bulk("abp", months)
+    if cells is not None:
+        return _sail_ytd_cells(cells, months, item, with_conversion=False)
     conn = connect()
     cursor = conn.cursor()
 
@@ -397,6 +552,9 @@ def get_production_actual_value(plant: str, item_name: str, report_month: str) -
     """Single plant/item/month lookup from production_table (no cross-plant
     aggregation) - used to show 'current DB value' next to a freshly-extracted
     figure during upload preview, so the user can compare before confirming."""
+    cells = _bulk("actual", (report_month,))
+    if cells is not None:
+        return _cells_value(cells, report_month, plant, item_name)
     conn = connect()
     cursor = conn.cursor()
     cursor.execute(

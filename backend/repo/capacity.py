@@ -3,7 +3,10 @@ effective from a month). Functions moved verbatim from db.py."""
 from typing import Any, Dict, List, Optional
 
 import activity_context
+import report_context
 from dbengine import Row, connect
+from report_context import fold
+from repo import conn as rc
 from repo import version as _ver
 from repo.conn import row_dict as _row_dict
 
@@ -29,10 +32,34 @@ def list_capacity_entries(plant: Optional[str] = None, item: Optional[str] = Non
     return rows
 
 
+def _capacity_load(_first, _last):
+    """{(fold(plant), fold(item)): [(effective_month, annual_capacity), ...]}
+    for every item_capacity_table row (the report_context window is not
+    needed: capacity entries apply from their month onward)."""
+    out = {}
+    with rc.cursor() as cur:
+        cur.execute("SELECT plant_name, item_name, effective_month, annual_capacity "
+                    "FROM item_capacity_table")
+        for r in cur.fetchall():
+            out.setdefault((fold(r[0]), fold(r[1])), []).append((r[2], r[3]))
+    return out
+
+
 def get_effective_capacity(plant: str, item: str, month: str) -> Optional[float]:
     """Annual capacity ('000 T/yr) in effect for `plant`/`item` at `month` —
     the latest entry with effective_month <= month, or None if the plant/item
-    has never had a capacity entered at or before that month."""
+    has never had a capacity entered at or before that month.
+
+    Inside report_context.activate() it is served from one load of the
+    whole (small) table."""
+    ctx = report_context.current()
+    if ctx is not None:
+        entries = ctx.load("capacity", _capacity_load).get((fold(plant), fold(item)), ())
+        best = None
+        for effective_month, annual_capacity in entries:
+            if effective_month <= month and (best is None or effective_month > best[0]):
+                best = (effective_month, annual_capacity)
+        return best[1] if best else None
     conn = connect()
     try:
         cur = conn.execute(

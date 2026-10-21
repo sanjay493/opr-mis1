@@ -1,5 +1,6 @@
 import calendar
 import db
+import report_context
 from constants import FIVE_PLANTS as _5P
 from repo import production as rp
 
@@ -110,11 +111,11 @@ _FS_ALIAS = frozenset({"SSP", "VISL"})
 def _p4_query_one(cur, table, month, plant, db_item):
     """Single plant, single month. SSP/VISL fall back to Saleable Steel for Finished Steel."""
     tbl = _TABLES[table]
-    row = rp.value_row(cur, tbl, month, plant, db_item)
+    row = rp.cell(cur, tbl, month, plant, db_item)
     if row and row[0] is not None:
         return row[0]
     if db_item == "Finished Steel" and plant in _FS_ALIAS:
-        row = rp.value_row(cur, tbl, month, plant, "Saleable Steel")
+        row = rp.cell(cur, tbl, month, plant, "Saleable Steel")
         return row[0] if row and row[0] is not None else None
     return None
 
@@ -132,7 +133,7 @@ def _p4_query_sum(cur, table, month, plants, db_item):
                 total += v
                 found = True
         return total if found else None
-    row = rp.sum_plants_row(cur, _TABLES[table], month, plants, db_item)
+    row = rp.sum_plants_cell(cur, _TABLES[table], month, plants, db_item)
     return row[0] if row and row[0] is not None else None
 
 
@@ -324,7 +325,7 @@ def _p4_conv_actuals(cur, month: str):
     ytd_prev = db.get_ytd_months(prev)
 
     def fetch(m):
-        r = rp.value_row(cur, "actual", m, "SAIL", "Conversion")
+        r = rp.cell(cur, "actual", m, "SAIL", "Conversion")
         return r[0] if r and r[0] is not None else None
 
     def ytd_sum(months):
@@ -396,6 +397,14 @@ def generate_page4_rows(month: str, raw: bool = False, basis: str = "app") -> li
     if basis not in ("app", "mou"):
         raise ValueError(f"basis must be 'app' or 'mou', not {basis!r}")
     plan = "mou" if basis == "mou" else "plan"
+    # Every per-month read below (and get_effective_capacity) is served from
+    # the request's report_context bulk load; this activates one when the
+    # caller has none (an active context for the same month is reused).
+    with report_context.activate(month):
+        return _page4_rows(month, raw, basis, plan)
+
+
+def _page4_rows(month: str, raw: bool, basis: str, plan: str) -> list:
     conn = db.connect()
     cur = conn.cursor()
     rows = []
