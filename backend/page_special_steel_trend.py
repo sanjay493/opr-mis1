@@ -26,6 +26,7 @@ import calendar
 import datetime as _dt
 import math
 import db
+import report_context
 from repo import production as rp
 from repo import special_steel as rss
 from page_special_steel import _ssps_special_steel
@@ -129,7 +130,7 @@ def _sum_actual(cur, months: list, entity: str):
 
 
 def _saleable_item(cur, month, plant, item_name):
-    r = rp.value_row(cur, "actual", month, plant, item_name)
+    r = rp.cell(cur, "actual", month, plant, item_name)
     return r[0] if r and r[0] is not None else None  # '000T
 
 
@@ -492,6 +493,13 @@ def _build_trend_bundle(cur, report_month: str, fys: list, ytd_months: list,
 
 
 def generate_special_steel_trend(report_month: str) -> dict:
+    # Per-month production reads are served from the report_context bulk
+    # load (the request's, or one of its own when called alone).
+    with report_context.activate(report_month):
+        return _generate_special_steel_trend(report_month)
+
+
+def _generate_special_steel_trend(report_month: str) -> dict:
     fys = _last_n_fys(report_month, 4)
     ytd_months = db.get_ytd_months(report_month)
 

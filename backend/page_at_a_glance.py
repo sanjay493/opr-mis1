@@ -15,6 +15,7 @@ import datetime as _dt
 import re as _re
 
 import db
+import report_context
 from repo import techno as rt
 from chart_utils import axis_break_svg, own_scale
 from report_utils import compute_item_row
@@ -1001,6 +1002,13 @@ def _trend_section(report_month: str) -> dict:
 # ── public API ────────────────────────────────────────────────────────────────
 
 def generate_at_a_glance(report_month: str) -> dict:
+    # Per-month production reads are served from the report_context bulk
+    # load (the request's, or one of its own when called alone).
+    with report_context.activate(report_month):
+        return _generate_at_a_glance(report_month)
+
+
+def _generate_at_a_glance(report_month: str) -> dict:
     dt = _dt.datetime.strptime(report_month, "%Y-%m")
     month_label = dt.strftime("%B %Y")
     month_short = dt.strftime("%b'%y")
