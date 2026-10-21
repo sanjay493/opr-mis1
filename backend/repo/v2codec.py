@@ -502,14 +502,26 @@ def decode_text_rows(scope: str, rows: Iterable[Dict[str, Any]]) -> List[Dict[st
         else:  # sail_sales_note
             v1 = {"report_month": r["period"], "note": r["text"]}
         out.append({c: v1[c] for c in spec["v1_columns"]})
-    pk = {"secretary_review": ("report_month", "block_key"),
-          "board_note": ("report_fy", "quarter", "plant", "field"),
-          "do_letter": ("report_month", "item_name", "plant_name"),
-          "sail_sales_note": ("report_month",),
-          "rail_note": ("sort_order",),
-          "ss_phys_note": ("financial_year", "sort_order")}[scope]
+    pk = text_v1_key(scope)
     out.sort(key=lambda d: tuple(d[c] for c in pk))
     return out
+
+
+# v1 primary key of each narrative table (wide tables: the period column)
+_TEXT_V1_KEY = {"secretary_review": ("report_month", "block_key"),
+                "board_note": ("report_fy", "quarter", "plant", "field"),
+                "do_letter": ("report_month", "item_name", "plant_name"),
+                "sail_sales_note": ("report_month",),
+                "rail_note": ("sort_order",),
+                "ss_phys_note": ("financial_year", "sort_order")}
+
+
+def text_v1_key(scope: str) -> Tuple[str, ...]:
+    """The v1 primary-key columns of the scope's table."""
+    spec = TEXT_SCOPES[scope]
+    if spec["kind"] == "wide":
+        return (spec["period"],)
+    return _TEXT_V1_KEY[scope]
 
 
 # ═════════════════════════════════════════════════════════════════════════════
