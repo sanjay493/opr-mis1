@@ -34,13 +34,8 @@ class VersionedCache:
             entry = self._entries.get(full_key)
             if entry is not None:
                 self._entries.move_to_end(full_key)
-                if part in entry:
-                    stored = entry[part]
-                    hit = True
-                else:
-                    hit = False
-            else:
-                hit = False
+            hit = entry is not None and part in entry
+            stored = entry[part] if hit else None
         if hit:
             # Stored values are never mutated, so copying outside the lock is safe.
             return copy.deepcopy(stored)
