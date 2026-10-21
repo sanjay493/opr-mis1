@@ -1213,6 +1213,31 @@ def records_plants_items_in(cur, plants):
     return cur.fetchall()
 
 
+def records_rows(cur, scope):
+    """[(item_name, plant_name, report_month, month_actual)] for every row
+    in `scope`, in the order MySQL reads them: the same WHERE as the
+    records GROUP BY queries above and no ORDER BY, so the same access
+    path. Those queries group one row per (item, period, plant, month), so
+    their output is these rows in this order; page_records aggregates them
+    in Python (one fetch instead of one GROUP BY per period kind).
+    Memoised per scope in the active report_context (the result is shared:
+    do not mutate)."""
+    where, args = scope
+
+    def fetch():
+        cur.execute(f"""
+            SELECT item_name, plant_name, report_month, month_actual
+            FROM production_table
+            WHERE {where}
+        """, list(args))
+        return [tuple(r) for r in cur.fetchall()]
+
+    ctx = report_context.current()
+    if ctx is None:
+        return fetch()
+    return ctx.memo(("records_rows", where, tuple(args)), fetch)
+
+
 def records_fy_window_cells(cur, scope, s_pos, e_pos):
     """fetchall() of (item_name, fy_start, plant_name, report_month, v, days)
     for months whose FY position (0 = Apr) is within [s_pos, e_pos]."""

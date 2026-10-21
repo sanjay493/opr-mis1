@@ -231,3 +231,33 @@ def test_fold_matches_mysql_collation():
     assert report_context.fold("Pig Iron") == report_context.fold("pig iron")
     assert report_context.fold("Pig Iron ") != report_context.fold("Pig Iron")   # NO PAD
     assert report_context.fold("Café") == report_context.fold("cafe")
+
+
+def test_records_rows_reproduce_group_by(mysql_db, monkeypatch):
+    """page_records aggregates rp.records_rows in Python; every row the old
+    GROUP BY queries return comes back identical, in the same order, and
+    the built records are identical (order-sensitive)."""
+    import json
+
+    import page_records as pr
+    _seed()
+    scopes = [rp.records_scope(pr.SAIL5, pr.HIGHLIGHT_ITEMS, MONTH), rp.records_scope(pr.ALL8, pr.ITEMS),
+              rp.records_scope(["DSP"]), rp.records_scope(pr.ALL8, pr.MAJOR_ITEMS, "2025-12")]
+    with rc.cursor() as cur:
+        for sc in scopes:
+            for bucket in ("quarter", "half", "fy", "cy"):
+                old = [tuple(r) for r in rp.records_bucket_cells(cur, sc, bucket)]
+                assert old and list(pr._bucket_cells(cur, sc, bucket)) == old
+            for s, e in ((0, 2), (6, 10), (9, 11)):
+                old = [tuple(r) for r in rp.records_fy_window_cells(cur, sc, s, e)]
+                assert old and list(pr._fy_window_cells(cur, sc, s, e)) == old
+
+    def built():
+        return json.dumps([pr._build_group_records(pr.HIGHLIGHT_ITEMS, MONTH), pr.generate_records(),
+                           pr.generate_best_period(10, 2, "plants", "all")], default=str)
+    new = built()
+    with report_context.activate(MONTH):
+        assert built() == new
+    monkeypatch.setattr(pr, "_bucket_cells", rp.records_bucket_cells)        # the old GROUP BY path
+    monkeypatch.setattr(pr, "_fy_window_cells", rp.records_fy_window_cells)
+    assert built() == new

@@ -61,6 +61,86 @@ def _cells_period_value(item, plant_cells):
     return sum(w[2] for w in plant_cells.values())
 
 
+# ── Period arithmetic on report_month, exactly as the SQL in repo/production
+# (_fy_expr, _q_expr, _H_EXPR, _days_expr, _fy_pos_expr) computes it. The
+# period records are aggregated here from rp.records_rows (one fetch per
+# scope, rows in MySQL's read order) instead of one GROUP BY query per
+# period kind; rp.records_bucket_cells / records_fy_window_cells stay as the
+# reference these must match (tests/test_report_context.py). The calendar
+# month totals stay in SQL (one cheap query; equal totals come back in
+# MySQL's sort order, which Python can't reproduce).
+
+def _sql_int(text: str) -> int:
+    """MySQL CAST(text AS SIGNED): the leading integer, 0 when there is none."""
+    t = text.lstrip(" ")
+    sign, digits = 1, ""
+    if t[:1] in ("-", "+"):
+        sign, t = (-1 if t[0] == "-" else 1), t[1:]
+    for ch in t:
+        if not ch.isdigit():
+            break
+        digits += ch
+    return sign * int(digits) if digits else 0
+
+
+def _mon(rm: str) -> int:
+    return _sql_int(rm[5:7])
+
+
+def _fy_start(rm: str) -> int:
+    return _sql_int(rm[0:4]) if _mon(rm) >= 4 else _sql_int(rm[0:4]) - 1
+
+
+def _qnum(rm: str) -> int:
+    m = _mon(rm)
+    return 1 if m in (4, 5, 6) else 2 if m in (7, 8, 9) else 3 if m in (10, 11, 12) else 4
+
+
+def _hnum(rm: str) -> int:
+    return 1 if 4 <= _mon(rm) <= 9 else 2
+
+
+def _days(rm: str) -> int:
+    m = _mon(rm)
+    if m in (1, 3, 5, 7, 8, 10, 12):
+        return 31
+    if m in (4, 6, 9, 11):
+        return 30
+    y = _sql_int(rm[0:4])
+    return 29 if y % 4 == 0 and (y % 100 != 0 or y % 400 == 0) else 28
+
+
+def _fy_pos(rm: str) -> int:
+    m = _mon(rm)
+    return m - 4 if m >= 4 else m + 8
+
+
+_BUCKET_KEY = {
+    'quarter': lambda rm: (_qnum(rm), _fy_start(rm)),
+    'half':    lambda rm: (_hnum(rm), _fy_start(rm)),
+    'fy':      lambda rm: (_fy_start(rm),),
+    'cy':      lambda rm: (rm[0:4],),
+}
+
+
+def _bucket_cells(cur, scope, bucket: str):
+    """rp.records_bucket_cells' rows, (item, *bucket, plant, month, v, days),
+    from rp.records_rows. Each (item, bucket, plant, month) group is one
+    row (the table's key), so v is SUM over that row alone: 0.0 + value,
+    None for NULL."""
+    key = _BUCKET_KEY[bucket]
+    for item, plant, rm, value in rp.records_rows(cur, scope):
+        yield (item, *key(rm), plant, rm, None if value is None else 0.0 + value, _days(rm))
+
+
+def _fy_window_cells(cur, scope, s_pos: int, e_pos: int):
+    """rp.records_fy_window_cells' rows, (item, fy_start, plant, month, v,
+    days), from rp.records_rows."""
+    for item, plant, rm, value in rp.records_rows(cur, scope):
+        if s_pos <= _fy_pos(rm) <= e_pos:
+            yield (item, _fy_start(rm), plant, rm, None if value is None else 0.0 + value, _days(rm))
+
+
 def _bucketed_period_values(cur, items: list, scope, bucket: str,
                             required_months: int) -> dict:
     """{(item_name, *bucket): value} for every (item, period bucket) whose
@@ -73,7 +153,7 @@ def _bucketed_period_values(cur, items: list, scope, bucket: str,
     item_set = set(items)
 
     acc = {}  # (item, bucket_tuple) -> {'months': set, 'plants': {plant: [wsum, wdays, total]}}
-    for row in rp.records_bucket_cells(cur, scope, bucket):
+    for row in _bucket_cells(cur, scope, bucket):
         n = len(row) - 5
         item, bucket = row[0], tuple(row[1:1 + n])
         plant, rm, v, days = row[1 + n], row[2 + n], row[3 + n], row[4 + n]
@@ -302,7 +382,7 @@ def _compute_best_period(cur, items: list, scope,
     item_set = set(items)
     # (item, fy_start) -> {'months': set, 'plants': {plant: [wsum, wdays, total]}}
     acc: dict = {}
-    for item, fy_start, plant, rm, v, days in rp.records_fy_window_cells(cur, scope, s_pos, e_pos):
+    for item, fy_start, plant, rm, v, days in _fy_window_cells(cur, scope, s_pos, e_pos):
         if item not in item_set or v is None:
             continue
         d = acc.setdefault((item, fy_start), {'months': set(), 'plants': {}})
