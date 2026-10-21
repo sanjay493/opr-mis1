@@ -8,6 +8,7 @@ Used by the /api/production-records endpoint.
 import db
 from page_production_fy_export import is_rate_item
 from repo import production as rp
+from version_cache import VersionedCache
 
 ITEMS = ['Total Sinter', 'Hot Metal', 'Total Crude Steel',
          'Saleable Steel', 'Pig Iron', 'Finished Steel']
@@ -389,7 +390,20 @@ def generate_best_period(start_mon: int, end_mon: int, scope: str = 'sail5',
         conn.close()
 
 
+# Best-Ever Highlights and Best Calendar Month both ask for the same
+# (items, upto_month); memoised on data_version so a write invalidates it.
+_group_records_cache = VersionedCache(maxsize=32)
+
+
 def generate_group_records(items: list = HIGHLIGHT_ITEMS, upto_month: str = None) -> dict:
+    """_build_group_records, memoised on (items, upto_month, data_version).
+    Each call gets its own copy."""
+    items = list(items)
+    return _group_records_cache.get_or_compute(
+        (tuple(items), upto_month), None, lambda: _build_group_records(items, upto_month))
+
+
+def _build_group_records(items: list, upto_month: str = None) -> dict:
     """Like generate_records(), but only the two plant-group scopes
     (sail5/all8) and a caller-supplied item list — used by the Best-Ever
     Highlights and Best Calendar Month report pages, which don't need

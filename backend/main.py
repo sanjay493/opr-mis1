@@ -15,8 +15,10 @@ from typing import List, Optional
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 
+import data_version
 import db
 import dbengine
+from version_cache import VersionedCache
 from repo import production as rp
 from repo import techno as rt
 from repo import special_steel as rss
@@ -118,9 +120,34 @@ import techno_period
 import page_techno_custom_export
 import page_techno_verification_export
 
+# Page cache: /api/data fills it, _enrich_pdf_pages (the PDF export, which
+# re-derives the same pages) reads it instead of recomputing. Key (month,
+# page_number, data_version); each entry holds the page's generator results
+# by (generator, args, colors_config.json mtime) -- some generators bake
+# colours in, and a colour edit must apply on the next render. A repo write
+# bumps data_version, so nothing stale is ever served. Values are deep-copied
+# in and out (see version_cache). get_data / _enrich_pdf_pages read
+# data_version once per request (data_version.pinned).
+_page_cache = VersionedCache(maxsize=512)
+_COLORS_CONFIG_PATH = os.path.join(os.path.dirname(__file__), "colors_config.json")
+
+
+def _config_stamp():
+    try:
+        return os.stat(_COLORS_CONFIG_PATH).st_mtime_ns
+    except OSError:
+        return None
+
+
+def _pc(month, page_number, fn, *args):
+    """fn(*args), through the page cache under (month, page_number)."""
+    part = (getattr(fn, "__name__", repr(fn)), repr(args), _config_stamp())
+    return _page_cache.get_or_compute((month, page_number), part, lambda: fn(*args))
+
+
 def _safe_te_table(month):
     try:
-        result = generate_summary_te_table(month)
+        result = _pc(month, 3, generate_summary_te_table, month)
         # Get SAIL plan metadata to check if user-supplied
         fy = int(month[:4])
         m = int(month[5:7])
@@ -138,7 +165,7 @@ def _safe_te_table(month):
 
 def _safe_chart_data(month):
     try:
-        return generate_summary_chart_data(month)
+        return _pc(month, 3, generate_summary_chart_data, month)
     except Exception:
         return {}
 
@@ -199,12 +226,16 @@ def _subscript_co2(obj):
     return obj
 
 
+def _major_techno(month):
+    return generate_major_techno_from_db(month, exclude_labels=_MAJOR_TECHNO_EXCLUDE)
+
+
 def _safe_techno(month, pg):
     try:
         if pg == 27:
-            return generate_major_techno_from_db(month, exclude_labels=_MAJOR_TECHNO_EXCLUDE)
+            return _pc(month, pg, _major_techno, month)
         elif 28 <= pg <= 35:
-            return generate_techno_from_db(month, pg)
+            return _pc(month, pg, generate_techno_from_db, month, pg)
         return {}
     except Exception:
         return {}
@@ -1005,7 +1036,15 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
     the fixed 1-40 numbering — see its comment above) can be requested too;
     every comparison against page_number below (`==`, `in`) is a plain
     numeric comparison, which Python treats 24 and 24.0 as equal for, so
-    real int page numbers 1-40 are unaffected."""
+    real int page numbers 1-40 are unaffected.
+
+    Pages come from the page cache when data_version is unchanged (_pc);
+    data_version is read once for the whole request."""
+    with data_version.pinned():
+        return _get_data(month, page_number)
+
+
+def _get_data(month: str, page_number: Optional[float]):
     if not os.path.exists(FRONTEND_DATA_PATH):
         raise HTTPException(status_code=404, detail="Template data source not found.")
     try:
@@ -1054,9 +1093,9 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             for page in pages_config:
                 if page.get("page") == 3 or page.get("type") == "summary":
                     for row in page.get("production_table", []):
-                        row["values"] = compute_item_row(month, row.get("item"))
+                        row["values"] = _pc(month, page.get("page"), compute_item_row, month, row.get("item"))
                     page["production_narrative"] = build_production_narrative(page.get("production_table", []))
-                    page["highlights"] = generate_page3_highlights(month)
+                    page["highlights"] = _pc(month, page.get("page"), generate_page3_highlights, month)
                     page["highlights_gap_px"] = _page3_highlights_gap_px(page["highlights"])
                     te_result = _safe_te_table(month)
                     # Handle both dict and list returns (for backwards compatibility)
@@ -1067,16 +1106,16 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                         page["te_table"] = te_result
                     page["chart_data"] = _safe_chart_data(month)
                 if page.get("page") == 4 or page.get("type") == "page4_table":
-                    page["rows"] = generate_page4_rows(month)
+                    page["rows"] = _pc(month, page.get("page"), generate_page4_rows, month)
                     page["type"] = "page4_table"
                     # "Tentative" until every plant's final monthly report is in
                     # (see db.production_month_status).
                     page["tentative"] = db.production_month_status(month)["tentative"]
                 if page.get("page") == 5:
-                    page["rows"] = generate_page5_rows(month)
+                    page["rows"] = _pc(month, page.get("page"), generate_page5_rows, month)
                     page["type"] = "performance_summary_table"
                 if page.get("page") == 6:
-                    page["rows"] = generate_page6_rows(month)
+                    page["rows"] = _pc(month, page.get("page"), generate_page6_rows, month)
                     page["type"] = "performance_summary_table"
                 pg = page.get("page")
                 if isinstance(pg, int) and 7 <= pg <= 12:
@@ -1088,26 +1127,26 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                         page["item_display"] = cfg.get("display", "")
                         page["unit"] = ""
                         page["rows"] = []
-                        page["items"] = generate_combined_trend_items(month, pg)
+                        page["items"] = _pc(month, pg, generate_combined_trend_items, month, pg)
                     else:
                         page["type"] = "trend_yearly"
                         page["title"] = f"10 Years Month Wise Production : {cfg.get('display', '')}"
                         page["item_display"] = cfg.get("display", "")
                         page["unit"] = cfg.get("unit", "")
-                        page["rows"] = generate_trend_page_rows(month, pg)
+                        page["rows"] = _pc(month, pg, generate_trend_page_rows, month, pg)
                 if pg == 13:
                     page["type"] = "concast_performance"
                     page["title"] = "Crude Steel Production Details - Concast"
                     page["subtitle"] = ""
                     page["rows"] = []
                     page["headers"] = []
-                    concast = generate_concast_data(month)
+                    concast = _pc(month, pg, generate_concast_data, month)
                     page["monthly"] = concast["monthly"]
                     page["ytd"]     = concast["ytd"]
                 if pg == 14:
                     page["type"] = "prod_by_process"
                     page["title"] = "Crude Steel Production Details - Process Type"
-                    pbp = generate_prod_by_process(month)
+                    pbp = _pc(month, pg, generate_prod_by_process, month)
                     page["monthly"]      = pbp["monthly"]
                     page["monthly_prev"] = pbp["monthly_prev"]
                     page["ytd"]          = pbp["ytd"]
@@ -1121,19 +1160,19 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                 if pg == 15:
                     page["type"]     = "catwise_saleable"
                     page["title"]    = "Category Wise Production of Saleable Steel"
-                    page["sections"] = generate_catwise_saleable(month, ["BSP"])
+                    page["sections"] = _pc(month, pg, generate_catwise_saleable, month, ["BSP"])
                 if pg == 16:
                     page["type"]     = "catwise_saleable"
                     page["title"]    = "Category Wise Production of Saleable Steel"
-                    page["sections"] = generate_catwise_saleable(month, ["DSP", "RSP"])
+                    page["sections"] = _pc(month, pg, generate_catwise_saleable, month, ["DSP", "RSP"])
                 if pg == 17:
                     page["type"]     = "catwise_saleable"
                     page["title"]    = "Category Wise Production of Saleable Steel"
-                    page["sections"] = generate_catwise_saleable(month, ["BSL", "ISP"])
+                    page["sections"] = _pc(month, pg, generate_catwise_saleable, month, ["BSL", "ISP"])
                 if pg == 18:
                     page["type"]        = "segment_wise"
                     page["title"]       = "Segment Wise Production"
-                    sw = generate_segment_wise(month)
+                    sw = _pc(month, pg, generate_segment_wise, month)
                     page["rows"]        = sw["rows"]
 
         # Always regenerate special steel pages (data from special_steel_orders,
@@ -1286,7 +1325,7 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             if pg in _SPECIAL_PLANTS:
                 page["month_label"] = _ml
                 page["cply_label"]  = _cl
-                ss = generate_special_steel_plant(month, _SPECIAL_PLANTS[pg])
+                ss = _pc(month, pg, generate_special_steel_plant, month, _SPECIAL_PLANTS[pg])
                 page.update(ss)
                 page["type"] = "special_steel"
                 if pg == 23:
@@ -1299,67 +1338,67 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
                     # them at the page level instead, same _ml/_cl as above)
                     # — set directly on the nested dict so the template's
                     # `ss.month_label`/`ss.cply_label` resolve.
-                    page["sail_section"] = generate_special_steel_sail(month)
+                    page["sail_section"] = _pc(month, pg, generate_special_steel_sail, month)
                     page["sail_section"]["month_label"] = _ml
                     page["sail_section"]["cply_label"] = _cl
             if pg == 24:
-                page.update(generate_special_steel_donut(month))
+                page.update(_pc(month, pg, generate_special_steel_donut, month))
                 page["type"] = "special_steel_donut"
             if pg == TREND_PAGE_ID:
-                page.update(generate_special_steel_trend(month))
+                page.update(_pc(month, pg, generate_special_steel_trend, month))
             if pg == SS_PHYSICAL_PAGE_ID:
-                page.update(generate_special_steel_physical(month))
+                page.update(_pc(month, pg, generate_special_steel_physical, month))
                 page["type"] = "special_steel_physical"
                 page["orientation"] = "landscape"
             if pg == AT_A_GLANCE_PAGE_ID:
-                page.update(generate_at_a_glance(month))
+                page.update(_pc(month, pg, generate_at_a_glance, month))
                 page["type"] = "at_a_glance"
             if pg == KEY_HIGHLIGHTS_PAGE_ID:
-                page.update(generate_key_highlights(month))
+                page.update(_pc(month, pg, generate_key_highlights, month))
                 page["orientation"] = "landscape"
             if pg == STEEL_SALES_PAGE_ID:
-                page.update(generate_steel_sales_performance(month))
+                page.update(_pc(month, pg, generate_steel_sales_performance, month))
                 page["type"] = "steel_sales_performance"
             if pg == BEST_EVER_PAGE_ID:
-                page.update(generate_best_ever_highlights(month))
+                page.update(_pc(month, pg, generate_best_ever_highlights, month))
                 page["type"] = "best_ever_highlights"
             if pg == BEST_CAL_MONTH_PAGE_ID:
-                page.update(generate_best_calendar_month(month))
+                page.update(_pc(month, pg, generate_best_calendar_month, month))
                 page["type"] = "best_calendar_month"
             if pg == KEY_PARAMS_PAGE_ID:
-                page.update(generate_key_parameters(month))
+                page.update(_pc(month, pg, generate_key_parameters, month))
                 page["type"] = "key_parameters"
             if pg == BF_LARGE_ANNEXURE_PAGE_ID:
-                page.update(generate_bf_large_annexure(month))
+                page.update(_pc(month, pg, generate_bf_large_annexure, month))
                 page["type"] = "bf_large_annexure"
             if pg == COST_TREND_HM_PAGE_ID:
-                page.update(generate_cost_trend(month, "HM"))
+                page.update(_pc(month, pg, generate_cost_trend, month, "HM"))
                 page["type"] = "cost_trend"
                 page["orientation"] = "landscape"
             if pg == COST_TREND_CS_PAGE_ID:
-                page.update(generate_cost_trend(month, "CS"))
+                page.update(_pc(month, pg, generate_cost_trend, month, "CS"))
                 page["type"] = "cost_trend"
                 page["orientation"] = "landscape"
             if pg == COST_TREND_SS_PAGE_ID:
-                page.update(generate_cost_trend(month, "SS"))
+                page.update(_pc(month, pg, generate_cost_trend, month, "SS"))
                 page["type"] = "cost_trend"
                 page["orientation"] = "landscape"
             if pg == SAIL_MINES_PAGE_ID:
-                page.update(generate_sail_mines(month))
+                page.update(_pc(month, pg, generate_sail_mines, month))
                 page["type"] = "sail_mines"
             if pg == MINES_PERF_PAGE_ID:
-                page.update(generate_mines_performance_page(month))
+                page.update(_pc(month, pg, generate_mines_performance_page, month))
             if pg == RAIL_REPORT_PAGE_ID:
-                page.update(generate_rail_report(month))
+                page.update(_pc(month, pg, generate_rail_report, month))
                 page["type"] = "rail_report"
                 page["orientation"] = "landscape"
             if pg in RAKE_DETENTION_DETAIL_PAGES:
-                page.update(generate_rake_detention_detail(month, RAKE_DETENTION_DETAIL_PAGES[pg]))
+                page.update(_pc(month, pg, generate_rake_detention_detail, month, RAKE_DETENTION_DETAIL_PAGES[pg]))
                 page["orientation"] = "landscape"
             if pg == RAKE_DETENTION_SUMMARY_PAGE_ID:
-                page.update(generate_rake_detention_summary(month))
+                page.update(_pc(month, pg, generate_rake_detention_summary, month))
             if pg == RAKE_DETENTION_TREND_PAGE_ID:
-                page.update(generate_rake_detention_trend(month))
+                page.update(_pc(month, pg, generate_rake_detention_trend, month))
             if pg == READY_RECKONER_ISP_SEPARATOR_PAGE_ID:
                 page.update(generate_ready_reckoner_separator("ISP"))
             if pg == READY_RECKONER_SSP_SEPARATOR_PAGE_ID:
@@ -1371,45 +1410,45 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
             if pg == MAJOR_UNIT_SEPARATOR_PAGE_ID:
                 page.update(generate_major_unit_separator())
             if pg in MAJOR_UNIT_ACTIVE_PAGES:
-                page.update(generate_major_unit_page(MAJOR_UNIT_ACTIVE_PAGES[pg], month))
+                page.update(_pc(month, pg, generate_major_unit_page, MAJOR_UNIT_ACTIVE_PAGES[pg], month))
             if pg == SAIL8_TREND_SEPARATOR_PAGE_ID:
                 page.update(generate_sail8_trend_separator())
             if pg == SAIL8_TREND_PAGE_ID:
-                page.update(generate_sail8_trend_annexure(month))
+                page.update(_pc(month, pg, generate_sail8_trend_annexure, month))
                 page["orientation"] = "landscape"
             if pg == MARKET_PRICES_PAGE_ID:
-                page.update(generate_market_prices(month))
+                page.update(_pc(month, pg, generate_market_prices, month))
                 page["orientation"] = "landscape"
             if pg == MACRO_INDICATORS_PAGE_ID:
-                page.update(generate_macro_indicators(month))
+                page.update(_pc(month, pg, generate_macro_indicators, month))
                 page["orientation"] = "landscape"
             if pg == EPI_PAGE_ID:
-                page.update(generate_epi(month))
+                page.update(_pc(month, pg, generate_epi, month))
                 page["orientation"] = "landscape"
             if pg == COAL_RECEIPTS_PAGE_ID:
-                page.update(generate_coal_consumption(month))
+                page.update(_pc(month, pg, generate_coal_consumption, month))
             if pg == COAL_RECEIPTS_PAGE_2_ID:
-                page.update(generate_coal_receipts_sail(month))
+                page.update(_pc(month, pg, generate_coal_receipts_sail, month))
             if pg == POWER_DATA_PAGE_ID:
-                page.update(generate_power_data(month))
+                page.update(_pc(month, pg, generate_power_data, month))
             if pg == 1:
                 page.update(generate_cover(month))
             if pg == 2:
                 page["rows"] = _index_rows()
             if pg == 25:
-                page.update(generate_opening_stock(month))
+                page.update(_pc(month, pg, generate_opening_stock, month))
                 page["type"] = "opening_stock"
             if pg == 26:
-                page.update(generate_ipt(month))
+                page.update(_pc(month, pg, generate_ipt, month))
                 page["type"] = "ipt_status"
             if pg in TECHNO_PAGES:
                 page.update(_safe_techno(month, pg))
                 page["type"] = "techno_params"
                 page["orientation"] = "landscape" if 31 <= pg <= 35 else "portrait"
             if pg in STEEL_SECTOR_PAGES:
-                page.update(generate_steel_sector_performance(month, STEEL_SECTOR_PAGES[pg]))
+                page.update(_pc(month, pg, generate_steel_sector_performance, month, STEEL_SECTOR_PAGES[pg]))
             if pg in CR_PAGES:
-                page.update(generate_capital_repair(CR_PAGES[pg], fy_from_month(month), month))
+                page.update(_pc(month, pg, generate_capital_repair, CR_PAGES[pg], fy_from_month(month), month))
                 page["type"] = "capital_repair"
                 page["orientation"] = "portrait"
 
@@ -1480,6 +1519,14 @@ def save_page3_narrative(request: Page3NarrativeRequest):
 # ---------------------------------------------------------------------------
 
 def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
+    """Page data for a PDF export: reads the pages /api/data built from the
+    page cache (_pc) and computes only what is missing. data_version is read
+    once for the whole request."""
+    with data_version.pinned():
+        return _enrich_pdf_pages_impl(request)
+
+
+def _enrich_pdf_pages_impl(request: PDFRequest) -> tuple[list, dict]:
     import datetime as _dt
     _enrich_t0 = time.perf_counter()
     _page_times = []  # (page_id, type_after_enrichment, seconds) — see this function's own timing print, below
@@ -1694,15 +1741,15 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
         if pg == 2:
             p["rows"] = _index_rows()
         if pg == 4 or p.get("type") == "page4_table":
-            p["rows"] = generate_page4_rows(request.month)
+            p["rows"] = _pc(request.month, pg, generate_page4_rows, request.month)
             p["type"] = "page4_table"
             p["tentative"] = db.production_month_status(request.month)["tentative"]
         if pg == 13:
-            concast = generate_concast_data(request.month)
+            concast = _pc(request.month, pg, generate_concast_data, request.month)
             p["monthly"] = concast["monthly"]
             p["ytd"]     = concast["ytd"]
         if pg == 14:
-            pbp = generate_prod_by_process(request.month)
+            pbp = _pc(request.month, pg, generate_prod_by_process, request.month)
             p["monthly"]      = pbp["monthly"]
             p["monthly_prev"] = pbp["monthly_prev"]
             p["ytd"]          = pbp["ytd"]
@@ -1714,83 +1761,83 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
             p["cply_label"]  = _dt.datetime(dt.year - 1, dt.month, 1).strftime("%b'%y")
         if pg == 15:
             p["type"]     = "catwise_saleable"
-            p["sections"] = generate_catwise_saleable(request.month, ["BSP"])
+            p["sections"] = _pc(request.month, pg, generate_catwise_saleable, request.month, ["BSP"])
         if pg == 16:
             p["type"]     = "catwise_saleable"
-            p["sections"] = generate_catwise_saleable(request.month, ["DSP", "RSP"])
+            p["sections"] = _pc(request.month, pg, generate_catwise_saleable, request.month, ["DSP", "RSP"])
         if pg == 17:
             p["type"]     = "catwise_saleable"
-            p["sections"] = generate_catwise_saleable(request.month, ["BSL", "ISP"])
+            p["sections"] = _pc(request.month, pg, generate_catwise_saleable, request.month, ["BSL", "ISP"])
         if pg == 18:
             p["type"]        = "segment_wise"
-            p["rows"]        = generate_segment_wise(request.month)["rows"]
+            p["rows"]        = _pc(request.month, pg, generate_segment_wise, request.month)["rows"]
         _SP = {19: "BSP", 20: "DSP", 21: "RSP", 22: "BSL", 23: "ISP"}
         if pg in _SP:
-            ss = generate_special_steel_plant(request.month, _SP[pg])
+            ss = _pc(request.month, pg, generate_special_steel_plant, request.month, _SP[pg])
             p.update(ss); p["type"] = "special_steel"
             if pg == 23:
-                p["sail_section"] = generate_special_steel_sail(request.month)
+                p["sail_section"] = _pc(request.month, pg, generate_special_steel_sail, request.month)
                 p["sail_section"]["month_label"] = p["month_label"]
                 p["sail_section"]["cply_label"] = p["cply_label"]
         if pg == 24:
-            p.update(generate_special_steel_donut(request.month))
+            p.update(_pc(request.month, pg, generate_special_steel_donut, request.month))
             p["type"] = "special_steel_donut"
         if pg == TREND_PAGE_ID:
-            p.update(generate_special_steel_trend(request.month))
+            p.update(_pc(request.month, pg, generate_special_steel_trend, request.month))
             p["type"] = "special_steel_trend"
         if pg == SS_PHYSICAL_PAGE_ID:
-            p.update(generate_special_steel_physical(request.month))
+            p.update(_pc(request.month, pg, generate_special_steel_physical, request.month))
             p["type"] = "special_steel_physical"
             p["orientation"] = "landscape"
         if pg == AT_A_GLANCE_PAGE_ID:
-            p.update(generate_at_a_glance(request.month))
+            p.update(_pc(request.month, pg, generate_at_a_glance, request.month))
             p["type"] = "at_a_glance"
         if pg == KEY_HIGHLIGHTS_PAGE_ID:
-            p.update(generate_key_highlights(request.month))
+            p.update(_pc(request.month, pg, generate_key_highlights, request.month))
             p["orientation"] = "landscape"
         if pg == STEEL_SALES_PAGE_ID:
-            p.update(generate_steel_sales_performance(request.month))
+            p.update(_pc(request.month, pg, generate_steel_sales_performance, request.month))
             p["type"] = "steel_sales_performance"
         if pg == BEST_EVER_PAGE_ID:
-            p.update(generate_best_ever_highlights(request.month))
+            p.update(_pc(request.month, pg, generate_best_ever_highlights, request.month))
             p["type"] = "best_ever_highlights"
         if pg == BEST_CAL_MONTH_PAGE_ID:
-            p.update(generate_best_calendar_month(request.month))
+            p.update(_pc(request.month, pg, generate_best_calendar_month, request.month))
             p["type"] = "best_calendar_month"
         if pg == KEY_PARAMS_PAGE_ID:
-            p.update(generate_key_parameters(request.month))
+            p.update(_pc(request.month, pg, generate_key_parameters, request.month))
             p["type"] = "key_parameters"
         if pg == BF_LARGE_ANNEXURE_PAGE_ID:
-            p.update(generate_bf_large_annexure(request.month))
+            p.update(_pc(request.month, pg, generate_bf_large_annexure, request.month))
             p["type"] = "bf_large_annexure"
         if pg == COST_TREND_HM_PAGE_ID:
-            p.update(generate_cost_trend(request.month, "HM"))
+            p.update(_pc(request.month, pg, generate_cost_trend, request.month, "HM"))
             p["type"] = "cost_trend"
             p["orientation"] = "landscape"
         if pg == COST_TREND_CS_PAGE_ID:
-            p.update(generate_cost_trend(request.month, "CS"))
+            p.update(_pc(request.month, pg, generate_cost_trend, request.month, "CS"))
             p["type"] = "cost_trend"
             p["orientation"] = "landscape"
         if pg == COST_TREND_SS_PAGE_ID:
-            p.update(generate_cost_trend(request.month, "SS"))
+            p.update(_pc(request.month, pg, generate_cost_trend, request.month, "SS"))
             p["type"] = "cost_trend"
             p["orientation"] = "landscape"
         if pg == SAIL_MINES_PAGE_ID:
-            p.update(generate_sail_mines(request.month))
+            p.update(_pc(request.month, pg, generate_sail_mines, request.month))
             p["type"] = "sail_mines"
         if pg == MINES_PERF_PAGE_ID:
-            p.update(generate_mines_performance_page(request.month))
+            p.update(_pc(request.month, pg, generate_mines_performance_page, request.month))
         if pg == RAIL_REPORT_PAGE_ID:
-            p.update(generate_rail_report(request.month))
+            p.update(_pc(request.month, pg, generate_rail_report, request.month))
             p["type"] = "rail_report"
             p["orientation"] = "landscape"
         if pg in RAKE_DETENTION_DETAIL_PAGES:
-            p.update(generate_rake_detention_detail(request.month, RAKE_DETENTION_DETAIL_PAGES[pg]))
+            p.update(_pc(request.month, pg, generate_rake_detention_detail, request.month, RAKE_DETENTION_DETAIL_PAGES[pg]))
             p["orientation"] = "landscape"
         if pg == RAKE_DETENTION_SUMMARY_PAGE_ID:
-            p.update(generate_rake_detention_summary(request.month))
+            p.update(_pc(request.month, pg, generate_rake_detention_summary, request.month))
         if pg == RAKE_DETENTION_TREND_PAGE_ID:
-            p.update(generate_rake_detention_trend(request.month))
+            p.update(_pc(request.month, pg, generate_rake_detention_trend, request.month))
         if pg == READY_RECKONER_ISP_SEPARATOR_PAGE_ID:
             p.update(generate_ready_reckoner_separator("ISP"))
         if pg == READY_RECKONER_SSP_SEPARATOR_PAGE_ID:
@@ -1802,32 +1849,32 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
         if pg == MAJOR_UNIT_SEPARATOR_PAGE_ID:
             p.update(generate_major_unit_separator())
         if pg in MAJOR_UNIT_ACTIVE_PAGES:
-            p.update(generate_major_unit_page(MAJOR_UNIT_ACTIVE_PAGES[pg], request.month))
+            p.update(_pc(request.month, pg, generate_major_unit_page, MAJOR_UNIT_ACTIVE_PAGES[pg], request.month))
         if pg == SAIL8_TREND_SEPARATOR_PAGE_ID:
             p.update(generate_sail8_trend_separator())
         if pg == SAIL8_TREND_PAGE_ID:
-            p.update(generate_sail8_trend_annexure(request.month))
+            p.update(_pc(request.month, pg, generate_sail8_trend_annexure, request.month))
             p["orientation"] = "landscape"
         if pg == MARKET_PRICES_PAGE_ID:
-            p.update(generate_market_prices(request.month))
+            p.update(_pc(request.month, pg, generate_market_prices, request.month))
             p["orientation"] = "landscape"
         if pg == MACRO_INDICATORS_PAGE_ID:
-            p.update(generate_macro_indicators(request.month))
+            p.update(_pc(request.month, pg, generate_macro_indicators, request.month))
             p["orientation"] = "landscape"
         if pg == EPI_PAGE_ID:
-            p.update(generate_epi(request.month))
+            p.update(_pc(request.month, pg, generate_epi, request.month))
             p["orientation"] = "landscape"
         if pg == COAL_RECEIPTS_PAGE_ID:
-            p.update(generate_coal_consumption(request.month))
+            p.update(_pc(request.month, pg, generate_coal_consumption, request.month))
         if pg == COAL_RECEIPTS_PAGE_2_ID:
-            p.update(generate_coal_receipts_sail(request.month))
+            p.update(_pc(request.month, pg, generate_coal_receipts_sail, request.month))
         if pg == POWER_DATA_PAGE_ID:
-            p.update(generate_power_data(request.month))
+            p.update(_pc(request.month, pg, generate_power_data, request.month))
         if pg == 25:
-            p.update(generate_opening_stock(request.month))
+            p.update(_pc(request.month, pg, generate_opening_stock, request.month))
             p["type"] = "opening_stock"
         if pg == 26:
-            p.update(generate_ipt(request.month))
+            p.update(_pc(request.month, pg, generate_ipt, request.month))
             p["type"] = "ipt_status"
         if pg in TECHNO_PAGES:
             p.update(_safe_techno(request.month, pg))
@@ -1973,9 +2020,9 @@ def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
                     entry.pop("fontFamily", None)
                 dynamic_page_layouts[str(pg)] = entry
         if pg in STEEL_SECTOR_PAGES:
-            p.update(generate_steel_sector_performance(request.month, STEEL_SECTOR_PAGES[pg]))
+            p.update(_pc(request.month, pg, generate_steel_sector_performance, request.month, STEEL_SECTOR_PAGES[pg]))
         if pg in CR_PAGES:
-            p.update(generate_capital_repair(CR_PAGES[pg], fy_from_month(request.month), request.month))
+            p.update(_pc(request.month, pg, generate_capital_repair, CR_PAGES[pg], fy_from_month(request.month), request.month))
             p["type"] = "capital_repair"
             p["orientation"] = "portrait"
         _page_times.append((pg, p.get("type"), time.perf_counter() - _page_t0))
