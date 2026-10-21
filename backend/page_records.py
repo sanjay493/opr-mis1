@@ -5,7 +5,10 @@ Computed for the SAIL group aggregates ('sail5', 'all8') and for every
 individual plant/unit (keyed by plant code, e.g. 'BSP', 'ASP').
 Used by the /api/production-records endpoint.
 """
+import functools
+
 import db
+import report_context
 from page_production_fy_export import is_rate_item
 from repo import production as rp
 from version_cache import VersionedCache
@@ -83,44 +86,29 @@ def _sql_int(text: str) -> int:
     return sign * int(digits) if digits else 0
 
 
-def _mon(rm: str) -> int:
-    return _sql_int(rm[5:7])
-
-
-def _fy_start(rm: str) -> int:
-    return _sql_int(rm[0:4]) if _mon(rm) >= 4 else _sql_int(rm[0:4]) - 1
-
-
-def _qnum(rm: str) -> int:
-    m = _mon(rm)
-    return 1 if m in (4, 5, 6) else 2 if m in (7, 8, 9) else 3 if m in (10, 11, 12) else 4
-
-
-def _hnum(rm: str) -> int:
-    return 1 if 4 <= _mon(rm) <= 9 else 2
-
-
-def _days(rm: str) -> int:
-    m = _mon(rm)
+@functools.lru_cache(maxsize=4096)
+def _month_fields(rm: str) -> dict:
+    """The SQL's per-month columns for report_month rm: quarter / half /
+    fy / cy bucket keys, days (_days_expr), fy_pos (_fy_pos_expr), fy_start."""
+    m, y = _sql_int(rm[5:7]), _sql_int(rm[0:4])
+    fy_start = y if m >= 4 else y - 1
     if m in (1, 3, 5, 7, 8, 10, 12):
-        return 31
-    if m in (4, 6, 9, 11):
-        return 30
-    y = _sql_int(rm[0:4])
-    return 29 if y % 4 == 0 and (y % 100 != 0 or y % 400 == 0) else 28
-
-
-def _fy_pos(rm: str) -> int:
-    m = _mon(rm)
-    return m - 4 if m >= 4 else m + 8
-
-
-_BUCKET_KEY = {
-    'quarter': lambda rm: (_qnum(rm), _fy_start(rm)),
-    'half':    lambda rm: (_hnum(rm), _fy_start(rm)),
-    'fy':      lambda rm: (_fy_start(rm),),
-    'cy':      lambda rm: (rm[0:4],),
-}
+        days = 31
+    elif m in (4, 6, 9, 11):
+        days = 30
+    else:
+        days = 29 if y % 4 == 0 and (y % 100 != 0 or y % 400 == 0) else 28
+    qnum = 1 if m in (4, 5, 6) else 2 if m in (7, 8, 9) else 3 if m in (10, 11, 12) else 4
+    hnum = 1 if 4 <= m <= 9 else 2
+    return {
+        'quarter': (qnum, fy_start),
+        'half':    (hnum, fy_start),
+        'fy':      (fy_start,),
+        'cy':      (rm[0:4],),
+        'days':    days,
+        'fy_pos':  m - 4 if m >= 4 else m + 8,
+        'fy_start': fy_start,
+    }
 
 
 def _bucket_cells(cur, scope, bucket: str):
@@ -128,17 +116,18 @@ def _bucket_cells(cur, scope, bucket: str):
     from rp.records_rows. Each (item, bucket, plant, month) group is one
     row (the table's key), so v is SUM over that row alone: 0.0 + value,
     None for NULL."""
-    key = _BUCKET_KEY[bucket]
     for item, plant, rm, value in rp.records_rows(cur, scope):
-        yield (item, *key(rm), plant, rm, None if value is None else 0.0 + value, _days(rm))
+        f = _month_fields(rm)
+        yield (item, *f[bucket], plant, rm, None if value is None else 0.0 + value, f['days'])
 
 
 def _fy_window_cells(cur, scope, s_pos: int, e_pos: int):
     """rp.records_fy_window_cells' rows, (item, fy_start, plant, month, v,
     days), from rp.records_rows."""
     for item, plant, rm, value in rp.records_rows(cur, scope):
-        if s_pos <= _fy_pos(rm) <= e_pos:
-            yield (item, _fy_start(rm), plant, rm, None if value is None else 0.0 + value, _days(rm))
+        f = _month_fields(rm)
+        if s_pos <= f['fy_pos'] <= e_pos:
+            yield (item, f['fy_start'], plant, rm, None if value is None else 0.0 + value, f['days'])
 
 
 def _bucketed_period_values(cur, items: list, scope, bucket: str,
@@ -305,32 +294,34 @@ def _latest_production_month(cur) -> str:
 
 
 def generate_records() -> dict:
-    conn = db.connect()
-    cur  = conn.cursor()
-    sort_key = _item_sort_key()
-    try:
-        result = {}
-        groups = [('sail5', SAIL5), ('all8', ALL8)] + [(p, [p]) for p in ALL8]
-        for group_name, plants in groups:
-            # Group scopes keep the summary items (unit-level items don't sum
-            # meaningfully across plants); single-plant scopes cover every
-            # unit/item that plant has ever reported (BF#1, SMS-2, URM …).
-            if len(plants) == 1:
-                items = sorted(
-                    (r[0] for r in rp.distinct_items(cur, "actual", plants[0])
-                     if r[0] not in LEGACY_ITEM_NAMES),
-                    key=sort_key)
-                sql_scope = rp.records_scope(plants)
-            else:
-                items = ITEMS
-                sql_scope = rp.records_scope(plants, ITEMS)
+    # One records_rows fetch per scope, shared by every period kind.
+    with report_context.ensure():
+        conn = db.connect()
+        cur  = conn.cursor()
+        sort_key = _item_sort_key()
+        try:
+            result = {}
+            groups = [('sail5', SAIL5), ('all8', ALL8)] + [(p, [p]) for p in ALL8]
+            for group_name, plants in groups:
+                # Group scopes keep the summary items (unit-level items don't sum
+                # meaningfully across plants); single-plant scopes cover every
+                # unit/item that plant has ever reported (BF#1, SMS-2, URM …).
+                if len(plants) == 1:
+                    items = sorted(
+                        (r[0] for r in rp.distinct_items(cur, "actual", plants[0])
+                         if r[0] not in LEGACY_ITEM_NAMES),
+                        key=sort_key)
+                    sql_scope = rp.records_scope(plants)
+                else:
+                    items = ITEMS
+                    sql_scope = rp.records_scope(plants, ITEMS)
 
-            result[group_name] = _compute_group_records(cur, items, sql_scope)
+                result[group_name] = _compute_group_records(cur, items, sql_scope)
 
-        result['latest_month'] = _latest_production_month(cur)
-        return result
-    finally:
-        conn.close()
+            result['latest_month'] = _latest_production_month(cur)
+            return result
+        finally:
+            conn.close()
 
 
 # Items shown on the Best-Ever Highlights / Best Calendar Month report
@@ -437,37 +428,39 @@ def generate_best_period(start_mon: int, end_mon: int, scope: str = 'sail5',
         raise ValueError(f"unknown items mode {items_mode!r} (major | all)")
 
     columns = _BEST_PERIOD_SCOPES[scope]
-    conn = db.connect()
-    cur = conn.cursor()
-    sort_key = _item_sort_key()
-    try:
-        results = {}
-        for col_key, plants in columns:
-            if items_mode == 'all':
-                items = sorted((r[0] for r in rp.records_plants_items_in(cur, plants)), key=sort_key)
-            else:
-                items = MAJOR_ITEMS
-            sql_scope = rp.records_scope(plants, items)
-            results[col_key] = _compute_best_period(
-                cur, items, sql_scope, s_pos, e_pos, top_n)
+    # One records_rows fetch per scope, shared by every period kind.
+    with report_context.ensure():
+        conn = db.connect()
+        cur = conn.cursor()
+        sort_key = _item_sort_key()
+        try:
+            results = {}
+            for col_key, plants in columns:
+                if items_mode == 'all':
+                    items = sorted((r[0] for r in rp.records_plants_items_in(cur, plants)), key=sort_key)
+                else:
+                    items = MAJOR_ITEMS
+                sql_scope = rp.records_scope(plants, items)
+                results[col_key] = _compute_best_period(
+                    cur, items, sql_scope, s_pos, e_pos, top_n)
 
-        window_months = [_MON[_pos_to_mon(p)] for p in range(s_pos, e_pos + 1)]
-        return {
-            'window': {
-                'start_mon': start_mon, 'end_mon': end_mon,
-                'start_label': _MON[start_mon], 'end_label': _MON[end_mon],
-                'length': e_pos - s_pos + 1,
-                'months': window_months,
-                'spans_year_end': e_pos > 8 >= s_pos or (s_pos >= 9),
-            },
-            'scope': scope,
-            'items_mode': items_mode,
-            'column_order': [c[0] for c in columns],
-            'results': results,
-            'latest_month': _latest_production_month(cur),
-        }
-    finally:
-        conn.close()
+            window_months = [_MON[_pos_to_mon(p)] for p in range(s_pos, e_pos + 1)]
+            return {
+                'window': {
+                    'start_mon': start_mon, 'end_mon': end_mon,
+                    'start_label': _MON[start_mon], 'end_label': _MON[end_mon],
+                    'length': e_pos - s_pos + 1,
+                    'months': window_months,
+                    'spans_year_end': e_pos > 8 >= s_pos or (s_pos >= 9),
+                },
+                'scope': scope,
+                'items_mode': items_mode,
+                'column_order': [c[0] for c in columns],
+                'results': results,
+                'latest_month': _latest_production_month(cur),
+            }
+        finally:
+            conn.close()
 
 
 # Best-Ever Highlights and Best Calendar Month both ask for the same
@@ -494,16 +487,18 @@ def _build_group_records(items: list, upto_month: str = None) -> dict:
     report must not list Jul/Aug, nor a Q1/H1 that isn't complete yet —
     quarters/halves only count once all their months are present).
     latest_month is capped to it too."""
-    conn = db.connect()
-    cur  = conn.cursor()
-    try:
-        result = {}
-        for group_name, plants in [('sail5', SAIL5), ('all8', ALL8)]:
-            sql_scope = rp.records_scope(plants, items, upto_month)
-            result[group_name] = _compute_group_records(cur, items, sql_scope)
+    # One records_rows fetch per scope, shared by every period kind.
+    with report_context.ensure():
+        conn = db.connect()
+        cur  = conn.cursor()
+        try:
+            result = {}
+            for group_name, plants in [('sail5', SAIL5), ('all8', ALL8)]:
+                sql_scope = rp.records_scope(plants, items, upto_month)
+                result[group_name] = _compute_group_records(cur, items, sql_scope)
 
-        latest = _latest_production_month(cur)
-        result['latest_month'] = min(latest, upto_month) if (latest and upto_month) else (upto_month or latest)
-        return result
-    finally:
-        conn.close()
+            latest = _latest_production_month(cur)
+            result['latest_month'] = min(latest, upto_month) if (latest and upto_month) else (upto_month or latest)
+            return result
+        finally:
+            conn.close()

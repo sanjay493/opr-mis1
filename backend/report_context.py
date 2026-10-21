@@ -142,6 +142,23 @@ def invalidate_current() -> None:
 
 
 @contextmanager
+def ensure():
+    """The active context for the block, or, when none is active, one that
+    covers no months: every read runs its SQL, but ctx.memo() memoises
+    (e.g. a history range fetched once per scope by several builders)."""
+    active = _current.get()
+    if active is not None:
+        yield active
+        return
+    ctx = ReportContext(None)
+    token = _current.set(ctx)
+    try:
+        yield ctx
+    finally:
+        _current.reset(token)
+
+
+@contextmanager
 def activate(report_month: str):
     """Serve bulk reads for report_month's window inside the block. An
     already-active context for the same month is reused (nested pages and
