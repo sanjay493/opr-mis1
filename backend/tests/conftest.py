@@ -65,6 +65,12 @@ load_dotenv(BACKEND_DIR / ".env")
 
 _TEST_DB_PREFIX = "mis_reports_test_"
 _SCHEMA_V1 = Path(__file__).resolve().parent / "fixtures" / "schema_v1.sql"
+# Migrations applied on top of schema_v1 (the live schema dump), in order.
+V1_MIGRATION_DIR = BACKEND_DIR / "scripts"
+_V1_MIGRATIONS = (
+    V1_MIGRATION_DIR / "migrate_add_data_version.sql",
+    V1_MIGRATION_DIR / "migrate_add_perf_indexes.sql",
+)
 
 
 def _test_cfg():
@@ -112,9 +118,10 @@ def _mysql_test_schema():
             cur.execute(f"DROP DATABASE IF EXISTS `{name}`")
             cur.execute(f"CREATE DATABASE `{name}` CHARACTER SET utf8mb4")
             cur.execute(f"USE `{name}`")
-            cur.execute(_SCHEMA_V1.read_text(encoding="utf-8"))
-            while cur.nextset():
-                pass
+            for script in (_SCHEMA_V1, *_V1_MIGRATIONS):
+                cur.execute(script.read_text(encoding="utf-8"))
+                while cur.nextset():
+                    pass
     except BaseException:
         with conn.cursor() as cur:
             cur.execute(f"DROP DATABASE IF EXISTS `{name}`")
@@ -173,8 +180,15 @@ def mysql_db(_mysql_test_schema, monkeypatch):
             for t in sorted(dirty):
                 cur.execute(f"TRUNCATE TABLE `{t}`")
             cur.execute("SET FOREIGN_KEY_CHECKS = 1")
+            # data_version starts every test at its migrated state (one row,
+            # n = 1); the in-process caches keyed on it start empty, so no
+            # test can see another test's cached pages.
+            if "data_version" in tables:
+                cur.execute("INSERT IGNORE INTO data_version (id, n) VALUES (1, 1)")
     finally:
         conn.close()
+    import data_version
+    data_version.clear_caches()
 
     yield name
     dbengine._pool_clear()

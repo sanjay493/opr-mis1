@@ -17,6 +17,7 @@ from typing import Any, Dict, Iterable, List, Optional
 
 import activity_context
 from dbengine import Row, connect
+from repo import version as _ver
 from repo import conn as rc
 from repo.conn import row_dict as _row_dict
 
@@ -116,6 +117,7 @@ def save_techno_data_from_extraction(plant: str, report_month: str, extracted_ro
             created_at = new.created_at
     """, (plant, report_month, unit, json.dumps(techno_json), source_file, now))
 
+    _ver.bump(conn)
     conn.commit()
     conn.close()
 
@@ -136,6 +138,7 @@ def save_techno_json(plant: str, report_month: str, unit: str,
             source_file = new.source_file,
             created_at  = new.created_at
     """, (plant, report_month, unit, json.dumps(techno_json), source_file, now))
+    _ver.bump(conn)
     conn.commit()
     conn.close()
 
@@ -184,6 +187,7 @@ def _raw_upsert_techno_data(plant: str, report_month: str, unit: str, techno_jso
             source_file = new.source_file,
             created_at  = NOW()
     """, (plant, report_month, unit, json.dumps(techno_json), source_file))
+    _ver.bump(conn)
     if owns_conn:
         conn.commit()
         conn.close()
@@ -490,6 +494,7 @@ def save_sail_techno_actuals(report_month: str, unit: str, techno_json: Dict,
         # Alternative: Create techno_calc_metadata table
         pass
 
+    _ver.bump(conn)
     conn.commit()
     conn.close()
 
@@ -603,6 +608,7 @@ def save_techno_plan(plant: str, fy: str, unit: str, techno_json: Dict,
             updated_at = new.updated_at
     """, (plant, unit, fy, json.dumps(techno_json), int(is_user_supplied),
           json.dumps(calculated_json or {}), json.dumps(calculation_method or {}), created_by, now, now))
+    _ver.bump(conn)
     conn.commit()
     conn.close()
 
@@ -964,6 +970,7 @@ def plan_rows_for_fy(cur, fy):
 def insert_ignore_plant_unit(cur, plant_code, unit_type, unit_name, display_label, is_shop, sort_order):
     """INSERT IGNORE one plant_units row on the caller's cursor; the caller
     reads cur.rowcount and commits. plant_registry.seed_plant_registry."""
+    _ver.bump(cur)
     cur.execute("""
             INSERT IGNORE INTO plant_units
                 (plant_code, unit_type, unit_name, display_label, is_shop, is_active, sort_order)
@@ -974,6 +981,7 @@ def insert_ignore_plant_unit(cur, plant_code, unit_type, unit_name, display_labe
 def insert_ignore_param_type(cur, unit_type, param_name, unit_of_meas, agg_method, sort_order):
     """INSERT IGNORE one techno_param_types row on the caller's cursor; the
     caller reads cur.rowcount and commits. plant_registry.seed_plant_registry."""
+    _ver.bump(cur)
     cur.execute("""
             INSERT IGNORE INTO techno_param_types
                 (unit_type, param_name, unit_of_meas, agg_method, sort_order)
@@ -991,6 +999,7 @@ def param_master_unit_rows(cur):
 def update_param_master_unit(cur, unit, param_id):
     """Set one techno_param_master row's unit on the caller's cursor; the
     caller commits. techno_registry.migrate_units."""
+    _ver.bump(cur)
     cur.execute(
                 "UPDATE techno_param_master SET unit=%s WHERE param_id=%s",
                 (unit, param_id),

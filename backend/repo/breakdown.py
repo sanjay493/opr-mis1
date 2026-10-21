@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional
 
 import activity_context
 from dbengine import Row, connect
+from repo import version as _ver
 from repo.conn import row_dict as _row_dict
 
 
@@ -72,6 +73,7 @@ def save_breakdown_entry(plant: str, unit_type: str, unit_name: str, sms_subtag:
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """, (plant, unit_type, unit_name, sms_subtag, start_ts, end_ts, int(is_ongoing),
           cause, hours_lost_override, capital_repair_id, created_by, now, created_by, now))
+    _ver.bump(conn)
     conn.commit()
     new_id = cur.lastrowid
     conn.close()
@@ -108,6 +110,7 @@ def update_breakdown_entry(breakdown_id: int, updated_by: str, **fields) -> bool
     sets.append("updated_at=%s"); args.append(datetime.now().isoformat())
     args.append(breakdown_id)
     conn.execute(f"UPDATE breakdown_table SET {', '.join(sets)} WHERE id=%s", args)
+    _ver.bump(conn)
     conn.commit()
     conn.close()
     new = {**old, **{k: v for k, v in fields.items() if k in allowed}}
@@ -123,6 +126,7 @@ def delete_breakdown_entry(breakdown_id: int) -> bool:
         conn.close()
         return False
     conn.execute("DELETE FROM breakdown_table WHERE id=%s", (breakdown_id,))
+    _ver.bump(conn)
     conn.commit()
     conn.close()
     activity_context.record(f"breakdown_table/{old['plant']}/{old['unit_name']}/{breakdown_id}", old, None)
@@ -256,6 +260,7 @@ def update_cr_entry(cur, plan_sql, params):
     """Update one row's classification / actual (plus the plan columns in
     plan_sql, ", col=%s" each) on the caller's cursor; the caller commits.
     main /api/capital-repair-entry."""
+    _ver.bump(cur)
     cur.execute(f"""
         UPDATE capital_repair_table
         SET unit_type=%s, unit_name=%s, sms_subtag=%s, actual_start=%s, actual_end=%s,
@@ -267,6 +272,7 @@ def update_cr_entry(cur, plan_sql, params):
 def cr_renumber(cur, plant: str, fy: str, ids: list) -> None:
     """sort_order = position in `ids` for a plant/FY's rows; the caller
     commits. main (was _cr_renumber)."""
+    _ver.bump(cur)
     for i, rid in enumerate(ids):
         cur.execute("UPDATE capital_repair_table SET sort_order=%s WHERE id=%s AND plant=%s AND fy=%s",
                     (i, rid, plant, fy))
@@ -291,6 +297,7 @@ def insert_cr_row(cur, values):
     """Insert one row (sort_order 0, renumbered by the caller) on the
     caller's cursor; the caller reads cur.lastrowid and commits.
     main /api/capital-repair-row."""
+    _ver.bump(cur)
     cur.execute("""
         INSERT INTO capital_repair_table
             (plant, fy, shop, equipment, activity, schedule_days, period, actual,
@@ -307,4 +314,5 @@ def cr_row_dict(conn, row_id):
 def delete_cr_row(cur, row_id):
     """Delete one row on the caller's cursor; the caller renumbers and
     commits. main DELETE /api/capital-repair-row."""
+    _ver.bump(cur)
     cur.execute("DELETE FROM capital_repair_table WHERE id=%s", (row_id,))

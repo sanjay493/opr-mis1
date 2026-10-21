@@ -27,6 +27,7 @@ import json
 from typing import Any, Dict, List, Optional
 
 from dbengine import connect
+from repo import version as _ver
 from repo import conn as rc
 from secretary_review_layout import BLOCKS as _SECRETARY_BLOCKS
 
@@ -68,6 +69,7 @@ def save_page3_narrative(month: str, production_narrative: str, highlights: List
                        highlights = new.highlights,
                        updated_at = new.updated_at
     """, (month, production_narrative or "", highlights_text))
+    _ver.bump(conn)
     conn.commit()
     conn.close()
 
@@ -116,6 +118,7 @@ def save_key_highlights_narrative(month: str, achievements: list, shortfalls: li
                        updated_at  = new.updated_at
     """, (month, json.dumps(achievements or []), json.dumps(shortfalls or []),
           json.dumps(focus_areas or []), updated_by or ""))
+    _ver.bump(conn)
     conn.commit()
     conn.close()
 
@@ -159,6 +162,7 @@ def save_steel_sales_highlights(month: str, month_items: list, ytd_items: list, 
                        updated_by  = new.updated_by,
                        updated_at  = new.updated_at
     """, (month, json.dumps(month_items or []), json.dumps(ytd_items or []), updated_by or ""))
+    _ver.bump(conn)
     conn.commit()
     conn.close()
 
@@ -189,6 +193,7 @@ def save_ss_phys_notes(financial_year, rows):
             continue
         cur.execute("INSERT INTO special_steel_phys_note (financial_year, sort_order, note_text) "
                     "VALUES (%s, %s, %s)", (financial_year, int(r.get("sort_order") or 0), text))
+    _ver.bump(conn)
     conn.commit()
     conn.close()
     return len(rows)
@@ -215,6 +220,7 @@ def save_rail_report_notes(rows: List[Dict[str, Any]]) -> int:
             continue
         cur.execute("INSERT INTO rail_prod_despatch_note (sort_order, note_text) VALUES (%s, %s)",
                     (int(r.get("sort_order") or 0), text))
+    _ver.bump(conn)
     conn.commit()
     conn.close()
     return len(rows)
@@ -261,6 +267,7 @@ def save_manual_text(fy: str, quarter: int, entries: list) -> int:
                     (fy, quarter, plant, field),
                 )
             saved += 1
+        _ver.bump(conn)
         conn.commit()
     finally:
         conn.close()
@@ -296,6 +303,7 @@ def save_texts(month: str, texts: dict) -> int:
                 AS new ON DUPLICATE KEY UPDATE text = new.text, updated_at = new.updated_at
             """, (month, key, text, now))
             n += 1
+        _ver.bump(conn)
         conn.commit()
         return n
     finally:
@@ -315,6 +323,7 @@ def delete_texts(month: str, keys) -> int:
         cur.execute(f"DELETE FROM secretary_review_text WHERE report_month=%s AND block_key IN ({phs})",
                     [month] + keys)
         n = cur.rowcount
+        _ver.bump(conn)
         conn.commit()
         return n
     finally:
@@ -355,6 +364,7 @@ def page3_narrative_any_row(report_month):
 def upsert_sail_sales_note(cur, month, note):
     """Upsert the Table A footnote on the caller's cursor; the caller commits.
     main POST /api/sail-1page/confirm."""
+    _ver.bump(cur)
     cur.execute("""
                 INSERT INTO sail_sales_note_table (report_month, note)
                 VALUES (%s, %s)
@@ -393,6 +403,7 @@ def do_letter_item_remark_rows(cur, report_month, item_name):
 def upsert_do_letter_remark(cur, report_month, item_name, plant_name, remark):
     """Upsert one remark on the caller's cursor; the caller commits.
     main POST /api/do-letter/remarks."""
+    _ver.bump(cur)
     cur.execute("""
                     INSERT INTO do_letter_remark_table (report_month, item_name, plant_name, remark)
                     VALUES (%s, %s, %s, %s)
@@ -403,6 +414,7 @@ def upsert_do_letter_remark(cur, report_month, item_name, plant_name, remark):
 def delete_do_letter_remark(cur, report_month, item_name, plant_name):
     """Delete one remark on the caller's cursor; the caller commits.
     main POST /api/do-letter/remarks (empty remark)."""
+    _ver.bump(cur)
     cur.execute(
                     "DELETE FROM do_letter_remark_table WHERE report_month=%s AND item_name=%s AND plant_name=%s",
                     (report_month, item_name, plant_name),

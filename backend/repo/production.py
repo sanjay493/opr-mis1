@@ -17,6 +17,7 @@ from typing import Any, Dict, Iterable, List, Literal, Optional
 import activity_context
 from constants import ALL_PLANTS as PLANTS
 from dbengine import connect
+from repo import version as _ver
 from repo import conn as rc
 from repo.conn import row_dict as _row_dict
 
@@ -74,6 +75,7 @@ def upsert(measure: Measure, rows: Iterable[tuple]) -> None:
     if not rows:
         return
     with rc.tx() as cur:
+        _ver.bump(cur)
         cur.executemany(
             f"INSERT INTO {table} (report_month, plant_name, item_name, month_actual) "
             "VALUES (%s, %s, %s, %s) AS new "
@@ -92,6 +94,7 @@ def delete(measure: Measure, month: str, plant: str, items: Iterable[str] | None
         sql += f" AND {_in('item_name', items)}"
         params += items
     with rc.tx() as cur:
+        _ver.bump(cur)
         cur.execute(sql, params)
 
 
@@ -356,6 +359,7 @@ def save_production_actual(month: str, plant: str, item: str, value: Optional[fl
             VALUES (%s, %s, %s, %s)
             AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
         """, (month, plant, item, value))
+    _ver.bump(conn)
     conn.commit()
     conn.close()
     new = None if value is None else {"report_month": month, "plant_name": plant, "item_name": item, "month_actual": value}
@@ -380,6 +384,7 @@ def save_production_plan(month: str, plant: str, item: str, value: Optional[floa
             VALUES (%s, %s, %s, %s)
             AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
         """, (month, plant, item, value))
+    _ver.bump(conn)
     conn.commit()
     conn.close()
     new = None if value is None else {"report_month": month, "plant_name": plant, "item_name": item, "month_actual": value}
@@ -474,6 +479,7 @@ _UPSERT_ROW_SQL = """
 
 def upsert_row(cur, measure: Measure, month, plant, item, value) -> None:
     """Insert or update one (month, plant, item) value on `cur`."""
+    _ver.bump(cur)
     cur.execute(_UPSERT_ROW_SQL.format(table=_table(measure)), (month, plant, item, value))
 
 
@@ -565,6 +571,7 @@ def bsl_bf_shop_production_sum(cur, month):
 
 
 def upsert_bsl_furnace_production(cur, month, unit, value):
+    _ver.bump(cur)
     cur.execute(
         """INSERT INTO production_table (report_month, plant_name, item_name, month_actual)
            VALUES (%s, 'BSL', %s, %s)

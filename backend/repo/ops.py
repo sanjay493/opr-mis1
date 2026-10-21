@@ -19,6 +19,7 @@ import re
 from typing import Any, Dict, List, Optional
 
 from dbengine import Row, connect
+from repo import version as _ver
 
 
 # ── Moved from db.py ─────────────────────────────────────────────────────────
@@ -164,6 +165,7 @@ def log_extraction(plant: str, report_month: str, file_name: str, sheet_name: st
         INSERT INTO extraction_log (logged_at, plant_name, report_month, file_name, sheet_name, source_type, items_extracted)
         VALUES (%s, %s, %s, %s, %s, %s, %s)
     """, (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), plant, report_month, file_name, sheet_name, source_type, items_extracted))
+    _ver.bump(conn)       # page 4's "tentative" flag reads extraction_log
     if owns_conn:
         conn.commit()
         conn.close()

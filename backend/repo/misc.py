@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional
 
 import activity_context
 from dbengine import connect
+from repo import version as _ver
 from repo import conn as rc
 from repo.conn import row_dict as _row_dict
 
@@ -52,6 +53,7 @@ def save_market_price_trend(rows: List[Dict[str, Any]]) -> int:
             VALUES (%s, %s, %s)
             AS new ON DUPLICATE KEY UPDATE value = new.value
         """, (r["report_month"], r["series_code"], r.get("value")))
+    _ver.bump(conn)
     conn.commit()
     conn.close()
     return len(rows)
@@ -86,6 +88,7 @@ def save_macro_indicators(rows: List[Dict[str, Any]]) -> int:
             VALUES (%s, %s, %s)
             AS new ON DUPLICATE KEY UPDATE value = new.value
         """, (r["report_month"], r["metric_code"], r.get("value")))
+    _ver.bump(conn)
     conn.commit()
     conn.close()
     return len(rows)
@@ -119,6 +122,7 @@ def save_pdf_item_alias(plant: str, pdf_label: str, item_name: str, convert_t: i
         VALUES (%s, %s, %s, %s)
         AS new ON DUPLICATE KEY UPDATE item_name = new.item_name, convert_t = new.convert_t
     """, (plant, pdf_label, item_name, convert_t))
+    _ver.bump(conn)
     conn.commit()
     conn.close()
     new = {"plant_name": plant, "pdf_label": pdf_label, "item_name": item_name, "convert_t": convert_t}
@@ -155,6 +159,7 @@ def save_rail_report_data(rows: List[Dict[str, Any]]) -> int:
             AS new ON DUPLICATE KEY UPDATE
                 value = new.value, note = new.note
         """, (r["financial_year"], r["metric"], r.get("value"), r.get("note")))
+    _ver.bump(conn)
     conn.commit()
     conn.close()
     return len(rows)
@@ -245,6 +250,7 @@ def upsert_ready_reckoner_master(row: Dict[str, Any]) -> None:
             plant_name = new.plant_name, plant_group = new.plant_group,
             sort_order = new.sort_order
     """, (row["plant_code"], row.get("plant_name"), row["plant_group"], int(row.get("sort_order") or 0)))
+    _ver.bump(conn)
     conn.commit()
     conn.close()
 
@@ -290,6 +296,7 @@ def save_ready_reckoner_content(
     conn = connect()
     cur = conn.cursor()
     cur.execute(f"UPDATE ready_reckoner_pages SET {', '.join(sets)} WHERE plant_code = %s", args)
+    _ver.bump(conn)
     conn.commit()
     conn.close()
 
@@ -306,6 +313,7 @@ def save_ready_reckoner_image(plant_code: str, image_path: str, updated_by: str)
         SET process_flow_image_path = %s, updated_by = %s, updated_at = %s
         WHERE plant_code = %s
     """, (image_path, updated_by, _dt.datetime.now().isoformat(timespec="seconds"), plant_code))
+    _ver.bump(conn)
     conn.commit()
     conn.close()
 
@@ -370,6 +378,7 @@ def save_major_unit_daily_record(plant_code: str, unit_label: str, value: Option
             updated_at = new.updated_at
     """, (plant_code, unit_label, unit_of_measure, value, record_date, remarks,
           sort_order, updated_by, _dt.datetime.now().isoformat(timespec="seconds")))
+    _ver.bump(conn)
     conn.commit()
     conn.close()
 
@@ -399,6 +408,7 @@ def power_value_row(cur, report_month, plant_name, item_name):
 def upsert_power_value(cur, report_month, plant_name, item_name, value):
     """Upsert one power figure on the caller's cursor; the caller commits.
     api_power_omi POST /insert."""
+    _ver.bump(cur)
     cur.execute("""
                 INSERT INTO power_data_table (report_month, plant_name, item_name, value)
                 VALUES (%s, %s, %s, %s)
@@ -432,6 +442,7 @@ def power_plants_for_month(report_month):
 def upsert_steel_sector_performance(cur, report_month, data_json, source_file, created_at):
     """Archive one release's preview JSON on the caller's cursor; the caller
     commits. main POST /api/steel-sector-performance/confirm."""
+    _ver.bump(cur)
     cur.execute("""
             INSERT INTO steel_sector_performance_table (report_month, data_json, source_file, created_at)
             VALUES (%s, %s, %s, %s)
@@ -492,6 +503,7 @@ def major_unit_daily_label_row(cur, plant_code, unit_label):
 def rename_major_unit_label(cur, new_label, plant_code, old_label):
     """Rename one unit label on the caller's cursor; the caller commits and
     reads cur.rowcount. scripts/rename_major_unit_labels."""
+    _ver.bump(cur)
     cur.execute(
                 "UPDATE major_unit_daily_record SET unit_label = %s "
                 "WHERE plant_code = %s AND unit_label = %s",
@@ -519,6 +531,7 @@ def bf_sail_meta_rows(cur):
 def upsert_bf_sail_meta(cur, plant, unit, working_volume_m3, updated_at):
     """Upsert one SAIL BF's Working Volume on the caller's cursor; the caller
     commits. api_bf_benchmark PATCH /sail-meta."""
+    _ver.bump(cur)
     cur.execute(
         "INSERT INTO bf_benchmark_sail_meta (plant, unit, working_volume_m3, updated_at) VALUES (%s, %s, %s, %s) "
         "AS new ON DUPLICATE KEY UPDATE working_volume_m3=new.working_volume_m3, updated_at=new.updated_at",
@@ -554,6 +567,7 @@ def external_bf_list_rows(cur, active_only):
 def insert_external_bf(cur, name, company, location, created_at):
     """Insert one non-SAIL BF on the caller's cursor; the caller commits and
     reads cur.lastrowid. api_bf_benchmark POST /external-bfs."""
+    _ver.bump(cur)
     cur.execute(
         "INSERT INTO bf_benchmark_external_bf (name, company, location, active, created_at) VALUES (%s, %s, %s, 1, %s)",
         (name, company, location, created_at),
@@ -571,6 +585,7 @@ def update_external_bf(cur, fields, params):
     """Update the "col=%s" `fields` of one non-SAIL BF (`params` ends with
     its id) on the caller's cursor; the caller commits.
     api_bf_benchmark PATCH /external-bfs/{id}."""
+    _ver.bump(cur)
     cur.execute(f"UPDATE bf_benchmark_external_bf SET {', '.join(fields)} WHERE id=%s", params)
 
 
@@ -598,6 +613,7 @@ def external_bf_data_row(cur, bf_id, fy):
 def update_external_bf_data(cur, param_json, updated_at, bf_id, fy):
     """Overwrite one FY entry's JSON on the caller's cursor; the caller
     commits. api_bf_benchmark POST .../entry."""
+    _ver.bump(cur)
     cur.execute(
             "UPDATE bf_benchmark_external_data SET param_json=%s, updated_at=%s "
             "WHERE external_bf_id=%s AND report_month=%s",
@@ -608,6 +624,7 @@ def update_external_bf_data(cur, param_json, updated_at, bf_id, fy):
 def insert_external_bf_data(cur, bf_id, fy, param_json, now):
     """Insert one FY entry on the caller's cursor; the caller commits.
     api_bf_benchmark POST .../entry."""
+    _ver.bump(cur)
     cur.execute(
             "INSERT INTO bf_benchmark_external_data (external_bf_id, report_month, param_json, created_at, updated_at) "
             "VALUES (%s, %s, %s, %s, %s)",
@@ -635,10 +652,12 @@ def _cover_query(sql: str, args=()) -> list:
 
 
 def _cover_execute(sql: str, args=()):
+    """Run one cover write and commit; returns its lastrowid."""
     conn = connect()
     try:
         cur = conn.cursor()
         cur.execute(sql, args)
+        _ver.bump(conn)
         conn.commit()
         return cur.lastrowid
     finally:

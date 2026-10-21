@@ -10,6 +10,7 @@ from typing import Optional
 
 import activity_context
 from dbengine import connect
+from repo import version as _ver
 from repo import conn as rc
 from repo.conn import row_dict as _row_dict
 
@@ -28,6 +29,7 @@ def save_stock_entry(stock_month: str, plant: str, item_type: str,
         VALUES (%s, %s, %s, %s, %s)
         AS new ON DUPLICATE KEY UPDATE stock = new.stock
     """, (stock_month, plant, item_type, stock_type, stock))
+    _ver.bump(conn)
     conn.commit()
     conn.close()
     new = {"stock_month": stock_month, "plant_name": plant, "item_type": item_type,
@@ -73,6 +75,7 @@ def plants_for_month(stock_month):
 def upsert_sales(cur, month, item, data_json):
     """Upsert one sales row (data_json already serialised) on the caller's
     cursor; the caller commits. main /api/sail-1page/confirm."""
+    _ver.bump(cur)
     cur.execute("""
                 INSERT INTO sail_sales_table (report_month, item_name, data_json)
                 VALUES (%s, %s, %s)
@@ -83,6 +86,7 @@ def upsert_sales(cur, month, item, data_json):
 def upsert_stock_snapshot(cur, snapshot_date, item, value):
     """Upsert one stock snapshot on the caller's cursor; the caller commits.
     main /api/sail-1page/confirm."""
+    _ver.bump(cur)
     cur.execute("""
                 INSERT INTO sail_stock_snapshot_table (snapshot_date, item_name, value)
                 VALUES (%s, %s, %s)

@@ -11,6 +11,7 @@ rollback_tx() dry-run routing still applies.
 from typing import Any, Dict, List
 
 from dbengine import connect
+from repo import version as _ver
 from repo import conn as rc
 
 
@@ -63,6 +64,7 @@ def save_cost_trend_annual(fy: str, product: str, entries: List[Dict[str, Any]])
             AS new ON DUPLICATE KEY UPDATE value = new.value
         """, (fy, product, e["cost_type"], e["plant"], e.get("value")))
         saved += 1
+    _ver.bump(conn)
     conn.commit()
     conn.close()
     return saved
@@ -105,6 +107,7 @@ def save_cost_trend_monthly(report_month: str, product: str, entries: List[Dict[
             AS new ON DUPLICATE KEY UPDATE month_value = new.month_value, till_month_value = new.till_month_value
         """, (report_month, product, e["cost_type"], e["plant"], e.get("month_value"), e.get("till_month_value")))
         saved += 1
+    _ver.bump(conn)
     conn.commit()
     conn.close()
     return saved
@@ -131,6 +134,7 @@ def save_cost_trend_monthly_field(report_month: str, product: str, entries: List
             AS new ON DUPLICATE KEY UPDATE {field} = new.{field}
         """, (report_month, product, e["cost_type"], e["plant"], e.get("value")))
         saved += 1
+    _ver.bump(conn)
     conn.commit()
     conn.close()
     return saved

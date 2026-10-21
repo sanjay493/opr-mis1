@@ -16,6 +16,7 @@ from typing import Optional
 
 import activity_context
 from dbengine import Row, connect
+from repo import version as _ver
 from repo import conn as rc
 from repo.conn import row_dict as _row_dict
 
@@ -38,6 +39,7 @@ def clear_special_steel_orders(month: str, plant: str) -> int:
         (month, plant),
     )
     deleted = cur.rowcount
+    _ver.bump(conn)
     conn.commit()
     conn.close()
     for old in olds:
@@ -69,6 +71,7 @@ def save_special_steel_entry(month: str, plant: str, product: str, quality_grade
             actual_despatch = new.actual_despatch
     """, (month, plant, product, quality_grade, section or "",
           sort_order, order_qty, actual_despatch))
+    _ver.bump(conn)
     conn.commit()
     conn.close()
     new = {"report_month": month, "plant_name": plant, "product": product,
@@ -113,6 +116,7 @@ def save_ss_phys_meta(rows):
                 sort_order = new.sort_order
         """, (r["plant"], r["series"], r.get("capacity_kt"), r.get("best_actual_kt"),
               r.get("best_year"), r.get("remark"), int(r.get("sort_order") or 0)))
+    _ver.bump(conn)
     conn.commit()
     conn.close()
     return len(rows)
@@ -137,6 +141,7 @@ def save_ss_phys_perf(rows):
                 AS new ON DUPLICATE KEY UPDATE value_kt = new.value_kt
             """, (*key, r["value_kt"]))
         saved += 1
+    _ver.bump(conn)
     conn.commit()
     conn.close()
     return saved
@@ -191,6 +196,7 @@ def save_ss_ipt_requirement(financial_year, rows):
             AS new ON DUPLICATE KEY UPDATE plan_kt = new.plan_kt, sort_order = new.sort_order
         """, (financial_year, item, frm, to, r.get("plan_kt"), int(r.get("sort_order") or 0)))
         saved += 1
+    _ver.bump(conn)
     conn.commit()
     conn.close()
     return saved
@@ -201,6 +207,7 @@ def delete_ss_ipt_requirement(financial_year, item, from_plant, to_plant):
     cur = conn.cursor()
     cur.execute("DELETE FROM special_steel_ipt_requirement WHERE financial_year=%s AND item=%s "
                 "AND from_plant=%s AND to_plant=%s", (financial_year, item, from_plant, to_plant))
+    _ver.bump(conn)
     conn.commit()
     conn.close()
 
@@ -509,6 +516,7 @@ def abp_rows(cur, months):
 def upsert_abp(cur, report_month, plant_name, abp_qty):
     """Upsert one ABP cell on the caller's cursor; the caller commits.
     main POST /api/special-steel-abp."""
+    _ver.bump(cur)
     cur.execute("""
                 INSERT INTO special_steel_abp_table (report_month, plant_name, abp_qty)
                 VALUES (%s, %s, %s)
@@ -563,6 +571,7 @@ def ordered_club_rows(cur, plant, product):
 
 def upsert_grade_club(cur, plant, product, grade, label, now):
     """Put one grade in a club on the caller's cursor; the caller commits."""
+    _ver.bump(cur)
     cur.execute("""
             INSERT INTO special_steel_grade_clubs (plant_name, product, quality_grade, club_label, created_at)
             VALUES (%s, %s, %s, %s, %s)
@@ -581,6 +590,7 @@ def club_member_rows(cur, plant, product, label):
 
 def delete_club(cur, plant, product, label):
     """Delete every member of one club on the caller's cursor; the caller commits."""
+    _ver.bump(cur)
     cur.execute(
         "DELETE FROM special_steel_grade_clubs WHERE plant_name=%s AND product=%s AND club_label=%s",
         (plant, product, label),
@@ -598,6 +608,7 @@ def grade_club_row(cur, plant, product, grade):
 
 def delete_grade_club(cur, plant, product, grade):
     """Remove one grade from its club on the caller's cursor; the caller commits."""
+    _ver.bump(cur)
     cur.execute(
         "DELETE FROM special_steel_grade_clubs WHERE plant_name=%s AND product=%s AND quality_grade=%s",
         (plant, product, grade),

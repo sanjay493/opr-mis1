@@ -12,8 +12,19 @@ CREATE TABLE IF NOT EXISTS production_table (
     item_name    VARCHAR(64)  NOT NULL,
     month_actual DOUBLE,
     PRIMARY KEY (report_month, plant_name, item_name),
-    KEY idx_prod_plant_item (plant_name, item_name)
+    KEY idx_prod_plant_item (plant_name, item_name),
+    KEY idx_prod_item_month (item_name, report_month)
 ) ENGINE=InnoDB;
+
+-- One-row write counter (id = 1): every repo write bumps n in its own
+-- transaction; in-process caches key on it (backend/data_version.py).
+CREATE TABLE IF NOT EXISTS data_version (
+    id  TINYINT NOT NULL,
+    n   BIGINT  NOT NULL,
+    PRIMARY KEY (id),
+    CONSTRAINT data_version_one_row CHECK (id = 1)
+) ENGINE=InnoDB;
+INSERT IGNORE INTO data_version (id, n) VALUES (1, 1);
 
 CREATE TABLE IF NOT EXISTS production_plan_table (
     report_month CHAR(7)      NOT NULL,
@@ -331,7 +342,8 @@ CREATE TABLE IF NOT EXISTS extraction_log (
     sheet_name   VARCHAR(160),
     source_type  VARCHAR(160),
     items_extracted INT,
-    KEY idx_extraction_logged (logged_at)
+    KEY idx_extraction_logged (logged_at),
+    KEY idx_extraction_month (report_month)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS users (

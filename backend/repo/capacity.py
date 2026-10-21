@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional
 
 import activity_context
 from dbengine import Row, connect
+from repo import version as _ver
 from repo.conn import row_dict as _row_dict
 
 
@@ -63,6 +64,7 @@ def save_capacity_entry(plant: str, item: str, effective_month: str,
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (plant, item, effective_month, annual_capacity, reason,
               created_by, now, created_by, now))
+        _ver.bump(conn)
         conn.commit()
         new_id = cur.lastrowid
     finally:
@@ -100,6 +102,7 @@ def update_capacity_entry(entry_id: int, updated_by: str, **fields) -> bool:
     args.append(entry_id)
     try:
         conn.execute(f"UPDATE item_capacity_table SET {', '.join(sets)} WHERE id=%s", args)
+        _ver.bump(conn)
         conn.commit()
     finally:
         conn.close()
@@ -116,6 +119,7 @@ def delete_capacity_entry(entry_id: int) -> bool:
         conn.close()
         return False
     conn.execute("DELETE FROM item_capacity_table WHERE id=%s", (entry_id,))
+    _ver.bump(conn)
     conn.commit()
     conn.close()
     activity_context.record(f"item_capacity_table/{old['plant_name']}/{old['item_name']}/{entry_id}", old, None)

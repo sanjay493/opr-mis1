@@ -8,6 +8,7 @@ The db.py functions moved here verbatim (re-exported from db.py).
 from typing import Any, Dict, List, Optional
 
 from dbengine import connect
+from repo import version as _ver
 
 
 # ── "Details of Rakes Detention Plant Wise" (RAKE_DETENTION_* pages) ───────
@@ -115,6 +116,7 @@ def save_rake_detention_master_row(row: Dict[str, Any]) -> int:
             int(bool(row.get("is_active", True))),
         ))
         row_id = cur.lastrowid
+    _ver.bump(conn)
     conn.commit()
     conn.close()
     return row_id
@@ -128,6 +130,7 @@ def deactivate_rake_detention_master_row(master_id: int) -> None:
     conn = connect()
     cur = conn.cursor()
     cur.execute("UPDATE rake_detention_master SET is_active = 0 WHERE id = %s", (master_id,))
+    _ver.bump(conn)
     conn.commit()
     conn.close()
 
@@ -157,6 +160,7 @@ def save_rake_detention_monthly(report_month: str, rows: List[Dict[str, Any]]) -
             VALUES (%s, %s, %s)
             AS new ON DUPLICATE KEY UPDATE value_hours = new.value_hours
         """, (report_month, r["master_id"], r.get("value_hours")))
+    _ver.bump(conn)
     conn.commit()
     conn.close()
     return len(rows)
@@ -207,6 +211,7 @@ def save_rake_detention_summary(report_month: str, rows: List[Dict[str, Any]]) -
             VALUES (%s, %s, %s, %s)
             AS new ON DUPLICATE KEY UPDATE value = new.value
         """, (report_month, r["period_row"], r["plant"], r.get("value")))
+    _ver.bump(conn)
     conn.commit()
     conn.close()
     return len(rows)
@@ -239,6 +244,7 @@ def save_rake_detention_annual(rows: List[Dict[str, Any]]) -> int:
             VALUES (%s, %s, %s)
             AS new ON DUPLICATE KEY UPDATE avg_hours = new.avg_hours
         """, (r["plant"], r["financial_year"], r.get("avg_hours")))
+    _ver.bump(conn)
     conn.commit()
     conn.close()
     return len(rows)

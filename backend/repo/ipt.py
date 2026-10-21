@@ -9,6 +9,7 @@ from typing import Optional
 
 import activity_context
 from dbengine import connect
+from repo import version as _ver
 from repo import conn as rc
 from repo.conn import row_dict as _row_dict
 
@@ -41,6 +42,7 @@ def save_ipt_entry(month: str, item: str, from_plant: str, to_plant: str,
             actual_tonnage = new.actual_tonnage
     """, (month, item, from_plant, to_plant, unit, sort_order,
           plan, actual, plan_tonnage, actual_tonnage))
+    _ver.bump(conn)
     conn.commit()
     conn.close()
     new = {"report_month": month, "item": item, "from_plant": from_plant, "to_plant": to_plant,
@@ -60,6 +62,7 @@ def delete_ipt_entry(month: str, item: str, from_plant: str, to_plant: str) -> i
         (month, item, from_plant, to_plant),
     )
     deleted = cur.rowcount
+    _ver.bump(conn)
     conn.commit()
     conn.close()
     if old:

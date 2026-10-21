@@ -7,6 +7,7 @@ import json
 from typing import List, Optional
 
 from dbengine import connect
+from repo import version as _ver
 
 
 def get_page_config(month: str, page_number: int) -> Optional[dict]:
@@ -38,5 +39,6 @@ def save_page_config(month: str, page_number: int, page_data: dict):
         VALUES (%s, %s, %s)
         AS new ON DUPLICATE KEY UPDATE page_data = new.page_data
     """, (month, page_number, json.dumps(page_data)))
+    _ver.bump(conn)
     conn.commit()
     conn.close()

@@ -12,6 +12,7 @@ cursor and returns the plain fetchall() result.
 from typing import Any, Dict, List
 
 from dbengine import connect
+from repo import version as _ver
 from repo import conn as rc
 
 
@@ -51,6 +52,7 @@ def save_sail_mines_monthly(report_month: str, entries: List[Dict[str, Any]]) ->
             AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual, month_plan = new.month_plan
         """, (report_month, e["section"], e["item"], e.get("actual"), e.get("plan")))
         saved += 1
+    _ver.bump(conn)
     conn.commit()
     conn.close()
     return saved
@@ -213,6 +215,7 @@ def save_mines_production_despatch_monthly(
             AS new ON DUPLICATE KEY UPDATE qty_plan = new.qty_plan
         """, (report_month, mine_code, e["material_code"], e.get("plan")))
         saved += 1
+    _ver.bump(conn)
     conn.commit()
     conn.close()
     return saved
