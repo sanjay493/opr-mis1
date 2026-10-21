@@ -187,6 +187,16 @@ def sum_plants_cell(cur, measure: Measure, month, plants, item):
     return (_cells_sum(cells, (month,), plants, item),)
 
 
+def sum_months_cell(cur, measure: Measure, plant, item, months):
+    """sum_months_row(), served from the active report_context when it
+    covers every month: (SUM,) with SUM None when no non-NULL row matched."""
+    _table(measure)
+    cells = _bulk(measure, months)
+    if cells is None:
+        return sum_months_row(cur, measure, plant, item, months)
+    return (_cells_sum(cells, months, (plant,), item),)
+
+
 def _fs_alias_sum_cells(cells, month: str, plants: list) -> Optional[float]:
     """_fs_alias_sum from cells (same arithmetic, same order)."""
     regular = [p for p in plants if p not in _FS_ALIAS_PLANTS]

@@ -261,3 +261,71 @@ def test_records_rows_reproduce_group_by(mysql_db, monkeypatch):
     monkeypatch.setattr(pr, "_bucket_cells", rp.records_bucket_cells)        # the old GROUP BY path
     monkeypatch.setattr(pr, "_fy_window_cells", rp.records_fy_window_cells)
     assert built() == new
+
+
+def _seed_techno(seed=11):
+    """techno_data rows over the window and outside it: several units per
+    plant / month (inserted out of unit order), ints / floats / nulls,
+    a row holding only "month", a lower-case plant spelling."""
+    import json
+    rnd = random.Random(seed)
+    rows = []
+    for month in WINDOW[:6] + OUTSIDE:
+        for plant in ["BSP", "DSP", "isp", "SAIL"]:
+            for unit in ["SMS-2", "BF_Shop", "General", "BF#1", "bf-5", "Shop"]:
+                if rnd.random() < 0.2:
+                    continue
+                body = {"month": {"coke_rate": rnd.choice([None, 412, round(rnd.uniform(300, 500), 2)]),
+                                  "cdi": round(rnd.uniform(50, 200), 3)}}
+                if rnd.random() < 0.7:
+                    body["till_month"] = {"coke_rate": rnd.randint(300, 500)}
+                rows.append((plant, month, unit, json.dumps(body)))
+    with rc.tx() as cur:
+        cur.executemany("INSERT INTO techno_data (plant, report_month, unit, techno_json) "
+                        "VALUES (%s, %s, %s, %s)", rows)
+
+
+def _techno_snapshot():
+    from repo import techno as rt
+    out = {}
+    months = WINDOW[:6] + OUTSIDE
+    out["blobs"] = rt.blobs(months)
+    out["blobs-f"] = rt.blobs(months[:3], ["bsp", "ISP"], ["bf_shop", "General"])
+    with rc.cursor() as cur:
+        for month in months:
+            out[("sail", month)] = rt.get_sail_techno_actuals(month)
+            for plant in ["BSP", "DSP", "ISP", "isp", "SAIL", "RSP"]:
+                d = rt.get_techno_data(plant, month)
+                out[("all", month, plant)] = (list(d), d)             # unit order too
+                for unit in ["BF_Shop", "bf_shop", "BF-5", "Missing", None, ""]:
+                    out[("one", month, plant, unit)] = rt.get_techno_data(plant, month, unit)
+                    if unit:
+                        out[("json", month, plant, unit)] = rt.json_cell(cur, plant, month, unit)
+        for plant in ALL_PLANTS:
+            for ms in (WINDOW[:5], WINDOW[2:3], ["2024-08", "2025-04"]):
+                out[("summ", plant, tuple(ms))] = rp.sum_months_cell(cur, "actual", plant, "Hot Metal", ms)
+    return out
+
+
+def test_techno_bulk_equals_single(mysql_db, query_count):
+    """repo.techno reads (blobs, get_techno_data in unit order, SAIL actuals,
+    json_cell) and sum_months_cell from the bulk load equal their SQL."""
+    from repo import techno as rt
+    _seed()
+    _seed_techno()
+    single = _techno_snapshot()
+    sql_queries = query_count[0]
+    query_count[0] = 0
+    with report_context.activate(MONTH) as ctx:
+        bulk = _techno_snapshot()
+    assert ctx.loads == 2                          # techno + production
+    assert query_count[0] < sql_queries / 2
+    diffs = [k for k in single if not _same(single[k], bulk[k])]
+    assert not diffs, diffs[:10]
+    assert any(len(v[0]) > 2 for k, v in single.items() if k[0] == "all")
+    # Each read gets its own objects: mutating one never reaches the next.
+    with report_context.activate(MONTH):
+        d = rt.get_techno_data("BSP", WINDOW[0])
+        unit = next(iter(d))
+        d[unit]["month"]["coke_rate"] = "mutated"
+        assert rt.get_techno_data("BSP", WINDOW[0])[unit]["month"]["coke_rate"] != "mutated"

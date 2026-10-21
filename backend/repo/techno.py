@@ -16,7 +16,9 @@ import json
 from typing import Any, Dict, Iterable, List, Optional
 
 import activity_context
+import report_context
 from dbengine import Row, connect
+from report_context import fold
 from repo import version as _ver
 from repo import conn as rc
 from repo.conn import row_dict as _row_dict
@@ -24,6 +26,70 @@ from repo.conn import row_dict as _row_dict
 
 def _in(col, vals):
     return f"{col} IN ({', '.join(['%s'] * len(vals))})"
+
+
+# ── report_context bulk load ────────────────────────────────────────────────
+# Inside report_context.activate(), techno_data reads whose month falls in
+# the context's window are served from one load of the window's rows
+# (ORDER BY report_month, plant, unit: the unit order get_techno_data's
+# ORDER BY unit gives). The stored JSON text is kept and parsed on every
+# read, so each caller gets fresh objects, as from SQL. Reads on a
+# caller-supplied connection (conn=..., writers mid-transaction) always
+# use SQL.
+
+def _bulk_load(first, last):
+    """{(report_month, fold(plant)): [(plant, unit, techno_json text), ...]}
+    in unit order, for first <= report_month <= last."""
+    out = {}
+    with rc.cursor() as cur:
+        cur.execute(
+            "SELECT report_month, plant, unit, techno_json FROM techno_data "
+            "WHERE report_month BETWEEN %s AND %s ORDER BY report_month, plant, unit",
+            (first, last))
+        for r in cur.fetchall():
+            out.setdefault((r[0], fold(r[1])), []).append((r[1], r[2], r[3]))
+    return out
+
+
+def _bulk(months):
+    ctx = report_context.covering(months)
+    if ctx is None:
+        return None
+    return ctx.load("techno", _bulk_load)
+
+
+def _parse(text):
+    try:
+        return json.loads(text)
+    except (json.JSONDecodeError, TypeError):
+        return {}
+
+
+def _units_from_bulk(plant, report_month, unit=None):
+    """get_techno_data's {unit: json} from the bulk load, or None when the
+    active context does not cover report_month."""
+    bulk = _bulk((report_month,))
+    if bulk is None:
+        return None
+    result = {}
+    for _plant, u, text in bulk.get((report_month, fold(plant)), ()):
+        if unit and fold(u) != fold(unit):
+            continue
+        result[u] = _parse(text)
+    return result
+
+
+def json_cell(cur, plant, report_month, unit):
+    """json_row(), served from the active report_context when it covers
+    report_month: (techno_json text,) or None."""
+    bulk = _bulk((report_month,))
+    if bulk is None:
+        return json_row(cur, plant, report_month, unit)
+    fu = fold(unit)
+    for _plant, u, text in bulk.get((report_month, fold(plant)), ()):
+        if fold(u) == fu:
+            return (text,)
+    return None
 
 
 def blobs(months: Iterable[str], plants: Iterable[str] | None = None,
@@ -38,6 +104,14 @@ def blobs(months: Iterable[str], plants: Iterable[str] | None = None,
     units = None if units is None else list(units)
     if not months or plants == [] or units == []:
         return {}
+    bulk = _bulk(months)
+    if bulk is not None:
+        mset = set(months)
+        pset = None if plants is None else {fold(p) for p in plants}
+        uset = None if units is None else {fold(u) for u in units}
+        return {(m, plant, unit): _parse(text)
+                for (m, fp), rows in bulk.items() if m in mset and (pset is None or fp in pset)
+                for plant, unit, text in rows if uset is None or fold(unit) in uset}
     where = [_in("report_month", months)]
     params = list(months)
     if plants is not None:
@@ -412,7 +486,14 @@ def get_techno_data(plant: str, report_month: str, unit: str = None, conn=None) 
     `conn`: see merge_upsert_techno_data's docstring. When reusing a passed-in
     connection, its row_factory is saved and restored afterward rather than
     being permanently switched to Row, since a shared connection may
-    be reused by other callers (plain tuple rows) later in the same batch."""
+    be reused by other callers (plain tuple rows) later in the same batch.
+
+    Without `conn`, served from the active report_context's bulk load when
+    it covers report_month."""
+    if conn is None:
+        served = _units_from_bulk(plant, report_month, unit)
+        if served is not None:
+            return served
     owns_conn = conn is None
     if owns_conn:
         conn = connect()
@@ -450,6 +531,9 @@ def get_sail_techno_actuals(report_month: str) -> Dict[str, Any]:
     """Fetch SAIL consolidated techno actuals (stored, not calculated).
     Returns: {unit: {month: {...}, till_month: {...}}} where unit is typically 'Shop'
     """
+    served = _units_from_bulk("SAIL", report_month)
+    if served is not None:
+        return served
     conn = connect()
     conn.row_factory = Row
     cursor = conn.cursor()

@@ -363,7 +363,7 @@ def calculate_sail_actuals(report_month: str) -> dict:
                 for month in all_months:
                     # Fetch BF_Shop (BF params) and General (SEC) units
                     for _unit in ("BF_Shop", "General"):
-                        row = rt.json_row(cur, plant, month, _unit)
+                        row = rt.json_cell(cur, plant, month, _unit)
                         if row:
                             try:
                                 techno_json = _json.loads(row[0])
@@ -395,9 +395,9 @@ def calculate_sail_actuals(report_month: str) -> dict:
             def _get_weight(plant, rm, item, months_list=None):
                 """Get production weight for a plant. Single month or sum over months_list."""
                 if months_list:
-                    row = rp.sum_months_row(cur, "actual", plant, item, months_list)
+                    row = rp.sum_months_cell(cur, "actual", plant, item, months_list)
                 else:
-                    row = rp.value_row(cur, "actual", rm, plant, item)
+                    row = rp.cell(cur, "actual", rm, plant, item)
                 return (row[0] or 0) if row else 0
 
             # Calculate each parameter
@@ -539,7 +539,7 @@ def calculate_sail_actuals_strict(report_month: str) -> dict:
             # figures ARE its shop-wide figures (same rule as BF_UNITS below).
             units = ("BF_Shop", "BF-5", "General") if plant == "ISP" else ("BF_Shop", "General")
             for _unit in units:
-                row = rt.json_row(cur, plant, report_month, _unit)
+                row = rt.json_cell(cur, plant, report_month, _unit)
                 if row:
                     try:
                         techno_json = _json.loads(row[0])
@@ -550,7 +550,7 @@ def calculate_sail_actuals_strict(report_month: str) -> dict:
                         pass
 
         def _get_weight(plant, item):
-            row = rp.value_row(cur, "actual", report_month, plant, item)
+            row = rp.cell(cur, "actual", report_month, plant, item)
             return (row[0] or 0) if row else 0
 
         values = {}
@@ -621,7 +621,7 @@ def _sail_stored_json_value(cur, month, unit, keys, period):
     written by the techno-manual entry page). Returns None when absent so the
     caller falls back to the calculated weighted average."""
     import json as _json
-    row = rt.json_row(cur, "SAIL", month, unit)
+    row = rt.json_cell(cur, "SAIL", month, unit)
     if not row:
         return None
     try:
