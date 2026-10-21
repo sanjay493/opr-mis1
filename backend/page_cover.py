@@ -37,6 +37,7 @@ import os
 import cover_designs
 import cover_store
 import db
+import report_context
 from report_utils import compute_item_row
 
 _COVER_ASSET_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend", "public", "cover")
@@ -156,6 +157,14 @@ def _saved_setting(report_month: str):
 
 
 def generate_cover(report_month: str, design: str | None = None, photo_id: int | None = None) -> dict:
+    # The cover is not page-cached (it reads its pictures from disk) and makes
+    # only a few production reads: they run their own SQL rather than make
+    # an otherwise fully cached request bulk-load the report_context window.
+    with report_context.suspend():
+        return _generate_cover(report_month, design, photo_id)
+
+
+def _generate_cover(report_month: str, design: str | None = None, photo_id: int | None = None) -> dict:
     """Page-1 data. `design`/`photo_id` override the saved choice (the /report
     preview of an unsaved pick); otherwise the month's saved setting is used,
     and a month with none keeps the Classic cover with exactly today's keys."""

@@ -220,6 +220,26 @@ def test_page_cache_hit_does_no_bulk_load(mysql_db, monkeypatch):
     assert again == first and len(loads) == 1
 
 
+def test_cached_full_request_does_no_bulk_load(mysql_db, monkeypatch):
+    """A second full /api/data for the month (every page from the page
+    cache, the cover's KPI rows from compute_item_row's memo) loads
+    nothing; after a write, the rows show the new value."""
+    import main
+    from report_utils import compute_item_row
+    _seed()
+    loads = []
+    real = rp._bulk_load
+    monkeypatch.setattr(rp, "_bulk_load", lambda a, b: loads.append(a) or real(a, b))
+    main.get_data(month=MONTH)
+    assert loads
+    loads.clear()
+    main.get_data(month=MONTH)
+    assert loads == []
+    before = compute_item_row(MONTH, "Hot Metal")
+    rp.upsert("abp", [(MONTH, "BSP", "Hot Metal", 99999.0)])
+    assert compute_item_row(MONTH, "Hot Metal")[0] != before[0]
+
+
 def test_no_context_inside_dry_run(mysql_db):
     with report_context.activate(MONTH):
         assert report_context.current() is not None

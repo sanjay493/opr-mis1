@@ -1,6 +1,8 @@
 import db
 from typing import List, Dict, Any, Optional
 
+from version_cache import VersionedCache
+
 
 # Page-number ranges -> corner-badge color group, matching the report's
 # section boundaries in frontend/src/app/report/page.js's PAGE_LABELS.
@@ -187,7 +189,21 @@ def assign_dept_badges(pages: list) -> None:
         p["dept_badge"] = {"group": group, "side": _DEPT_BADGE_SIDE.get(pg, "right")} if group is not None else None
 
 
+# compute_item_row is asked for the same (month, item) by page 3, the cover,
+# MIS at a Glance and Key Highlights; memoised on data_version (a write
+# invalidates it), so a request whose pages all come from main's page cache
+# does not rebuild these rows (nor the bulk load they read) for the cover.
+_item_row_cache = VersionedCache(maxsize=256)
+
+
 def compute_item_row(month: str, item_name: str) -> list:
+    """_compute_item_row, memoised on (month, item_name, data_version).
+    Each call gets its own copy."""
+    return _item_row_cache.get_or_compute(
+        (month, item_name), None, lambda: _compute_item_row(month, item_name))
+
+
+def _compute_item_row(month: str, item_name: str) -> list:
     """Computes a 12-value list for the SAIL summary production table.
 
     Index  Column

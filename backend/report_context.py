@@ -142,6 +142,18 @@ def invalidate_current() -> None:
 
 
 @contextmanager
+def suspend():
+    """No context inside the block: every read runs its own SQL. For code
+    outside the page cache that makes only a handful of reads (the cover),
+    so a request served from the page cache never pays for a bulk load."""
+    token = _current.set(None)
+    try:
+        yield
+    finally:
+        _current.reset(token)
+
+
+@contextmanager
 def ensure():
     """The active context for the block, or, when none is active, one that
     covers no months: every read runs its SQL, but ctx.memo() memoises
