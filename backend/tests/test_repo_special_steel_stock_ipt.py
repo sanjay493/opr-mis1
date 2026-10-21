@@ -62,7 +62,7 @@ class _CommitSpy:
 
             def execute(self, sql, params=()):
                 self._cur.execute(sql, params)
-                if sql.lstrip().upper().startswith(("INSERT", "DELETE")):
+                if sql.lstrip().upper().startswith(("INSERT", "DELETE")) and "data_version" not in sql:  # not the bump
                     spy.visible_mid_call.append(_other_conn_count(spy.table))
                 return self
 
