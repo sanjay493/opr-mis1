@@ -138,6 +138,41 @@ def _mysql_test_schema():
         conn.close()
 
 
+SCHEMA_V2_DIR = BACKEND_DIR / "scripts" / "v2"
+SCHEMA_V2_FILES = (SCHEMA_V2_DIR / "schema_v2.sql", SCHEMA_V2_DIR / "seed_cal_month.sql")
+
+
+def _apply_sql_files(cur, files):
+    for script in files:
+        cur.execute(script.read_text(encoding="utf-8"))
+        while cur.nextset():
+            pass
+
+
+@pytest.fixture(scope="module")
+def mysql_v2_db():
+    """A throwaway `mis_reports_test_v2_<pid>` schema built from
+    scripts/v2/schema_v2.sql + seed_cal_month.sql (the v2 DDL). Yields an
+    autocommit pymysql connection to it; dropped afterwards. Not wired into
+    the app's DB layer (the app still runs on v1 until Task 7)."""
+    cfg = _test_cfg()
+    name = f"{_TEST_DB_PREFIX}v2_{os.getpid()}"
+    _assert_test_schema(name)
+    conn = _admin_connect(cfg, multi=True)
+    try:
+        with conn.cursor() as cur:
+            cur.execute(f"DROP DATABASE IF EXISTS `{name}`")
+            cur.execute(f"CREATE DATABASE `{name}` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci")
+            cur.execute(f"USE `{name}`")
+            _apply_sql_files(cur, SCHEMA_V2_FILES)
+        yield conn
+    finally:
+        _assert_test_schema(name)
+        with conn.cursor() as cur:
+            cur.execute(f"DROP DATABASE IF EXISTS `{name}`")
+        conn.close()
+
+
 @pytest.fixture
 def mysql_db(_mysql_test_schema, monkeypatch):
     """Empty v1 schema in a throwaway MySQL database, wired into the app's DB
