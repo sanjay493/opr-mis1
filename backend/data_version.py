@@ -2,8 +2,9 @@
 (table data_version, SQL in repo/version.py). In-process caches key on it,
 so a write anywhere invalidates them without any explicit cache clearing.
 
-    current()      the version, or None when the table is missing (callers
-                   then skip caching and always recompute). Inside pinned()
+    current()      the version, or None when the table is missing or inside
+                   the preview dry run (callers then skip caching and
+                   always recompute). Inside pinned()
                    it is read once and reused for the whole block.
     bump(cur=None) n := n + 1, on `cur` (joining its transaction) or in a
                    transaction of its own.
@@ -25,6 +26,10 @@ _max_seen = 0     # highest n this process has read; a floor for after_restore
 
 
 def current():
+    # Inside the preview dry run (repo.conn.rollback_tx) caching is off: a
+    # read there must never key a cache on that connection's uncommitted state.
+    if _rv.in_dry_run():
+        return None
     pinned = _pinned.get()
     if pinned is not _UNSET:
         return pinned
@@ -34,6 +39,8 @@ def current():
 def _read():
     global _max_seen
     n = _rv.read()
+    # Unlocked read-modify-write: benign, it only ever raises a floor
+    # (a lost update just leaves after_restore a slightly lower one).
     if n is not None and n > _max_seen:
         _max_seen = n
     return n

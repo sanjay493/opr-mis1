@@ -28,6 +28,7 @@ def save_ipt_entry(month: str, item: str, from_plant: str, to_plant: str,
     old = _row_dict(conn,
         "SELECT * FROM ipt_table WHERE report_month=%s AND item=%s AND from_plant=%s AND to_plant=%s",
         (month, item, from_plant, to_plant))
+    _ver.bump(conn)
     conn.execute("""
         INSERT INTO ipt_table
             (report_month, item, from_plant, to_plant, unit, sort_order,
@@ -42,7 +43,6 @@ def save_ipt_entry(month: str, item: str, from_plant: str, to_plant: str,
             actual_tonnage = new.actual_tonnage
     """, (month, item, from_plant, to_plant, unit, sort_order,
           plan, actual, plan_tonnage, actual_tonnage))
-    _ver.bump(conn)
     conn.commit()
     conn.close()
     new = {"report_month": month, "item": item, "from_plant": from_plant, "to_plant": to_plant,
@@ -57,12 +57,12 @@ def delete_ipt_entry(month: str, item: str, from_plant: str, to_plant: str) -> i
     old = _row_dict(conn,
         "SELECT * FROM ipt_table WHERE report_month=%s AND item=%s AND from_plant=%s AND to_plant=%s",
         (month, item, from_plant, to_plant))
+    _ver.bump(conn)
     cur = conn.execute(
         "DELETE FROM ipt_table WHERE report_month=%s AND item=%s AND from_plant=%s AND to_plant=%s",
         (month, item, from_plant, to_plant),
     )
     deleted = cur.rowcount
-    _ver.bump(conn)
     conn.commit()
     conn.close()
     if old:

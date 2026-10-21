@@ -108,20 +108,35 @@ def test_cursor_helper_bump_keeps_lastrowid(mysql_db):
         assert cur.fetchone()[0] == "BF-X"
 
 
-def test_dry_run_rolls_back_bump(mysql_db):
+def test_dry_run_skips_bump(mysql_db):
     """The plan-preview dry run (rollback_tx + the _shared_raw contextvar):
-    the bump is visible on the shared connection, then rolled back."""
+    its writes don't bump (nothing to invalidate, no row lock held), and
+    current() is None in there (caching off)."""
     n0 = _n()
     inside = []
 
     def extractor():
         rp.upsert("abp", [(MONTH, "BSP", "Hot Metal", 9.0)])
-        inside.append(_n())               # same shared connection
+        inside.append((_n(), data_version.current()))   # same shared connection
     rows = rp.plan_preview_rows(extractor)
     assert [tuple(r) for r in rows] == [("BSP", "Hot Metal", MONTH, 9.0)]
-    assert inside == [n0 + 1]
+    assert inside == [(n0, None)]
     assert _n() == n0
     assert rp.values([MONTH], None, None, "abp") == {}
+    assert data_version.current() == n0
+
+
+def test_nothing_cached_inside_dry_run(mysql_db):
+    cache = VersionedCache(8)
+    built = []
+    with rc.rollback_tx():
+        with data_version.pinned():
+            for _ in range(2):
+                cache.get_or_compute(("m", 1), "p", lambda: built.append(1) or "v")
+    assert len(built) == 2 and len(cache) == 0
+    cache.get_or_compute(("m", 1), "p", lambda: built.append(1) or "v")
+    cache.get_or_compute(("m", 1), "p", lambda: built.append(1) or "v")
+    assert len(built) == 3 and len(cache) == 1          # outside: cached again
 
 
 # ── missing table: no caching, writes still work ───────────────────────────

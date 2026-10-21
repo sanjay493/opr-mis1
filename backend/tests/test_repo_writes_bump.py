@@ -120,6 +120,91 @@ def _write_functions():
     return out
 
 
+# ── bump-first ordering ─────────────────────────────────────────────────────
+# Every writer takes the data_version row lock BEFORE any data-row lock, so
+# two concurrent writers always lock in the same order and cannot deadlock
+# on it (MySQL error 1213).
+
+def _is_bump(call):
+    f = call.func
+    return isinstance(f, ast.Attribute) and f.attr == "bump" \
+        and isinstance(f.value, ast.Name) and f.value.id == "_ver"
+
+
+def _local_write_names(fn):
+    names = set()
+    for node in ast.walk(fn):
+        if isinstance(node, (ast.Assign, ast.AugAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            t = _text(node.value)
+            if t and WRITE_RE.search(t):
+                names |= {x.id for x in targets if isinstance(x, ast.Name)}
+    return names
+
+
+def _is_write_sql(arg, write_names):
+    t = _text(arg)
+    if t is not None:
+        return bool(WRITE_RE.search(t))
+    if isinstance(arg, ast.Name):
+        return arg.id in write_names
+    if isinstance(arg, ast.Call) and isinstance(arg.func, ast.Attribute) \
+            and arg.func.attr == "format" and isinstance(arg.func.value, ast.Name):
+        return arg.func.value.id in write_names
+    return False
+
+
+def write_and_bump_calls(tree):
+    """(function, first write call, first direct _ver.bump call) for each
+    module-level function that executes write SQL; a write call is an
+    execute / executemany whose SQL is a write statement."""
+    module_names = _module_write_constants(tree)
+    for fn in tree.body:
+        if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        # A SQL parameter counts as a write: a generic executor such as
+        # misc._cover_execute runs whatever write its callers pass.
+        params = {a.arg for a in fn.args.args}
+        names = module_names | _local_write_names(fn) | params
+        calls = sorted((n for n in ast.walk(fn) if isinstance(n, ast.Call)),
+                       key=lambda n: (n.lineno, n.col_offset))
+        write = next((c for c in calls
+                      if isinstance(c.func, ast.Attribute) and c.func.attr in ("execute", "executemany")
+                      and c.args and _is_write_sql(c.args[0], names)), None)
+        bump = next((c for c in calls if _is_bump(c)), None)
+        if write is not None or bump is not None:
+            yield fn, write, bump
+
+
+def enclosing_stmt(body, lineno):
+    """The statement in `body` holding line `lineno`, descending into try /
+    with bodies (straight-line code) but not into loops or branches."""
+    for stmt in body:
+        if stmt.lineno <= lineno <= stmt.end_lineno:
+            if isinstance(stmt, (ast.Try, ast.With)) and stmt.body \
+                    and stmt.body[0].lineno <= lineno <= stmt.body[-1].end_lineno:
+                return enclosing_stmt(stmt.body, lineno)
+            return stmt
+    raise LookupError(lineno)
+
+
+def test_bump_precedes_the_first_write():
+    late, unseen = [], []
+    for path in sorted(REPO.glob("*.py")):
+        if path.stem == "version":
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for fn, write, bump in write_and_bump_calls(tree):
+            if bump is None:
+                continue                      # exempt, or bumps through a helper
+            if write is None:
+                unseen.append(f"{path.stem}.{fn.name}")
+            elif (bump.lineno, bump.col_offset) > (write.lineno, write.col_offset):
+                late.append(f"{path.stem}.{fn.name}: bump L{bump.lineno} after write L{write.lineno}")
+    assert late == []
+    assert unseen == []
+
+
 def test_scan_finds_the_known_writers():
     found = _write_functions()
     for key in [("production", "upsert"), ("production", "upsert_row"),

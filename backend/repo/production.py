@@ -348,6 +348,7 @@ def save_production_actual(month: str, plant: str, item: str, value: Optional[fl
     old = _row_dict(conn,
         "SELECT * FROM production_table WHERE report_month=%s AND plant_name=%s AND item_name=%s",
         (month, plant, item))
+    _ver.bump(conn)
     if value is None:
         cursor.execute("""
             DELETE FROM production_table
@@ -359,7 +360,6 @@ def save_production_actual(month: str, plant: str, item: str, value: Optional[fl
             VALUES (%s, %s, %s, %s)
             AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
         """, (month, plant, item, value))
-    _ver.bump(conn)
     conn.commit()
     conn.close()
     new = None if value is None else {"report_month": month, "plant_name": plant, "item_name": item, "month_actual": value}
@@ -373,6 +373,7 @@ def save_production_plan(month: str, plant: str, item: str, value: Optional[floa
     old = _row_dict(conn,
         "SELECT * FROM production_plan_table WHERE report_month=%s AND plant_name=%s AND item_name=%s",
         (month, plant, item))
+    _ver.bump(conn)
     if value is None:
         cursor.execute("""
             DELETE FROM production_plan_table
@@ -384,7 +385,6 @@ def save_production_plan(month: str, plant: str, item: str, value: Optional[floa
             VALUES (%s, %s, %s, %s)
             AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual
         """, (month, plant, item, value))
-    _ver.bump(conn)
     conn.commit()
     conn.close()
     new = None if value is None else {"report_month": month, "plant_name": plant, "item_name": item, "month_actual": value}

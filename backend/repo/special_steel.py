@@ -34,12 +34,12 @@ def clear_special_steel_orders(month: str, plant: str) -> int:
     )
     olds = [dict(r) for r in old_rows.fetchall()]
     conn.row_factory = None
+    _ver.bump(conn)
     cur = conn.execute(
         "DELETE FROM special_steel_orders WHERE report_month=%s AND plant_name=%s",
         (month, plant),
     )
     deleted = cur.rowcount
-    _ver.bump(conn)
     conn.commit()
     conn.close()
     for old in olds:
@@ -60,6 +60,7 @@ def save_special_steel_entry(month: str, plant: str, product: str, quality_grade
     old = _row_dict(conn,
         "SELECT * FROM special_steel_orders WHERE report_month=%s AND plant_name=%s AND product=%s AND quality_grade=%s AND section=%s",
         (month, plant, product, quality_grade, section or ""))
+    _ver.bump(conn)
     conn.execute("""
         INSERT INTO special_steel_orders
             (report_month, plant_name, product, quality_grade, section,
@@ -71,7 +72,6 @@ def save_special_steel_entry(month: str, plant: str, product: str, quality_grade
             actual_despatch = new.actual_despatch
     """, (month, plant, product, quality_grade, section or "",
           sort_order, order_qty, actual_despatch))
-    _ver.bump(conn)
     conn.commit()
     conn.close()
     new = {"report_month": month, "plant_name": plant, "product": product,
@@ -105,6 +105,7 @@ def save_ss_phys_meta(rows):
     best_actual_kt, best_year, remark, sort_order}."""
     conn = connect()
     cur = conn.cursor()
+    _ver.bump(conn)
     for r in rows:
         cur.execute("""
             INSERT INTO special_steel_phys_meta
@@ -116,7 +117,6 @@ def save_ss_phys_meta(rows):
                 sort_order = new.sort_order
         """, (r["plant"], r["series"], r.get("capacity_kt"), r.get("best_actual_kt"),
               r.get("best_year"), r.get("remark"), int(r.get("sort_order") or 0)))
-    _ver.bump(conn)
     conn.commit()
     conn.close()
     return len(rows)
@@ -128,6 +128,7 @@ def save_ss_phys_perf(rows):
     conn = connect()
     cur = conn.cursor()
     saved = 0
+    _ver.bump(conn)
     for r in rows:
         key = (r["financial_year"], r["plant"], r["series"], r["metric"])
         if r.get("value_kt") is None:
@@ -141,7 +142,6 @@ def save_ss_phys_perf(rows):
                 AS new ON DUPLICATE KEY UPDATE value_kt = new.value_kt
             """, (*key, r["value_kt"]))
         saved += 1
-    _ver.bump(conn)
     conn.commit()
     conn.close()
     return saved
@@ -180,6 +180,7 @@ def save_ss_ipt_requirement(financial_year, rows):
     conn = connect()
     cur = conn.cursor()
     saved = 0
+    _ver.bump(conn)
     for r in rows:
         item = (r.get("item") or "").strip()
         frm, to = (r.get("from_plant") or "").strip(), (r.get("to_plant") or "").strip()
@@ -196,7 +197,6 @@ def save_ss_ipt_requirement(financial_year, rows):
             AS new ON DUPLICATE KEY UPDATE plan_kt = new.plan_kt, sort_order = new.sort_order
         """, (financial_year, item, frm, to, r.get("plan_kt"), int(r.get("sort_order") or 0)))
         saved += 1
-    _ver.bump(conn)
     conn.commit()
     conn.close()
     return saved
@@ -205,9 +205,9 @@ def save_ss_ipt_requirement(financial_year, rows):
 def delete_ss_ipt_requirement(financial_year, item, from_plant, to_plant):
     conn = connect()
     cur = conn.cursor()
+    _ver.bump(conn)
     cur.execute("DELETE FROM special_steel_ipt_requirement WHERE financial_year=%s AND item=%s "
                 "AND from_plant=%s AND to_plant=%s", (financial_year, item, from_plant, to_plant))
-    _ver.bump(conn)
     conn.commit()
     conn.close()
 

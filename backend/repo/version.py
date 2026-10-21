@@ -2,19 +2,21 @@
 bumps inside its own transaction, so a cache keyed on n can never serve a
 page built from older data. See backend/data_version.py.
 
-    bump(cur)       on the writer's cursor or db.connect() connection, so a
-                    rollback (including repo.conn.rollback_tx's dry run)
-                    also rolls back the bump
+    bump(cur)       on the writer's cursor or db.connect() connection, before
+                    its first write (one lock order for every writer), so a
+                    rollback also rolls back the bump
     read()          current n, or None (no table / no row)
     set_fresh(n)    n := GREATEST(n + 1, floor); after an admin restore
 
 A missing data_version table (a database the migration has not reached) is
-tolerated everywhere: bump() is a no-op and read() returns None.
+tolerated everywhere: bump() is a no-op and read() returns None. Inside
+repo.conn.rollback_tx (the preview dry run) bump() is a no-op too.
 """
 import time
 
 import pymysql
 
+import dbengine
 from repo import conn as rc
 
 _NO_TABLE = 1146          # ER_NO_SUCH_TABLE
@@ -31,6 +33,11 @@ def _no_table(exc) -> bool:
     return bool(getattr(exc, "args", None)) and exc.args[0] == _NO_TABLE
 
 
+def in_dry_run() -> bool:
+    """True inside repo.conn.rollback_tx (dbengine's shared connection)."""
+    return dbengine._shared_raw.get() is not None
+
+
 def now_us() -> int:
     return time.time_ns() // 1000
 
@@ -39,7 +46,13 @@ def bump(cur) -> None:
     """n := n + 1 on `cur` (a repo.conn Cursor, a db.connect() cursor or
     connection): it joins that transaction. Call it before the write's own
     statement on a shared cursor, so the caller still reads the write's
-    lastrowid / rowcount."""
+    lastrowid / rowcount.
+
+    Inside repo.conn.rollback_tx (the preview dry run) it does nothing: the
+    dry run's writes are always rolled back, so there is nothing to
+    invalidate, and it must not hold the data_version row lock."""
+    if in_dry_run():
+        return
     try:
         cur.execute(_BUMP_SQL, (now_us(),))
     except (pymysql.err.OperationalError, pymysql.err.ProgrammingError) as e:

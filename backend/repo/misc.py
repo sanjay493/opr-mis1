@@ -47,13 +47,13 @@ def save_market_price_trend(rows: List[Dict[str, Any]]) -> int:
     """Upsert market_price_trend_monthly rows: {report_month, series_code, value}."""
     conn = connect()
     cur = conn.cursor()
+    _ver.bump(conn)
     for r in rows:
         cur.execute("""
             INSERT INTO market_price_trend_monthly (report_month, series_code, value)
             VALUES (%s, %s, %s)
             AS new ON DUPLICATE KEY UPDATE value = new.value
         """, (r["report_month"], r["series_code"], r.get("value")))
-    _ver.bump(conn)
     conn.commit()
     conn.close()
     return len(rows)
@@ -82,13 +82,13 @@ def save_macro_indicators(rows: List[Dict[str, Any]]) -> int:
     """Upsert macro_indicators_monthly rows: {report_month, metric_code, value}."""
     conn = connect()
     cur = conn.cursor()
+    _ver.bump(conn)
     for r in rows:
         cur.execute("""
             INSERT INTO macro_indicators_monthly (report_month, metric_code, value)
             VALUES (%s, %s, %s)
             AS new ON DUPLICATE KEY UPDATE value = new.value
         """, (r["report_month"], r["metric_code"], r.get("value")))
-    _ver.bump(conn)
     conn.commit()
     conn.close()
     return len(rows)
@@ -117,12 +117,12 @@ def save_pdf_item_alias(plant: str, pdf_label: str, item_name: str, convert_t: i
     old = _row_dict(conn,
         "SELECT * FROM pdf_item_alias WHERE plant_name=%s AND pdf_label=%s",
         (plant, pdf_label))
+    _ver.bump(conn)
     conn.execute("""
         INSERT INTO pdf_item_alias (plant_name, pdf_label, item_name, convert_t)
         VALUES (%s, %s, %s, %s)
         AS new ON DUPLICATE KEY UPDATE item_name = new.item_name, convert_t = new.convert_t
     """, (plant, pdf_label, item_name, convert_t))
-    _ver.bump(conn)
     conn.commit()
     conn.close()
     new = {"plant_name": plant, "pdf_label": pdf_label, "item_name": item_name, "convert_t": convert_t}
@@ -152,6 +152,7 @@ def save_rail_report_data(rows: List[Dict[str, Any]]) -> int:
     """Upsert rail_prod_despatch rows: {financial_year, metric, value, note}."""
     conn = connect()
     cur = conn.cursor()
+    _ver.bump(conn)
     for r in rows:
         cur.execute("""
             INSERT INTO rail_prod_despatch (financial_year, metric, value, note)
@@ -159,7 +160,6 @@ def save_rail_report_data(rows: List[Dict[str, Any]]) -> int:
             AS new ON DUPLICATE KEY UPDATE
                 value = new.value, note = new.note
         """, (r["financial_year"], r["metric"], r.get("value"), r.get("note")))
-    _ver.bump(conn)
     conn.commit()
     conn.close()
     return len(rows)
@@ -243,6 +243,7 @@ def upsert_ready_reckoner_master(row: Dict[str, Any]) -> None:
     below)."""
     conn = connect()
     cur = conn.cursor()
+    _ver.bump(conn)
     cur.execute("""
         INSERT INTO ready_reckoner_pages (plant_code, plant_name, plant_group, sort_order)
         VALUES (%s, %s, %s, %s)
@@ -250,7 +251,6 @@ def upsert_ready_reckoner_master(row: Dict[str, Any]) -> None:
             plant_name = new.plant_name, plant_group = new.plant_group,
             sort_order = new.sort_order
     """, (row["plant_code"], row.get("plant_name"), row["plant_group"], int(row.get("sort_order") or 0)))
-    _ver.bump(conn)
     conn.commit()
     conn.close()
 
@@ -295,8 +295,8 @@ def save_ready_reckoner_content(
     args += [updated_by, _dt.datetime.now().isoformat(timespec="seconds"), plant_code]
     conn = connect()
     cur = conn.cursor()
-    cur.execute(f"UPDATE ready_reckoner_pages SET {', '.join(sets)} WHERE plant_code = %s", args)
     _ver.bump(conn)
+    cur.execute(f"UPDATE ready_reckoner_pages SET {', '.join(sets)} WHERE plant_code = %s", args)
     conn.commit()
     conn.close()
 
@@ -308,12 +308,12 @@ def save_ready_reckoner_image(plant_code: str, image_path: str, updated_by: str)
     import datetime as _dt
     conn = connect()
     cur = conn.cursor()
+    _ver.bump(conn)
     cur.execute("""
         UPDATE ready_reckoner_pages
         SET process_flow_image_path = %s, updated_by = %s, updated_at = %s
         WHERE plant_code = %s
     """, (image_path, updated_by, _dt.datetime.now().isoformat(timespec="seconds"), plant_code))
-    _ver.bump(conn)
     conn.commit()
     conn.close()
 
@@ -366,6 +366,7 @@ def save_major_unit_daily_record(plant_code: str, unit_label: str, value: Option
     import datetime as _dt
     conn = connect()
     cur = conn.cursor()
+    _ver.bump(conn)
     cur.execute("""
         INSERT INTO major_unit_daily_record
             (plant_code, unit_label, unit_of_measure, value, record_date,
@@ -378,7 +379,6 @@ def save_major_unit_daily_record(plant_code: str, unit_label: str, value: Option
             updated_at = new.updated_at
     """, (plant_code, unit_label, unit_of_measure, value, record_date, remarks,
           sort_order, updated_by, _dt.datetime.now().isoformat(timespec="seconds")))
-    _ver.bump(conn)
     conn.commit()
     conn.close()
 
@@ -656,8 +656,8 @@ def _cover_execute(sql: str, args=()):
     conn = connect()
     try:
         cur = conn.cursor()
-        cur.execute(sql, args)
         _ver.bump(conn)
+        cur.execute(sql, args)
         conn.commit()
         return cur.lastrowid
     finally:

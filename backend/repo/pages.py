@@ -34,11 +34,11 @@ def save_page_config(month: str, page_number: int, page_data: dict):
     """Saves or updates a page configuration."""
     conn = connect()
     cursor = conn.cursor()
+    _ver.bump(conn)
     cursor.execute("""
         INSERT INTO page_configs (report_month, page_number, page_data)
         VALUES (%s, %s, %s)
         AS new ON DUPLICATE KEY UPDATE page_data = new.page_data
     """, (month, page_number, json.dumps(page_data)))
-    _ver.bump(conn)
     conn.commit()
     conn.close()

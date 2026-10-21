@@ -66,6 +66,7 @@ def save_breakdown_entry(plant: str, unit_type: str, unit_name: str, sms_subtag:
     from datetime import datetime
     conn = connect()
     now = datetime.now().isoformat()
+    _ver.bump(conn)
     cur = conn.execute("""
         INSERT INTO breakdown_table
             (plant, unit_type, unit_name, sms_subtag, start_ts, end_ts, is_ongoing,
@@ -73,7 +74,6 @@ def save_breakdown_entry(plant: str, unit_type: str, unit_name: str, sms_subtag:
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """, (plant, unit_type, unit_name, sms_subtag, start_ts, end_ts, int(is_ongoing),
           cause, hours_lost_override, capital_repair_id, created_by, now, created_by, now))
-    _ver.bump(conn)
     conn.commit()
     new_id = cur.lastrowid
     conn.close()
@@ -109,8 +109,8 @@ def update_breakdown_entry(breakdown_id: int, updated_by: str, **fields) -> bool
     sets.append("updated_by=%s"); args.append(updated_by)
     sets.append("updated_at=%s"); args.append(datetime.now().isoformat())
     args.append(breakdown_id)
-    conn.execute(f"UPDATE breakdown_table SET {', '.join(sets)} WHERE id=%s", args)
     _ver.bump(conn)
+    conn.execute(f"UPDATE breakdown_table SET {', '.join(sets)} WHERE id=%s", args)
     conn.commit()
     conn.close()
     new = {**old, **{k: v for k, v in fields.items() if k in allowed}}
@@ -125,8 +125,8 @@ def delete_breakdown_entry(breakdown_id: int) -> bool:
     if old is None:
         conn.close()
         return False
-    conn.execute("DELETE FROM breakdown_table WHERE id=%s", (breakdown_id,))
     _ver.bump(conn)
+    conn.execute("DELETE FROM breakdown_table WHERE id=%s", (breakdown_id,))
     conn.commit()
     conn.close()
     activity_context.record(f"breakdown_table/{old['plant']}/{old['unit_name']}/{breakdown_id}", old, None)

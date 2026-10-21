@@ -108,6 +108,7 @@ def save_techno_data_from_extraction(plant: str, report_month: str, extracted_ro
     cursor = conn.cursor()
     now = datetime.now().isoformat()
 
+    _ver.bump(conn)
     cursor.execute("""
         INSERT INTO techno_data (plant, report_month, unit, techno_json, source_file, created_at)
         VALUES (%s, %s, %s, %s, %s, %s)
@@ -117,7 +118,6 @@ def save_techno_data_from_extraction(plant: str, report_month: str, extracted_ro
             created_at = new.created_at
     """, (plant, report_month, unit, json.dumps(techno_json), source_file, now))
 
-    _ver.bump(conn)
     conn.commit()
     conn.close()
 
@@ -130,6 +130,7 @@ def save_techno_json(plant: str, report_month: str, unit: str,
     conn = connect()
     cursor = conn.cursor()
     now = datetime.now().isoformat()
+    _ver.bump(conn)
     cursor.execute("""
         INSERT INTO techno_data (plant, report_month, unit, techno_json, source_file, created_at)
         VALUES (%s, %s, %s, %s, %s, %s)
@@ -138,7 +139,6 @@ def save_techno_json(plant: str, report_month: str, unit: str,
             source_file = new.source_file,
             created_at  = new.created_at
     """, (plant, report_month, unit, json.dumps(techno_json), source_file, now))
-    _ver.bump(conn)
     conn.commit()
     conn.close()
 
@@ -179,6 +179,7 @@ def _raw_upsert_techno_data(plant: str, report_month: str, unit: str, techno_jso
         "SELECT techno_json, source_file FROM techno_data WHERE plant=%s AND report_month=%s AND unit=%s",
         (plant, report_month, unit))
     cursor = conn.cursor()
+    _ver.bump(conn)
     cursor.execute("""
         INSERT INTO techno_data (plant, report_month, unit, techno_json, source_file, created_at)
         VALUES (%s, %s, %s, %s, %s, NOW())
@@ -187,7 +188,6 @@ def _raw_upsert_techno_data(plant: str, report_month: str, unit: str, techno_jso
             source_file = new.source_file,
             created_at  = NOW()
     """, (plant, report_month, unit, json.dumps(techno_json), source_file))
-    _ver.bump(conn)
     if owns_conn:
         conn.commit()
         conn.close()
@@ -479,6 +479,7 @@ def save_sail_techno_actuals(report_month: str, unit: str, techno_json: Dict,
     conn = connect()
     cursor = conn.cursor()
 
+    _ver.bump(conn)
     cursor.execute("""
         INSERT INTO techno_data (plant, report_month, unit, techno_json, source_file, created_at)
         VALUES (%s, %s, %s, %s, %s, %s)
@@ -494,7 +495,6 @@ def save_sail_techno_actuals(report_month: str, unit: str, techno_json: Dict,
         # Alternative: Create techno_calc_metadata table
         pass
 
-    _ver.bump(conn)
     conn.commit()
     conn.close()
 
@@ -596,6 +596,7 @@ def save_techno_plan(plant: str, fy: str, unit: str, techno_json: Dict,
     from datetime import datetime
     now = datetime.now().isoformat()
 
+    _ver.bump(conn)
     cur.execute("""
         INSERT INTO techno_plan_fy
             (plant_name, unit, fy, techno_json, is_user_supplied, calculated_json, calculation_method, created_by, created_at, updated_at)
@@ -608,7 +609,6 @@ def save_techno_plan(plant: str, fy: str, unit: str, techno_json: Dict,
             updated_at = new.updated_at
     """, (plant, unit, fy, json.dumps(techno_json), int(is_user_supplied),
           json.dumps(calculated_json or {}), json.dumps(calculation_method or {}), created_by, now, now))
-    _ver.bump(conn)
     conn.commit()
     conn.close()
 

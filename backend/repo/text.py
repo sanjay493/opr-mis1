@@ -62,6 +62,7 @@ def save_page3_narrative(month: str, production_narrative: str, highlights: List
     conn = connect()
     cursor = conn.cursor()
     highlights_text = "\n".join(highlights or [])
+    _ver.bump(conn)
     cursor.execute("""
         INSERT INTO page3_narrative (report_month, production_narrative, highlights, updated_at)
         VALUES (%s, %s, %s, NOW())
@@ -69,7 +70,6 @@ def save_page3_narrative(month: str, production_narrative: str, highlights: List
                        highlights = new.highlights,
                        updated_at = new.updated_at
     """, (month, production_narrative or "", highlights_text))
-    _ver.bump(conn)
     conn.commit()
     conn.close()
 
@@ -107,6 +107,7 @@ def save_key_highlights_narrative(month: str, achievements: list, shortfalls: li
     save_page3_narrative above."""
     conn = connect()
     cursor = conn.cursor()
+    _ver.bump(conn)
     cursor.execute("""
         INSERT INTO key_highlights_narrative
             (report_month, achievements, shortfalls, focus_areas, updated_by, updated_at)
@@ -118,7 +119,6 @@ def save_key_highlights_narrative(month: str, achievements: list, shortfalls: li
                        updated_at  = new.updated_at
     """, (month, json.dumps(achievements or []), json.dumps(shortfalls or []),
           json.dumps(focus_areas or []), updated_by or ""))
-    _ver.bump(conn)
     conn.commit()
     conn.close()
 
@@ -153,6 +153,7 @@ def save_steel_sales_highlights(month: str, month_items: list, ytd_items: list, 
     save_key_highlights_narrative above."""
     conn = connect()
     cursor = conn.cursor()
+    _ver.bump(conn)
     cursor.execute("""
         INSERT INTO steel_sales_highlights
             (report_month, month_items, ytd_items, updated_by, updated_at)
@@ -162,7 +163,6 @@ def save_steel_sales_highlights(month: str, month_items: list, ytd_items: list, 
                        updated_by  = new.updated_by,
                        updated_at  = new.updated_at
     """, (month, json.dumps(month_items or []), json.dumps(ytd_items or []), updated_by or ""))
-    _ver.bump(conn)
     conn.commit()
     conn.close()
 
@@ -186,6 +186,7 @@ def save_ss_phys_notes(financial_year, rows):
     """Replace every note for a FY with `rows`: {sort_order, note_text}."""
     conn = connect()
     cur = conn.cursor()
+    _ver.bump(conn)
     cur.execute("DELETE FROM special_steel_phys_note WHERE financial_year=%s", (financial_year,))
     for r in rows:
         text = (r.get("note_text") or "").strip()
@@ -193,7 +194,6 @@ def save_ss_phys_notes(financial_year, rows):
             continue
         cur.execute("INSERT INTO special_steel_phys_note (financial_year, sort_order, note_text) "
                     "VALUES (%s, %s, %s)", (financial_year, int(r.get("sort_order") or 0), text))
-    _ver.bump(conn)
     conn.commit()
     conn.close()
     return len(rows)
@@ -213,6 +213,7 @@ def save_rail_report_notes(rows: List[Dict[str, Any]]) -> int:
     """Replace every footer remark with `rows`: {sort_order, note_text}."""
     conn = connect()
     cur = conn.cursor()
+    _ver.bump(conn)
     cur.execute("DELETE FROM rail_prod_despatch_note")
     for r in rows:
         text = (r.get("note_text") or "").strip()
@@ -220,7 +221,6 @@ def save_rail_report_notes(rows: List[Dict[str, Any]]) -> int:
             continue
         cur.execute("INSERT INTO rail_prod_despatch_note (sort_order, note_text) VALUES (%s, %s)",
                     (int(r.get("sort_order") or 0), text))
-    _ver.bump(conn)
     conn.commit()
     conn.close()
     return len(rows)
@@ -249,6 +249,7 @@ def save_manual_text(fy: str, quarter: int, entries: list) -> int:
     cur = conn.cursor()
     try:
         saved = 0
+        _ver.bump(conn)
         for e in entries:
             plant = str(e.get("plant", "")).strip()
             field = str(e.get("field", "")).strip()
@@ -267,7 +268,6 @@ def save_manual_text(fy: str, quarter: int, entries: list) -> int:
                     (fy, quarter, plant, field),
                 )
             saved += 1
-        _ver.bump(conn)
         conn.commit()
     finally:
         conn.close()
@@ -292,6 +292,7 @@ def save_texts(month: str, texts: dict) -> int:
     cur = conn.cursor()
     try:
         n = 0
+        _ver.bump(conn)
         for key, text in texts.items():
             key = str(key).strip()
             if not key:
@@ -303,7 +304,6 @@ def save_texts(month: str, texts: dict) -> int:
                 AS new ON DUPLICATE KEY UPDATE text = new.text, updated_at = new.updated_at
             """, (month, key, text, now))
             n += 1
-        _ver.bump(conn)
         conn.commit()
         return n
     finally:
@@ -320,10 +320,10 @@ def delete_texts(month: str, keys) -> int:
     cur = conn.cursor()
     try:
         phs = ",".join("%s" for _ in keys)
+        _ver.bump(conn)
         cur.execute(f"DELETE FROM secretary_review_text WHERE report_month=%s AND block_key IN ({phs})",
                     [month] + keys)
         n = cur.rowcount
-        _ver.bump(conn)
         conn.commit()
         return n
     finally:

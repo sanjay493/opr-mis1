@@ -57,6 +57,7 @@ def save_capacity_entry(plant: str, item: str, effective_month: str,
     conn = connect()
     now = datetime.now().isoformat()
     try:
+        _ver.bump(conn)
         cur = conn.execute("""
             INSERT INTO item_capacity_table
                 (plant_name, item_name, effective_month, annual_capacity, reason,
@@ -64,7 +65,6 @@ def save_capacity_entry(plant: str, item: str, effective_month: str,
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (plant, item, effective_month, annual_capacity, reason,
               created_by, now, created_by, now))
-        _ver.bump(conn)
         conn.commit()
         new_id = cur.lastrowid
     finally:
@@ -101,8 +101,8 @@ def update_capacity_entry(entry_id: int, updated_by: str, **fields) -> bool:
     sets.append("updated_at=%s"); args.append(datetime.now().isoformat())
     args.append(entry_id)
     try:
-        conn.execute(f"UPDATE item_capacity_table SET {', '.join(sets)} WHERE id=%s", args)
         _ver.bump(conn)
+        conn.execute(f"UPDATE item_capacity_table SET {', '.join(sets)} WHERE id=%s", args)
         conn.commit()
     finally:
         conn.close()
@@ -118,8 +118,8 @@ def delete_capacity_entry(entry_id: int) -> bool:
     if old is None:
         conn.close()
         return False
-    conn.execute("DELETE FROM item_capacity_table WHERE id=%s", (entry_id,))
     _ver.bump(conn)
+    conn.execute("DELETE FROM item_capacity_table WHERE id=%s", (entry_id,))
     conn.commit()
     conn.close()
     activity_context.record(f"item_capacity_table/{old['plant_name']}/{old['item_name']}/{entry_id}", old, None)

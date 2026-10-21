@@ -57,6 +57,7 @@ def save_cost_trend_annual(fy: str, product: str, entries: List[Dict[str, Any]])
     conn = connect()
     cur = conn.cursor()
     saved = 0
+    _ver.bump(conn)
     for e in entries:
         cur.execute("""
             INSERT INTO cost_trend_annual (fy, product, cost_type, plant, value)
@@ -64,7 +65,6 @@ def save_cost_trend_annual(fy: str, product: str, entries: List[Dict[str, Any]])
             AS new ON DUPLICATE KEY UPDATE value = new.value
         """, (fy, product, e["cost_type"], e["plant"], e.get("value")))
         saved += 1
-    _ver.bump(conn)
     conn.commit()
     conn.close()
     return saved
@@ -100,6 +100,7 @@ def save_cost_trend_monthly(report_month: str, product: str, entries: List[Dict[
     conn = connect()
     cur = conn.cursor()
     saved = 0
+    _ver.bump(conn)
     for e in entries:
         cur.execute("""
             INSERT INTO cost_trend_monthly (report_month, product, cost_type, plant, month_value, till_month_value)
@@ -107,7 +108,6 @@ def save_cost_trend_monthly(report_month: str, product: str, entries: List[Dict[
             AS new ON DUPLICATE KEY UPDATE month_value = new.month_value, till_month_value = new.till_month_value
         """, (report_month, product, e["cost_type"], e["plant"], e.get("month_value"), e.get("till_month_value")))
         saved += 1
-    _ver.bump(conn)
     conn.commit()
     conn.close()
     return saved
@@ -127,6 +127,7 @@ def save_cost_trend_monthly_field(report_month: str, product: str, entries: List
     conn = connect()
     cur = conn.cursor()
     saved = 0
+    _ver.bump(conn)
     for e in entries:
         cur.execute(f"""
             INSERT INTO cost_trend_monthly (report_month, product, cost_type, plant, {field})
@@ -134,7 +135,6 @@ def save_cost_trend_monthly_field(report_month: str, product: str, entries: List
             AS new ON DUPLICATE KEY UPDATE {field} = new.{field}
         """, (report_month, product, e["cost_type"], e["plant"], e.get("value")))
         saved += 1
-    _ver.bump(conn)
     conn.commit()
     conn.close()
     return saved

@@ -45,6 +45,7 @@ def save_sail_mines_monthly(report_month: str, entries: List[Dict[str, Any]]) ->
     conn = connect()
     cur = conn.cursor()
     saved = 0
+    _ver.bump(conn)
     for e in entries:
         cur.execute("""
             INSERT INTO sail_mines_monthly (report_month, section, item, month_actual, month_plan)
@@ -52,7 +53,6 @@ def save_sail_mines_monthly(report_month: str, entries: List[Dict[str, Any]]) ->
             AS new ON DUPLICATE KEY UPDATE month_actual = new.month_actual, month_plan = new.month_plan
         """, (report_month, e["section"], e["item"], e.get("actual"), e.get("plan")))
         saved += 1
-    _ver.bump(conn)
     conn.commit()
     conn.close()
     return saved
@@ -175,6 +175,7 @@ def save_mines_production_despatch_monthly(
     conn = connect()
     cur = conn.cursor()
     saved = 0
+    _ver.bump(conn)
     for e in production_entries:
         cur.execute("""
             INSERT INTO mines_production_monthly (report_month, mine_code, material_code, qty_actual, qty_plan)
@@ -215,7 +216,6 @@ def save_mines_production_despatch_monthly(
             AS new ON DUPLICATE KEY UPDATE qty_plan = new.qty_plan
         """, (report_month, mine_code, e["material_code"], e.get("plan")))
         saved += 1
-    _ver.bump(conn)
     conn.commit()
     conn.close()
     return saved

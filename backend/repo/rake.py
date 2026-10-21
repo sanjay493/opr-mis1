@@ -89,6 +89,7 @@ def save_rake_detention_master_row(row: Dict[str, Any]) -> int:
     called from /data-entry/rake-detention, never needs a code change."""
     conn = connect()
     cur = conn.cursor()
+    _ver.bump(conn)
     if row.get("id"):
         cur.execute("""
             UPDATE rake_detention_master SET
@@ -116,7 +117,6 @@ def save_rake_detention_master_row(row: Dict[str, Any]) -> int:
             int(bool(row.get("is_active", True))),
         ))
         row_id = cur.lastrowid
-    _ver.bump(conn)
     conn.commit()
     conn.close()
     return row_id
@@ -129,8 +129,8 @@ def deactivate_rake_detention_master_row(master_id: int) -> None:
     stays intact)."""
     conn = connect()
     cur = conn.cursor()
-    cur.execute("UPDATE rake_detention_master SET is_active = 0 WHERE id = %s", (master_id,))
     _ver.bump(conn)
+    cur.execute("UPDATE rake_detention_master SET is_active = 0 WHERE id = %s", (master_id,))
     conn.commit()
     conn.close()
 
@@ -154,13 +154,13 @@ def save_rake_detention_monthly(report_month: str, rows: List[Dict[str, Any]]) -
     """Upsert rake_detention_monthly rows: {master_id, value_hours} for report_month."""
     conn = connect()
     cur = conn.cursor()
+    _ver.bump(conn)
     for r in rows:
         cur.execute("""
             INSERT INTO rake_detention_monthly (report_month, master_id, value_hours)
             VALUES (%s, %s, %s)
             AS new ON DUPLICATE KEY UPDATE value_hours = new.value_hours
         """, (report_month, r["master_id"], r.get("value_hours")))
-    _ver.bump(conn)
     conn.commit()
     conn.close()
     return len(rows)
@@ -205,13 +205,13 @@ def save_rake_detention_summary(report_month: str, rows: List[Dict[str, Any]]) -
     """Upsert rake_detention_summary rows: {period_row, plant, value} for report_month."""
     conn = connect()
     cur = conn.cursor()
+    _ver.bump(conn)
     for r in rows:
         cur.execute("""
             INSERT INTO rake_detention_summary (report_month, period_row, plant, value)
             VALUES (%s, %s, %s, %s)
             AS new ON DUPLICATE KEY UPDATE value = new.value
         """, (report_month, r["period_row"], r["plant"], r.get("value")))
-    _ver.bump(conn)
     conn.commit()
     conn.close()
     return len(rows)
@@ -238,13 +238,13 @@ def save_rake_detention_annual(rows: List[Dict[str, Any]]) -> int:
     """Upsert rake_detention_annual rows: {plant, financial_year, avg_hours}."""
     conn = connect()
     cur = conn.cursor()
+    _ver.bump(conn)
     for r in rows:
         cur.execute("""
             INSERT INTO rake_detention_annual (plant, financial_year, avg_hours)
             VALUES (%s, %s, %s)
             AS new ON DUPLICATE KEY UPDATE avg_hours = new.avg_hours
         """, (r["plant"], r["financial_year"], r.get("avg_hours")))
-    _ver.bump(conn)
     conn.commit()
     conn.close()
     return len(rows)

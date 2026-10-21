@@ -24,12 +24,12 @@ def save_stock_entry(stock_month: str, plant: str, item_type: str,
     old = _row_dict(conn,
         "SELECT * FROM stock_table WHERE stock_month=%s AND plant_name=%s AND item_type=%s AND stock_type=%s",
         (stock_month, plant, item_type, stock_type))
+    _ver.bump(conn)
     conn.execute("""
         INSERT INTO stock_table (stock_month, plant_name, item_type, stock_type, stock)
         VALUES (%s, %s, %s, %s, %s)
         AS new ON DUPLICATE KEY UPDATE stock = new.stock
     """, (stock_month, plant, item_type, stock_type, stock))
-    _ver.bump(conn)
     conn.commit()
     conn.close()
     new = {"stock_month": stock_month, "plant_name": plant, "item_type": item_type,
