@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import json
+import math
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -88,6 +89,7 @@ TS_COLUMNS: Dict[str, Tuple[str, str]] = {
     "page_visit.created_at":              ("page_visits.timestamp", ISO_UTC),
     "bf_benchmark_sail_meta.updated_at":  ("bf_benchmark_sail_meta.updated_at", ISO_UTC),
     # mixed columns: ISO_UTC, or SQL_SECONDS where the row's *_plain flag is 1
+    # (TS_FLAGGED)
     "bf_benchmark_external_bf.created_at":   ("bf_benchmark_external_bf.created_at", ISO_UTC),
     "bf_benchmark_external_data.created_at": ("bf_benchmark_external_data.created_at", ISO_UTC),
     "bf_benchmark_external_data.updated_at": ("bf_benchmark_external_data.updated_at", ISO_UTC),
@@ -107,16 +109,25 @@ TS_COLUMNS: Dict[str, Tuple[str, str]] = {
     "cover_photo.created_at":             ("cover_photos.uploaded_at", SQL_SECONDS),
     "report_cover_setting.updated_at":    ("report_cover_settings.updated_at", SQL_SECONDS),
     "extraction_log.created_at":          ("extraction_log.logged_at", SQL_SECONDS),
+    # mixed: SQL_SECONDS, or ISO_LOCAL where created_at_iso is 1 (TS_FLAGGED)
     "techno_upload.created_at":           ("techno_data.created_at", SQL_SECONDS),
     # report_text.updated_at depends on the scope: see TEXT_SCOPES.
 }
 
-# The per-row format markers of the mixed columns: v2 column -> flag column.
-# flag 1 = the v1 string was SQL_SECONDS, 0 = the column's format (ISO_UTC).
-TS_PLAIN_FLAGS: Dict[str, str] = {
-    "bf_benchmark_external_bf.created_at": "created_at_plain",
-    "bf_benchmark_external_data.created_at": "created_at_plain",
-    "bf_benchmark_external_data.updated_at": "updated_at_plain",
+# Columns whose v1 strings come in two formats, with a per-row flag column:
+# v2 column -> (flag column, alternate format). flag 0 = the column's format
+# in TS_COLUMNS, flag 1 = the alternate. The two formats of each column never
+# share a spelling (' ' vs 'T', '+00:00' vs naive), so the flag is decided
+# by which one the v1 string parses in. Writers must set the flag to match
+# the form they write (render_ts_flagged reads it back).
+#   bf_benchmark_external_*: ISO_UTC now, SQL_SECONDS in legacy rows
+#   techno_upload.created_at: NOW() (SQL_SECONDS) in merge_upsert_techno_data,
+#     datetime.now().isoformat() (ISO_LOCAL) in the other techno_data writers
+TS_FLAGGED: Dict[str, Tuple[str, str]] = {
+    "bf_benchmark_external_bf.created_at": ("created_at_plain", SQL_SECONDS),
+    "bf_benchmark_external_data.created_at": ("created_at_plain", SQL_SECONDS),
+    "bf_benchmark_external_data.updated_at": ("updated_at_plain", SQL_SECONDS),
+    "techno_upload.created_at": ("created_at_iso", ISO_LOCAL),
 }
 
 # v1 'YYYY-MM-DD' strings -> DATE. v2 "table.column" -> v1 "table.column".
@@ -193,18 +204,22 @@ def parse_ts(fmt: str, text) -> Optional[_dt.datetime]:
     return dt
 
 
-def parse_ts_mixed(text) -> Tuple[Optional[_dt.datetime], int]:
-    """For the TS_PLAIN_FLAGS columns: -> (datetime, plain flag)."""
+def parse_ts_flagged(column: str, text) -> Tuple[Optional[_dt.datetime], int]:
+    """For the TS_FLAGGED columns: a v1 string in the column's format (flag
+    0) or its alternate format (flag 1) -> (datetime, flag)."""
     if text is None:
         return None, 0
+    fmt = TS_COLUMNS[column][1]
+    alt = TS_FLAGGED[column][1]
     try:
-        return parse_ts(ISO_UTC, text), 0
+        return parse_ts(fmt, text), 0
     except CodecError:
-        return parse_ts(SQL_SECONDS, text), 1
+        return parse_ts(alt, text), 1
 
 
-def render_ts_mixed(value, plain) -> Optional[str]:
-    return render_ts(SQL_SECONDS if plain else ISO_UTC, value)
+def render_ts_flagged(column: str, value, flag) -> Optional[str]:
+    fmt = TS_FLAGGED[column][1] if flag else TS_COLUMNS[column][1]
+    return render_ts(fmt, value)
 
 
 def render_date(value) -> Optional[str]:
@@ -241,7 +256,10 @@ def parse_date(text) -> Optional[_dt.date]:
 #   float  num = value, is_int = 0, raw NULL      (5.0 stays 5.0)
 #   other  num NULL, is_int 0, raw = json.dumps(value): a string, an object,
 #          a bool, or the JSON literal null (an explicit null key stays
-#          distinct from a missing key)
+#          distinct from a missing key); also an int beyond +-2^53 (a DOUBLE
+#          cannot hold it exactly) and -0.0 (a DOUBLE column may not keep
+#          the sign), which then pass through the same MySQL JSON type that
+#          v1 stored them in
 # techno_upload.has_month / has_till_month record which periods the blob
 # had, so {"month": {}} stays distinct from a blob without "month".
 #
@@ -268,6 +286,8 @@ def encode_leaf(value) -> Tuple[Optional[float], int, Optional[str]]:
             return None, 0, json.dumps(value)
         return float(value), 1, None
     if isinstance(value, float):
+        if value == 0 and math.copysign(1.0, value) < 0:
+            return None, 0, json.dumps(value)      # -0.0: a DOUBLE column may drop the sign
         return value, 0, None
     raise CodecError(f"unsupported techno leaf {value!r}")
 

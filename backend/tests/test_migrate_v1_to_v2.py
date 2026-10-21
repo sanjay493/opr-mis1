@@ -64,9 +64,14 @@ TECHNO_BLOBS = {
     # empty month, '#' unit spelling
     ("BSP", "2026-05", "BF#1"): {"month": {}, "till_month": {"Coke Rate": 451}},
     # large int, int vs float of the same number, exponents
-    ("DSP", "2011-03", "SMS"): {"month": {"Heat": 1420711, "neg": -0.5, "big": 1e20, "tiny": 1e-7},
+    ("DSP", "2011-03", "SMS"): {"month": {"Heat": 1420711, "neg": -0.5, "big": 1e20, "tiny": 1e-7,
+                                          "huge": 2 ** 53 + 1, "negz": -0.0},
                                 "till_month": {"Heat": 1420711.0, "s": "1.50"}},
 }
+
+# techno_data.created_at has two v1 writer forms: NOW() and isoformat()
+TECHNO_CREATED_AT = ["2026-07-25 07:56:10", "2026-07-25 07:56:11",
+                     "2026-07-25T07:56:12.345678", "2026-07-25T07:56:13"]
 
 FIXTURE = {
     "production_table": (
@@ -108,7 +113,7 @@ FIXTURE = {
     ),
     "techno_data": (
         ("id", "plant", "report_month", "unit", "techno_json", "source_file", "created_at"),
-        [(i + 1, p, m, u, json.dumps(b), f"src{i}.xlsx", f"2026-07-25 07:56:1{i}")
+        [(i + 1, p, m, u, json.dumps(b), f"src{i}.xlsx", TECHNO_CREATED_AT[i])
          for i, ((p, m, u), b) in enumerate(TECHNO_BLOBS.items())],
     ),
     "techno_plan_fy": (
@@ -390,7 +395,8 @@ def _same(a, b, path="$"):
 def _v2_techno(v2):
     uploads = {(r["plant_code"], r["report_month"], r["unit_code"]): r for r in _rows(
         v2, "SELECT t.plant_code, t.report_month, u.unit_code, t.has_month, t.has_till_month, "
-            "t.source_file, t.created_at FROM techno_upload t JOIN plant_unit u ON u.unit_id = t.unit_id")}
+            "t.source_file, t.created_at, t.created_at_iso FROM techno_upload t "
+            "JOIN plant_unit u ON u.unit_id = t.unit_id")}
     leaves = {}
     for r in _rows(v2, "SELECT t.plant_code, t.report_month, u.unit_code, t.period, t.param_key, "
                        "t.num, t.is_int, t.raw FROM techno_value t JOIN plant_unit u ON u.unit_id = t.unit_id "
@@ -416,7 +422,8 @@ def test_techno_roundtrip_preserves_types(dbs):
         assert got == want
         _same(got, want)
         assert up["source_file"] == r["source_file"]
-        assert vc.render_ts(vc.SQL_SECONDS, up["created_at"]) == r["created_at"]
+        assert vc.render_ts_flagged("techno_upload.created_at", up["created_at"],
+                                    up["created_at_iso"]) == r["created_at"]
     # the fixture really has both number types for the same value
     dsp = vc.decode_techno(*[uploads[("DSP", "2011-03", "SMS")][k] for k in ("has_month", "has_till_month")],
                            leaves[("DSP", "2011-03", "SMS")])
@@ -528,13 +535,13 @@ def test_timestamp_render_unchanged(dbs):
         k1, k2, frm = _TS_KEYS[v2t]
         src = _rows(v1, f"SELECT {', '.join(f'`{k}`' for k in k1)}, `{c1}` AS v FROM `{v1t}`")
         assert src, v1col
-        flag = vc.TS_PLAIN_FLAGS.get(v2col)
+        flag = vc.TS_FLAGGED.get(v2col, (None,))[0]
         sel = f"SELECT {', '.join(f'{k} AS k{i}' for i, k in enumerate(k2))}, t.`{c2}` AS v" \
-              + (f", t.`{flag}` AS plain" if flag else "") + f" FROM {frm}"
+              + (f", t.`{flag}` AS flag" if flag else "") + f" FROM {frm}"
         back = []
         for r in _rows(v2, sel):
-            plain = r.pop("plain", 0)
-            r["v"] = vc.render_ts_mixed(r["v"], plain) if flag else vc.render_ts(fmt, r["v"])
+            f = r.pop("flag", 0)
+            r["v"] = vc.render_ts_flagged(v2col, r["v"], f) if flag else vc.render_ts(fmt, r["v"])
             back.append(r)
         assert _pairs(back) == _pairs(src), v2col
         checked += 1
@@ -605,3 +612,52 @@ def test_verbatim_copies(dbs):
     assert _rows(v2, "SELECT id, unit_id IS NULL AS no_unit, unit_type FROM capital_repair ORDER BY id") == \
         [{"id": 5, "no_unit": 0, "unit_type": "BF"}, {"id": 6, "no_unit": 1, "unit_type": None}]
     assert _rows(v2, "SELECT n FROM data_version") == [{"n": 7}]
+
+
+def test_techno_created_at_both_writer_forms(dbs):
+    """NOW() ('YYYY-MM-DD HH:MM:SS', flag 0) and isoformat() (flag 1) rows of
+    techno_data.created_at both re-render byte for byte."""
+    v1, v2 = dbs
+    got = {r["source_file"]: r for r in _rows(
+        v2, "SELECT source_file, created_at, created_at_iso FROM techno_upload")}
+    assert [got[f"src{i}.xlsx"]["created_at_iso"] for i in range(4)] == [0, 0, 1, 1]
+    for i, want in enumerate(TECHNO_CREATED_AT):
+        r = got[f"src{i}.xlsx"]
+        assert vc.render_ts_flagged("techno_upload.created_at", r["created_at"], r["created_at_iso"]) == want
+    assert vc.parse_ts_flagged("techno_upload.created_at", "2026-07-25T07:56:13")[1] == 1
+    with pytest.raises(vc.CodecError):
+        vc.parse_ts_flagged("techno_upload.created_at", "2026-07-25T07:56:13+00:00")
+
+
+def test_techno_leaf_edge_values():
+    import math
+    # ints beyond 2^53 and -0.0 go to raw (JSON), never to the DOUBLE column
+    assert vc.encode_leaf(2 ** 53) == (float(2 ** 53), 1, None)
+    assert vc.encode_leaf(2 ** 53 + 1) == (None, 0, "9007199254740993")
+    assert vc.encode_leaf(-(2 ** 53 + 1)) == (None, 0, "-9007199254740993")
+    num, is_int, raw = vc.encode_leaf(-0.0)
+    assert (num, is_int, raw) == (None, 0, "-0.0")
+    back = vc.decode_leaf(num, is_int, raw)
+    assert type(back) is float and back == 0 and math.copysign(1.0, back) < 0
+    assert vc.encode_leaf(0.0) == (0.0, 0, None)
+    assert type(vc.decode_leaf(None, 0, "9007199254740993")) is int
+
+
+def test_dst_guards_refuse(dbs):
+    v1, v2 = dbs
+    before = _rows(v1, "SELECT COUNT(*) AS n FROM production_table")
+    for name in ("MIS_REPORTS", "Mis_Reports_Baseline", "mis_reports"):
+        with pytest.raises(mig.MigrationError, match="refusing"):
+            mig.migrate(v2, name, src_cfg=_cfg(), dst_cfg=_cfg())
+        with pytest.raises(mig.MigrationError, match="refusing"):
+            mig.clear_dst(name, dst_cfg=_cfg())
+    with pytest.raises(mig.MigrationError, match="refusing"):       # dst == src, any case
+        mig.migrate(v1, v1.upper(), src_cfg=_cfg(), dst_cfg=_cfg())
+    # a v1-schema dst is refused before anything is truncated
+    with pytest.raises(mig.MigrationError, match="not a v2 schema"):
+        mig.migrate(v2, v1, src_cfg=_cfg(), dst_cfg=_cfg())
+    with pytest.raises(mig.MigrationError, match="not a v2 schema"):
+        mig.clear_dst(v1, dst_cfg=_cfg())
+    assert _rows(v1, "SELECT COUNT(*) AS n FROM production_table") == before
+    assert before[0]["n"] == len(FIXTURE["production_table"][1])
+    assert _rows(v1, "SELECT n FROM data_version") == [{"n": 7}]

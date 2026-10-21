@@ -38,7 +38,10 @@ PROTECTED_DBS = {"mis_reports", "mis_reports_baseline"}
 
 
 class MigrationError(RuntimeError):
-    """The v1 data cannot be carried into v2 exactly; nothing was written."""
+    """The migration refused or failed. Raised before phase 2 (a guard, or v1
+    data that cannot be carried exactly), dst was not written. Raised from
+    phase 2 ("load failed; <dst> has been emptied"), dst was emptied and the
+    load rolled back, so dst is left empty."""
 
 
 # ── connections ─────────────────────────────────────────────────────────────
@@ -119,7 +122,7 @@ PLANT_ORDER = list(PLANT_KIND)
 #   None     copied verbatim
 #   month    copied; must be a cal_month report_month
 #   ts       v1 VARCHAR timestamp -> DATETIME by vc.TS_COLUMNS[v2 table.column]
-#   mixed    ts of a TS_PLAIN_FLAGS column; ('flag') its per-row plain flag
+#   mixed    ts of a vc.TS_FLAGGED column; flag:<v2 ts column> its per-row flag
 #   date     v1 'YYYY-MM-DD' -> DATE
 #   item     item name -> item_id
 #   unit:<plant column>  unit string -> unit_id of (plant, unit); NULL stays NULL
@@ -220,11 +223,11 @@ SIMPLE: List[Tuple[str, str, list]] = [
         ("report_month", "month"), "section", "item", "month_actual", "month_plan")),
     ("bf_benchmark_external_bf", "bf_benchmark_external_bf", _cols(
         "id", "name", "company", "location", "working_volume_m3", "active", ("created_at", "mixed"),
-        ("created_at_plain", "created_at", "flag"), "created_by")),
+        ("created_at_plain", "created_at", "flag:created_at"), "created_by")),
     ("bf_benchmark_external_data", "bf_benchmark_external_data", _cols(
         "id", "external_bf_id", ("fy", "report_month", None), "param_json", ("created_at", "mixed"),
-        ("updated_at", "mixed"), ("created_at_plain", "created_at", "flag"),
-        ("updated_at_plain", "updated_at", "flag"))),
+        ("updated_at", "mixed"), ("created_at_plain", "created_at", "flag:created_at"),
+        ("updated_at_plain", "updated_at", "flag:updated_at"))),
     ("bf_benchmark_sail_meta", "bf_benchmark_sail_meta", _cols(
         ("plant_code", "plant", None), ("unit_id", "unit", "unit:plant"), "working_volume_m3",
         ("updated_at", "ts"))),
@@ -405,14 +408,15 @@ def build_plan(src_cur, cal_months: set) -> _Plan:
         uid = unit_id[(d["plant"], d["unit"])]
         try:
             has_m, has_t, leaves = vc.encode_techno(d["techno_json"])
-            created = vc.parse_ts(vc.TS_COLUMNS["techno_upload.created_at"][1], d["created_at"])
+            created, created_iso = vc.parse_ts_flagged("techno_upload.created_at", d["created_at"])
         except (vc.CodecError, ValueError) as e:
             plan.error(f"{_row_id('techno_data', cols, r)}: {e}")
             continue
-        uploads.append((d["report_month"], d["plant"], uid, has_m, has_t, d["source_file"], created))
+        uploads.append((d["report_month"], d["plant"], uid, has_m, has_t, d["source_file"], created,
+                        created_iso))
         values.extend((d["report_month"], d["plant"], uid) + leaf for leaf in leaves)
     plan.tables["techno_upload"] = (["report_month", "plant_code", "unit_id", "has_month", "has_till_month",
-                                     "source_file", "created_at"], uploads)
+                                     "source_file", "created_at", "created_at_iso"], uploads)
     plan.tables["techno_value"] = (["report_month", "plant_code", "unit_id", "period", "param_key", "num",
                                     "is_int", "raw"], values)
 
@@ -462,9 +466,9 @@ def build_plan(src_cur, cal_months: set) -> _Plan:
                     elif kind == "ts":
                         v = vc.parse_ts(vc.TS_COLUMNS[f"{v2t}.{c2}"][1], v)
                     elif kind == "mixed":
-                        v = vc.parse_ts_mixed(v)[0]
-                    elif kind == "flag":
-                        v = vc.parse_ts_mixed(v)[1]
+                        v = vc.parse_ts_flagged(f"{v2t}.{c2}", v)[0]
+                    elif kind.startswith("flag:"):
+                        v = vc.parse_ts_flagged(f"{v2t}.{kind[5:]}", v)[1]
                     elif kind == "date":
                         assert f"{v2t}.{c2}" in vc.DATE_COLUMNS, f"{v2t}.{c2}"
                         v = vc.parse_date(v)
@@ -540,8 +544,26 @@ def _insert(cur, table, cols, rows, chunk=1000):
 
 
 def _check_dst(dst_db, src_db):
-    if not dst_db or dst_db in PROTECTED_DBS or dst_db == src_db:
+    """Name guard. Case-insensitive: the server runs lower_case_table_names=1,
+    so 'MIS_REPORTS' is mis_reports."""
+    dst = (dst_db or "").lower()
+    if not dst or dst in PROTECTED_DBS or (src_db is not None and dst == src_db.lower()):
         raise MigrationError(f"refusing to write database {dst_db!r}")
+
+
+def _assert_v2(cur, dst_db):
+    """Schema guard, run before anything in dst is truncated: dst must be a
+    v2 schema (techno_value present) and not a v1 one (techno_data absent)."""
+    cur.execute("SELECT DATABASE()")
+    _check_dst(cur.fetchone()[0], None)
+    cur.execute("SHOW TABLES LIKE 'techno_value'")
+    has_v2 = cur.fetchone() is not None
+    cur.execute("SHOW TABLES LIKE 'techno_data'")
+    has_v1 = cur.fetchone() is not None
+    if not has_v2 or has_v1:
+        raise MigrationError(f"refusing to write {dst_db!r}: not a v2 schema "
+                             f"(techno_value {'present' if has_v2 else 'missing'}, "
+                             f"techno_data {'present' if has_v1 else 'absent'})")
 
 
 def migrate(src_db: str, dst_db: str, *, src_cfg: Optional[dict] = None,
@@ -552,11 +574,9 @@ def migrate(src_db: str, dst_db: str, *, src_cfg: Optional[dict] = None,
     dst = connect(dst_db, dst_cfg)
     try:
         with src.cursor() as s, dst.cursor() as d:
+            _assert_v2(d, dst_db)
             s.execute("SET SESSION TRANSACTION READ ONLY")
             s.execute("START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY")
-            d.execute("SHOW TABLES LIKE 'techno_value'")
-            if not d.fetchone():
-                raise MigrationError(f"{dst_db!r} has no v2 schema (no techno_value table)")
             s.execute("SHOW TABLES LIKE 'techno_data'")
             if not s.fetchone():
                 raise MigrationError(f"{src_db!r} has no v1 schema (no techno_data table)")
@@ -573,14 +593,25 @@ def migrate(src_db: str, dst_db: str, *, src_cfg: Optional[dict] = None,
                 raise MigrationError(f"v1 data cannot be migrated exactly ({len(plan.errors)} "
                                      f"problems); nothing was written:\n  {shown}{more}")
 
-            _empty_dst(d, plan.data_version or 1)
-            dst.commit()
-            for t in LOAD_ORDER:
-                cols, rows = plan.tables[t]
-                _insert(d, t, cols, rows)
-            dst.commit()
+            # phase 2: from here on dst is emptied first, so a failure leaves it empty
+            try:
+                _empty_dst(d, plan.data_version or 1)
+                dst.commit()
+                for t in LOAD_ORDER:
+                    cols, rows = plan.tables[t]
+                    _insert(d, t, cols, rows)
+                dst.commit()
+            except Exception as e:
+                try:
+                    dst.rollback()
+                except Exception:  # noqa: BLE001 - keep the load error
+                    pass
+                raise MigrationError(f"load failed; {dst_db} has been emptied: {e}") from e
     except BaseException:
-        dst.rollback()
+        try:
+            dst.rollback()
+        except Exception:  # noqa: BLE001 - never hide the original error
+            pass
         raise
     finally:
         src.close()
@@ -593,6 +624,7 @@ def clear_dst(dst_db: str, *, dst_cfg: Optional[dict] = None) -> None:
     dst = connect(dst_db, dst_cfg)
     try:
         with dst.cursor() as d:
+            _assert_v2(d, dst_db)
             _empty_dst(d, 1)
         dst.commit()
     finally:

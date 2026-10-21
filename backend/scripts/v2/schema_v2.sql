@@ -390,6 +390,12 @@ CREATE TABLE techno_upload (
     has_till_month TINYINT(1)   NOT NULL DEFAULT 1,
     source_file    VARCHAR(255) NULL DEFAULT '',
     created_at     DATETIME(6)  NULL,
+    -- 1 when the v1 string was datetime.now().isoformat() ('YYYY-MM-DDTHH:MM:SS[.ffffff]')
+    -- instead of the NOW() form 'YYYY-MM-DD HH:MM:SS'. v1 techno_data writers
+    -- use both (merge_upsert_techno_data: NOW(); the save paths: isoformat),
+    -- so the per-column format rule of repo/v2codec.py needs this per-row
+    -- marker (TS_FLAGGED). Writers set it to match the form they write.
+    created_at_iso TINYINT(1)   NOT NULL DEFAULT 0,
     -- (month), (month, plant), (month, plant, unit) reads: repo.techno._bulk_load,
     -- blobs, get_techno_data, get_sail_techno_actuals, month_rows,
     -- plants_month_rows, rows_for_months, units_for_plant_month, json_row,
