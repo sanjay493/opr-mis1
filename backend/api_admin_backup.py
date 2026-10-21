@@ -28,6 +28,7 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends, HTTPException
 
 import auth
+import data_version
 import db
 from repo import ops as rop
 
@@ -250,9 +251,11 @@ def _tables_at_risk(src: Path) -> list:
     [] if nothing would be lost."""
     source_counts = _source_table_counts(src)
     live_counts = _live_table_counts()
+    # data_version is a write counter, not data; a dump taken before it
+    # existed leaves it alone, and the restore resets it anyway.
     at_risk = [
         (t, live_counts[t]) for t in live_counts
-        if live_counts[t] > 0 and source_counts.get(t, 0) == 0
+        if live_counts[t] > 0 and source_counts.get(t, 0) == 0 and t != "data_version"
     ]
     at_risk.sort(key=lambda x: -x[1])
     return at_risk
@@ -385,6 +388,15 @@ def restore_backup(filename: str, confirm_data_loss: bool = False, admin: dict =
         finally:
             os.remove(ini_path)
             sanitized.unlink(missing_ok=True)
+            # The import bypassed repo writes and may have brought back an
+            # older data_version (or stopped part-way): move it to a value
+            # never used before and drop the in-process caches. Runs on every
+            # path that may have touched the data, before the lock is freed.
+            try:
+                data_version.after_restore()
+            except Exception:  # noqa: BLE001 - must not mask the restore's own outcome
+                import logging
+                logging.getLogger(__name__).exception("restore: data_version.after_restore failed")
     finally:
         _release_admin_lock(lock)
 
