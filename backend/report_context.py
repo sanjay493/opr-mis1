@@ -70,9 +70,16 @@ def window(report_month):
 class ReportContext:
     def __init__(self, report_month):
         self.report_month = report_month
-        self.first, self.last = window(report_month)
-        lo, hi = _month_index(self.first), _month_index(self.last)
-        self.months = frozenset(_month_at(i) for i in range(lo, hi + 1))
+        try:
+            self.first, self.last = window(report_month)
+        except (TypeError, ValueError, IndexError):
+            # Not a YYYY-MM month: cover nothing, every read runs its SQL
+            # (and fails or not exactly as it did without a context).
+            self.first = self.last = None
+            self.months = frozenset()
+        else:
+            lo, hi = _month_index(self.first), _month_index(self.last)
+            self.months = frozenset(_month_at(i) for i in range(lo, hi + 1))
         self._loaded = {}            # loader name -> loaded data
         self._memo = {}              # call signature -> result
         self._lock = threading.Lock()

@@ -16,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 
 import data_version
+import report_context
 import db
 import dbengine
 from version_cache import VersionedCache
@@ -1039,8 +1040,11 @@ def get_data(month: str = "2025-11", page_number: Optional[float] = None):
     real int page numbers 1-40 are unaffected.
 
     Pages come from the page cache when data_version is unchanged (_pc);
-    data_version is read once for the whole request."""
-    with data_version.pinned():
+    data_version is read once for the whole request. Pages that are built
+    read their per-month production / techno data from one bulk load
+    (report_context), loaded on first use: a fully cached request loads
+    nothing."""
+    with data_version.pinned(), report_context.activate(month):
         return _get_data(month, page_number)
 
 
@@ -1521,8 +1525,9 @@ def save_page3_narrative(request: Page3NarrativeRequest):
 def _enrich_pdf_pages(request: PDFRequest) -> tuple[list, dict]:
     """Page data for a PDF export: reads the pages /api/data built from the
     page cache (_pc) and computes only what is missing. data_version is read
-    once for the whole request."""
-    with data_version.pinned():
+    once for the whole request; what is computed reads from one bulk load
+    (report_context, loaded on first use)."""
+    with data_version.pinned(), report_context.activate(request.month):
         return _enrich_pdf_pages_impl(request)
 
 

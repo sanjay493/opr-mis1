@@ -4,6 +4,7 @@ Page 5: SAIL + BSP + DSP + RSP
 Page 6: BSL + ISP + ASP + SSP + VISP
 """
 import db
+import report_context
 from repo import production as rp
 
 # ---------------------------------------------------------------------------
@@ -180,7 +181,7 @@ PAGE6_PLANTS = [
 
 def _one(cur, table, plant, item, month):
     tbl = "actual" if table == "act" else "abp"
-    r = rp.value_row(cur, tbl, month, plant, item)
+    r = rp.cell(cur, tbl, month, plant, item)
     return r[0] if r and r[0] is not None else None
 
 
@@ -250,15 +251,15 @@ def _get_single(cur, table, plant, item, month):
         if alias_items:
             return _sum_items(cur, table, plant, alias_items, month)
 
-    r = rp.value_row(cur, tbl, month, plant, item)
+    r = rp.cell(cur, tbl, month, plant, item)
     if r and r[0] is not None:
         return r[0]
     for alt in _ITEM_ALT_NAMES.get((plant, item), []):
-        r = rp.value_row(cur, tbl, month, plant, alt)
+        r = rp.cell(cur, tbl, month, plant, alt)
         if r and r[0] is not None:
             return r[0]
     if item == "Finished Steel" and plant in _FS_ALIAS:
-        r = rp.value_row(cur, tbl, month, plant, "Saleable Steel")
+        r = rp.cell(cur, tbl, month, plant, "Saleable Steel")
         return r[0] if r and r[0] is not None else None
     diff = _ITEM_DERIVED_DIFF.get((plant, item))
     if diff:
@@ -473,11 +474,15 @@ def _build_rows(plant_defs, report_month):
 
 
 def generate_page5_rows(report_month: str) -> list:
-    return _build_rows(PAGE5_PLANTS, report_month)
+    # Per-month reads are served from the report_context bulk load (the
+    # request's, or one of its own when called alone).
+    with report_context.activate(report_month):
+        return _build_rows(PAGE5_PLANTS, report_month)
 
 
 def generate_page6_rows(report_month: str) -> list:
-    return _build_rows(PAGE6_PLANTS, report_month)
+    with report_context.activate(report_month):
+        return _build_rows(PAGE6_PLANTS, report_month)
 
 
 # ---------------------------------------------------------------------------
