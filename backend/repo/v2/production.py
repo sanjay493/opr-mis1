@@ -295,9 +295,9 @@ def upsert(measure: Measure, rows: Iterable[tuple]) -> None:
         for r in rows:
             _keys.check_month(cur, r[0])
             _keys.check_plant(cur, r[1])
-        _ver.bump(cur)
-        for month, plant, item, value in rows:
-            _put(cur, measure, month, plant, item, value, bump=False)
+        # one bump for the batch (as v1's executemany), taken by the first row
+        for i, (month, plant, item, value) in enumerate(rows):
+            _put(cur, measure, month, plant, item, value, bump=i == 0)
 
 
 def delete(measure: Measure, month: str, plant: str, items: Iterable[str] | None = None) -> None:

@@ -14,6 +14,14 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent / "repo"
 
+
+def repo_sources():
+    """(module key, path) of every repo module: repo/<m>.py as "<m>", and
+    the Task 7 v2 implementations repo/v2/<m>.py as "v2.<m>"."""
+    out = [(p.stem, p) for p in sorted(REPO.glob("*.py"))]
+    out += [(f"v2.{p.stem}", p) for p in sorted((REPO / "v2").glob("*.py"))]
+    return out
+
 WRITE_RE = re.compile(r"^\s*(INSERT|UPDATE|DELETE|REPLACE)\b")
 
 # (module, function) -> reason. Tables: users, allowed_emails, otp_codes,
@@ -106,7 +114,7 @@ def _bumps(fn):
 
 def _write_functions():
     out = {}
-    for path in sorted(REPO.glob("*.py")):
+    for stem, path in repo_sources():
         tree = ast.parse(path.read_text(encoding="utf-8"))
         docs = _docstrings(tree)
         write_names = _module_write_constants(tree)
@@ -116,7 +124,7 @@ def _write_functions():
             f._bumps = f.name in bumpers or bool(_called_names(f) & bumpers)
         for f in funcs.values():
             if _writes(f, docs, write_names):
-                out[(path.stem, f.name)] = f
+                out[(stem, f.name)] = f
     return out
 
 
@@ -190,17 +198,17 @@ def enclosing_stmt(body, lineno):
 
 def test_bump_precedes_the_first_write():
     late, unseen = [], []
-    for path in sorted(REPO.glob("*.py")):
-        if path.stem == "version":
+    for stem, path in repo_sources():
+        if stem == "version":
             continue
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for fn, write, bump in write_and_bump_calls(tree):
             if bump is None:
                 continue                      # exempt, or bumps through a helper
             if write is None:
-                unseen.append(f"{path.stem}.{fn.name}")
+                unseen.append(f"{stem}.{fn.name}")
             elif (bump.lineno, bump.col_offset) > (write.lineno, write.col_offset):
-                late.append(f"{path.stem}.{fn.name}: bump L{bump.lineno} after write L{write.lineno}")
+                late.append(f"{stem}.{fn.name}: bump L{bump.lineno} after write L{write.lineno}")
     assert late == []
     assert unseen == []
 
@@ -210,7 +218,9 @@ def test_scan_finds_the_known_writers():
     for key in [("production", "upsert"), ("production", "upsert_row"),
                 ("production", "save_production_actual"), ("techno", "save_techno_plan"),
                 ("ops", "log_extraction"), ("misc", "replace_cover_setting"),
-                ("text", "save_texts"), ("breakdown", "delete_cr_row")]:
+                ("text", "save_texts"), ("breakdown", "delete_cr_row"),
+                ("v2.production", "_put"), ("v2.production", "_clear"),
+                ("v2.capacity", "save_capacity_entry")]:
         assert key in found, key
     assert len(found) > 100
 
