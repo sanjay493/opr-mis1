@@ -9,18 +9,19 @@ has_till_month, source_file, created_at + created_at_iso) plus one
 techno_value row per leaf (repo.v2codec encode_techno / decode_techno);
 units are plant_unit rows (unit_id).
 
-BLOBS COME BACK TWO WAYS, both equal to what v1 returned:
-  - as dicts (blobs, get_techno_data, get_sail_techno_actuals, the activity
-    log's old state): decode_techno over the leaves, ordered by
-    TECHNO_LEAF_ORDER_BY, so every dict iterates in the MySQL-JSON
-    normalised key order v1's json.loads(text) gave, and every leaf keeps
-    its type (5 int, 5.0 float, True, None, -0.0 and big ints via raw);
-  - as the JSON TEXT v1's techno_json column handed back (the cursor-level
-    helpers, the report_context bulk load, json_cell): _TEXT, built by
-    MySQL itself (JSON_OBJECTAGG / JSON_OBJECT over the leaves, int leaves
-    cast to SIGNED, float leaves to a JSON double, raw leaves as stored), so
-    the text is MySQL's own serialisation of the same JSON value, byte for
-    byte what v1 stored (checked on all 5,273 blobs of the rehearsal copy).
+BLOBS COME BACK AS v1's TEXT. _TEXT rebuilds the JSON text v1's
+techno_json column handed back, by MySQL itself: JSON_OBJECTAGG /
+JSON_OBJECT over the leaves (int leaves cast to SIGNED, float leaves to a
+JSON double, raw leaves - strings, objects, bools, explicit nulls, -0.0,
+ints beyond 2^53 - as stored), so it is MySQL's own serialisation of the
+same JSON value: byte for byte what v1 stored (checked on all 5,273 blobs
+of the rehearsal copy), keys in the MySQL-JSON normalised order that
+TECHNO_LEAF_ORDER_BY describes. The cursor helpers, the report_context bulk
+load and json_cell return that text; the dict reads (blobs,
+get_techno_data, get_sail_techno_actuals) json.loads it as v1 did, so every
+leaf keeps its type (5 int, 5.0 float). The write paths' locking read of
+one stored blob (merge, recompute, activity-log old state) decodes its leaf
+rows with v2codec.decode_techno (same dict; ORDER BY TECHNO_LEAF_ORDER_BY).
 
 ROW ORDER. v1 techno_data's clustered key was a surrogate id (insertion
 order) that v2 does not keep. Reads with an ORDER BY keep it (on the v2
@@ -134,10 +135,14 @@ def _decoded(rows):
 
 
 def _blobs_sql(cur, where, params, order):
-    """[((month, plant, unit), blob)] of the uploads matching `where`, in
-    `order` (which must keep each upload's rows together)."""
-    cur.execute(f"{_LEAVES} WHERE {where} ORDER BY {order}, {_LEAF_ORDER}", list(params))
-    return _decoded(cur.fetchall())
+    """[((month, plant, unit), blob dict)] of the uploads matching `where`,
+    in `order`: v1's own path, json.loads of the techno_json text (_TEXT,
+    byte-identical to v1's), which is 3-4x faster than decoding the leaf
+    rows in Python (pymysql parses every row in Python) and gives the same
+    dicts (key order and leaf types)."""
+    cur.execute(f"SELECT u.report_month, u.plant_code, pu.unit_code, {_TEXT} FROM {_TU} "
+                f"WHERE {where} ORDER BY {order}", list(params))
+    return [((r[0], r[1], r[2]), _parse(r[3])) for r in cur.fetchall()]
 
 
 # ── report_context bulk load ────────────────────────────────────────────────
