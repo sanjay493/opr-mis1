@@ -82,7 +82,7 @@ def _snapshot(mod):
     """Every row of every measure, read back through `mod`."""
     out = {}
     for measure in ("actual", "abp", "mou"):
-        for plant in ("BSP", "DSP", "RSP", "BSL", "ISP", "SSP", "SAIL"):
+        for plant in ("BSP", "DSP", "RSP", "BSL", "ISP", "SSP", "SAIL", "XYZ", "xyz2", ""):
             rows = _with_cur(lambda m, cur: m.plant_all_rows(cur, measure, plant))(mod)
             out[(measure, plant)] = sorted(tuple(r) for r in rows)
     return out
@@ -177,19 +177,57 @@ def test_every_v2_write_bumps_data_version(seeded):
             assert seeded.data_version(2) > n
 
 
-def test_out_of_calendar_month_or_unknown_plant_is_refused_before_any_write(seeded):
-    """v1 stored any month / plant string; v2 cannot (FKs to cal_month and
-    plant) and refuses before the bump. Deletes still match nothing."""
+def test_months_outside_the_seeded_calendar_and_unknown_plants_are_stored_as_v1(seeded):
+    """v1 stored any month / plant string; v2 creates the cal_month / plant
+    master row it needs (repo/v2/_keys.py), so the read-back is equal."""
+    rows = [("1950-01", "BSP", "Hot Metal", 1.0), ("2099-01", "BSP", "Hot Metal", 2.0),
+            ("2025-04", "XYZ", "Hot Metal", 3.0), ("2099-12", "xyz2", "New", None),
+            ("2025-05", "", "Hot Metal", 4.0)]
+    for measure in ("actual", "abp"):
+        seeded.both(lambda m: m.upsert(measure, rows), v1=p1, v2=p2)
+        _assert_same_data(seeded)
+    seeded.both(lambda m: m.save_production_actual("1950-02", "XYZ", "Hot Metal", 5.0), v1=p1, v2=p2)
+    seeded.both(lambda m: m.save_production_plan("2099-01", "XYZ", "Hot Metal", None), v1=p1, v2=p2)
+    seeded.both(lambda m: m.delete("actual", "2099-01", "BSP"), v1=p1, v2=p2)
+    _assert_same_data(seeded)
+    for args in (("actual", "1950-01", "BSP", "Hot Metal"), ("actual", "2025-04", "xyz", "hot metal"),
+                 ("abp", "2099-12", "XYZ2", "new")):
+        _same(seeded, _with_cur(lambda m, cur: m.value_row(cur, *args)))
+    cm = seeded.sql(2, "SELECT report_month, month_start, fy, fy_month, quarter, half FROM cal_month "
+                       "WHERE report_month IN ('1950-01', '2099-12') ORDER BY report_month")
+    assert [tuple(r) for r in cm] == [("1950-01", "1950-01-01", "1949-50", 10, 4, 2),
+                                      ("2099-12", "2099-12-01", "2099-00", 9, 3, 2)]
+    assert [tuple(r) for r in seeded.sql(2, "SELECT plant_code, plant_name, plant_kind FROM plant "
+                                            "WHERE plant_kind = 'external' ORDER BY plant_code")] ==         [("", None, "external"), ("XYZ", None, "external"), ("xyz2", None, "external")]
+
+
+def test_month_strings_that_are_not_months(seeded):
+    """Longer than CHAR(7): the same DataError 1406 on both. A short non-month
+    ('2025-4'): v1 stored it as text; v2 cannot (cal_month needs a real
+    month) and refuses before the bump - the one remaining divergence."""
+    import pymysql
+    for m in (p1, p2):
+        with (seeded.v1() if m is p1 else seeded.v2()):
+            with pytest.raises(pymysql.err.DataError) as e:
+                m.upsert("actual", [("2025-04-01", "BSP", "Hot Metal", 1.0)])
+            assert e.value.args[0] == 1406
     with seeded.v2():
         n = seeded.data_version(2)
-        for month, plant in (("2099-01", "BSP"), ("2025-4", "BSP"), ("2025-04", "XYZ")):
+        for bad in ("2025-4", "2025-13", "abc", ""):
             with pytest.raises(_keys.OutOfModelError):
-                p2.upsert("actual", [(month, plant, "Hot Metal", 1.0)])
-            with pytest.raises(ValueError):
-                p2.save_production_actual(month, plant, "Hot Metal", 1.0)
+                p2.upsert("actual", [(bad, "BSP", "Hot Metal", 1.0)])
+            with pytest.raises(_keys.OutOfModelError):
+                p2.save_production_actual(bad, "BSP", "Hot Metal", 1.0)
         assert seeded.data_version(2) == n
-        p2.delete("actual", "2099-01", "BSP")
-        p2.save_production_actual("2099-01", "BSP", "Hot Metal", None)
+        p2.save_production_actual("2025-4", "BSP", "Hot Metal", None)   # a delete: matches nothing
+
+
+def test_cal_month_row_matches_the_seed(seeded):
+    rows = seeded.sql(2, "SELECT report_month, month_start, fy, fy_month, quarter, half FROM cal_month "
+                         "ORDER BY report_month")
+    assert len(rows) >= 960
+    for r in rows:
+        assert _keys.cal_month_row(r[0]) == tuple(r), r
 
 
 def test_new_case_variant_creates_its_own_item(seeded):
@@ -370,11 +408,11 @@ def test_delete_capacity_entry(cap_seeded, monkeypatch):
     _cap_same(cap_seeded, _cap_all)
 
 
-def test_capacity_out_of_calendar_month_is_refused(cap_seeded):
-    with cap_seeded.v2():
-        n = cap_seeded.data_version(2)
-        with pytest.raises(_keys.OutOfModelError):
-            cap2.save_capacity_entry("BSP", "Hot Metal", "2099-04", 1.0, "", "c@x")
-        with pytest.raises(_keys.OutOfModelError):
-            cap2.update_capacity_entry(1, "u@x", effective_month="2099-04")
-        assert cap_seeded.data_version(2) == n
+def test_capacity_months_and_plants_outside_the_masters(cap_seeded):
+    ids = _cap_same(cap_seeded, lambda m: m.save_capacity_entry("XYZ", "Hot Metal", "2099-04", 1.0, "", "c@x"))
+    assert ids == 4
+    _cap_same(cap_seeded, lambda m: m.update_capacity_entry(1, "u@x", effective_month="1950-04", plant_name="QQ"))
+    strip = lambda rows: [{k: v for k, v in r.items() if k not in ("created_at", "updated_at")} for r in rows]
+    a, b = cap_seeded.both(_cap_all, v1=cap1, v2=cap2)
+    assert strip(a) == strip(b)
+    _cap_same(cap_seeded, lambda m: m.get_effective_capacity("xyz", "hot metal", "2100-01"))

@@ -215,6 +215,33 @@ COMPARE_MODE = {
 }
 
 
+# Individual recorded calls whose v2 result is ACCEPTED as different from v1
+# (a controller ruling each): ("module.func", canonical args text, canonical
+# kwargs text) -> why. Replay reports such a call as KNOWN EXCEPTION instead
+# of a diff when it differs; every other call of the function is still
+# compared as usual. The user-visible effect of each is listed in
+# backend/tools/parity_exceptions.md (7g parity must show exactly those).
+_CALENDAR_TIES = (
+    "Task 7b ruling (a): tie order only. v1 GROUP BY + ORDER BY item_name, mon_num, total DESC sorted "
+    "2,700-8,800 groups for a single-plant scope with filesort; they exceed the default "
+    "sort_buffer_size (256 KB), so v1 sorted chunks and merged them, and the order of groups with equal "
+    "(item, mon_num, total) is an artefact of that buffer size. v2 (repo.v2._mysqlsort) reproduces the "
+    "tie order of a sort that fits one buffer - exactly v1's for the other 69 scopes, and v1's own output "
+    "for these 5 when run with sort_buffer_size = 64M. Rows, keys and key sequence are equal; only tied "
+    "rows swap. Effect: 33 top-2 month labels on the /records single-plant tabs (parity_exceptions.md).")
+KNOWN_PARITY_EXCEPTIONS = {
+    ("production.records_calendar_month_totals",
+     '[{"$cursor":"dbengine","row_factory":null},{"$tuple":["plant_name IN (%s)",["' + plant + '"]]}]',
+     "[]"): _CALENDAR_TIES
+    for plant in ("BSP", "DSP", "RSP", "BSL", "ISP")
+}
+
+
+def known_exception(module, name, rec):
+    """The ruling text when this recorded call is a KNOWN_PARITY_EXCEPTIONS entry, else None."""
+    return KNOWN_PARITY_EXCEPTIONS.get((f"{module}.{name}", dumps(rec["a"]), dumps(rec["k"])))
+
+
 def parse_mode(mode):
     """'strict' | 'multiset' | 'deep_unordered(depth=N)' -> (kind, depth)."""
     import re
@@ -876,7 +903,7 @@ def replay_records(records, impl, module, pass_name, *, functions=None, limit_di
     values are compared; what a function does to its arguments is not.
     Returns stats {calls, diffs, missing: {fn: n}, per_function: {fn: [calls, diffs]}}."""
     stats = stats if stats is not None else {"calls": 0, "diffs": 0, "missing": collections.Counter(),
-                                             "per_function": {}, "unreplayable": 0}
+                                             "per_function": {}, "unreplayable": 0, "known": 0}
     contexts = contexts or _Contexts()
     shown = collections.Counter()
     for rec in records:
@@ -907,6 +934,12 @@ def replay_records(records, impl, module, pass_name, *, functions=None, limit_di
         text = dumps(got)
         problems = _compare(rec, got, text, depth=compare_depth(module, name))
         if problems is None:
+            continue
+        if known_exception(module, name, rec) is not None:
+            stats["known"] = stats.get("known", 0) + 1
+            ctx = f" ctx={rec['ctx']}" if "ctx" in rec else ""
+            out(f"KNOWN EXCEPTION {module}.{name} [{pass_name}{ctx}] args {_short(rec['a'], 200)} "
+                f"(KNOWN_PARITY_EXCEPTIONS; not a diff)")
             continue
         pf[1] += 1
         stats["diffs"] += 1
@@ -963,7 +996,7 @@ def replay_module(store_root, module, impl, *, passes=PASSES, functions=None, li
             out(f"  {module}.{f} [{pass_name}]: {diffs} of {calls} calls differ")
         out(f"{module} [{pass_name}]: {stats['calls']} calls replayed, {stats['diffs']} diffs, "
             f"{sum(stats['missing'].values())} missing, {stats['unreplayable']} unreplayable, "
-            f"{time.time() - t0:.0f}s")
+            f"{stats.get('known', 0)} known exceptions, {time.time() - t0:.0f}s")
         failed = failed or bool(stats["diffs"] or missing_public or stats["unreplayable"])
     return 1 if failed else 0
 

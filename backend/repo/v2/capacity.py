@@ -15,10 +15,9 @@ exact spelling), so the clash is checked in code and raised as the same
 IntegrityError (1062). A write stores the caller's exact spelling (the item
 is created when missing), as v1 stored it verbatim.
 
-Months / plants the v2 model cannot hold raise _keys.OutOfModelError
-before anything is written (api_capacity validates the plant list and the
-YYYY-MM shape; a year outside 1960-04 .. 2040-03 is the only input v1
-accepted that v2 refuses).
+Months / plants: a write creates the cal_month / plant master row it needs
+(repo/v2/_keys.py), as for production; only a month string that is not a
+'YYYY-MM' at all is refused (api_capacity already rejects those with 400).
 """
 from typing import Any, Dict, List, Optional
 
@@ -149,9 +148,10 @@ def save_capacity_entry(plant: str, item: str, effective_month: str,
     now = datetime.now().isoformat()
     try:
         cur = conn.cursor()
-        _keys.check_month(cur, effective_month)
-        _keys.check_plant(cur, plant)
+        _keys.check_month(effective_month)
         _ver.bump(cur)
+        _keys.ensure_month(cur, effective_month, bump=False)
+        _keys.ensure_plant(cur, plant, bump=False)
         item_id = _item_id_for_write(cur, item, bump=False)
         _check_unique(cur, plant, item, effective_month)
         cur.execute("""
@@ -195,10 +195,12 @@ def update_capacity_entry(entry_id: int, updated_by: str, **fields) -> bool:
     try:
         cur = conn.cursor()
         if "effective_month" in given:
-            _keys.check_month(cur, given["effective_month"])
-        if "plant_name" in given:
-            _keys.check_plant(cur, given["plant_name"])
+            _keys.check_month(given["effective_month"])
         _ver.bump(cur)
+        if "effective_month" in given:
+            _keys.ensure_month(cur, given["effective_month"], bump=False)
+        if "plant_name" in given:
+            _keys.ensure_plant(cur, given["plant_name"], bump=False)
         sets, args = [], []
         for k, v in given.items():
             if k == "item_name":

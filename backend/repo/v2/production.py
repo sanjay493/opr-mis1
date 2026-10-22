@@ -42,8 +42,11 @@ WRITES (every write bumps data_version first; none in a dry run)
     the row already holds other measures).
   - delete of one measure: clears its flag and sets its value to NULL;
     a row left with no flag is deleted (ck_production_source).
-  - Months / plants the v2 model cannot hold (_keys.OutOfModelError) are
-    refused before the bump; deletes are not checked (they match nothing).
+  - Months / plants: a write creates the cal_month / plant master row it
+    needs (repo/v2/_keys.py ensure_month / ensure_plant), so every month
+    and plant v1 stored is stored; only a month string that is not a
+    'YYYY-MM' at all is refused (_keys.check_month). Deletes resolve
+    nothing (they match nothing, as in v1).
 """
 import re
 from typing import Any, Dict, Iterable, List, Literal, Optional
@@ -240,10 +243,11 @@ def _put(cur, measure, month, plant, item, value, *, bump=True):
     """Set one measure of (month, plant, item) to `value` (a v1 upsert of one
     row). `bump`: False only when the caller has already bumped on `cur`."""
     col, flag = _cols(measure)
-    _keys.check_month(cur, month)
-    _keys.check_plant(cur, plant)
+    _keys.check_month(month)
     if bump:
         _ver.bump(cur)
+    _keys.ensure_month(cur, month, bump=False)
+    _keys.ensure_plant(cur, plant, bump=False)
     hit = cur.execute(
         "SELECT pm.item_id FROM production_monthly pm JOIN item i ON i.item_id = pm.item_id "
         f"WHERE pm.report_month = %s AND pm.plant_code = %s AND pm.{flag} = 1 "
@@ -293,8 +297,7 @@ def upsert(measure: Measure, rows: Iterable[tuple]) -> None:
         return
     with rc.tx() as cur:
         for r in rows:
-            _keys.check_month(cur, r[0])
-            _keys.check_plant(cur, r[1])
+            _keys.check_month(r[0])
         # one bump for the batch (as v1's executemany), taken by the first row
         for i, (month, plant, item, value) in enumerate(rows):
             _put(cur, measure, month, plant, item, value, bump=i == 0)

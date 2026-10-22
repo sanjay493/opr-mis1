@@ -350,6 +350,37 @@ def test_replay_detects_a_value_change(fake):
     assert "values" in out and "[0]" in out and "'v'" in out
 
 
+def test_known_parity_exception_is_reported_not_a_diff_and_only_that_call(fake, monkeypatch):
+    v1 = fake["v1"]
+    rec = _recorder(fake)
+    with rec.installed():
+        v1.values("BSP", ["2026-08"])
+        v1.values("DSP", ["2026-08"])
+    rec.commit()
+    recs = {r["a"][0]: r for r in ro.Store(fake["store"]).iter_records("fake", "sql")}
+    key = ("fake.values", ro.dumps(recs["BSP"]["a"]), ro.dumps(recs["BSP"]["k"]))
+    monkeypatch.setattr(ro, "KNOWN_PARITY_EXCEPTIONS", {key: "a ruling"})
+    code, out = _replay(fake, "v2_value")
+    assert code == 1                                   # DSP still differs
+    assert "KNOWN EXCEPTION fake.values" in out and "1 known exceptions" in out
+    assert "1 of 2 calls differ" in out
+    monkeypatch.setattr(ro, "KNOWN_PARITY_EXCEPTIONS",
+                        {key: "a ruling", (key[0], ro.dumps(recs["DSP"]["a"]), key[2]): "another"})
+    code, out = _replay(fake, "v2_value")
+    assert code == 0 and "2 known exceptions" in out
+    code, out = _replay(fake, "v2_clean")              # equal again: nothing reported
+    assert code == 0 and "KNOWN EXCEPTION" not in out
+
+
+def test_known_parity_exceptions_table():
+    import json
+    assert len(ro.KNOWN_PARITY_EXCEPTIONS) == 5
+    for (fn, args, kwargs), why in ro.KNOWN_PARITY_EXCEPTIONS.items():
+        assert fn == "production.records_calendar_month_totals" and kwargs == "[]"
+        assert json.loads(args)[1]["$tuple"][0] == "plant_name IN (%s)"
+        assert len(why) > 200
+
+
 def test_replay_detects_a_type_change(fake):
     _record(fake)
     code, out = _replay(fake, "v2_type")
