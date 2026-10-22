@@ -197,7 +197,14 @@ def test_wide_text_stamp_split(dbs):
     assert _verify(dbs) == []
 
 
-# ── guards ──────────────────────────────────────────────────────────────────
+# ── CLI and guards ──────────────────────────────────────────────────────────
+
+def test_cli_exit_code(monkeypatch, capsys):
+    for problems, code in (([], 0), (["row count x: v1 1 != v2 0"], 1)):
+        monkeypatch.setattr(ver, "verify", lambda *a, _p=problems, **k: list(_p))
+        assert ver.main(["--src", "a", "--dst", "b"]) == code
+    assert "PROBLEM: row count x" in capsys.readouterr().out
+
 
 def test_guards(dbs):
     v1, v2 = dbs
