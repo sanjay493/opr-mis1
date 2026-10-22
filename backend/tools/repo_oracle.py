@@ -51,9 +51,15 @@ replay
     (a recorded cursor / connection argument becomes a fresh one on the
     replay DB) and compares canonical results. Bulk-pass records are
     replayed inside a report_context for the recorded month (loaders
-    directly). Prints the first --limit-diffs diffs per function (args,
-    first differing row and key) and exits 1 on any diff or on a recorded
-    function missing from the implementation.
+    directly). Results are equal when their canonical TEXT is equal (so
+    True vs 1 and 5 vs 5.0 differ), except for the functions COMPARE_MODE
+    lists (multiset / deep_unordered, each with a caller-audit reason).
+    Only return values are compared: what a function does to its arguments
+    (e.g. enrich_* filling rows in place) is not, unless it also returns them.
+    Prints the first --limit-diffs diffs per function (args, first
+    differing row and key) and exits 1 on any diff, unreplayable call, or
+    recorded PUBLIC function missing from the implementation (a missing
+    _private one, e.g. a loader, is a warning).
 
 Canonical form (type- and order-preserving JSON): str / int / bool / None
 as is; float {"$float": repr}; Decimal {"$Decimal": str}; datetime / date /
@@ -65,7 +71,7 @@ Store (default C:\\mysql\\archive\\oracle\\v1):
     <module>.<pass>.jsonl.gz   one record per unique call (gzip members
                                appended per run; a killed run leaves only
                                _staging/ behind, never a torn file)
-    <module>.<pass>.keys       "<call key sha1> <result sha256>" per record
+    <module>.<pass>.keys       "<call key sha1> <result sha256> <sorted-rows sha256>"
     index.json                 runs, per-function call / unique counts,
                                conflicts, write attempts
 A result whose canonical JSON is over BIG_LIMIT (1 MB) is stored as
@@ -76,8 +82,10 @@ record and replay re-run themselves with PYTHONHASHSEED=0: a few reads
 build dicts by iterating a set of strings, whose order otherwise differs
 between processes (and so between recording chunks and the replay).
 
-Databases: both commands refuse mis_reports and mis_reports_baseline
-(case-insensitive). --db (or MYSQL_DB in the environment) is required.
+Databases: an allowlist, case-insensitive: names ending _rehearsal or
+starting mis_reports_test_. Everything else (mis_reports, mis_reports_baseline,
+mis_reports_v2, ...) is refused before connecting, and the live
+SELECT DATABASE() is checked again. --db (or MYSQL_DB) is required.
 """
 
 import argparse
@@ -107,7 +115,9 @@ if str(BACKEND_DIR) not in sys.path:
 from tools import parity_snapshot as ps  # noqa: E402
 
 DEFAULT_STORE = Path(r"C:\mysql\archive\oracle\v1")
-REFUSED_DBS = {"mis_reports", "mis_reports_baseline"}
+# Allowlist (case-insensitive): rehearsal copies and the test fixture's schemas.
+ALLOWED_DB_SUFFIX = "_rehearsal"
+ALLOWED_DB_PREFIX = "mis_reports_test_"
 PASSES = ("sql", "bulk")
 BIG_LIMIT = 1_000_000
 BIG_CHUNK = 256
@@ -158,14 +168,59 @@ WRITE_FUNCTIONS = {
              "save_steel_sales_highlights", "save_texts", "upsert_do_letter_remark", "upsert_sail_sales_note"),
 }
 
-# Reads whose row order v1 itself does not hold stable -> why. Replay
-# compares their rows as a multiset (as it does for any function whose
-# order changed between identical calls while recording, index "conflicts").
-KNOWN_UNORDERED = {
-    ("techno", "rows_for_months"):
-        "no ORDER BY; seen returning the same 883 rows in two orders in a trial recording "
-        "(MySQL chose an idx_techno_month range scan in one process, a table scan in another)",
+# How replay compares a function's result: "module.func" -> (mode, why).
+# Modes: "strict" (the default for every function not listed: canonical
+# text equality, so order and types count), "multiset" (top-level rows in
+# any order), "deep_unordered(depth=N)" (dict items / list elements sorted
+# down to depth N; depth 1 = multiset). Every non-strict entry needs a
+# caller audit: `why` says why the order never reaches any output. Add an
+# entry only after such an audit (an "order" conflict in index.json is a
+# reason to audit, never an entry by itself).
+COMPARE_MODE = {
+    "techno.rows_for_months": (
+        "multiset",
+        "No ORDER BY; seen returning the same 883 rows in two orders in a trial recording (MySQL chose "
+        "an idx_techno_month range scan in one process, a table scan in another). Caller audit: its three "
+        "callers (page_techno ~L1215, ~L1883, ~L2971) only build store[(plant, month)][unit] for keyed "
+        ".get() lookups; the iterations over store are a per-entry fuel_rate patch (order-independent) and "
+        "plant / unit sets that are sorted by _PLANT_ORDER / _VERIFY_BF_PLANTS or tested for membership "
+        "against _SMS_UNIT_ORDER. Row order never reaches output."),
+    "production._bulk_load": (
+        "deep_unordered(depth=2)",
+        "{measure: {(month, fold(plant), fold(item)): (plant, item, value)}} from a UNION ALL with no ORDER "
+        "BY. Depth 2 = the measure dict and each measure's cells dict; the (plant, item, value) tuples stay "
+        "ordered. Caller audit: cell / sum_plants_cell / sum_months_cell / fs_alias_sum and the other "
+        "served readers look cells up by key, and _cells_sum walks sorted(set(months)) x sorted folded "
+        "plants, so the SUM order is fixed by the code, not by the dict. The only iteration is values() "
+        "(cells.items()), whose result order is documented unspecified and which no app module calls."),
+    "capacity._capacity_load": (
+        "deep_unordered(depth=2)",
+        "{(fold(plant), fold(item)): [(effective_month, annual_capacity), ...]} from a SELECT with no "
+        "ORDER BY. Depth 2 = the dict and each entry list; the tuples stay ordered. Caller audit: the only "
+        "user, get_effective_capacity, looks the list up by key and keeps the entry with the strictly "
+        "greatest effective_month <= month. uq_capacity_plant_item_month (plant_name, item_name, "
+        "effective_month) is unique under the ai_ci collation that fold() mirrors, so effective_month "
+        "never repeats within one list and the pick is the same for any list order."),
 }
+
+
+def parse_mode(mode):
+    """'strict' | 'multiset' | 'deep_unordered(depth=N)' -> (kind, depth)."""
+    import re
+    if mode == "strict":
+        return "strict", 0
+    if mode == "multiset":
+        return "multiset", 1
+    m = re.fullmatch(r"deep_unordered\(depth=(\d+)\)", mode)
+    if m and int(m.group(1)) >= 1:
+        return "deep_unordered", int(m.group(1))
+    raise ValueError(f"unknown compare mode {mode!r}")
+
+
+def compare_depth(module, name, overrides=None):
+    """0 for strict, else the unordered depth for module.name."""
+    entry = (overrides or COMPARE_MODE).get(f"{module}.{name}")
+    return 0 if entry is None else parse_mode(entry[0])[1]
 
 # Public non-write functions that are not recorded -> why.
 NOT_RECORDED = {
@@ -353,7 +408,8 @@ def _items(c):
         return c
     if isinstance(c, dict) and len(c) == 1:
         (tag, val), = c.items()
-        if tag.startswith(("$tuple", "$dict", "$Row", "$set", "$frozenset", "$list")) and isinstance(val, list):
+        if tag.startswith(("$tuple", "$dict", "$Row", "$set", "$frozenset", "$list", "$unordered", "$sorted")) \
+                and isinstance(val, list):
             return val
     return None
 
@@ -645,6 +701,10 @@ class Recorder:
             self._new_keys.clear()
             if self.staging.exists():
                 shutil.rmtree(self.staging)
+            try:
+                self.staging.parent.rmdir()        # _staging/, when no other run is staged
+            except OSError:
+                pass
             return run
 
 
@@ -656,20 +716,27 @@ def _path_str(path):
     return "".join(f"[{p}]" if isinstance(p, int) else f".{p!r}" for p in path)
 
 
+def _same(a, b):
+    """Canonical equality by text (Python's == has True == 1)."""
+    return dumps(a) == dumps(b)
+
+
 def first_diff(a, b, path=()):
-    """(path, a_part, b_part) of the first difference, or None."""
-    if a == b:
+    """(path, a_part, b_part) of the first difference, or None. Diagnostics
+    only: whether two results are equal is decided by their canonical text."""
+    if _same(a, b):
         return None
     ia, ib = _items(a), _items(b)
     if ia is not None and ib is not None and type(a) is type(b) and \
             (not isinstance(a, dict) or list(a) == list(b)):
         for i, (x, y) in enumerate(zip(ia, ib)):
-            if x != y:
+            if not _same(x, y):
                 # a dict / Row item: [key, type, value]
-                if isinstance(x, list) and isinstance(y, list) and len(x) == len(y) == 3 \
-                        and isinstance(a, dict) and x[0] == y[0]:
+                kv = isinstance(a, dict) and any(t in next(iter(a)) for t in ("$dict", "$Row"))
+                if kv and isinstance(x, list) and isinstance(y, list) and len(x) == len(y) == 3 \
+                        and _same(x[0], y[0]):
                     sub = first_diff(x[2], y[2], path + (i, x[0]))
-                    if x[1] != y[1]:
+                    if not _same(x[1], y[1]):
                         return path + (i, x[0]), x, y
                     return sub
                 return first_diff(x, y, path + (i,)) or (path + (i,), x, y)
@@ -693,10 +760,14 @@ class _Live:
         from repo import conn as rc
         if ph.get("$cursor") == "repo":
             return self.stack.enter_context(rc.cursor())
+        if not (ph.get("$cursor") == "dbengine" or ph.get("$conn") == "dbengine"):
+            raise Unreplayable(f"unknown DB handle {ph!r}")
+        factories = {None: None, "Row": dbengine.Row}
+        if ph.get("row_factory") not in factories:
+            raise Unreplayable(f"unknown row_factory {ph.get('row_factory')!r}")
         conn = dbengine.connect()
         self.stack.callback(conn.close)
-        if ph.get("row_factory") == "Row":
-            conn.row_factory = dbengine.Row
+        conn.row_factory = factories[ph.get("row_factory")]
         return conn.cursor() if "$cursor" in ph else conn
 
 
@@ -721,21 +792,47 @@ class _Contexts:
             yield ctx
 
 
-def _compare(rec, got_c, got_text, unordered=False):
-    """None when equal, else a list of message lines. unordered: compare the
-    top-level rows as a multiset (v1's own order varied between runs)."""
-    if unordered and "x" not in rec:
-        if sorted_hash(got_c) == rec["s"]:
+def _unordered_form(c, depth):
+    """c with dict items / list elements sorted down to `depth` levels
+    (1 = top-level rows only). A dict / Row item [key, type, value] is
+    sorted as a whole and its value is the next level down."""
+    if depth <= 0:
+        return c
+    items = _items(c)
+    if items is None:
+        return c
+    tag = "$list" if isinstance(c, list) else next(iter(c))
+    kv = tag.startswith(("$dict", "$Row"))
+    new = [[it[0], it[1], _unordered_form(it[2], depth - 1)] if kv else _unordered_form(it, depth - 1)
+           for it in items]
+    return {"$unordered:" + tag: sorted(new, key=_sort_key)}
+
+
+def _compare(rec, got_c, got_text, depth=0):
+    """None when equal, else a list of message lines. Equality is canonical
+    TEXT equality (the sha256 recorded with the result), so True vs 1 or
+    5 vs 5.0 always differ. depth > 0 (COMPARE_MODE): compare the
+    _unordered_form of both sides instead."""
+    if depth == 0 or "x" in rec:
+        if hashlib.sha256(got_text.encode("utf-8")).hexdigest() == rec["h"]:
             return None
-        if "big" in rec:
-            return [f"  big result differs as a multiset: rows expected {rec['big']['rows']} "
-                    f"got {len(_items(got_c) or [])}"]
-        rec = dict(rec, r=_sorted_form(rec["r"]))
-        got_c = _sorted_form(got_c)
+        return _explain(rec, got_c, got_text)
+    if "big" in rec:
+        if depth == 1 and sorted_hash(got_c) == rec["s"]:
+            return None
+        return [f"  big result differs (or cannot be compared) at unordered depth {depth}: rows expected "
+                f"{rec['big']['rows']} got {len(_items(got_c) or [])}"]
+    expected = _unordered_form(rec["r"], depth)
+    got_u = _unordered_form(got_c, depth)
+    if _same(expected, got_u):
+        return None
+    return _explain({"r": expected}, got_u, None)
+
+
+def _explain(rec, got_c, got_text):
+    """Diagnostic lines for a result that differs from rec."""
     if "big" in rec:
         big = rec["big"]
-        if hashlib.sha256(got_text.encode("utf-8")).hexdigest() == big["sha256"]:
-            return None
         g = big_form(got_c, got_text)
         lines = [f"  big result differs (sha256): rows expected {big['rows']} got {g['rows']}"]
         for label in ("head", "tail"):
@@ -750,8 +847,6 @@ def _compare(rec, got_c, got_text, unordered=False):
                 break
         return lines
     expected = {"x": rec["x"]} if "x" in rec else rec["r"]
-    if got_c == expected:
-        return None
     d = first_diff(expected, got_c)
     path, e, g = d if d else ((), expected, got_c)
     lines = [f"  at {_path_str(path) or '<result>'}: expected {_short(e)}", f"  {' ' * (len(_path_str(path) or '<result>') + 4)}got      {_short(g)}"]
@@ -764,9 +859,10 @@ def _compare(rec, got_c, got_text, unordered=False):
 
 
 def replay_records(records, impl, module, pass_name, *, functions=None, limit_diffs=20, out=print,
-                   contexts=None, stats=None, unordered=()):
-    """Replay `records` (one pass of one module) against module object `impl`.
-    `unordered`: functions whose rows are compared as a multiset.
+                   contexts=None, stats=None):
+    """Replay `records` (one pass of one module) against module object `impl`,
+    comparing each result per COMPARE_MODE (strict by default). Only return
+    values are compared; what a function does to its arguments is not.
     Returns stats {calls, diffs, missing: {fn: n}, per_function: {fn: [calls, diffs]}}."""
     stats = stats if stats is not None else {"calls": 0, "diffs": 0, "missing": collections.Counter(),
                                              "per_function": {}, "unreplayable": 0}
@@ -798,7 +894,7 @@ def replay_records(records, impl, module, pass_name, *, functions=None, limit_di
             except Exception as e:      # noqa: BLE001 - compared with the recorded exception
                 got = {"x": canonical_exception(e)}
         text = dumps(got)
-        problems = _compare(rec, got, text, unordered=name in unordered)
+        problems = _compare(rec, got, text, depth=compare_depth(module, name))
         if problems is None:
             continue
         pf[1] += 1
@@ -819,14 +915,20 @@ def replay_module(store_root, module, impl, *, passes=PASSES, functions=None, li
     failed = False
     total = 0
     idx = store.load_index()
-    unordered = sorted({c["function"] for c in idx["conflicts"]
-                        if c["module"] == module and c.get("kind") == "order"}
-                       | {f for (m, f) in KNOWN_UNORDERED if m == module})
-    if unordered:
-        out(f"{module}: v1 row order not stable (KNOWN_UNORDERED / order conflicts); compared as a multiset: "
-            + ", ".join(unordered))
+    modes = {k.split(".", 1)[1]: v[0] for k, v in COMPARE_MODE.items() if k.split(".", 1)[0] == module}
+    for name, mode in sorted(modes.items()):
+        kind = parse_mode(mode)[0]
+        out(f"{module}.{name}: compared as {'a multiset' if kind == 'multiset' else mode} (COMPARE_MODE)")
+    warned = set()
     for c in idx["conflicts"]:
-        if c["module"] == module and c.get("kind") != "order":
+        if c["module"] != module or c["function"] in warned:
+            continue
+        warned.add(c["function"])
+        if c.get("kind") == "order":
+            if c["function"] not in modes:
+                out(f"WARNING {module}.{c['function']}: v1 row order varied between identical calls; still "
+                    f"compared strictly - audit its callers and add a COMPARE_MODE entry if order never reaches output")
+        else:
             out(f"WARNING {module}.{c['function']}: v1 returned different values for one call "
                 f"(nondeterministic); the first result is the oracle")
     for pass_name in passes:
@@ -835,18 +937,23 @@ def replay_module(store_root, module, impl, *, passes=PASSES, functions=None, li
             continue
         t0 = time.time()
         stats = replay_records(store.iter_records(module, pass_name), impl, module, pass_name,
-                               functions=functions, limit_diffs=limit_diffs, out=out,
-                               unordered=set(unordered))
+                               functions=functions, limit_diffs=limit_diffs, out=out)
         total += stats["calls"]
+        missing_public = 0
         for name, n in sorted(stats["missing"].items()):
-            out(f"MISSING {module}.{name} [{pass_name}]: {n} recorded call(s), not in {impl.__name__}")
+            if name.startswith("_"):
+                out(f"WARNING {module}.{name} [{pass_name}]: private, {n} recorded call(s), not in "
+                    f"{impl.__name__} (not a failure; compared whenever it exists)")
+            else:
+                missing_public += n
+                out(f"MISSING {module}.{name} [{pass_name}]: {n} recorded call(s), not in {impl.__name__}")
         bad = {f: v for f, v in stats["per_function"].items() if v[1]}
         for f, (calls, diffs) in sorted(bad.items()):
             out(f"  {module}.{f} [{pass_name}]: {diffs} of {calls} calls differ")
         out(f"{module} [{pass_name}]: {stats['calls']} calls replayed, {stats['diffs']} diffs, "
             f"{sum(stats['missing'].values())} missing, {stats['unreplayable']} unreplayable, "
             f"{time.time() - t0:.0f}s")
-        failed = failed or bool(stats["diffs"] or stats["missing"] or stats["unreplayable"])
+        failed = failed or bool(stats["diffs"] or missing_public or stats["unreplayable"])
     return 1 if failed else 0
 
 
@@ -855,11 +962,17 @@ def replay_module(store_root, module, impl, *, passes=PASSES, functions=None, li
 # ---------------------------------------------------------------------------
 
 def check_db_name(name):
+    """Allow only *_rehearsal and mis_reports_test_* (case-insensitive);
+    everything else (mis_reports, mis_reports_baseline, mis_reports_v2, ...)
+    is refused."""
     if not name:
         raise SystemExit("no database: pass --db or set MYSQL_DB")
-    if name.strip().lower() in REFUSED_DBS:
-        raise SystemExit(f"refusing to run against {name!r} (live / frozen baseline); "
-                         f"use mis_reports_rehearsal or mis_reports_v2_rehearsal")
+    low = name.strip().lower()
+    ok = (low.endswith(ALLOWED_DB_SUFFIX) and len(low) > len(ALLOWED_DB_SUFFIX)) or \
+        (low.startswith(ALLOWED_DB_PREFIX) and len(low) > len(ALLOWED_DB_PREFIX))
+    if not ok:
+        raise SystemExit(f"refusing to run against {name!r}: only *{ALLOWED_DB_SUFFIX} and "
+                         f"{ALLOWED_DB_PREFIX}* databases are allowed (e.g. mis_reports_v2_rehearsal)")
 
 
 def select_database(name):

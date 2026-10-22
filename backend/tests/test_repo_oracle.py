@@ -47,6 +47,15 @@ def ctx_month():
 def _load(first, last):
     return {(first, "A"): 1.5, (last, "B"): None}
 
+def flag():
+    return True
+
+def flags():
+    return (True, False)
+
+def nested():
+    return {"b": {"y": 1, "x": 2}, "a": {"z": 3}}
+
 def save(x):
     return "written"
 '''
@@ -73,6 +82,13 @@ VARIANTS = {
     "v2_exc": _mutate(V1, 'raise ValueError(f"bad {x}")', 'raise KeyError(x)'),
     "v2_big": _mutate(V1, '"pad": "x" * 20}', '"pad": "x" * 20 if i != 7 else "y"}'),
     "v2_ctx": _mutate(V1, "(last, \"B\"): None}", "(last, \"B\"): 0}"),
+    "v2_bool": _mutate(_mutate(V1, "def flag():\n    return True", "def flag():\n    return 1"),
+                       "return (True, False)", "return (1, False)"),
+    "v2_nested": _mutate(V1, 'return {"b": {"y": 1, "x": 2}, "a": {"z": 3}}',
+                         'return {"a": {"z": 3}, "b": {"x": 2, "y": 1}}'),
+    "v2_nested_value": _mutate(V1, 'return {"b": {"y": 1, "x": 2}, "a": {"z": 3}}',
+                               'return {"a": {"z": 3}, "b": {"x": 2, "y": 9}}'),
+    "v2_private_missing": V1.replace("_load", "_load2"),
 }
 
 
@@ -178,6 +194,7 @@ def test_record_dedupes_records_aliases_and_skips_writes(fake):
     # unpatched afterwards
     assert fake["caller"].total is ro.unwrap(fake["caller"].total)
     assert not hasattr(fake["v1"].values, "__oracle_original__")
+    assert not (fake["store"] / "_staging").exists()
 
 
 def test_record_appends_across_runs_and_flags_nondeterminism(fake):
@@ -207,10 +224,10 @@ def test_record_appends_across_runs_and_flags_nondeterminism(fake):
     assert len(idx["conflicts"]) == 1
 
 
-def test_order_only_nondeterminism_is_classified_and_replayed_as_a_multiset(fake):
+def test_order_only_nondeterminism_is_classified_but_replay_stays_strict(fake, monkeypatch):
     """A query without ORDER BY whose plan (and so row order) varies between
-    runs: the conflict is kind 'order', and replay compares that function's
-    rows as a multiset (every record of it), still catching value changes."""
+    runs: the conflict is kind 'order'. Replay still compares strictly (with
+    a warning) until a caller audit adds a COMPARE_MODE entry."""
     _record(fake)
     v1 = fake["v1"]
     orig = v1.ordered
@@ -224,21 +241,82 @@ def test_order_only_nondeterminism_is_classified_and_replayed_as_a_multiset(fake
     v1.ordered = orig
     assert [c["kind"] for c in rec.conflicts] == ["order"]
     code, out = _replay(fake, "v2_order")
-    assert code == 0, out
-    assert "multiset" in out
-    # a value change in the same function is still a diff
-    v1src = importlib.import_module("fakerepo.v2_order")
-    v1src.ordered = lambda: [("b", 2), ("a", 9)]
-    out = []
-    assert ro.replay_module(fake["store"], "fake", v1src, passes=("sql",), out=out.append) == 1
-
-
-def test_known_unordered_functions_replay_as_a_multiset(fake, monkeypatch):
-    _record(fake)
-    assert _replay(fake, "v2_order")[0] == 1
-    monkeypatch.setitem(ro.KNOWN_UNORDERED, ("fake", "ordered"), "test")
+    assert code == 1 and "COMPARE_MODE" in out
+    monkeypatch.setitem(ro.COMPARE_MODE, "fake.ordered", ("multiset", "test: order never reaches output"))
     code, out = _replay(fake, "v2_order")
     assert code == 0 and "multiset" in out
+    # a value change in the same function is still a diff
+    v2 = importlib.import_module("fakerepo.v2_order")
+    v2.ordered = lambda: [("b", 2), ("a", 9)]
+    assert ro.replay_module(fake["store"], "fake", v2, passes=("sql",), out=[].append) == 1
+
+
+def test_multiset_mode(fake, monkeypatch):
+    _record(fake)
+    assert _replay(fake, "v2_order")[0] == 1
+    monkeypatch.setitem(ro.COMPARE_MODE, "fake.ordered", ("multiset", "test justification"))
+    code, out = _replay(fake, "v2_order")
+    assert code == 0 and "multiset" in out
+
+
+def test_deep_unordered_mode_sorts_down_to_its_depth(fake, monkeypatch):
+    rec = _recorder(fake)
+    with rec.installed():
+        fake["v1"].nested()
+    rec.commit()
+    assert _replay(fake, "v2_nested")[0] == 1                      # strict
+    monkeypatch.setitem(ro.COMPARE_MODE, "fake.nested", ("multiset", "test justification"))
+    assert _replay(fake, "v2_nested")[0] == 1                      # inner order still differs
+    monkeypatch.setitem(ro.COMPARE_MODE, "fake.nested", ("deep_unordered(depth=2)", "test justification"))
+    assert _replay(fake, "v2_nested")[0] == 0
+    code, out = _replay(fake, "v2_nested_value")
+    assert code == 1 and "'y'" in out
+
+
+@pytest.mark.parametrize("fn", ["flag", "flags"])
+def test_true_and_1_differ_at_top_level_and_inside_a_tuple(fake, fn):
+    rec = _recorder(fake)
+    with rec.installed():
+        getattr(fake["v1"], fn)()
+    rec.commit()
+    assert _replay(fake, "v2_clean")[0] == 0
+    code, out = _replay(fake, "v2_bool")
+    assert code == 1, out
+    assert "true" in out and "1" in out
+
+
+def test_compare_mode_table():
+    assert set(ro.COMPARE_MODE) == {"techno.rows_for_months", "production._bulk_load", "capacity._capacity_load"}
+    for name, (mode, why) in ro.COMPARE_MODE.items():
+        kind, depth = ro.parse_mode(mode)
+        assert kind in ("multiset", "deep_unordered") and depth >= 1, name
+        assert isinstance(why, str) and len(why.strip()) > 40, name
+    assert ro.parse_mode("strict") == ("strict", 0)
+    assert ro.parse_mode("multiset") == ("multiset", 1)
+    assert ro.parse_mode("deep_unordered(depth=3)") == ("deep_unordered", 3)
+    with pytest.raises(ValueError):
+        ro.parse_mode("fuzzy")
+
+
+def test_missing_private_function_is_a_warning(fake):
+    rec = _recorder(fake, "bulk")
+    with rec.installed():
+        with report_context.activate("2026-08"):
+            fake["v1"].ctx_month()
+    rec.commit()
+    code, out = _replay(fake, "v2_private_missing", passes=("bulk",))
+    assert code == 0, out
+    assert "WARNING" in out and "_load" in out
+
+
+def test_unknown_row_factory_is_unreplayable(monkeypatch):
+    import contextlib as _cl
+    monkeypatch.setattr(dbengine, "connect", lambda: pytest.fail("connected"))
+    with _cl.ExitStack() as stack:
+        with pytest.raises(ro.Unreplayable):
+            ro._Live(stack)({"$conn": "dbengine", "row_factory": "dict"})
+        with pytest.raises(ro.Unreplayable):
+            ro._Live(stack)({"$cursor": "other"})
 
 
 def test_value_nondeterminism_is_kind_value(fake):
@@ -355,8 +433,10 @@ def test_record_and_replay_rerun_with_a_fixed_hash_seed(monkeypatch):
 
 
 
-@pytest.mark.parametrize("name", ["mis_reports", "MIS_REPORTS", "mis_reports_baseline", "Mis_Reports_Baseline"])
-def test_refuses_live_and_baseline_databases(name):
+@pytest.mark.parametrize("name", ["mis_reports", "MIS_REPORTS", "mis_reports_baseline", "Mis_Reports_Baseline",
+                                  "mis_reports_v2", "MIS_REPORTS_V2", "other_db", "mis_reports_rehearsal_x",
+                                  "rehearsal", "mis_reports_test"])
+def test_refuses_every_database_off_the_allowlist(name):
     with pytest.raises(SystemExit):
         ro.check_db_name(name)
 
@@ -372,8 +452,9 @@ def test_cli_refuses_live_and_baseline_before_connecting(cmd, name, monkeypatch)
         ro.main_cli(cmd + ["--db", name])
 
 
-@pytest.mark.parametrize("name", ["mis_reports_rehearsal", "mis_reports_v2_rehearsal"])
-def test_allows_rehearsal_databases(name):
+@pytest.mark.parametrize("name", ["mis_reports_rehearsal", "mis_reports_v2_rehearsal", "MIS_REPORTS_V2_REHEARSAL",
+                                  "mis_reports_test_1234", "MIS_REPORTS_TEST_99"])
+def test_allows_rehearsal_and_test_databases(name):
     ro.check_db_name(name)
 
 
