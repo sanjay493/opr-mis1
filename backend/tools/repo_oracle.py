@@ -193,6 +193,17 @@ COMPARE_MODE = {
         "served readers look cells up by key, and _cells_sum walks sorted(set(months)) x sorted folded "
         "plants, so the SUM order is fixed by the code, not by the dict. The only iteration is values() "
         "(cells.items()), whose result order is documented unspecified and which no app module calls."),
+    "production.item_plants_range": (
+        "multiset",
+        "No ORDER BY; v1's row order is a cost-model choice per item: idx_prod_item_month gives (month, "
+        "plant), idx_prod_plant_item gives (plant, month) (EXPLAIN on the v1 data: e.g. 'Pig Iron', "
+        "'Finished Steel' used the latter), which v2 cannot predict. Caller audit (2026-10-22, Task 7b): "
+        "the only caller, page7_13._generate_rows_for_config (4 call sites, ~L360-385), stores each row as "
+        "act_data[plant][rm] / plan_data[plant][rm] (dicts pre-built in all_plants order; the Finished Steel "
+        "alias patch only fills keys still missing). (plant, month) is unique per call, and every v1 access "
+        "path yields each plant's months ascending, so even each inner dict's insertion order is the same "
+        "whichever path; nothing else iterates the rows. Row order never reaches output. --impl current "
+        "re-run in a fresh process first: 0 diffs, both passes."),
     "capacity._capacity_load": (
         "deep_unordered(depth=2)",
         "{(fold(plant), fold(item)): [(effective_month, annual_capacity), ...]} from a SELECT with no "
