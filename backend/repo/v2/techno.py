@@ -1,0 +1,1053 @@
+"""Techno repository on the v2 schema (techno_upload + techno_value +
+plant_unit, and techno_plan_fy).
+
+Same public names, signatures, return shapes and exceptions as
+repo/techno.py (v1: techno_data (id, plant, report_month, unit, techno_json
+JSON, source_file, created_at VARCHAR) and techno_plan_fy (plant_name, unit,
+fy, ...)). v2 holds a v1 blob as one techno_upload row (has_month /
+has_till_month, source_file, created_at + created_at_iso) plus one
+techno_value row per leaf (repo.v2codec encode_techno / decode_techno);
+units are plant_unit rows (unit_id).
+
+BLOBS COME BACK TWO WAYS, both equal to what v1 returned:
+  - as dicts (blobs, get_techno_data, get_sail_techno_actuals, the activity
+    log's old state): decode_techno over the leaves, ordered by
+    TECHNO_LEAF_ORDER_BY, so every dict iterates in the MySQL-JSON
+    normalised key order v1's json.loads(text) gave, and every leaf keeps
+    its type (5 int, 5.0 float, True, None, -0.0 and big ints via raw);
+  - as the JSON TEXT v1's techno_json column handed back (the cursor-level
+    helpers, the report_context bulk load, json_cell): _TEXT, built by
+    MySQL itself (JSON_OBJECTAGG / JSON_OBJECT over the leaves, int leaves
+    cast to SIGNED, float leaves to a JSON double, raw leaves as stored), so
+    the text is MySQL's own serialisation of the same JSON value, byte for
+    byte what v1 stored (checked on all 5,273 blobs of the rehearsal copy).
+
+ROW ORDER. v1 techno_data's clustered key was a surrogate id (insertion
+order) that v2 does not keep. Reads with an ORDER BY keep it (on the v2
+names, same ai_ci collation). Reads v1 served through its uq_techno
+(plant, report_month, unit) index have an explicit ORDER BY reproducing
+that index order. Reads whose v1 order was id order (idx_techno_month or a
+table scan) cannot be reproduced: they get a plain deterministic ORDER BY
+and a caller-audited COMPARE_MODE entry in tools/repo_oracle.py.
+
+UNITS. plant_unit.unit_code is utf8mb4_0900_ai_ci with UNIQUE (plant_code,
+unit_code), as v1's uq_techno compared unit, so lookups match case
+variants exactly as v1 did. A write resolves (plant, unit) to the existing
+plant_unit row, else creates it (unit_type NULL). v1 kept the caller's
+spelling per row; v2 keeps one spelling per (plant, unit), the first one
+stored (v1 data has no case collisions; see the 7c report). A unit longer
+than v1's VARCHAR(32) raises v1's DataError 1406 before anything is written.
+
+WRITES (every write bumps data_version first; none in a dry run)
+  - created_at: the NOW() writer (_raw_upsert_techno_data, so upsert /
+    merge_upsert / the recompute) stores NOW() with created_at_iso = 0
+    (renders 'YYYY-MM-DD HH:MM:SS'); the datetime.now().isoformat() writers
+    (save_techno_data_from_extraction, save_techno_json,
+    save_sail_techno_actuals) store that datetime (microseconds kept) with
+    created_at_iso = 1 (renders as isoformat()), per v2codec TS_FLAGGED.
+  - merge_upsert_techno_data is one transaction: bump, locking read of the
+    stored blob, the v1 merge in Python, then the write chain (raw write,
+    tmi / fuel_rate recompute, extraction log) on the same connection.
+  - Months / plants: repo/v2/_keys.py ensure_month / ensure_plant.
+"""
+import copy
+import functools
+import json
+from datetime import datetime
+from typing import Any, Dict, Iterable, List, Optional
+
+import pymysql
+
+import activity_context
+import report_context
+from dbengine import connect
+from report_context import fold
+from repo import version as _ver
+from repo import conn as rc
+from repo.v2 import _keys
+from repo.v2.production import _row_like
+from repo.v2codec import TECHNO_LEAF_ORDER_BY, decode_techno, encode_techno, render_ts_flagged
+
+_V1_UNIT_LEN = 32          # v1 techno_data.unit / techno_plan_fy.unit VARCHAR(32)
+
+
+def _in(col, vals):
+    return f"{col} IN ({', '.join(['%s'] * len(vals))})"
+
+
+def _ph(vals):
+    return ",".join(["%s"] * len(vals))
+
+
+# ── SQL building blocks ─────────────────────────────────────────────────────
+
+_U = "techno_upload u JOIN plant_unit pu ON pu.unit_id = u.unit_id"
+
+_LEAF_VAL = ("CASE WHEN v.raw IS NOT NULL THEN v.raw "
+             "WHEN v.is_int = 1 THEN CAST(CAST(v.num AS SIGNED) AS JSON) "
+             "ELSE CAST(v.num AS JSON) END")
+
+
+def _period_obj(period, alias):
+    return (f"LEFT JOIN LATERAL (SELECT JSON_OBJECTAGG(v.param_key, {_LEAF_VAL}) AS obj "
+            "FROM techno_value v WHERE v.report_month = u.report_month AND v.plant_code = u.plant_code "
+            f"AND v.unit_id = u.unit_id AND v.period = '{period}') {alias} ON TRUE")
+
+
+# FROM clause for _TEXT: the uploads with their unit and both period objects.
+_TU = f"{_U} {_period_obj('month', 'tm')} {_period_obj('till_month', 'tt')}"
+# The v1 techno_json text of the upload row u (see the module docstring).
+_TEXT = ("CASE WHEN u.has_month = 1 AND u.has_till_month = 1 "
+         "THEN JSON_OBJECT('month', COALESCE(tm.obj, JSON_OBJECT()), 'till_month', COALESCE(tt.obj, JSON_OBJECT())) "
+         "WHEN u.has_month = 1 THEN JSON_OBJECT('month', COALESCE(tm.obj, JSON_OBJECT())) "
+         "WHEN u.has_till_month = 1 THEN JSON_OBJECT('till_month', COALESCE(tt.obj, JSON_OBJECT())) "
+         "ELSE JSON_OBJECT() END")
+
+# Leaves of the selected uploads, for decode_techno: (report_month, plant,
+# unit, has_month, has_till_month, period, param_key, num, is_int, raw,
+# source_file); an upload without leaves gives one row with period NULL.
+_LEAVES = ("SELECT u.report_month, u.plant_code, pu.unit_code, u.has_month, u.has_till_month, "
+           "v.period, v.param_key, v.num, v.is_int, v.raw, u.source_file "
+           f"FROM {_U} LEFT JOIN techno_value v ON v.report_month = u.report_month "
+           "AND v.plant_code = u.plant_code AND v.unit_id = u.unit_id")
+# v2codec.TECHNO_LEAF_ORDER_BY on the techno_value alias v
+assert TECHNO_LEAF_ORDER_BY == "period, LENGTH(param_key), param_key"
+_LEAF_ORDER = "v.period, LENGTH(v.param_key), v.param_key"
+
+
+def _decoded(rows):
+    """_LEAVES rows (grouped by upload, in order) -> [((month, plant, unit), blob dict)]."""
+    out = []
+    key = None
+    leaves = flags = None
+    for r in rows:
+        k = (r[0], r[1], r[2])
+        if k != key:
+            if key is not None:
+                out.append((key, decode_techno(flags[0], flags[1], leaves)))
+            key, flags, leaves = k, (r[3], r[4]), []
+        if r[5] is not None:
+            leaves.append((r[5], r[6], r[7], r[8], r[9]))
+    if key is not None:
+        out.append((key, decode_techno(flags[0], flags[1], leaves)))
+    return out
+
+
+def _blobs_sql(cur, where, params, order):
+    """[((month, plant, unit), blob)] of the uploads matching `where`, in
+    `order` (which must keep each upload's rows together)."""
+    cur.execute(f"{_LEAVES} WHERE {where} ORDER BY {order}, {_LEAF_ORDER}", list(params))
+    return _decoded(cur.fetchall())
+
+
+# ── report_context bulk load ────────────────────────────────────────────────
+# Inside report_context.activate(), techno reads whose month falls in the
+# context's window are served from one load of the window's rows (ORDER BY
+# report_month, plant, unit, as v1). The JSON text is kept and parsed on
+# every read, so each caller gets fresh objects, as from SQL. Reads on a
+# caller-supplied connection (conn=..., writers mid-transaction) always use
+# SQL.
+
+def _bulk_load(first, last):
+    """{(report_month, fold(plant)): [(plant, unit, techno_json text), ...]}
+    in unit order, for first <= report_month <= last."""
+    out = {}
+    with rc.cursor() as cur:
+        cur.execute(
+            f"SELECT u.report_month, u.plant_code, pu.unit_code, {_TEXT} FROM {_TU} "
+            "WHERE u.report_month BETWEEN %s AND %s ORDER BY u.report_month, u.plant_code, pu.unit_code",
+            (first, last))
+        for r in cur.fetchall():
+            out.setdefault((r[0], fold(r[1])), []).append((r[1], r[2], r[3]))
+    return out
+
+
+def _bulk(months):
+    ctx = report_context.covering(months)
+    if ctx is None:
+        return None
+    return ctx.load("techno", _bulk_load)
+
+
+def _parse(text):
+    try:
+        return json.loads(text)
+    except (json.JSONDecodeError, TypeError):
+        return {}
+
+
+def _units_from_bulk(plant, report_month, unit=None):
+    """get_techno_data's {unit: json} from the bulk load, or None when the
+    active context does not cover report_month."""
+    bulk = _bulk((report_month,))
+    if bulk is None:
+        return None
+    result = {}
+    for _plant, u, text in bulk.get((report_month, fold(plant)), ()):
+        if unit and fold(u) != fold(unit):
+            continue
+        result[u] = _parse(text)
+    return result
+
+
+def json_cell(cur, plant, report_month, unit):
+    """json_row(), served from the active report_context when it covers
+    report_month: (techno_json text,) or None.
+
+    Read-only helper. Inside a context it ignores `cur` and reads the
+    committed snapshot the context loaded (never `cur`'s own uncommitted
+    writes); a repo write switches the context off for the rest of the
+    request, after which it reads on `cur` again."""
+    bulk = _bulk((report_month,))
+    if bulk is None:
+        return json_row(cur, plant, report_month, unit)
+    fu = fold(unit)
+    for _plant, u, text in bulk.get((report_month, fold(plant)), ()):
+        if fold(u) == fu:
+            return (text,)
+    return None
+
+
+def blobs(months: Iterable[str], plants: Iterable[str] | None = None,
+          units: Iterable[str] | None = None) -> Dict[tuple, Dict[str, Any]]:
+    """{(report_month, plant, unit): techno_json} for the given months, plants
+    and units (None = all). Each value is exactly what get_techno_data returns
+    for that unit: the stored JSON as-is (a row holding only "month" has no
+    "till_month" key; JSON null stays None; ints stay int), or {} when the
+    stored JSON does not parse. A missing key means there is no row. The
+    dict's order is unspecified (v2: deterministic, by month, plant, unit)."""
+    months = list(months)
+    plants = None if plants is None else list(plants)
+    units = None if units is None else list(units)
+    if not months or plants == [] or units == []:
+        return {}
+    bulk = _bulk(months)
+    if bulk is not None:
+        mset = set(months)
+        pset = None if plants is None else {fold(p) for p in plants}
+        uset = None if units is None else {fold(u) for u in units}
+        return {(m, plant, unit): _parse(text)
+                for (m, fp), rows in bulk.items() if m in mset and (pset is None or fp in pset)
+                for plant, unit, text in rows if uset is None or fold(unit) in uset}
+    where = [_in("u.report_month", months)]
+    params = list(months)
+    if plants is not None:
+        where.append(_in("u.plant_code", plants))
+        params += plants
+    if units is not None:
+        where.append(_in("pu.unit_code", units))
+        params += units
+    with rc.cursor() as cur:
+        rows = _blobs_sql(cur, " AND ".join(where), params, "u.report_month, u.plant_code, pu.unit_code")
+    return dict(rows)
+
+
+def merge_upsert(month: str, plant: str, unit: str, blob: Dict[str, Any],
+                 source_file: str = "") -> None:
+    """Merge `blob` ({"month": {...}, "till_month": {...}}) into the stored
+    row for (month, plant, unit): read the existing blob, merge in Python
+    (new non-null values win, a null keeps the stored value), write back.
+    Same semantics as merge_upsert_techno_data, including the derived-param
+    recompute and the extraction-log entry."""
+    merge_upsert_techno_data(plant, month, unit, blob, source_file)
+
+
+# ── write primitives ────────────────────────────────────────────────────────
+
+def _check_unit(unit):
+    """v1's VARCHAR(32) unit column (strict sql_mode): DataError 1406."""
+    if isinstance(unit, str) and len(unit) > _V1_UNIT_LEN:
+        raise pymysql.err.DataError(1406, "Data too long for column 'unit' at row 1")
+
+
+def _unit_id_for_write(cur, plant, unit, *, bump):
+    """unit_id of (plant, unit) under ai_ci (plant_unit's collation, v1's
+    uq_techno rule), created when missing (unit_type NULL). Locking reads."""
+    if bump:
+        _ver.bump(cur)
+    sql = "SELECT unit_id FROM plant_unit WHERE plant_code = %s AND unit_code = %s FOR SHARE"
+    row = cur.execute(sql, (plant, unit)).fetchone()
+    if row is None:
+        cur.execute("INSERT INTO plant_unit (plant_code, unit_code) VALUES (%s, %s) AS new "
+                    "ON DUPLICATE KEY UPDATE unit_code = plant_unit.unit_code", (plant, unit))
+        row = cur.execute(sql, (plant, unit)).fetchone()
+    return row[0]
+
+
+def _stored(cur, plant, report_month, unit):
+    """The stored row of (plant, month, unit) as (blob dict, source_file,
+    stored plant spelling, stored unit spelling), or None. Write paths only
+    (after the bump): a locking read of the upload and its leaves."""
+    cur.execute(f"{_LEAVES} WHERE u.plant_code = %s AND u.report_month = %s AND pu.plant_code = %s "
+                f"AND pu.unit_code = %s ORDER BY {_LEAF_ORDER} FOR UPDATE OF u, v FOR SHARE OF pu",
+                (plant, report_month, plant, unit))
+    rows = cur.fetchall()
+    if not rows:
+        return None
+    (_m, stored_plant, stored_unit), blob = _decoded(rows)[0]
+    return blob, rows[0][10], stored_plant, stored_unit
+
+
+_UPLOAD_PUT = ("INSERT INTO techno_upload (report_month, plant_code, unit_id, has_month, has_till_month, "
+               "source_file, created_at, created_at_iso) VALUES (%s, %s, %s, %s, %s, %s, {at}, %s) AS new "
+               "ON DUPLICATE KEY UPDATE has_month = new.has_month, has_till_month = new.has_till_month, "
+               "source_file = new.source_file, created_at = new.created_at, created_at_iso = new.created_at_iso")
+
+
+def _put_blob(cur, plant, report_month, unit, techno_json, source_file, created_at, *, bump):
+    """Replace the whole stored blob of (plant, month, unit), as v1's
+    INSERT ... ON DUPLICATE KEY UPDATE techno_json, source_file, created_at
+    did (an existing row keeps its plant spelling). created_at None = NOW()
+    (created_at_iso 0), else that datetime (created_at_iso 1). Returns the
+    stored (blob, source_file) it replaced, or None."""
+    has_month, has_till, leaves = encode_techno(techno_json)
+    _keys.check_month(report_month)
+    _check_unit(unit)
+    if bump:
+        _ver.bump(cur)
+    _keys.ensure_month(cur, report_month, bump=False)
+    _keys.ensure_plant(cur, plant, bump=False)
+    unit_id = _unit_id_for_write(cur, plant, unit, bump=False)
+    stored = _stored(cur, plant, report_month, unit)
+    if stored is None:
+        old, stored_plant = None, plant
+    else:
+        old, stored_plant = stored[:2], stored[2]
+        cur.execute("DELETE FROM techno_value WHERE report_month = %s AND plant_code = %s AND unit_id = %s",
+                    (report_month, stored_plant, unit_id))
+    if created_at is None:
+        cur.execute(_UPLOAD_PUT.format(at="NOW()"),
+                    (report_month, stored_plant, unit_id, has_month, has_till, source_file, 0))
+    else:
+        cur.execute(_UPLOAD_PUT.format(at="%s"),
+                    (report_month, stored_plant, unit_id, has_month, has_till, source_file, created_at, 1))
+    if leaves:
+        cur.executemany("INSERT INTO techno_value (report_month, plant_code, unit_id, period, param_key, "
+                        "num, is_int, raw) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                        [(report_month, stored_plant, unit_id) + leaf for leaf in leaves])
+    return old
+
+
+def _iso_write(plant, report_month, unit, techno_json, source_file):
+    """One isoformat() writer: replace the blob, created_at =
+    datetime.now() (rendered back as its isoformat()), own transaction."""
+    conn = connect()
+    try:
+        now = datetime.now()
+        _put_blob(conn.cursor(), plant, report_month, unit, techno_json, source_file, now, bump=True)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+# ── Moved from db.py ─────────────────────────────────────────────────────
+
+def save_techno_data_from_extraction(plant: str, report_month: str, extracted_rows: List[Dict[str, Any]],
+                                     unit: str = "BF_Shop", source_file: str = ""):
+    """Save extracted techno data to techno_data table.
+
+    Args:
+        plant: Plant name (BSP, DSP, RSP, BSL, ISP)
+        report_month: YYYY-MM format
+        extracted_rows: List of dicts with keys like {'parameter', 'actual', 'cum_actual', 'key', ...}
+        unit: Unit name (default "BF_Shop")
+        source_file: Source file name for audit trail
+    """
+    month_data = {}
+    till_month_data = {}
+
+    for row in extracted_rows:
+        if row.get('actual') is not None:
+            key = row.get('key') or row.get('parameter', '').lower().replace(' ', '_')
+            month_data[key] = row['actual']
+        if row.get('cum_actual') is not None:
+            key = row.get('key') or row.get('parameter', '').lower().replace(' ', '_')
+            till_month_data[key] = row['cum_actual']
+
+    techno_json = {
+        "month": month_data,
+        "till_month": till_month_data
+    }
+    _iso_write(plant, report_month, unit, techno_json, source_file)
+
+
+def save_techno_json(plant: str, report_month: str, unit: str,
+                     techno_json: dict, source_file: str = ""):
+    """Save a pre-built techno_json dict directly to techno_data table."""
+    _iso_write(plant, report_month, unit, techno_json, source_file)
+
+
+# ============================================================================
+# Techno Data helpers  (techno_data table — all plants)
+# ============================================================================
+
+def _raw_upsert_techno_data(plant: str, report_month: str, unit: str, techno_json: Dict, source_file: str = '', conn=None):
+    """Bare INSERT/UPDATE with no post-save hooks (see repo/techno.py):
+    replace the stored blob, created_at = NOW(), then record the activity
+    log old/new. `conn`, if given, is reused and NOT committed (the caller
+    owns the transaction); otherwise one transaction of its own."""
+    owns_conn = conn is None
+    if owns_conn:
+        conn = connect()
+    try:
+        old = _put_blob(conn.cursor(), plant, report_month, unit, techno_json, source_file, None, bump=True)
+        if owns_conn:
+            conn.commit()
+    finally:
+        if owns_conn:
+            conn.close()
+    if old is not None:
+        old = {"techno_json": old[0], "source_file": old[1]}
+    new = {"techno_json": techno_json, "source_file": source_file}
+    activity_context.record(f"techno_data/{plant}/{unit}/{report_month}", old, new)
+
+
+def upsert_techno_data(plant: str, report_month: str, unit: str, techno_json: Dict, source_file: str = '', conn=None):
+    """Insert or replace techno data for one plant/unit/month, then the
+    tmi / fuel_rate recompute and the extraction-log entry (see
+    repo/techno.py). With `conn` everything runs on it, uncommitted;
+    without, the chain is one transaction of its own."""
+    owns_conn = conn is None
+    if owns_conn:
+        conn = connect()
+    try:
+        _upsert_chain(conn, plant, report_month, unit, techno_json, source_file)
+        if owns_conn:
+            conn.commit()
+    finally:
+        if owns_conn:
+            conn.close()
+
+
+def _upsert_chain(conn, plant, report_month, unit, techno_json, source_file):
+    _raw_upsert_techno_data(plant, report_month, unit, techno_json, source_file, conn=conn)
+    _maybe_recompute_derived_params(plant, report_month, unit, conn=conn)
+    _log_techno_save(plant, report_month, unit, techno_json, source_file, conn=conn)
+
+
+def _log_techno_save(plant: str, report_month: str, unit: str, techno_json: Dict, source_file: str, conn=None) -> None:
+    """Audit-log every techno save through the extraction_log table (see
+    repo/techno.py). Bound at call time to repo.ops.log_extraction (v1 went
+    through the db.py re-export, which Task 7g removes)."""
+    try:
+        from repo import ops  # bind at call time, as v1 bound db
+        items = len(techno_json.get("month", {})) + len(techno_json.get("till_month", {}))
+        ops.log_extraction(
+            plant=plant,
+            report_month=report_month,
+            file_name=source_file or "(manual entry)",
+            sheet_name=unit,
+            source_type="Techno Data",
+            items_extracted=items,
+            conn=conn,
+        )
+    except Exception as e:
+        print(f"[db] techno save logging failed for {plant}/{report_month}/{unit}: {e}")
+
+
+# tmi and fuel_rate are physically derived (see repo/techno.py):
+#   tmi        = specific_hm_consumption + specific_scrap_consumption
+#   fuel_rate  = coke_rate + nut_coke_rate + cdi   (nut_coke_rate may be 0/absent)
+_TMI_INPUT_KEYS = ("specific_hm_consumption", "specific_scrap_consumption")
+_FUEL_RATE_INPUT_KEYS = ("coke_rate", "cdi")  # nut_coke_rate optional, defaults to 0
+
+
+def _derived(data):
+    """v1's recompute over a stored blob: (updated, changed)."""
+    updated = {"month": dict(data.get("month", {})), "till_month": dict(data.get("till_month", {}))}
+    changed = False
+    for period in ("month", "till_month"):
+        d = updated[period]
+        hm, scrap = d.get(_TMI_INPUT_KEYS[0]), d.get(_TMI_INPUT_KEYS[1])
+        if isinstance(hm, (int, float)) and isinstance(scrap, (int, float)):
+            new_tmi = round(hm + scrap, 4)
+            if d.get("tmi") != new_tmi:
+                d["tmi"] = new_tmi
+                changed = True
+        coke, cdi = d.get(_FUEL_RATE_INPUT_KEYS[0]), d.get(_FUEL_RATE_INPUT_KEYS[1])
+        if isinstance(coke, (int, float)) and isinstance(cdi, (int, float)):
+            nut_coke = d.get("nut_coke_rate")
+            nut_coke = nut_coke if isinstance(nut_coke, (int, float)) else 0
+            new_fuel = round(coke + nut_coke + cdi, 4)
+            if d.get("fuel_rate") != new_fuel:
+                d["fuel_rate"] = new_fuel
+                changed = True
+    return updated, changed
+
+
+def _maybe_recompute_derived_params(plant: str, report_month: str, unit: str, conn=None) -> None:
+    """Recompute tmi/fuel_rate for this (plant, report_month, unit) from
+    whatever inputs are currently stored, and overwrite the stored value if
+    it differs (v1 rule, repo/techno.py). A plain read decides whether
+    anything changes (no bump for a no-op); a change bumps, re-reads with a
+    lock and writes through _raw_upsert_techno_data (NOW(), activity log).
+    `conn`: see merge_upsert_techno_data."""
+    try:
+        data = get_techno_data(plant, report_month, unit, conn=conn).get(unit, {})
+        if not data:
+            return
+        if not _derived(data)[1]:
+            return
+        owns_conn = conn is None
+        if owns_conn:
+            conn = connect()
+        try:
+            cur = conn.cursor()
+            _ver.bump(cur)
+            stored = _stored(cur, plant, report_month, unit)
+            # v1 read get_techno_data(...).get(unit): only the caller's exact spelling
+            if stored is None or stored[3] != unit or not stored[0]:
+                return
+            updated, changed = _derived(stored[0])
+            if changed:
+                _raw_upsert_techno_data(plant, report_month, unit, updated, source_file=stored[1], conn=conn)
+                if owns_conn:
+                    conn.commit()
+        finally:
+            if owns_conn:
+                conn.close()
+    except Exception as e:
+        print(f"[db] tmi/fuel_rate recompute failed for {plant}/{report_month}/{unit}: {e}")
+
+
+# unit names that feed the SAIL BF_Shop rollup (see repo/techno.py).
+_SAIL_BF_UNITS = ("BF_Shop", "BF-5")
+
+
+def _merged(existing, new_techno_json, clear_keys):
+    """v1's merge (repo/techno.py merge_upsert_techno_data), verbatim."""
+    if existing is None:
+        return new_techno_json
+    merged: Dict = {}
+    for period in ("month", "till_month"):
+        base = dict(existing.get(period, {}))
+        for k in (clear_keys or {}).get(period, []):
+            base.pop(k, None)
+        for k, v in new_techno_json.get(period, {}).items():
+            if v is not None:
+                base[k] = v        # new non-null overwrites
+            # if v is None, keep existing value (base already has it)
+        merged[period] = base
+    return merged
+
+
+def merge_upsert_techno_data(plant: str, report_month: str, unit: str, new_techno_json: Dict, source_file: str = '', conn=None, clear_keys: Optional[Dict[str, list]] = None):
+    """Merge new_techno_json into any existing row (non-null values win;
+    existing non-null kept if new value is null), with v1's clear_keys and
+    source_file rules (repo/techno.py):
+      - no stored row: new_techno_json is stored as given (its None leaves
+        become explicit JSON nulls; a missing period stays missing);
+      - a stored row: BOTH periods are rebuilt (a period the stored blob
+        lacked becomes {}): stored keys, minus clear_keys[period], then the
+        new non-null values over them; keys of the new blob that are None
+        and not stored are dropped;
+      - source_file is always replaced by the new one, created_at := NOW();
+      - then the tmi / fuel_rate recompute and the extraction-log entry.
+    One transaction: bump, locking read, merge, write chain. With `conn`
+    it runs on it and the caller commits."""
+    owns_conn = conn is None
+    if owns_conn:
+        conn = connect()
+    try:
+        cur = conn.cursor()
+        _keys.check_month(report_month)
+        _check_unit(unit)
+        _ver.bump(cur)
+        stored = _stored(cur, plant, report_month, unit)
+        merged = _merged(None if stored is None else stored[0], new_techno_json, clear_keys)
+        _upsert_chain(conn, plant, report_month, unit, merged, source_file)
+        if owns_conn:
+            conn.commit()
+    finally:
+        if owns_conn:
+            conn.close()
+
+
+def enrich_techno_records_with_db(records: List[Dict[str, Any]], plant: str, report_month: str, conn=None) -> List[Dict[str, Any]]:
+    """Attach 'db_json' (current techno_data {month:{}, till_month:{}} for the
+    same plant/unit/report_month, or empty dicts if none exists yet) to each
+    preview record in-place (see repo/techno.py)."""
+    if not records:
+        return records
+    existing = get_techno_data(plant, report_month, conn=conn)
+    for r in records:
+        r["db_json"] = existing.get(r.get("unit"), {"month": {}, "till_month": {}})
+    return records
+
+
+def get_techno_data(plant: str, report_month: str, unit: str = None, conn=None) -> Dict:
+    """Return {unit: {month: {...}, till_month: {...}}} for a given plant/month,
+    ordered by unit. `conn`: read on that connection (its row_factory is left
+    as it was). Without `conn`, served from the active report_context's bulk
+    load when it covers report_month."""
+    if conn is None:
+        served = _units_from_bulk(plant, report_month, unit)
+        if served is not None:
+            return served
+    where = "u.plant_code = %s AND u.report_month = %s"
+    params = [plant, report_month]
+    if unit:
+        where += " AND pu.plant_code = %s AND pu.unit_code = %s"
+        params += [plant, unit]
+    if conn is None:
+        with rc.cursor() as cur:
+            rows = _blobs_sql(cur, where, params, "pu.unit_code")
+    else:
+        rows = _blobs_sql(conn.cursor(), where, params, "pu.unit_code")
+    return {k[2]: blob for k, blob in rows}
+
+
+def get_sail_techno_actuals(report_month: str) -> Dict[str, Any]:
+    """Fetch SAIL consolidated techno actuals (stored, not calculated).
+    Returns: {unit: {month: {...}, till_month: {...}}} where unit is typically 'Shop'
+    """
+    served = _units_from_bulk("SAIL", report_month)
+    if served is not None:
+        return served
+    with rc.cursor() as cur:
+        rows = _blobs_sql(cur, "u.plant_code = 'SAIL' AND u.report_month = %s", [report_month], "pu.unit_code")
+    return {k[2]: blob for k, blob in rows}
+
+
+def save_sail_techno_actuals(report_month: str, unit: str, techno_json: Dict,
+                             calculation_details: Dict = None, source_file: str = ""):
+    """Save SAIL consolidated techno actuals with calculation metadata
+    (calculation_details is not stored, as in v1)."""
+    _iso_write("SAIL", report_month, unit, techno_json, source_file)
+
+
+def get_techno_months(plant: str = None) -> List[str]:
+    """Return distinct report_month values in techno_data, newest first.
+    Optionally filter by plant."""
+    with rc.cursor() as cur:
+        if plant:
+            cur.execute("SELECT DISTINCT report_month FROM techno_upload WHERE plant_code = %s "
+                        "ORDER BY report_month DESC", [plant])
+        else:
+            cur.execute("SELECT DISTINCT report_month FROM techno_upload ORDER BY report_month DESC")
+        return [row[0] for row in cur.fetchall()]
+
+
+# ---------------------------------------------------------------------------
+# Techno Plan (Targets) Functions - techno_plan_fy
+# ---------------------------------------------------------------------------
+
+_P = "techno_plan_fy p JOIN plant_unit pu ON pu.unit_id = p.unit_id"
+
+
+def _plan_entry(row, with_method):
+    try:
+        out = {
+            'data': json.loads(row[0]) if row[0] else {},
+            'is_user_supplied': bool(row[1]),
+            'calculated': json.loads(row[2]) if row[2] else {},
+        }
+        if with_method:
+            out['calculation_method'] = json.loads(row[3]) if row[3] else {}
+        return out
+    except json.JSONDecodeError:
+        out = {'data': {}, 'is_user_supplied': False, 'calculated': {}}
+        if with_method:
+            out['calculation_method'] = {}
+        return out
+
+
+def _plan_empty(with_method):
+    out = {'data': {}, 'is_user_supplied': False, 'calculated': {}}
+    if with_method:
+        out['calculation_method'] = {}
+    return out
+
+
+def get_techno_plan(plant: str, fy: str, unit: str = "") -> Dict[str, Any]:
+    """Fetch techno plan data from unified techno_plan_fy table.
+    If unit specified, returns that specific unit's data.
+    Otherwise returns all units for the plant.
+
+    Cached per (plant, fy, unit) for the process lifetime; save_techno_plan()
+    clears the cache on write. Returns a deep copy."""
+    return copy.deepcopy(_get_techno_plan_cached(plant, fy, unit))
+
+
+@functools.lru_cache(maxsize=None)
+def _get_techno_plan_cached(plant: str, fy: str, unit: str = "") -> Dict[str, Any]:
+    with rc.cursor() as cur:
+        if unit:
+            row = cur.execute(
+                f"SELECT p.techno_json, p.is_user_supplied, p.calculated_json FROM {_P} "
+                "WHERE p.plant_code = %s AND p.fy = %s AND pu.plant_code = %s AND pu.unit_code = %s",
+                (plant, fy, plant, unit)).fetchone()
+            return _plan_entry(row, False) if row else _plan_empty(False)
+        rows = cur.execute(
+            f"SELECT p.techno_json, p.is_user_supplied, p.calculated_json, pu.unit_code FROM {_P} "
+            "WHERE p.plant_code = %s AND p.fy = %s ORDER BY pu.unit_code", (plant, fy)).fetchall()
+    return {row[3]: _plan_entry(row, False) for row in rows}
+
+
+def save_techno_plan(plant: str, fy: str, unit: str, techno_json: Dict,
+                    is_user_supplied: bool = False, calculated_json: Dict = None,
+                    calculation_method: Dict = None, created_by: str = ""):
+    """Save or update techno plan data for a plant/unit/FY (the only write
+    path into techno_plan_fy; see repo/techno.py)."""
+    _check_unit(unit)
+    now = datetime.now().isoformat()
+    conn = connect()
+    try:
+        cur = conn.cursor()
+        _ver.bump(cur)
+        _keys.ensure_plant(cur, plant, bump=False)
+        unit_id = _unit_id_for_write(cur, plant, unit, bump=False)
+        old = cur.execute("SELECT techno_json, is_user_supplied, calculated_json, calculation_method "
+                          "FROM techno_plan_fy WHERE plant_code = %s AND unit_id = %s AND fy = %s FOR UPDATE",
+                          (plant, unit_id, fy)).fetchone()
+        if old is not None:
+            old = dict(zip(("techno_json", "is_user_supplied", "calculated_json", "calculation_method"), old))
+        cur.execute("""
+            INSERT INTO techno_plan_fy
+                (plant_code, unit_id, fy, techno_json, is_user_supplied, calculated_json, calculation_method, created_by, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            AS new ON DUPLICATE KEY UPDATE
+                techno_json = new.techno_json,
+                is_user_supplied = new.is_user_supplied,
+                calculated_json = new.calculated_json,
+                calculation_method = new.calculation_method,
+                updated_at = new.updated_at
+        """, (plant, unit_id, fy, json.dumps(techno_json), int(is_user_supplied),
+              json.dumps(calculated_json or {}), json.dumps(calculation_method or {}), created_by, now, now))
+        conn.commit()
+    finally:
+        conn.close()
+
+    _get_techno_plan_cached.cache_clear()
+    _get_techno_plant_plan_cached.cache_clear()
+    _get_sail_techno_plan_cached.cache_clear()
+
+    if old is not None:
+        for key in ("techno_json", "calculated_json", "calculation_method"):
+            if old.get(key):
+                old[key] = json.loads(old[key])
+    new = {"techno_json": techno_json, "is_user_supplied": bool(is_user_supplied),
+           "calculated_json": calculated_json or {}, "calculation_method": calculation_method or {}}
+    activity_context.record(f"techno_plan_fy/{plant}/{unit}/{fy}", old, new)
+
+
+def get_techno_plant_plan(plant: str, fy: str) -> Dict[str, Any]:
+    """Fetch plant-level techno plan data (unit='Shop') for a FY. Cached."""
+    return copy.deepcopy(_get_techno_plant_plan_cached(plant, fy))
+
+
+_SHOP_PLAN_SQL = (f"SELECT p.techno_json, p.is_user_supplied, p.calculated_json, p.calculation_method FROM {_P} "
+                  "WHERE p.plant_code = %s AND p.fy = %s AND pu.plant_code = %s AND pu.unit_code = 'Shop'")
+
+
+@functools.lru_cache(maxsize=None)
+def _get_techno_plant_plan_cached(plant: str, fy: str) -> Dict[str, Any]:
+    with rc.cursor() as cur:
+        row = cur.execute(_SHOP_PLAN_SQL, (plant, fy, plant)).fetchone()
+    return _plan_entry(row, True) if row else _plan_empty(True)
+
+
+def save_techno_plant_plan(plant: str, fy: str, data: Dict, is_user_supplied: bool = False,
+                          calculated_json: Dict = None, calculation_method: Dict = None, created_by: str = ""):
+    """Save or update plant-level techno plan data (unit='Shop') for a FY."""
+    save_techno_plan(plant, fy, 'Shop', data, is_user_supplied, calculated_json, calculation_method, created_by)
+
+
+def get_sail_techno_plan(fy: str) -> Dict[str, Any]:
+    """Fetch SAIL consolidated techno plan data (plant 'SAIL', unit 'Shop') for a FY. Cached."""
+    return copy.deepcopy(_get_sail_techno_plan_cached(fy))
+
+
+@functools.lru_cache(maxsize=None)
+def _get_sail_techno_plan_cached(fy: str) -> Dict[str, Any]:
+    with rc.cursor() as cur:
+        row = cur.execute(_SHOP_PLAN_SQL, ("SAIL", fy, "SAIL")).fetchone()
+    return _plan_entry(row, True) if row else _plan_empty(True)
+
+
+def save_sail_techno_plan(fy: str, data: Dict, is_user_supplied: bool = False,
+                         calculated_json: Dict = None, calculation_method: Dict = None, created_by: str = ""):
+    """Save or update SAIL consolidated techno plan data (plant_name='SAIL', unit='Shop') for a FY."""
+    save_techno_plan('SAIL', fy, 'Shop', data, is_user_supplied, calculated_json, calculation_method, created_by)
+
+
+def list_techno_plan_fys(plant: str = None) -> List[str]:
+    """List distinct FYs in techno_plan_fy table, optionally filtered by plant."""
+    with rc.cursor() as cur:
+        if plant:
+            cur.execute("SELECT DISTINCT fy FROM techno_plan_fy WHERE plant_code = %s ORDER BY fy DESC", (plant,))
+        else:
+            cur.execute("SELECT DISTINCT fy FROM techno_plan_fy ORDER BY fy DESC")
+        return [row[0] for row in cur.fetchall()]
+
+
+# ── Named queries (cursor-level) ────────────────────────────────────────────
+# Each runs on the caller's cursor (so the caller's connection, transaction
+# and row type are unchanged) and returns fetchall() / fetchone() with v1's
+# column names. Orders: see the module docstring.
+
+def units_for_plant_month(cur, plant, report_month):
+    """fetchall() of (unit,) for one plant/month, ordered by unit."""
+    cur.execute(f"SELECT pu.unit_code AS unit FROM {_U} WHERE u.plant_code = %s AND u.report_month = %s "
+                "ORDER BY pu.unit_code", [plant, report_month])
+    return cur.fetchall()
+
+
+def distinct_plants(cur):
+    """fetchall() of (plant,), every plant with a techno_data row."""
+    cur.execute("SELECT DISTINCT plant_code AS plant FROM techno_upload ORDER BY plant")
+    return cur.fetchall()
+
+
+def distinct_report_months(cur):
+    """fetchall() of (report_month,), every month with a techno_data row
+    (v1: idx_techno_month order, ascending)."""
+    cur.execute("SELECT DISTINCT report_month FROM techno_upload ORDER BY report_month")
+    return cur.fetchall()
+
+
+def distinct_units_for_plant(cur, plant):
+    """fetchall() of (unit,) stored for a plant (non-empty units only), in
+    v1's order: DISTINCT over uq_techno (plant, report_month, unit), i.e.
+    by each unit's first month, then unit."""
+    cur.execute(f"SELECT pu.unit_code AS unit FROM {_U} WHERE u.plant_code = %s AND pu.unit_code != '' "
+                "GROUP BY pu.unit_code ORDER BY MIN(u.report_month), pu.unit_code", (plant,))
+    return cur.fetchall()
+
+
+def bf_shop_rows(cur, report_month):
+    """fetchall() of (plant, unit, techno_json) for the BF_Shop / BF-5 units."""
+    cur.execute(f"SELECT u.plant_code AS plant, pu.unit_code AS unit, {_TEXT} AS techno_json FROM {_TU} "
+                "WHERE u.report_month = %s AND pu.unit_code IN ('BF_Shop', 'BF-5') "
+                "ORDER BY u.plant_code, pu.unit_code", [report_month])
+    return cur.fetchall()
+
+
+def plant_unit_month_rows(cur, plant, unit, months):
+    """fetchall() of (report_month, techno_json) for one plant/unit over
+    months (v1: uq_techno order, by month)."""
+    cur.execute(f"SELECT u.report_month, {_TEXT} AS techno_json FROM {_TU} "
+                f"WHERE pu.plant_code = %s AND pu.unit_code = %s AND u.plant_code = %s "
+                f"AND u.report_month IN ({_ph(months)}) ORDER BY u.report_month",
+                (plant, unit, plant, *months))
+    return cur.fetchall()
+
+
+def plant_units_month_rows(cur, plant, units, months):
+    """fetchall() of (unit, report_month, techno_json) for one plant over
+    units x months (v1: uq_techno order, by month then unit)."""
+    cur.execute(f"SELECT pu.unit_code AS unit, u.report_month, {_TEXT} AS techno_json FROM {_TU} "
+                f"WHERE u.plant_code = %s AND pu.unit_code IN ({_ph(units)}) "
+                f"AND u.report_month IN ({_ph(months)}) ORDER BY u.report_month, pu.unit_code",
+                (plant, *units, *months))
+    return cur.fetchall()
+
+
+def json_row(cur, plant, report_month, unit):
+    """fetchone() of (techno_json,) for one plant/month/unit, or None."""
+    cur.execute(f"SELECT {_TEXT} AS techno_json FROM {_TU} WHERE u.plant_code = %s AND u.report_month = %s "
+                "AND pu.plant_code = %s AND pu.unit_code = %s", (plant, report_month, plant, unit))
+    return cur.fetchone()
+
+
+def all_json(cur):
+    """fetchall() of (techno_json,) for every techno_data row."""
+    cur.execute(f"SELECT {_TEXT} AS techno_json FROM {_TU} "
+                "ORDER BY u.report_month, u.plant_code, pu.unit_code")
+    return cur.fetchall()
+
+
+def rows_for_plants(cur, plants):
+    """fetchall() of (plant, report_month, unit, techno_json) for the given
+    plants, ordered by plant, report_month (then unit)."""
+    cur.execute(f"SELECT u.plant_code AS plant, u.report_month, pu.unit_code AS unit, {_TEXT} AS techno_json "
+                f"FROM {_TU} WHERE u.plant_code IN ({_ph(plants)}) "
+                "ORDER BY u.plant_code, u.report_month, pu.unit_code", plants)
+    return cur.fetchall()
+
+
+def sail_rows(cur):
+    """fetchall() of (report_month, techno_json) for plant='SAIL', by month (then unit)."""
+    cur.execute(f"SELECT u.report_month, {_TEXT} AS techno_json FROM {_TU} WHERE u.plant_code = 'SAIL' "
+                "ORDER BY u.report_month, pu.unit_code")
+    return cur.fetchall()
+
+
+def sail_unit_rows(cur, unit):
+    """fetchall() of (report_month, techno_json) for plant='SAIL' and one
+    unit, oldest month first."""
+    cur.execute(f"SELECT u.report_month, {_TEXT} AS techno_json FROM {_TU} "
+                "WHERE pu.plant_code = 'SAIL' AND pu.unit_code = %s AND u.plant_code = 'SAIL' "
+                "ORDER BY u.report_month ASC", [unit])
+    return cur.fetchall()
+
+
+def coal_blend_rows(cur, report_month, plants):
+    """fetchall() of (plant, unit, techno_json) for the Coal_Consumption /
+    General units of the given plants in one month."""
+    cur.execute(f"SELECT u.plant_code AS plant, pu.unit_code AS unit, {_TEXT} AS techno_json FROM {_TU} "
+                "WHERE u.report_month = %s AND pu.unit_code IN ('Coal_Consumption','General') "
+                f"AND u.plant_code IN ({_ph(plants)}) ORDER BY u.plant_code, pu.unit_code",
+                [report_month, *plants])
+    return cur.fetchall()
+
+
+def plants_month_rows(cur, report_month, plants):
+    """fetchall() of (plant, unit, techno_json) for the given plants in one month."""
+    cur.execute(f"SELECT u.plant_code AS plant, pu.unit_code AS unit, {_TEXT} AS techno_json FROM {_TU} "
+                f"WHERE u.report_month = %s AND u.plant_code IN ({_ph(plants)}) "
+                "ORDER BY u.plant_code, pu.unit_code", [report_month, *plants])
+    return cur.fetchall()
+
+
+def unit_plants_months_rows(cur, unit, plants, months):
+    """fetchall() of (plant, report_month, techno_json) for one unit over
+    plants x months."""
+    cur.execute(f"SELECT u.plant_code AS plant, u.report_month, {_TEXT} AS techno_json FROM {_TU} "
+                f"WHERE pu.unit_code = %s AND u.plant_code IN ({_ph(plants)}) "
+                f"AND u.report_month IN ({_ph(months)}) ORDER BY u.plant_code, u.report_month",
+                [unit, *plants, *months])
+    return cur.fetchall()
+
+
+def month_rows(cur, report_month):
+    """fetchall() of (plant, unit, techno_json) for every row of one month."""
+    cur.execute(f"SELECT u.plant_code AS plant, pu.unit_code AS unit, {_TEXT} AS techno_json FROM {_TU} "
+                "WHERE u.report_month = %s ORDER BY u.plant_code, pu.unit_code", [report_month])
+    return cur.fetchall()
+
+
+def rows_for_months(cur, months):
+    """fetchall() of (plant, report_month, unit, techno_json) for the months."""
+    cur.execute(f"SELECT u.plant_code AS plant, u.report_month, pu.unit_code AS unit, {_TEXT} AS techno_json "
+                f"FROM {_TU} WHERE u.report_month IN ({_ph(months)}) "
+                "ORDER BY u.report_month, u.plant_code, pu.unit_code", months)
+    return cur.fetchall()
+
+
+def non_sail_rows(cur):
+    """fetchall() of (plant, unit, techno_json) for every non-SAIL row."""
+    cur.execute(f"SELECT u.plant_code AS plant, pu.unit_code AS unit, {_TEXT} AS techno_json FROM {_TU} "
+                "WHERE u.plant_code != 'SAIL' ORDER BY u.report_month, u.plant_code, pu.unit_code")
+    return cur.fetchall()
+
+
+def general_rows_with_source(cur):
+    """fetchall() of (plant, report_month, unit, techno_json, source_file)
+    for every unit='General' row."""
+    cur.execute(f"SELECT u.plant_code AS plant, u.report_month, pu.unit_code AS unit, {_TEXT} AS techno_json, "
+                f"u.source_file FROM {_TU} WHERE pu.unit_code = 'General' "
+                "ORDER BY u.report_month, u.plant_code")
+    return cur.fetchall()
+
+
+def months_signature_row(cur, months):
+    """fetchone() of (COUNT(*), MAX(id), MAX(created_at)) over the months.
+
+    v2 has no techno_data.id. The row is page_techno_records' FY cache
+    signature, compared only for equality; v1's MAX(id) moved only when a
+    row was inserted, which also moves COUNT(*) (no techno row is ever
+    deleted), so the second value is NULLIF(COUNT(*), 0) (None for no rows,
+    as MAX(id)) and the signature changes exactly when v1's did.
+    MAX(created_at) is the maximum of the v1 strings (render_ts_flagged),
+    as v1's VARCHAR MAX compared them."""
+    cur.execute(f"SELECT created_at, created_at_iso FROM techno_upload WHERE report_month IN ({_ph(months)})",
+                months)
+    rows = cur.fetchall()
+    stamps = [s for s in (render_ts_flagged("techno_upload.created_at", r[0], r[1]) for r in rows)
+              if s is not None]
+    return _row_like(cur, ("COUNT(*)", "MAX(id)", "MAX(created_at)"),
+                     (len(rows), len(rows) or None, max(stamps) if stamps else None))
+
+
+def five_plant_unit_rows(cur, units):
+    """fetchall() of (plant, report_month, unit, techno_json) for the 5 ISPs
+    and the given units."""
+    cur.execute(f"SELECT u.plant_code AS plant, u.report_month, pu.unit_code AS unit, {_TEXT} AS techno_json "
+                f"FROM {_TU} WHERE u.plant_code IN ('BSP','DSP','RSP','BSL','ISP') "
+                f"AND pu.unit_code IN ({_ph(units)}) ORDER BY u.plant_code, u.report_month, pu.unit_code", units)
+    return cur.fetchall()
+
+
+def five_plant_first_month_row(cur):
+    """fetchone() of (MIN(report_month),) over the 5 ISPs."""
+    cur.execute("SELECT MIN(report_month) FROM techno_upload WHERE plant_code IN "
+                "('BSP','DSP','RSP','BSL','ISP')")
+    return cur.fetchone()
+
+
+def five_plant_first_months(cur):
+    """fetchall() of (plant, MIN(report_month)) for each of the 5 ISPs, by plant."""
+    cur.execute("SELECT plant_code AS plant, MIN(report_month) FROM techno_upload WHERE plant_code IN "
+                "('BSP','DSP','RSP','BSL','ISP') GROUP BY plant_code ORDER BY plant_code")
+    return cur.fetchall()
+
+
+# techno_plan_fy
+
+def plan_json_row(cur, plant, unit, fy):
+    """fetchone() of (techno_json,) for one plant/unit/FY plan, or None."""
+    cur.execute(f"SELECT p.techno_json FROM {_P} WHERE p.plant_code = %s AND pu.plant_code = %s "
+                "AND pu.unit_code = %s AND p.fy = %s", (plant, plant, unit, fy))
+    return cur.fetchone()
+
+
+def plan_plants_rows(cur, plants, fy, unit):
+    """fetchall() of (plant_name, techno_json) for the plants' plan rows
+    (v1: PRIMARY (plant_name, unit, fy) order)."""
+    cur.execute(f"SELECT p.plant_code AS plant_name, p.techno_json FROM {_P} "
+                f"WHERE p.plant_code IN ({_ph(plants)}) AND p.fy = %s AND pu.unit_code = %s "
+                "ORDER BY p.plant_code", (*plants, fy, unit))
+    return cur.fetchall()
+
+
+def plan_rows_for_fy(cur, fy):
+    """fetchall() of (plant_name, unit, techno_json) for every plan row of a
+    FY (v1: PRIMARY (plant_name, unit, fy) order)."""
+    cur.execute(f"SELECT p.plant_code AS plant_name, pu.unit_code AS unit, p.techno_json FROM {_P} "
+                "WHERE p.fy = %s ORDER BY p.plant_code, pu.unit_code", (fy,))
+    return cur.fetchall()
+
+
+# ── Registry tables (plant_registry.seed_plant_registry,
+#    techno_registry.migrate_units; neither is called anywhere, and these
+#    tables are in neither the v1 nor the v2 MySQL schema: the same SQL, so
+#    the same "table doesn't exist" error) ──────────────────────────────────
+
+def insert_ignore_plant_unit(cur, plant_code, unit_type, unit_name, display_label, is_shop, sort_order):
+    """INSERT IGNORE one plant_units row on the caller's cursor; the caller
+    reads cur.rowcount and commits. plant_registry.seed_plant_registry."""
+    _ver.bump(cur)
+    cur.execute("""
+            INSERT IGNORE INTO plant_units
+                (plant_code, unit_type, unit_name, display_label, is_shop, is_active, sort_order)
+            VALUES (%s, %s, %s, %s, %s, 1, %s)
+        """, (plant_code, unit_type, unit_name, display_label, is_shop, sort_order))
+
+
+def insert_ignore_param_type(cur, unit_type, param_name, unit_of_meas, agg_method, sort_order):
+    """INSERT IGNORE one techno_param_types row on the caller's cursor; the
+    caller reads cur.rowcount and commits. plant_registry.seed_plant_registry."""
+    _ver.bump(cur)
+    cur.execute("""
+            INSERT IGNORE INTO techno_param_types
+                (unit_type, param_name, unit_of_meas, agg_method, sort_order)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (unit_type, param_name, unit_of_meas, agg_method, sort_order))
+
+
+def param_master_unit_rows(cur):
+    """fetchall() of (param_id, group_code, section, unit) from
+    techno_param_master. techno_registry.migrate_units."""
+    cur.execute("SELECT param_id, group_code, section, unit FROM techno_param_master")
+    return cur.fetchall()
+
+
+def update_param_master_unit(cur, unit, param_id):
+    """Set one techno_param_master row's unit on the caller's cursor; the
+    caller commits. techno_registry.migrate_units."""
+    _ver.bump(cur)
+    cur.execute(
+                "UPDATE techno_param_master SET unit=%s WHERE param_id=%s",
+                (unit, param_id),
+            )
