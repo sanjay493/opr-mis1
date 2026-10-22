@@ -345,6 +345,19 @@ def _items(c):
     return None
 
 
+def _sorted_form(c):
+    """c with its top-level rows in a fixed order (for order-free comparison)."""
+    items = _items(c)
+    if items is None:
+        return c
+    tag = "$list" if isinstance(c, list) else next(iter(c))
+    return {"$sorted:" + tag: sorted(items, key=_sort_key)}
+
+
+def sorted_hash(c):
+    return hashlib.sha256(dumps(_sorted_form(c)).encode("utf-8")).hexdigest()
+
+
 def big_form(c, text):
     items = _items(c)
     out = {"sha256": hashlib.sha256(text.encode("utf-8")).hexdigest()}
@@ -376,13 +389,14 @@ class Store:
         return self.root / "index.json"
 
     def load_keys(self, module, pass_name) -> dict:
+        """{call key: (result sha256, sorted-rows sha256)}."""
         p = self.keys_path(module, pass_name)
         out = {}
         if p.exists():
             with open(p, encoding="ascii") as f:
                 for line in f:
-                    k, h = line.split()
-                    out[k] = h
+                    k, h, s = line.split()
+                    out[k] = (h, s)
         return out
 
     def iter_records(self, module, pass_name):
@@ -545,6 +559,7 @@ class Recorder:
         bulk_ctx = self.pass_name == "bulk" and has_ctx
         if exc is not None:
             body = {"x": canonical_exception(exc)}
+            rc_ = body
             text = dumps(body)
         else:
             rc_ = canonical(result)
@@ -559,15 +574,19 @@ class Recorder:
                 keys = self._keys[module] = self.store.load_keys(module, self.pass_name)
             known = keys.get(khash)
             if known is not None:
-                if known != rhash:
+                if known[0] != rhash:
+                    # Same rows in another order (a query without ORDER BY
+                    # whose plan varies) or different values.
+                    kind = "order" if sorted_hash(rc_) == known[1] else "value"
                     self.conflicts.append({"module": module, "function": name, "pass": self.pass_name,
-                                           "ctx": ctx_tag, "args": key_src[:500],
-                                           "first": known, "now": rhash})
+                                           "kind": kind, "ctx": ctx_tag, "args": key_src[:500],
+                                           "first": known[0], "now": rhash})
                 return
-            keys[khash] = rhash
-            self._new_keys[module].append((khash, rhash))
+            shash = sorted_hash(rc_)
+            keys[khash] = (rhash, shash)
+            self._new_keys[module].append((khash, rhash, shash))
             self.unique_new[(module, name)] += 1
-            rec = {"f": name, "a": ca, "k": ck, "h": rhash}
+            rec = {"f": name, "a": ca, "k": ck, "h": rhash, "s": shash}
             if bulk_ctx:
                 rec["ctx"] = ctx_tag
             if exc is not None:
@@ -595,7 +614,7 @@ class Recorder:
                 with open(self.store.data_path(module, self.pass_name), "ab") as out, open(staged, "rb") as src:
                     shutil.copyfileobj(src, out)
                 with open(self.store.keys_path(module, self.pass_name), "a", encoding="ascii") as f:
-                    f.writelines(f"{k} {h}\n" for k, h in new)
+                    f.writelines(f"{k} {h} {s}\n" for k, h, s in new)
             idx = self.store.load_index()
             for (module, name), n in self.calls.items():
                 e = idx["functions"].setdefault(f"{module}.{name}", {}).setdefault(
@@ -689,8 +708,17 @@ class _Contexts:
             yield ctx
 
 
-def _compare(rec, got_c, got_text):
-    """None when equal, else a list of message lines."""
+def _compare(rec, got_c, got_text, unordered=False):
+    """None when equal, else a list of message lines. unordered: compare the
+    top-level rows as a multiset (v1's own order varied between runs)."""
+    if unordered and "x" not in rec:
+        if sorted_hash(got_c) == rec["s"]:
+            return None
+        if "big" in rec:
+            return [f"  big result differs as a multiset: rows expected {rec['big']['rows']} "
+                    f"got {len(_items(got_c) or [])}"]
+        rec = dict(rec, r=_sorted_form(rec["r"]))
+        got_c = _sorted_form(got_c)
     if "big" in rec:
         big = rec["big"]
         if hashlib.sha256(got_text.encode("utf-8")).hexdigest() == big["sha256"]:
@@ -723,8 +751,9 @@ def _compare(rec, got_c, got_text):
 
 
 def replay_records(records, impl, module, pass_name, *, functions=None, limit_diffs=20, out=print,
-                   contexts=None, stats=None):
+                   contexts=None, stats=None, unordered=()):
     """Replay `records` (one pass of one module) against module object `impl`.
+    `unordered`: functions whose rows are compared as a multiset.
     Returns stats {calls, diffs, missing: {fn: n}, per_function: {fn: [calls, diffs]}}."""
     stats = stats if stats is not None else {"calls": 0, "diffs": 0, "missing": collections.Counter(),
                                              "per_function": {}, "unreplayable": 0}
@@ -756,7 +785,7 @@ def replay_records(records, impl, module, pass_name, *, functions=None, limit_di
             except Exception as e:      # noqa: BLE001 - compared with the recorded exception
                 got = {"x": canonical_exception(e)}
         text = dumps(got)
-        problems = _compare(rec, got, text)
+        problems = _compare(rec, got, text, unordered=name in unordered)
         if problems is None:
             continue
         pf[1] += 1
@@ -776,13 +805,24 @@ def replay_module(store_root, module, impl, *, passes=PASSES, functions=None, li
     store = Store(store_root)
     failed = False
     total = 0
+    idx = store.load_index()
+    unordered = sorted({c["function"] for c in idx["conflicts"]
+                        if c["module"] == module and c.get("kind") == "order"})
+    if unordered:
+        out(f"{module}: row order varied between identical v1 calls; compared as a multiset: "
+            + ", ".join(unordered))
+    for c in idx["conflicts"]:
+        if c["module"] == module and c.get("kind") != "order":
+            out(f"WARNING {module}.{c['function']}: v1 returned different values for one call "
+                f"(nondeterministic); the first result is the oracle")
     for pass_name in passes:
         if not store.data_path(module, pass_name).exists():
             out(f"{module} [{pass_name}]: no records")
             continue
         t0 = time.time()
         stats = replay_records(store.iter_records(module, pass_name), impl, module, pass_name,
-                               functions=functions, limit_diffs=limit_diffs, out=out)
+                               functions=functions, limit_diffs=limit_diffs, out=out,
+                               unordered=set(unordered))
         total += stats["calls"]
         for name, n in sorted(stats["missing"].items()):
             out(f"MISSING {module}.{name} [{pass_name}]: {n} recorded call(s), not in {impl.__name__}")
@@ -942,11 +982,12 @@ def cmd_record(a) -> int:
     print(f"recorded [{a.pass_name}] {months[0]}..{months[-1]} {sorted(scopes)}: {info['http_calls']} HTTP calls "
           f"{info['statuses']}, {run['calls']} repo calls, {run['unique_new']} new unique, "
           f"{run['conflicts']} conflicts, {run['write_attempts']} write attempts, {run['seconds']}s")
-    for c in rec.conflicts[:10]:
-        print(f"  CONFLICT {c['module']}.{c['function']} ctx={c['ctx']} args {c['args'][:200]}")
+    for c in rec.conflicts[:20]:
+        print(f"  CONFLICT ({c['kind']}) {c['module']}.{c['function']} ctx={c['ctx']} args {c['args'][:200]}")
     for (m, f), n in sorted(rec.write_calls.items()):
         print(f"  WRITE ATTEMPT {m}.{f}: {n}")
-    return 1 if rec.conflicts or rec.write_calls else 0
+    value_conflicts = [c for c in rec.conflicts if c["kind"] != "order"]
+    return 1 if value_conflicts or rec.write_calls else 0
 
 
 # ---------------------------------------------------------------------------

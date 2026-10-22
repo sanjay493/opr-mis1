@@ -207,6 +207,47 @@ def test_record_appends_across_runs_and_flags_nondeterminism(fake):
     assert len(idx["conflicts"]) == 1
 
 
+def test_order_only_nondeterminism_is_classified_and_replayed_as_a_multiset(fake):
+    """A query without ORDER BY whose plan (and so row order) varies between
+    runs: the conflict is kind 'order', and replay compares that function's
+    rows as a multiset (every record of it), still catching value changes."""
+    _record(fake)
+    v1 = fake["v1"]
+    orig = v1.ordered
+    flipped = lambda: [("b", 2), ("a", 1)]      # noqa: E731
+    flipped.__module__, flipped.__name__ = v1.__name__, "ordered"
+    v1.ordered = flipped
+    rec = _recorder(fake)
+    with rec.installed():
+        v1.ordered()
+    rec.commit()
+    v1.ordered = orig
+    assert [c["kind"] for c in rec.conflicts] == ["order"]
+    code, out = _replay(fake, "v2_order")
+    assert code == 0, out
+    assert "multiset" in out
+    # a value change in the same function is still a diff
+    v1src = importlib.import_module("fakerepo.v2_order")
+    v1src.ordered = lambda: [("b", 2), ("a", 9)]
+    out = []
+    assert ro.replay_module(fake["store"], "fake", v1src, passes=("sql",), out=out.append) == 1
+
+
+def test_value_nondeterminism_is_kind_value(fake):
+    _record(fake)
+    v1 = fake["v1"]
+    orig = v1.total
+    other = lambda plant: 6                     # noqa: E731
+    other.__module__, other.__name__ = v1.__name__, "total"
+    v1.total = other
+    rec = _recorder(fake)
+    with rec.installed():
+        v1.total("BSP")
+    rec.commit()
+    v1.total = orig
+    assert [c["kind"] for c in rec.conflicts] == ["value"]
+
+
 # ── replay ──────────────────────────────────────────────────────────────────
 
 def test_clean_replay_exits_0(fake):
