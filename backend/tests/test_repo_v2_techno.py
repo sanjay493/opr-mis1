@@ -140,6 +140,11 @@ def _snapshot(mod, months=("2025-04", "2025-05", "2025-06", "2099-01"),
             out[(m, p)] = canon(mod.get_techno_data(p, m))
     rows = _with_cur(lambda md, cur: md.rows_for_months(cur, list(months)))(mod)
     out["text"] = sorted(canon(r) for r in rows)
+    # v1 id order == v2 seq order, also for rows written by the test
+    out["all_json"] = canon(_with_cur(lambda md, cur: md.all_json(cur))(mod))
+    for m in months:
+        out[("month_rows", m)] = canon(_with_cur(lambda md, cur: md.month_rows(cur, m))(mod))
+    out["signature"] = canon(tuple(_with_cur(lambda md, cur: md.months_signature_row(cur, list(months)))(mod))[:2])
     return out
 
 
@@ -356,15 +361,38 @@ def test_months_plants_and_units_outside_the_masters(seeded, hooks):
         assert seeded.data_version(2) == n
 
 
-def test_new_case_variant_unit_keeps_the_first_spelling(seeded, hooks):
-    """The one unit divergence: v1 kept the caller's spelling per row, v2
-    one spelling per (plant, unit) (plant_unit, ai_ci unique). A case
-    variant in a month that has no row for that unit: v1 stores 'bf_shop',
-    v2 stores it under the existing 'BF_Shop'. Values are equal."""
-    _both_hooked(seeded, hooks, lambda m: m.merge_upsert_techno_data("DSP", "2025-05", "bf_shop", {"month": {"a": 1}}))
-    r1, r2 = seeded.both(lambda m: m.get_techno_data("DSP", "2025-05"), v1=t1, v2=t2)
-    assert list(r1) == ["bf_shop"] and list(r2) == ["BF_Shop"]
-    assert canon(r1["bf_shop"]) == canon(r2["BF_Shop"])
+def test_unit_case_variants_match_v1(seeded, hooks):
+    """unit_code is binary (fix round 1): a case variant of a unit in the
+    SAME (month, plant) updates the stored row and keeps its spelling (v1's
+    ON DUPLICATE KEY); in a month without a row for it, the caller's
+    spelling is stored as a unit of its own, as v1 stored it per row. Reads
+    match both under ai_ci, as v1."""
+    written = set()
+    for plant, month, unit, key in [("DSP", "2025-04", "bf_shop", ("2025-04", "DSP", "BF_Shop")),   # same month
+                                    ("DSP", "2025-05", "bf_shop", ("2025-05", "DSP", "bf_shop")),   # other month
+                                    ("DSP", "2025-05", "BF_SHOP", ("2025-05", "DSP", "bf_shop"))]:  # now stored
+        _both_hooked(seeded, hooks, lambda m: m.merge_upsert_techno_data(plant, month, unit, {"month": {"a": 1}}))
+        written.add(key)
+        _assert_same_data(seeded, now_written=written)
+    r1, r2 = seeded.both(lambda m: (m.get_techno_data("DSP", "2025-05"), m.get_techno_data("DSP", "2025-04"),
+                                    m.get_techno_data("DSP", "2025-05", "Bf_Shop")), v1=t1, v2=t2)
+    assert canon(r1) == canon(r2)
+    assert list(r2[0]) == ["bf_shop"] and list(r2[1]) == ["BF_Shop"] and list(r2[2]) == ["bf_shop"]
+    for fn in (lambda m, cur: m.distinct_units_for_plant(cur, "DSP"),
+               lambda m, cur: m.units_for_plant_month(cur, "DSP", "2025-05"),
+               lambda m, cur: m.bf_shop_rows(cur, "2025-05"),
+               lambda m, cur: m.plant_unit_month_rows(cur, "DSP", "BF_Shop", M)):
+        _same(seeded, _with_cur(fn))
+    # no v1 ORDER BY: the small schema's access path differs from the real data's (replay proves it)
+    _same(seeded, _with_cur(lambda m, cur: m.unit_plants_months_rows(cur, "bf_shop", PL, M)), True)
+    assert {r[0] for r in seeded.sql(2, "SELECT unit_code FROM plant_unit WHERE plant_code = 'DSP'")} \
+        == {"BF_Shop", "bf_shop", "Shop"}                     # 'Shop': the seeded plan's unit
+    # the plans: a variant of a stored (plant, fy) plan updates it; in another fy it is its own unit
+    for fy, unit in (("2025-26", "SHOP"), ("2026-27", "SHOP")):
+        _both_hooked(seeded, hooks, lambda m: (_clear_plan_caches(m), m.save_techno_plan("DSP", fy, unit, {"v": fy})))
+        p1, p2 = seeded.both(_plans, v1=t1, v2=t2)
+        assert p1 == p2
+    _same(seeded, _with_cur(lambda m, cur: m.plan_rows_for_fy(cur, "2026-27")))
 
 
 def test_every_v2_write_bumps_and_a_dry_run_does_not(seeded):
@@ -472,12 +500,9 @@ def test_zero_call_cursor_reads(seeded, row_factory):
             for u in ("BF_Shop", "bf_shop", "General", "Shop", "nope"):
                 c(lambda m, cur: m.json_cell(cur, p, month, u))
                 c(lambda m, cur: m.json_row(cur, p, month, u))
-    assert c(lambda m, cur: m.non_sail_rows(cur), True)
-    assert c(lambda m, cur: m.general_rows_with_source(cur), True)
-    rows = c(lambda m, cur: m.rows_for_plants(cur, ["BSP", "ISP", "SAIL"]), True)
-    r1, r2 = seeded.both(_with_cur(lambda m, cur: m.rows_for_plants(cur, ["BSP", "ISP", "SAIL"]), row_factory),
-                         v1=t1, v2=t2)
-    assert [tuple(r)[:2] for r in r1] == [tuple(r)[:2] for r in r2]      # ORDER BY plant, report_month
+    assert c(lambda m, cur: m.non_sail_rows(cur))                        # id order = seq
+    assert c(lambda m, cur: m.general_rows_with_source(cur))
+    rows = c(lambda m, cur: m.rows_for_plants(cur, ["BSP", "ISP", "SAIL"]))  # plant, month, then id
     assert len(rows) == 8
     assert c(lambda m, cur: m.sail_rows(cur))
     assert c(lambda m, cur: m.sail_unit_rows(cur, "Shop"))
@@ -492,26 +517,21 @@ def test_zero_call_cursor_reads(seeded, row_factory):
         c(lambda m, cur: m.plant_unit_month_rows(cur, "BSP", unit[0], M))
         c(lambda m, cur: m.plant_units_month_rows(cur, "BSP", unit, M), True)
         c(lambda m, cur: m.unit_plants_months_rows(cur, unit[0], PL, M), True)
-        c(lambda m, cur: m.five_plant_unit_rows(cur, unit), True)
+        c(lambda m, cur: m.five_plant_unit_rows(cur, unit))              # id order = seq
     for month in M:
-        c(lambda m, cur: m.month_rows(cur, month), True)
-        c(lambda m, cur: m.bf_shop_rows(cur, month), True)
+        c(lambda m, cur: m.month_rows(cur, month))                       # id order = seq
+        c(lambda m, cur: m.bf_shop_rows(cur, month))
         c(lambda m, cur: m.coal_blend_rows(cur, month, PL), True)
-        c(lambda m, cur: m.plants_month_rows(cur, month, PL), True)
-    c(lambda m, cur: m.all_json(cur), True)
+        c(lambda m, cur: m.plants_month_rows(cur, month, PL))
+    c(lambda m, cur: m.all_json(cur))
 
 
 def test_months_signature_row(seeded):
-    """(COUNT(*), MAX(id), MAX(created_at)): COUNT and the v1 MAX string are
-    equal; v2's second value is NULLIF(COUNT(*), 0) (carry-over 4)."""
+    """(COUNT(*), MAX(id), MAX(created_at)): equal, MAX(seq) being v1's MAX(id)."""
     for rf in (None, ROW):
         for months in (M, ["2025-04"], ["2030-01"], ["2025-05", "2025-06"]):
             r1, r2 = seeded.both(_with_cur(lambda m, cur: m.months_signature_row(cur, months), rf), v1=t1, v2=t2)
-            assert type(r1) is type(r2)
-            if rf is ROW:
-                assert r1.keys() == r2.keys()
-            assert (r1[0], r1[2]) == (r2[0], r2[2])
-            assert type(r1[1]) is type(r2[1]) and r2[1] == (r2[0] or None)
+            assert canon(r1) == canon(r2)
 
 
 def test_zero_call_connection_reads(seeded):
