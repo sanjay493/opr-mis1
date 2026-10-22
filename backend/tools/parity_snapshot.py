@@ -389,6 +389,14 @@ def _dynamic_values(client) -> dict:
     }
 
 
+def export_context(client) -> dict:
+    """The ctx POST_EXPORTS payloads are built from (BF keys read from the app)."""
+    return {
+        "sail_bf_keys": [f"{r['plant']}:{r['unit']}" for r in client.get("/api/bf-benchmark/sail-meta").json().get("sail_meta", [])],
+        "furnace_keys": client.get("/api/techno-bf-furnace/meta").json().get("furnace_keys", []),
+    }
+
+
 def expand_calls(path, params, month, fys, dynamic):
     """Param dicts to call `path` with. Returns (scope, [dict]) where scope is
     'month', 'fy' or 'global'; None when the endpoint needs a value we cannot make."""
@@ -573,10 +581,7 @@ def _snapshot(months, out_dir, db_name, pdf_months, only) -> None:
     timings = {}
     with TestClient(main.app, raise_server_exceptions=False) as client:
         dynamic = _dynamic_values(client)
-        ctx = {
-            "sail_bf_keys": [f"{r['plant']}:{r['unit']}" for r in client.get("/api/bf-benchmark/sail-meta").json().get("sail_meta", [])],
-            "furnace_keys": client.get("/api/techno-bf-furnace/meta").json().get("furnace_keys", []),
-        }
+        ctx = export_context(client)
         done_global = set()
         for month in months:
             for path, params in endpoints:
