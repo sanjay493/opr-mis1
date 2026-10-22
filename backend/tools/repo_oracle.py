@@ -204,6 +204,17 @@ COMPARE_MODE = {
         "path yields each plant's months ascending, so even each inner dict's insertion order is the same "
         "whichever path; nothing else iterates the rows. Row order never reaches output. --impl current "
         "re-run in a fresh process first: 0 diffs, both passes."),
+    "techno.plant_units_month_rows": (
+        "multiset",
+        "No ORDER BY; v1's row order is a cost-model choice per call between its two indexes: uq_techno "
+        "(plant, report_month, unit) -> (month, unit), which v2's ORDER BY report_month, unit (ai_ci) "
+        "reproduces for 95 of the 96 recorded calls, and idx_techno_month (report_month, id) -> (month, id), "
+        "which v1 picked for the call with the longest month list (BSP, 7 units x 16 months, 2016-03; "
+        "v2's ORDER BY report_month, seq would reproduce that one and miss 91 others). Same kind of entry as "
+        "production.item_plants_range. Caller audit (2026-10-23, Task 7c fix round 1): the only caller, "
+        "page_bf_large_annexure._coke_ash_and_sinter_fe (~L456), stores rows[(unit, month)] ((plant, unit, "
+        "month) is unique) and reads it only with .get() in fixed all_units / period order. Row order never "
+        "reaches output. --impl current re-run in a fresh process first (2026-10-22): 0 diffs, both passes."),
     "capacity._capacity_load": (
         "deep_unordered(depth=2)",
         "{(fold(plant), fold(item)): [(effective_month, annual_capacity), ...]} from a SELECT with no "

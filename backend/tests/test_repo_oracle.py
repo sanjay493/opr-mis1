@@ -296,7 +296,7 @@ def test_true_and_1_differ_at_top_level_and_inside_a_tuple(fake, fn):
 
 def test_compare_mode_table():
     assert set(ro.COMPARE_MODE) == {"techno.rows_for_months", "production._bulk_load", "capacity._capacity_load",
-                                    "production.item_plants_range"}
+                                    "production.item_plants_range", "techno.plant_units_month_rows"}
     for name, (mode, why) in ro.COMPARE_MODE.items():
         kind, depth = ro.parse_mode(mode)
         assert kind in ("multiset", "deep_unordered") and depth >= 1, name

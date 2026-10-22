@@ -23,21 +23,25 @@ leaf keeps its type (5 int, 5.0 float). The write paths' locking read of
 one stored blob (merge, recompute, activity-log old state) decodes its leaf
 rows with v2codec.decode_techno (same dict; ORDER BY TECHNO_LEAF_ORDER_BY).
 
-ROW ORDER. v1 techno_data's clustered key was a surrogate id (insertion
-order) that v2 does not keep. Reads with an ORDER BY keep it (on the v2
-names, same ai_ci collation). Reads v1 served through its uq_techno
-(plant, report_month, unit) index have an explicit ORDER BY reproducing
-that index order. Reads whose v1 order was id order (idx_techno_month or a
-table scan) cannot be reproduced: they get a plain deterministic ORDER BY
-and a caller-audited COMPARE_MODE entry in tools/repo_oracle.py.
+ROW ORDER. techno_upload.seq is v1's techno_data.id (loaded by the
+migration, AUTO_INCREMENT after it, kept by an upsert as v1 kept id).
+Reads v1 served in id order (idx_techno_month (report_month, id) or a
+PRIMARY scan) ORDER BY seq; months_signature_row reads MAX(seq). Reads
+with a v1 ORDER BY keep it (unit compared under ai_ci, as v1); reads v1
+served through uq_techno (plant, report_month, unit) have an explicit ORDER
+BY reproducing that index order.
 
-UNITS. plant_unit.unit_code is utf8mb4_0900_ai_ci with UNIQUE (plant_code,
-unit_code), as v1's uq_techno compared unit, so lookups match case
-variants exactly as v1 did. A write resolves (plant, unit) to the existing
-plant_unit row, else creates it (unit_type NULL). v1 kept the caller's
-spelling per row; v2 keeps one spelling per (plant, unit), the first one
-stored (v1 data has no case collisions; see the 7c report). A unit longer
-than v1's VARCHAR(32) raises v1's DataError 1406 before anything is written.
+UNITS. plant_unit.unit_code is utf8mb4_0900_bin: each case variant is its
+own unit row with its exact text, as v1 kept the caller's spelling per row.
+Reads match `pu.unit_code COLLATE utf8mb4_0900_ai_ci` (_UC) or fold(), as
+v1's ai_ci column did. Writes follow the production rule (repo/v2/_keys.py):
+after the bump, a locking ai_ci lookup of the stored row of (month, plant,
+unit); when there is one, its unit (and plant spelling) is reused, as v1's
+ON DUPLICATE KEY UPDATE kept the stored key; otherwise the unit is resolved
+by the EXACT string and created when missing (unit_type NULL). The plans
+(techno_plan_fy, v1 key (plant_name, unit, fy) under ai_ci) follow the
+same rule per (plant, fy). A unit longer than v1's VARCHAR(32) raises v1's
+DataError 1406 before anything is written.
 
 WRITES (every write bumps data_version first; none in a dry run)
   - created_at: the NOW() writer (_raw_upsert_techno_data, so upsert /
@@ -83,6 +87,8 @@ def _ph(vals):
 # ── SQL building blocks ─────────────────────────────────────────────────────
 
 _U = "techno_upload u JOIN plant_unit pu ON pu.unit_id = u.unit_id"
+# v1's unit comparison (techno_data.unit / techno_plan_fy.unit were ai_ci)
+_UC = "pu.unit_code COLLATE utf8mb4_0900_ai_ci"
 
 _LEAF_VAL = ("CASE WHEN v.raw IS NOT NULL THEN v.raw "
              "WHEN v.is_int = 1 THEN CAST(CAST(v.num AS SIGNED) AS JSON) "
@@ -106,9 +112,9 @@ _TEXT = ("CASE WHEN u.has_month = 1 AND u.has_till_month = 1 "
 
 # Leaves of the selected uploads, for decode_techno: (report_month, plant,
 # unit, has_month, has_till_month, period, param_key, num, is_int, raw,
-# source_file); an upload without leaves gives one row with period NULL.
+# source_file, unit_id); an upload without leaves gives one row with period NULL.
 _LEAVES = ("SELECT u.report_month, u.plant_code, pu.unit_code, u.has_month, u.has_till_month, "
-           "v.period, v.param_key, v.num, v.is_int, v.raw, u.source_file "
+           "v.period, v.param_key, v.num, v.is_int, v.raw, u.source_file, u.unit_id "
            f"FROM {_U} LEFT JOIN techno_value v ON v.report_month = u.report_month "
            "AND v.plant_code = u.plant_code AND v.unit_id = u.unit_id")
 # v2codec.TECHNO_LEAF_ORDER_BY on the techno_value alias v
@@ -160,7 +166,7 @@ def _bulk_load(first, last):
     with rc.cursor() as cur:
         cur.execute(
             f"SELECT u.report_month, u.plant_code, pu.unit_code, {_TEXT} FROM {_TU} "
-            "WHERE u.report_month BETWEEN %s AND %s ORDER BY u.report_month, u.plant_code, pu.unit_code",
+            f"WHERE u.report_month BETWEEN %s AND %s ORDER BY u.report_month, u.plant_code, {_UC}",
             (first, last))
         for r in cur.fetchall():
             out.setdefault((r[0], fold(r[1])), []).append((r[1], r[2], r[3]))
@@ -220,7 +226,8 @@ def blobs(months: Iterable[str], plants: Iterable[str] | None = None,
     for that unit: the stored JSON as-is (a row holding only "month" has no
     "till_month" key; JSON null stays None; ints stay int), or {} when the
     stored JSON does not parse. A missing key means there is no row. The
-    dict's order is unspecified (v2: deterministic, by month, plant, unit)."""
+    dict's order is unspecified (v2: deterministic, by month, then v1's id
+    order (seq), as v1's idx_techno_month read)."""
     months = list(months)
     plants = None if plants is None else list(plants)
     units = None if units is None else list(units)
@@ -240,10 +247,10 @@ def blobs(months: Iterable[str], plants: Iterable[str] | None = None,
         where.append(_in("u.plant_code", plants))
         params += plants
     if units is not None:
-        where.append(_in("pu.unit_code", units))
+        where.append(_in(_UC, units))
         params += units
     with rc.cursor() as cur:
-        rows = _blobs_sql(cur, " AND ".join(where), params, "u.report_month, u.plant_code, pu.unit_code")
+        rows = _blobs_sql(cur, " AND ".join(where), params, "u.report_month, u.seq")
     return dict(rows)
 
 
@@ -266,8 +273,10 @@ def _check_unit(unit):
 
 
 def _unit_id_for_write(cur, plant, unit, *, bump):
-    """unit_id of (plant, unit) under ai_ci (plant_unit's collation, v1's
-    uq_techno rule), created when missing (unit_type NULL). Locking reads."""
+    """unit_id of the unit spelled EXACTLY `unit` (unit_code is binary) of
+    `plant`, created when missing (unit_type NULL). Locking reads. Callers
+    first look for a stored row whose unit matches under ai_ci (v1's
+    uq_techno rule) and reuse its unit; this is the otherwise-branch."""
     if bump:
         _ver.bump(cur)
     sql = "SELECT unit_id FROM plant_unit WHERE plant_code = %s AND unit_code = %s FOR SHARE"
@@ -280,17 +289,18 @@ def _unit_id_for_write(cur, plant, unit, *, bump):
 
 
 def _stored(cur, plant, report_month, unit):
-    """The stored row of (plant, month, unit) as (blob dict, source_file,
-    stored plant spelling, stored unit spelling), or None. Write paths only
-    (after the bump): a locking read of the upload and its leaves."""
+    """The stored row of (plant, month, unit), matched under ai_ci as v1's
+    uq_techno did, as (blob dict, source_file, stored plant spelling,
+    stored unit spelling, unit_id), or None. Write paths only (after the
+    bump): a locking read of the upload and its leaves."""
     cur.execute(f"{_LEAVES} WHERE u.plant_code = %s AND u.report_month = %s AND pu.plant_code = %s "
-                f"AND pu.unit_code = %s ORDER BY {_LEAF_ORDER} FOR UPDATE OF u, v FOR SHARE OF pu",
+                f"AND {_UC} = %s ORDER BY {_LEAF_ORDER} FOR UPDATE OF u, v FOR SHARE OF pu",
                 (plant, report_month, plant, unit))
     rows = cur.fetchall()
     if not rows:
         return None
     (_m, stored_plant, stored_unit), blob = _decoded(rows)[0]
-    return blob, rows[0][10], stored_plant, stored_unit
+    return blob, rows[0][10], stored_plant, stored_unit, rows[0][11]
 
 
 _UPLOAD_PUT = ("INSERT INTO techno_upload (report_month, plant_code, unit_id, has_month, has_till_month, "
@@ -319,8 +329,9 @@ def _put_blob(cur, plant, report_month, unit, techno_json, source_file, created_
         _ver.bump(cur)
     _keys.ensure_month(cur, report_month, bump=False)
     _keys.ensure_plant(cur, plant, bump=False)
-    unit_id = _unit_id_for_write(cur, plant, unit, bump=False)
     stored = _stored(cur, plant, report_month, unit)
+    # v1's ON DUPLICATE KEY kept the stored (ai_ci-equal) key; else the exact spelling
+    unit_id = stored[4] if stored is not None else _unit_id_for_write(cur, plant, unit, bump=False)
     if transform:
         put = transform(stored)
         if put is None:
@@ -599,13 +610,13 @@ def get_techno_data(plant: str, report_month: str, unit: str = None, conn=None) 
     where = "u.plant_code = %s AND u.report_month = %s"
     params = [plant, report_month]
     if unit:
-        where += " AND pu.plant_code = %s AND pu.unit_code = %s"
+        where += " AND pu.plant_code = %s AND pu.unit_code COLLATE utf8mb4_0900_ai_ci = %s"
         params += [plant, unit]
     if conn is None:
         with rc.cursor() as cur:
-            rows = _blobs_sql(cur, where, params, "pu.unit_code")
+            rows = _blobs_sql(cur, where, params, _UC)
     else:
-        rows = _blobs_sql(conn.cursor(), where, params, "pu.unit_code")
+        rows = _blobs_sql(conn.cursor(), where, params, _UC)
     return {k[2]: blob for k, blob in rows}
 
 
@@ -617,7 +628,7 @@ def get_sail_techno_actuals(report_month: str) -> Dict[str, Any]:
     if served is not None:
         return served
     with rc.cursor() as cur:
-        rows = _blobs_sql(cur, "u.plant_code = 'SAIL' AND u.report_month = %s", [report_month], "pu.unit_code")
+        rows = _blobs_sql(cur, "u.plant_code = 'SAIL' AND u.report_month = %s", [report_month], _UC)
     return {k[2]: blob for k, blob in rows}
 
 
@@ -687,12 +698,12 @@ def _get_techno_plan_cached(plant: str, fy: str, unit: str = "") -> Dict[str, An
         if unit:
             row = cur.execute(
                 f"SELECT p.techno_json, p.is_user_supplied, p.calculated_json FROM {_P} "
-                "WHERE p.plant_code = %s AND p.fy = %s AND pu.plant_code = %s AND pu.unit_code = %s",
+                "WHERE p.plant_code = %s AND p.fy = %s AND pu.plant_code = %s AND pu.unit_code COLLATE utf8mb4_0900_ai_ci = %s",
                 (plant, fy, plant, unit)).fetchone()
             return _plan_entry(row, False) if row else _plan_empty(False)
         rows = cur.execute(
             f"SELECT p.techno_json, p.is_user_supplied, p.calculated_json, pu.unit_code FROM {_P} "
-            "WHERE p.plant_code = %s AND p.fy = %s ORDER BY pu.unit_code", (plant, fy)).fetchall()
+            f"WHERE p.plant_code = %s AND p.fy = %s ORDER BY {_UC}", (plant, fy)).fetchall()
     return {row[3]: _plan_entry(row, False) for row in rows}
 
 
@@ -708,12 +719,17 @@ def save_techno_plan(plant: str, fy: str, unit: str, techno_json: Dict,
         cur = conn.cursor()
         _ver.bump(cur)
         _keys.ensure_plant(cur, plant, bump=False)
-        unit_id = _unit_id_for_write(cur, plant, unit, bump=False)
-        old = cur.execute("SELECT techno_json, is_user_supplied, calculated_json, calculation_method "
-                          "FROM techno_plan_fy WHERE plant_code = %s AND unit_id = %s AND fy = %s FOR UPDATE",
-                          (plant, unit_id, fy)).fetchone()
+        # v1's PRIMARY (plant_name, unit, fy) compared under ai_ci: a stored
+        # plan of an ai_ci-equal unit is updated (its unit kept); otherwise
+        # the unit is resolved by the exact spelling
+        old = cur.execute(f"SELECT p.techno_json, p.is_user_supplied, p.calculated_json, p.calculation_method, "
+                          f"p.unit_id FROM {_P} WHERE p.plant_code = %s AND p.fy = %s AND {_UC} = %s "
+                          "FOR UPDATE OF p FOR SHARE OF pu", (plant, fy, unit)).fetchone()
         if old is not None:
-            old = dict(zip(("techno_json", "is_user_supplied", "calculated_json", "calculation_method"), old))
+            unit_id = old[4]
+            old = dict(zip(("techno_json", "is_user_supplied", "calculated_json", "calculation_method"), old[:4]))
+        else:
+            unit_id = _unit_id_for_write(cur, plant, unit, bump=False)
         cur.execute("""
             INSERT INTO techno_plan_fy
                 (plant_code, unit_id, fy, techno_json, is_user_supplied, calculated_json, calculation_method, created_by, created_at, updated_at)
@@ -749,7 +765,7 @@ def get_techno_plant_plan(plant: str, fy: str) -> Dict[str, Any]:
 
 
 _SHOP_PLAN_SQL = (f"SELECT p.techno_json, p.is_user_supplied, p.calculated_json, p.calculation_method FROM {_P} "
-                  "WHERE p.plant_code = %s AND p.fy = %s AND pu.plant_code = %s AND pu.unit_code = 'Shop'")
+                  "WHERE p.plant_code = %s AND p.fy = %s AND pu.plant_code = %s AND pu.unit_code COLLATE utf8mb4_0900_ai_ci = 'Shop'")
 
 
 @functools.lru_cache(maxsize=None)
@@ -801,7 +817,7 @@ def list_techno_plan_fys(plant: str = None) -> List[str]:
 def units_for_plant_month(cur, plant, report_month):
     """fetchall() of (unit,) for one plant/month, ordered by unit."""
     cur.execute(f"SELECT pu.unit_code AS unit FROM {_U} WHERE u.plant_code = %s AND u.report_month = %s "
-                "ORDER BY pu.unit_code", [plant, report_month])
+                "ORDER BY pu.unit_code COLLATE utf8mb4_0900_ai_ci", [plant, report_month])
     return cur.fetchall()
 
 
@@ -820,18 +836,21 @@ def distinct_report_months(cur):
 
 def distinct_units_for_plant(cur, plant):
     """fetchall() of (unit,) stored for a plant (non-empty units only), in
-    v1's order: DISTINCT over uq_techno (plant, report_month, unit), i.e.
-    by each unit's first month, then unit."""
-    cur.execute(f"SELECT pu.unit_code AS unit FROM {_U} WHERE u.plant_code = %s AND pu.unit_code != '' "
-                "GROUP BY pu.unit_code ORDER BY MIN(u.report_month), pu.unit_code", (plant,))
+    v1's order: DISTINCT (ai_ci) over uq_techno (plant, report_month, unit),
+    i.e. each ai_ci unit once, spelled as in its first row, by that row's
+    month, then unit."""
+    cur.execute(f"SELECT unit FROM (SELECT pu.unit_code AS unit, u.report_month AS m, ROW_NUMBER() OVER "
+                f"(PARTITION BY {_UC} ORDER BY u.report_month) AS rn FROM {_U} "
+                f"WHERE u.plant_code = %s AND {_UC} != '') AS t "
+                "WHERE rn = 1 ORDER BY m, unit COLLATE utf8mb4_0900_ai_ci", (plant,))
     return cur.fetchall()
 
 
 def bf_shop_rows(cur, report_month):
-    """fetchall() of (plant, unit, techno_json) for the BF_Shop / BF-5 units."""
+    """fetchall() of (plant, unit, techno_json) for the BF_Shop / BF-5 units
+    (v1: idx_techno_month, id order = seq)."""
     cur.execute(f"SELECT u.plant_code AS plant, pu.unit_code AS unit, {_TEXT} AS techno_json FROM {_TU} "
-                "WHERE u.report_month = %s AND pu.unit_code IN ('BF_Shop', 'BF-5') "
-                "ORDER BY u.plant_code, pu.unit_code", [report_month])
+                f"WHERE u.report_month = %s AND {_UC} IN ('BF_Shop', 'BF-5') ORDER BY u.seq", [report_month])
     return cur.fetchall()
 
 
@@ -839,7 +858,7 @@ def plant_unit_month_rows(cur, plant, unit, months):
     """fetchall() of (report_month, techno_json) for one plant/unit over
     months (v1: uq_techno order, by month)."""
     cur.execute(f"SELECT u.report_month, {_TEXT} AS techno_json FROM {_TU} "
-                f"WHERE pu.plant_code = %s AND pu.unit_code = %s AND u.plant_code = %s "
+                f"WHERE pu.plant_code = %s AND {_UC} = %s AND u.plant_code = %s "
                 f"AND u.report_month IN ({_ph(months)}) ORDER BY u.report_month",
                 (plant, unit, plant, *months))
     return cur.fetchall()
@@ -847,10 +866,11 @@ def plant_unit_month_rows(cur, plant, unit, months):
 
 def plant_units_month_rows(cur, plant, units, months):
     """fetchall() of (unit, report_month, techno_json) for one plant over
-    units x months (v1: uq_techno order, by month then unit)."""
+    units x months (v1: uq_techno order, by month then unit, in 95 of the 96
+    recorded calls; see tools/repo_oracle COMPARE_MODE)."""
     cur.execute(f"SELECT pu.unit_code AS unit, u.report_month, {_TEXT} AS techno_json FROM {_TU} "
-                f"WHERE u.plant_code = %s AND pu.unit_code IN ({_ph(units)}) "
-                f"AND u.report_month IN ({_ph(months)}) ORDER BY u.report_month, pu.unit_code",
+                f"WHERE u.plant_code = %s AND {_UC} IN ({_ph(units)}) "
+                f"AND u.report_month IN ({_ph(months)}) ORDER BY u.report_month, {_UC}",
                 (plant, *units, *months))
     return cur.fetchall()
 
@@ -858,30 +878,31 @@ def plant_units_month_rows(cur, plant, units, months):
 def json_row(cur, plant, report_month, unit):
     """fetchone() of (techno_json,) for one plant/month/unit, or None."""
     cur.execute(f"SELECT {_TEXT} AS techno_json FROM {_TU} WHERE u.plant_code = %s AND u.report_month = %s "
-                "AND pu.plant_code = %s AND pu.unit_code = %s", (plant, report_month, plant, unit))
+                f"AND pu.plant_code = %s AND {_UC} = %s", (plant, report_month, plant, unit))
     return cur.fetchone()
 
 
 def all_json(cur):
-    """fetchall() of (techno_json,) for every techno_data row."""
-    cur.execute(f"SELECT {_TEXT} AS techno_json FROM {_TU} "
-                "ORDER BY u.report_month, u.plant_code, pu.unit_code")
+    """fetchall() of (techno_json,) for every techno_data row (v1: PRIMARY
+    scan, id order = seq)."""
+    cur.execute(f"SELECT {_TEXT} AS techno_json FROM {_TU} ORDER BY u.seq")
     return cur.fetchall()
 
 
 def rows_for_plants(cur, plants):
     """fetchall() of (plant, report_month, unit, techno_json) for the given
-    plants, ordered by plant, report_month (then unit)."""
+    plants, ordered by plant, report_month (then id order = seq)."""
     cur.execute(f"SELECT u.plant_code AS plant, u.report_month, pu.unit_code AS unit, {_TEXT} AS techno_json "
                 f"FROM {_TU} WHERE u.plant_code IN ({_ph(plants)}) "
-                "ORDER BY u.plant_code, u.report_month, pu.unit_code", plants)
+                "ORDER BY u.plant_code, u.report_month, u.seq", plants)
     return cur.fetchall()
 
 
 def sail_rows(cur):
-    """fetchall() of (report_month, techno_json) for plant='SAIL', by month (then unit)."""
+    """fetchall() of (report_month, techno_json) for plant='SAIL', by month
+    (then id order = seq)."""
     cur.execute(f"SELECT u.report_month, {_TEXT} AS techno_json FROM {_TU} WHERE u.plant_code = 'SAIL' "
-                "ORDER BY u.report_month, pu.unit_code")
+                "ORDER BY u.report_month, u.seq")
     return cur.fetchall()
 
 
@@ -889,95 +910,92 @@ def sail_unit_rows(cur, unit):
     """fetchall() of (report_month, techno_json) for plant='SAIL' and one
     unit, oldest month first."""
     cur.execute(f"SELECT u.report_month, {_TEXT} AS techno_json FROM {_TU} "
-                "WHERE pu.plant_code = 'SAIL' AND pu.unit_code = %s AND u.plant_code = 'SAIL' "
+                f"WHERE pu.plant_code = 'SAIL' AND {_UC} = %s AND u.plant_code = 'SAIL' "
                 "ORDER BY u.report_month ASC", [unit])
     return cur.fetchall()
 
 
 def coal_blend_rows(cur, report_month, plants):
     """fetchall() of (plant, unit, techno_json) for the Coal_Consumption /
-    General units of the given plants in one month."""
+    General units of the given plants in one month (v1: uq_techno order)."""
     cur.execute(f"SELECT u.plant_code AS plant, pu.unit_code AS unit, {_TEXT} AS techno_json FROM {_TU} "
-                "WHERE u.report_month = %s AND pu.unit_code IN ('Coal_Consumption','General') "
-                f"AND u.plant_code IN ({_ph(plants)}) ORDER BY u.plant_code, pu.unit_code",
+                f"WHERE u.report_month = %s AND {_UC} IN ('Coal_Consumption','General') "
+                f"AND u.plant_code IN ({_ph(plants)}) ORDER BY u.plant_code, {_UC}",
                 [report_month, *plants])
     return cur.fetchall()
 
 
 def plants_month_rows(cur, report_month, plants):
-    """fetchall() of (plant, unit, techno_json) for the given plants in one month."""
+    """fetchall() of (plant, unit, techno_json) for the given plants in one
+    month (v1: idx_techno_month, id order = seq)."""
     cur.execute(f"SELECT u.plant_code AS plant, pu.unit_code AS unit, {_TEXT} AS techno_json FROM {_TU} "
-                f"WHERE u.report_month = %s AND u.plant_code IN ({_ph(plants)}) "
-                "ORDER BY u.plant_code, pu.unit_code", [report_month, *plants])
+                f"WHERE u.report_month = %s AND u.plant_code IN ({_ph(plants)}) ORDER BY u.seq",
+                [report_month, *plants])
     return cur.fetchall()
 
 
 def unit_plants_months_rows(cur, unit, plants, months):
     """fetchall() of (plant, report_month, techno_json) for one unit over
-    plants x months."""
+    plants x months (v1: uq_techno order)."""
     cur.execute(f"SELECT u.plant_code AS plant, u.report_month, {_TEXT} AS techno_json FROM {_TU} "
-                f"WHERE pu.unit_code = %s AND u.plant_code IN ({_ph(plants)}) "
+                f"WHERE {_UC} = %s AND u.plant_code IN ({_ph(plants)}) "
                 f"AND u.report_month IN ({_ph(months)}) ORDER BY u.plant_code, u.report_month",
                 [unit, *plants, *months])
     return cur.fetchall()
 
 
 def month_rows(cur, report_month):
-    """fetchall() of (plant, unit, techno_json) for every row of one month."""
+    """fetchall() of (plant, unit, techno_json) for every row of one month
+    (v1: idx_techno_month, id order = seq)."""
     cur.execute(f"SELECT u.plant_code AS plant, pu.unit_code AS unit, {_TEXT} AS techno_json FROM {_TU} "
-                "WHERE u.report_month = %s ORDER BY u.plant_code, pu.unit_code", [report_month])
+                "WHERE u.report_month = %s ORDER BY u.seq", [report_month])
     return cur.fetchall()
 
 
 def rows_for_months(cur, months):
-    """fetchall() of (plant, report_month, unit, techno_json) for the months."""
+    """fetchall() of (plant, report_month, unit, techno_json) for the months
+    (v1 had no ORDER BY and two plans; by month, then id order = seq)."""
     cur.execute(f"SELECT u.plant_code AS plant, u.report_month, pu.unit_code AS unit, {_TEXT} AS techno_json "
-                f"FROM {_TU} WHERE u.report_month IN ({_ph(months)}) "
-                "ORDER BY u.report_month, u.plant_code, pu.unit_code", months)
+                f"FROM {_TU} WHERE u.report_month IN ({_ph(months)}) ORDER BY u.report_month, u.seq", months)
     return cur.fetchall()
 
 
 def non_sail_rows(cur):
-    """fetchall() of (plant, unit, techno_json) for every non-SAIL row."""
+    """fetchall() of (plant, unit, techno_json) for every non-SAIL row (id order = seq)."""
     cur.execute(f"SELECT u.plant_code AS plant, pu.unit_code AS unit, {_TEXT} AS techno_json FROM {_TU} "
-                "WHERE u.plant_code != 'SAIL' ORDER BY u.report_month, u.plant_code, pu.unit_code")
+                "WHERE u.plant_code != 'SAIL' ORDER BY u.seq")
     return cur.fetchall()
 
 
 def general_rows_with_source(cur):
     """fetchall() of (plant, report_month, unit, techno_json, source_file)
-    for every unit='General' row."""
+    for every unit='General' row (id order = seq)."""
     cur.execute(f"SELECT u.plant_code AS plant, u.report_month, pu.unit_code AS unit, {_TEXT} AS techno_json, "
-                f"u.source_file FROM {_TU} WHERE pu.unit_code = 'General' "
-                "ORDER BY u.report_month, u.plant_code")
+                f"u.source_file FROM {_TU} WHERE {_UC} = 'General' ORDER BY u.seq")
     return cur.fetchall()
 
 
 def months_signature_row(cur, months):
-    """fetchone() of (COUNT(*), MAX(id), MAX(created_at)) over the months.
-
-    v2 has no techno_data.id. The row is page_techno_records' FY cache
-    signature, compared only for equality; v1's MAX(id) moved only when a
-    row was inserted, which also moves COUNT(*) (no techno row is ever
-    deleted), so the second value is NULLIF(COUNT(*), 0) (None for no rows,
-    as MAX(id)) and the signature changes exactly when v1's did.
-    MAX(created_at) is the maximum of the v1 strings (render_ts_flagged),
-    as v1's VARCHAR MAX compared them."""
-    cur.execute(f"SELECT created_at, created_at_iso FROM techno_upload WHERE report_month IN ({_ph(months)})",
-                months)
+    """fetchone() of (COUNT(*), MAX(id), MAX(created_at)) over the months:
+    MAX(seq) is v1's MAX(id); MAX(created_at) is the maximum of the v1
+    strings (render_ts_flagged), as v1's VARCHAR MAX compared them (the two
+    formats differ only at ' ' vs 'T' and a trailing fraction, where ai_ci
+    and code-point order agree)."""
+    cur.execute(f"SELECT seq, created_at, created_at_iso FROM techno_upload "
+                f"WHERE report_month IN ({_ph(months)})", months)
     rows = cur.fetchall()
-    stamps = [s for s in (render_ts_flagged("techno_upload.created_at", r[0], r[1]) for r in rows)
+    stamps = [s for s in (render_ts_flagged("techno_upload.created_at", r[1], r[2]) for r in rows)
               if s is not None]
     return _row_like(cur, ("COUNT(*)", "MAX(id)", "MAX(created_at)"),
-                     (len(rows), len(rows) or None, max(stamps) if stamps else None))
+                     (len(rows), max((r[0] for r in rows), default=None), max(stamps) if stamps else None))
 
 
 def five_plant_unit_rows(cur, units):
     """fetchall() of (plant, report_month, unit, techno_json) for the 5 ISPs
-    and the given units."""
+    and the given units (v1: id order = seq)."""
     cur.execute(f"SELECT u.plant_code AS plant, u.report_month, pu.unit_code AS unit, {_TEXT} AS techno_json "
                 f"FROM {_TU} WHERE u.plant_code IN ('BSP','DSP','RSP','BSL','ISP') "
-                f"AND pu.unit_code IN ({_ph(units)}) ORDER BY u.plant_code, u.report_month, pu.unit_code", units)
+                f"AND {_UC} IN ({_ph(units)}) ORDER BY u.seq", units)
     return cur.fetchall()
 
 
@@ -1000,7 +1018,7 @@ def five_plant_first_months(cur):
 def plan_json_row(cur, plant, unit, fy):
     """fetchone() of (techno_json,) for one plant/unit/FY plan, or None."""
     cur.execute(f"SELECT p.techno_json FROM {_P} WHERE p.plant_code = %s AND pu.plant_code = %s "
-                "AND pu.unit_code = %s AND p.fy = %s", (plant, plant, unit, fy))
+                "AND pu.unit_code COLLATE utf8mb4_0900_ai_ci = %s AND p.fy = %s", (plant, plant, unit, fy))
     return cur.fetchone()
 
 
@@ -1008,7 +1026,7 @@ def plan_plants_rows(cur, plants, fy, unit):
     """fetchall() of (plant_name, techno_json) for the plants' plan rows
     (v1: PRIMARY (plant_name, unit, fy) order)."""
     cur.execute(f"SELECT p.plant_code AS plant_name, p.techno_json FROM {_P} "
-                f"WHERE p.plant_code IN ({_ph(plants)}) AND p.fy = %s AND pu.unit_code = %s "
+                f"WHERE p.plant_code IN ({_ph(plants)}) AND p.fy = %s AND pu.unit_code COLLATE utf8mb4_0900_ai_ci = %s "
                 "ORDER BY p.plant_code", (*plants, fy, unit))
     return cur.fetchall()
 
@@ -1017,7 +1035,7 @@ def plan_rows_for_fy(cur, fy):
     """fetchall() of (plant_name, unit, techno_json) for every plan row of a
     FY (v1: PRIMARY (plant_name, unit, fy) order)."""
     cur.execute(f"SELECT p.plant_code AS plant_name, pu.unit_code AS unit, p.techno_json FROM {_P} "
-                "WHERE p.fy = %s ORDER BY p.plant_code, pu.unit_code", (fy,))
+                f"WHERE p.fy = %s ORDER BY p.plant_code, {_UC}", (fy,))
     return cur.fetchall()
 
 
