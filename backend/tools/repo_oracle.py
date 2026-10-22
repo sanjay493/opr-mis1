@@ -204,50 +204,6 @@ COMPARE_MODE = {
         "path yields each plant's months ascending, so even each inner dict's insertion order is the same "
         "whichever path; nothing else iterates the rows. Row order never reaches output. --impl current "
         "re-run in a fresh process first: 0 diffs, both passes."),
-    # Task 7c: v1 techno_data reads with no ORDER BY that MySQL served by
-    # idx_techno_month (report_month, id) or a PRIMARY (id) scan return rows
-    # in v1's surrogate-id (insertion) order, which v2 does not hold (no id
-    # on techno_upload). Shown 2026-10-22: every recorded result of these
-    # functions (sql and bulk) equals the v1 SQL + ORDER BY id on
-    # mis_reports_rehearsal, and a fresh --impl current replay of techno is
-    # 0 diffs (deterministic in v1, not random). v2 returns the same rows
-    # (multiset-equal) in a plain deterministic order. Each entry's caller
-    # audit says why the order never reaches output; five_plant_unit_rows,
-    # whose caller is order-sensitive, has NO entry (7c report, concern 1).
-    "techno.month_rows": (
-        "multiset",
-        "v1 order = techno_data id order (see the 7c note above). Caller audit (2026-10-22, Task 7c): the "
-        "only caller, page_missing_data._techno_data_presence (~L90), folds the rows into three sets of plant "
-        "codes and one boolean (unit == 'Coal_Receipt_Stock' for SAIL), used only for membership tests "
-        "(_plant_check: `plant in present_set`). Row order never reaches output."),
-    "techno.plants_month_rows": (
-        "multiset",
-        "v1 order = techno_data id order (see the 7c note above). Caller audit (2026-10-22, Task 7c): the "
-        "only caller, page_key_parameters._fetch_techno (~L125), stores out[(plant, unit)] = till_month dict; "
-        "(plant, unit) is unique per month, and every reader (_bf_unit_for, _bf_val, _general_val, "
-        "_first_present_val, _sms_joined, _sinter_fe_val) does keyed `in` / .get() lookups in fixed unit-list "
-        "order; nothing iterates the dict. Row order never reaches output."),
-    "techno.bf_shop_rows": (
-        "multiset",
-        "v1 order = techno_data id order (see the 7c note above). Caller audit (2026-10-22, Task 7c): the "
-        "only caller, api_techno_manual._get_bf_shop_data (~L126), builds by_plant_unit[plant][unit] "
-        "((plant, unit) unique per month) and picks units.get('BF_Shop') or units.get('BF-5') per plant; its "
-        "only user, _compute_sail_bf, unions the param keys into a set iterated sorted(), and walks plants in "
-        "the fixed _SAIL_PLANTS order. Row order never reaches output."),
-    "techno.all_json": (
-        "multiset",
-        "v1 order = techno_data PRIMARY (id) scan order (see the 7c note above). Over BIG_LIMIT, so compared "
-        "by the recorded sorted-rows hash. Caller audit (2026-10-22, Task 7c): the only caller, main "
-        "/api/techno-parameters (~L6580), unions each blob's 'month' keys into a set and returns "
-        "sorted(parameters). Row order never reaches output."),
-    "techno.plant_units_month_rows": (
-        "multiset",
-        "v1 read uq_techno (plant, report_month, unit) for 95 of 96 recorded calls (v2's ORDER BY "
-        "report_month, unit reproduces those exactly) and idx_techno_month (id order, see the 7c note above) "
-        "for the one with the longest month list (BSP, 7 units x 16 months, 2016-03). Caller audit "
-        "(2026-10-22, Task 7c): the only caller, page_bf_large_annexure._coke_ash_and_sinter_fe (~L456), "
-        "stores rows[(unit, month)] ((plant, unit, month) is unique) and reads it only with .get() in fixed "
-        "all_units / period order. Row order never reaches output."),
     "capacity._capacity_load": (
         "deep_unordered(depth=2)",
         "{(fold(plant), fold(item)): [(effective_month, annual_capacity), ...]} from a SELECT with no "
@@ -266,10 +222,6 @@ COMPARE_MODE = {
 #                         whose key (the values at those columns) is equal
 #                         differently. Accepted only when the key sequence
 #                         is identical AND the rows are the same multiset.
-#   ("opaque", (col, ...)) the result is ONE row (tuple / Row); the values at
-#                         those columns may differ but must have the same
-#                         type; every other column, the row type and the
-#                         column names must be equal.
 # A listed call that differs in any other way (a value, a type, a key out
 # of order, a missing row) is still a DIFF; unlisted calls are compared as
 # usual. The user-visible effect of each entry is listed in
@@ -288,25 +240,6 @@ KNOWN_PARITY_EXCEPTIONS = {
      "[]"): (("ties", (0, 1, 3)), _CALENDAR_TIES)       # (item_name, mon_num, total)
     for plant in ("BSP", "DSP", "RSP", "BSL", "ISP")
 }
-_SIGNATURE_MAX_ID = (
-    "Task 7 carry-over 4 (no v2 id for MAX(id): reproduce the observable result). (COUNT(*), MAX(id), "
-    "MAX(created_at)) is page_techno_records._signature's FY cache key, compared only for equality. v1's "
-    "MAX(id) moved only when a techno_data row was inserted, which also moves COUNT(*) (no techno row is "
-    "ever deleted), so v2 returns NULLIF(COUNT(*), 0) there and the key changes exactly when v1's did. "
-    "COUNT(*) and MAX(created_at) (the v1 strings) stay exact; no output shows the key.")
-
-
-def _fy_month_list(fy):
-    return [f"{fy}-{m:02d}" for m in range(4, 13)] + [f"{fy + 1}-{m:02d}" for m in range(1, 4)]
-
-
-# The 17 recorded FY signatures (FY 2010-11 .. 2026-27, page_techno_records._fy_months).
-KNOWN_PARITY_EXCEPTIONS.update({
-    ("techno.months_signature_row",
-     '[{"$cursor":"dbengine","row_factory":null},' + json.dumps(_fy_month_list(fy)).replace(" ", "") + "]",
-     "[]"): (("opaque", (1,)), _SIGNATURE_MAX_ID)       # MAX(id)
-    for fy in range(2010, 2027)
-})
 
 
 def known_exception(module, name, rec):
@@ -327,8 +260,6 @@ def _row_values(row):
 def within_relaxation(relaxation, expected, got):
     """True when `got` equals `expected` up to `relaxation` (see KNOWN_PARITY_EXCEPTIONS)."""
     kind, cols = relaxation
-    if kind == "opaque":
-        return _within_opaque(cols, expected, got)
     if kind != "ties":
         raise ValueError(f"unknown relaxation {kind!r}")
     e_rows, g_rows = _items(expected), _items(got)
@@ -344,39 +275,6 @@ def within_relaxation(relaxation, expected, got):
     if None in e_keys or e_keys != g_keys:
         return False
     return sorted(dumps(r) for r in e_rows) == sorted(dumps(r) for r in g_rows)
-
-
-def _within_opaque(cols, expected, got):
-    """("opaque", cols) on a one-row result: same row type, same length (and
-    column names / value types for a Row), equal outside `cols`; at `cols`
-    only the value's type must match."""
-    if not (isinstance(expected, dict) and isinstance(got, dict) and list(expected) == list(got)):
-        return False
-    tag = next(iter(expected))
-    if not tag.startswith(("$tuple", "$Row")):
-        return False
-    e_items, g_items = _items(expected), _items(got)
-    if e_items is None or g_items is None or len(e_items) != len(g_items) or max(cols) >= len(e_items):
-        return False
-    kv = tag.startswith("$Row")
-    for i, (e, g) in enumerate(zip(e_items, g_items)):
-        if kv:
-            if e[0] != g[0] or e[1] != g[1]:
-                return False
-            e, g = e[2], g[2]
-        if i in cols:
-            if _canon_type(e) != _canon_type(g):
-                return False
-        elif dumps(e) != dumps(g):
-            return False
-    return True
-
-
-def _canon_type(c):
-    """The type of a canonical value (None, int, str, bool, or its $tag)."""
-    if isinstance(c, dict) and len(c) == 1:
-        return next(iter(c))
-    return type(c).__name__
 
 
 def parse_mode(mode):

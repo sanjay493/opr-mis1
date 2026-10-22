@@ -395,7 +395,7 @@ def _same(a, b, path="$"):
 def _v2_techno(v2):
     uploads = {(r["plant_code"], r["report_month"], r["unit_code"]): r for r in _rows(
         v2, "SELECT t.plant_code, t.report_month, u.unit_code, t.has_month, t.has_till_month, "
-            "t.source_file, t.created_at, t.created_at_iso FROM techno_upload t "
+            "t.source_file, t.created_at, t.created_at_iso, t.seq FROM techno_upload t "
             "JOIN plant_unit u ON u.unit_id = t.unit_id")}
     leaves = {}
     for r in _rows(v2, "SELECT t.plant_code, t.report_month, u.unit_code, t.period, t.param_key, "
@@ -409,11 +409,12 @@ def _v2_techno(v2):
 def test_techno_roundtrip_preserves_types(dbs):
     v1, v2 = dbs
     uploads, leaves = _v2_techno(v2)
-    src = _rows(v1, "SELECT plant, report_month, unit, techno_json, source_file, created_at FROM techno_data")
+    src = _rows(v1, "SELECT id, plant, report_month, unit, techno_json, source_file, created_at FROM techno_data")
     assert len(src) == len(TECHNO_BLOBS) == len(uploads)
     for r in src:
         key = (r["plant"], r["report_month"], r["unit"])
         up = uploads[key]
+        assert up["seq"] == r["id"]                 # v1 id carried (7c fix round 1)
         rows = leaves.get(key, [])
         # SQL order rule == the codec's order == MySQL JSON's normalised order
         assert rows == sorted(rows, key=lambda x: vc.techno_key_order(x[0], x[1]))

@@ -136,6 +136,17 @@ def test_techno_leaf_type(dbs):
     assert _verify(dbs) == []
 
 
+def test_techno_seq_is_the_v1_id(dbs):
+    """techno_upload.seq carries v1 techno_data.id (insertion order, MAX(id))."""
+    v1, v2 = dbs
+    where = "plant_code = 'BSP' AND report_month = '2026-04'"
+    with _corrupt(v2, [f"UPDATE techno_upload SET seq = seq + 1000 WHERE {where}"],
+                  [f"UPDATE techno_upload SET seq = seq - 1000 WHERE {where}"]):
+        problems = _verify(dbs)
+    _has(problems, r"techno_data \('BSP', '2026-04', 'BF-1'\): id v1 \d+ != v2 seq \d+")
+    assert _verify(dbs) == []
+
+
 def test_techno_leaf_value_hidden_by_decode(dbs):
     """is_int=1 with a fractional num decodes as int(num), equal to v1's 450:
     the decode cannot see it, the canonical-form and SUM checks do. (A raw

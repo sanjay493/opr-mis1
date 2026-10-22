@@ -80,7 +80,14 @@
 --          major_unit_daily_record.unit_label. Longest 30 chars
 --          ('Billet Casters (M/c-1 & M/c-2)'). 0 collisions under ai_ci
 --          within a plant.
---          --> plant_unit.unit_code VARCHAR(64), table collation (ai_ci).
+--          --> plant_unit.unit_code VARCHAR(64) COLLATE utf8mb4_0900_bin
+--              (Task 7c fix round 1): each case variant is its own unit
+--              row with its exact text, as for item_name. v1 compared unit
+--              under ai_ci, so reads match unit_code COLLATE
+--              utf8mb4_0900_ai_ci (or fold()); a write onto a (month, plant)
+--              that already holds an ai_ci variant reuses that row's unit
+--              (v1's ON DUPLICATE KEY kept the stored key), else it stores
+--              the caller's exact spelling.
 --              Widened from 32: major_unit_daily_record.unit_label is a
 --              user-editable VARCHAR(64) in v1.
 --   techno param keys: longest 37 chars, 0 case collisions within one
@@ -165,7 +172,7 @@
 -- steel_sector_performance_table   -> steel_sector_performance | JSON archive of source figures, kept
 -- stock_data_json                  -> DROPPED | dead JSON archive, frozen since 2026-06-26, no reader
 -- stock_table                      -> stock_monthly | stock_month -> report_month
--- techno_data                      -> techno_upload, techno_value, plant_unit | one upload row per blob, one value row per leaf
+-- techno_data                      -> techno_upload, techno_value, plant_unit | one upload row per blob (id -> seq), one value row per leaf
 -- techno_plan_fy                   -> techno_plan_fy, plant_unit | plant_name -> plant_code, unit -> unit_id
 -- todo_jobs                        -> todo_job
 -- users                            -> app_user | ruling R6
@@ -213,7 +220,7 @@ CREATE TABLE item (
 CREATE TABLE plant_unit (
     unit_id     SMALLINT    NOT NULL AUTO_INCREMENT,
     plant_code  VARCHAR(8)  NOT NULL,
-    unit_code   VARCHAR(64) NOT NULL,
+    unit_code   VARCHAR(64) COLLATE utf8mb4_0900_bin NOT NULL,
     unit_type   VARCHAR(16) NULL,
     PRIMARY KEY (unit_id),
     -- (plant, unit name) -> unit_id: repo.techno.get_techno_data / json_row /
@@ -396,6 +403,13 @@ CREATE TABLE techno_upload (
     -- so the per-column format rule of repo/v2codec.py needs this per-row
     -- marker (TS_FLAGGED). Writers set it to match the form they write.
     created_at_iso TINYINT(1)   NOT NULL DEFAULT 0,
+    -- v1 techno_data.id (Task 7c fix round 1): the migration loads v1's id,
+    -- new rows take the next AUTO_INCREMENT value, and an upsert of an
+    -- existing row keeps it (as v1's ON DUPLICATE KEY UPDATE kept id). v1
+    -- reads without ORDER BY returned rows in id order (idx_techno_month,
+    -- PRIMARY scans) and months_signature_row reads MAX(id): v2 orders by
+    -- / reads MAX(seq).
+    seq            BIGINT       NOT NULL AUTO_INCREMENT,
     -- (month), (month, plant), (month, plant, unit) reads: repo.techno._bulk_load,
     -- blobs, get_techno_data, get_sail_techno_actuals, month_rows,
     -- plants_month_rows, rows_for_months, units_for_plant_month, json_row,
@@ -405,6 +419,9 @@ CREATE TABLE techno_upload (
     -- plant_units_month_rows, sail_unit_rows, sail_rows, rows_for_plants,
     -- get_techno_months, five_plant_first_months
     KEY idx_techno_upload_unit_month (plant_code, unit_id, report_month),
+    -- v1 id order / MAX(id): repo.techno.month_rows, plants_month_rows,
+    -- bf_shop_rows, all_json, five_plant_unit_rows, months_signature_row
+    UNIQUE KEY uq_techno_upload_seq (seq),
     CONSTRAINT fk_techno_upload_month FOREIGN KEY (report_month) REFERENCES cal_month (report_month),
     CONSTRAINT fk_techno_upload_plant FOREIGN KEY (plant_code) REFERENCES plant (plant_code),
     CONSTRAINT fk_techno_upload_unit  FOREIGN KEY (plant_code, unit_id) REFERENCES plant_unit (plant_code, unit_id)

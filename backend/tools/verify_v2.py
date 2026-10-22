@@ -57,9 +57,7 @@ MAX_PER_CHECK = 20
 
 # v1 columns deliberately not carried into v2 (any other uncarried v1 column
 # is reported as data loss).
-DROPPED_V1_COLUMNS: Dict[str, set] = {
-    "techno_data": {"id"},      # surrogate id, dropped by the schema (T5)
-}
+DROPPED_V1_COLUMNS: Dict[str, set] = {}     # techno_data.id is carried as techno_upload.seq (7c)
 
 # Every v1 -> v2 column rename of the SIMPLE tables, written by hand from
 # tests/fixtures/schema_v1.sql vs scripts/v2/schema_v2.sql (NOT derived from
@@ -126,7 +124,7 @@ NON_SIMPLE_V2_COLUMNS: Dict[str, set] = {
     "production_monthly": {"report_month", "plant_code", "item_id", "actual", "abp_plan", "mou_plan",
                            "has_actual", "has_abp", "has_mou"},
     "techno_upload": {"report_month", "plant_code", "unit_id", "has_month", "has_till_month",
-                      "source_file", "created_at", "created_at_iso"},
+                      "source_file", "created_at", "created_at_iso", "seq"},
     "techno_value": {"report_month", "plant_code", "unit_id", "period", "param_key", "num", "is_int", "raw"},
     "report_text": {"id", "scope", "period", "block_key", "plant_code", "item_id", "seq", "text",
                     "updated_by", "updated_at", "plant_key", "item_key"},
@@ -373,7 +371,7 @@ class _Verifier:
 
     # ── techno ──────────────────────────────────────────────────────────────
     def techno(self):
-        self._coverage("techno_data", {"plant", "report_month", "unit", "techno_json", "source_file",
+        self._coverage("techno_data", {"id", "plant", "report_month", "unit", "techno_json", "source_file",
                                        "created_at"})
         uploads = {}
         msgs = []
@@ -409,10 +407,11 @@ class _Verifier:
 
         n_leaves = 0
         sums: Dict[tuple, List] = defaultdict(lambda: [[], 0])
-        self.s.execute("SELECT plant, report_month, unit, techno_json, source_file, created_at FROM techno_data")
+        self.s.execute("SELECT plant, report_month, unit, techno_json, source_file, created_at, id "
+                       "FROM techno_data")
         seen = set()
         v1_techno = self.s.fetchall()
-        for plant, month, unit, blob, source_file, created_at in v1_techno:
+        for plant, month, unit, blob, source_file, created_at, v1_id in v1_techno:
             key = (plant, month, unit)
             if key in seen:
                 msgs.append(f"techno_data {key!r}: duplicate v1 key")
@@ -442,6 +441,8 @@ class _Verifier:
                 msgs.append(f"techno_data {key!r}: cannot decode: {e}")
                 continue
             msgs.extend(f"techno_data {key!r}: {m}" for m in _diff(want, got))
+            if not _same(v1_id, up["seq"]):
+                msgs.append(f"techno_data {key!r}: id v1 {v1_id!r} != v2 seq {up['seq']!r}")
             if not _same(source_file, up["source_file"]):
                 msgs.append(f"techno_data {key!r}: source_file v1 {source_file!r} != v2 {up['source_file']!r}")
             try:

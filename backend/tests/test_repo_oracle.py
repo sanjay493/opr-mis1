@@ -61,9 +61,6 @@ def ties():
 
 def save(x):
     return "written"
-
-def sig():
-    return (7, 18977, "2026-08-20 12:31:34")
 '''
 
 CALLER = '''
@@ -99,10 +96,6 @@ VARIANTS = {
                                '[("a", 1, "y"), ("a", 1, "x"), ("b", 2, "z")]'),
     "v2_ties_value": _mutate(V1, '[("a", 1, "x"), ("a", 1, "y"), ("b", 2, "z")]',
                              '[("a", 1, "y"), ("a", 1, "q"), ("b", 2, "z")]'),
-    "v2_sig_opaque": _mutate(V1, '(7, 18977, "2026', '(7, 7, "2026'),
-    "v2_sig_count": _mutate(V1, '(7, 18977, "2026', '(8, 18977, "2026'),
-    "v2_sig_type": _mutate(V1, '(7, 18977, "2026', '(7, None, "2026'),
-    "v2_sig_list": _mutate(V1, 'return (7, 18977, "2026-08-20 12:31:34")', 'return [7, 7, "2026-08-20 12:31:34"]'),
     "v2_ties_key_order": _mutate(V1, '[("a", 1, "x"), ("a", 1, "y"), ("b", 2, "z")]',
                                  '[("b", 2, "z"), ("a", 1, "x"), ("a", 1, "y")]'),
 }
@@ -303,9 +296,7 @@ def test_true_and_1_differ_at_top_level_and_inside_a_tuple(fake, fn):
 
 def test_compare_mode_table():
     assert set(ro.COMPARE_MODE) == {"techno.rows_for_months", "production._bulk_load", "capacity._capacity_load",
-                                    "production.item_plants_range", "techno.month_rows",
-                                    "techno.plants_month_rows", "techno.bf_shop_rows", "techno.all_json",
-                                    "techno.plant_units_month_rows"}
+                                    "production.item_plants_range"}
     for name, (mode, why) in ro.COMPARE_MODE.items():
         kind, depth = ro.parse_mode(mode)
         assert kind in ("multiset", "deep_unordered") and depth >= 1, name
@@ -404,42 +395,12 @@ def test_unlisted_call_of_a_listed_function_still_diffs(fake, monkeypatch):
 
 def test_known_parity_exceptions_table():
     import json
-    assert len(ro.KNOWN_PARITY_EXCEPTIONS) == 5 + 17
-    fns = {}
+    assert len(ro.KNOWN_PARITY_EXCEPTIONS) == 5
     for (fn, args, kwargs), (relaxation, why) in ro.KNOWN_PARITY_EXCEPTIONS.items():
-        fns[fn] = fns.get(fn, 0) + 1
-        assert kwargs == "[]" and len(why) > 200
-        if fn == "production.records_calendar_month_totals":
-            assert relaxation == ("ties", (0, 1, 3))
-            assert json.loads(args)[1]["$tuple"][0] == "plant_name IN (%s)"
-        else:
-            assert fn == "techno.months_signature_row" and relaxation == ("opaque", (1,))
-            cur, months = json.loads(args)
-            assert cur == {"$cursor": "dbengine", "row_factory": None}
-            assert len(months) == 12 and months[0][5:] == "04" and months[-1][5:] == "03"
-            assert args == ro.dumps(json.loads(args))          # the canonical text form
-    assert fns == {"production.records_calendar_month_totals": 5, "techno.months_signature_row": 17}
-
-
-def test_opaque_relaxation_accepts_only_its_columns(fake, monkeypatch):
-    rec = _recorder(fake)
-    with rec.installed():
-        fake["v1"].sig()
-    rec.commit()
-    r = next(iter(ro.Store(fake["store"]).iter_records("fake", "sql")))
-    key = ("fake.sig", ro.dumps(r["a"]), ro.dumps(r["k"]))
-    monkeypatch.setattr(ro, "KNOWN_PARITY_EXCEPTIONS", {key: (("opaque", (1,)), "a ruling")})
-    code, out = _replay(fake, "v2_sig_opaque")         # column 1 differs, same type: accepted
-    assert code == 0 and "KNOWN EXCEPTION fake.sig" in out
-    for variant in ("v2_sig_count", "v2_sig_type", "v2_sig_list"):   # anything else: DIFF
-        code, out = _replay(fake, variant)
-        assert code == 1 and "DIFF fake.sig" in out and "KNOWN EXCEPTION" not in out, variant
-    code, out = _replay(fake, "v2_clean")
-    assert code == 0 and "KNOWN EXCEPTION" not in out
-    e = ro.canonical(dbengine.Row(["n", "id"], (7, 18977)))
-    assert ro.within_relaxation(("opaque", (1,)), e, ro.canonical(dbengine.Row(["n", "id"], (7, 7))))
-    assert not ro.within_relaxation(("opaque", (1,)), e, ro.canonical(dbengine.Row(["n", "ID"], (7, 7))))
-    assert not ro.within_relaxation(("opaque", (1,)), e, ro.canonical((7, 7)))
+        assert relaxation == ("ties", (0, 1, 3))
+        assert fn == "production.records_calendar_month_totals" and kwargs == "[]"
+        assert json.loads(args)[1]["$tuple"][0] == "plant_name IN (%s)"
+        assert len(why) > 200
 
 
 def test_replay_detects_a_type_change(fake):

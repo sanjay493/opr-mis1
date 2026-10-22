@@ -265,6 +265,34 @@ def test_techno_value_is_number_or_raw(tx):
         assert cur.fetchone()[0] == 0
 
 
+def test_unit_case_variants_and_upload_seq(tx):
+    """Task 7c fix round 1: plant_unit.unit_code is binary (each case variant
+    its own unit, as v1 stored per row); techno_upload.seq keeps v1's id and
+    continues as AUTO_INCREMENT, unchanged by an upsert."""
+    with tx.cursor() as cur:
+        _seed_plants(cur, "BSP")
+        cur.executemany("INSERT INTO plant_unit (plant_code, unit_code) VALUES ('BSP', %s)",
+                        [("BF_Shop",), ("bf_shop",)])
+        cur.execute("SELECT unit_code FROM plant_unit WHERE plant_code = 'BSP' "
+                    "AND unit_code COLLATE utf8mb4_0900_ai_ci = 'BF_SHOP' ORDER BY unit_id")
+        ids_names = cur.fetchall()
+        assert [r[0] for r in ids_names] == ["BF_Shop", "bf_shop"]
+        with pytest.raises(pymysql.err.IntegrityError):
+            cur.execute("INSERT INTO plant_unit (plant_code, unit_code) VALUES ('BSP', 'bf_shop')")
+        cur.execute("SELECT unit_id FROM plant_unit WHERE plant_code = 'BSP' ORDER BY unit_id")
+        u1, u2 = [r[0] for r in cur.fetchall()]
+        up = ("INSERT INTO techno_upload (report_month, plant_code, unit_id{}) VALUES ('2026-08', 'BSP', %s{}) "
+              "AS new ON DUPLICATE KEY UPDATE source_file = 'again'")
+        cur.execute(up.format(", seq", ", %s"), (u1, 22167))         # the migration: v1's id
+        cur.execute(up.format("", ""), (u2,))                       # a new row: the next value
+        cur.execute(up.format("", ""), (u1,))                       # an upsert keeps its seq
+        cur.execute("SELECT unit_id, seq, source_file FROM techno_upload ORDER BY seq")
+        rows = [tuple(r) for r in cur.fetchall()]
+        assert rows[0] == (u1, 22167, "again") and rows[1][0] == u2 and rows[1][1] > 22167
+        with pytest.raises(pymysql.err.IntegrityError):
+            cur.execute("UPDATE techno_upload SET seq = 22167 WHERE unit_id = %s", (u2,))
+
+
 def test_report_text_key_is_unique_without_plant_or_item(tx):
     """NULL plant_code / item_id must not let the same text block be stored twice."""
     with tx.cursor() as cur:

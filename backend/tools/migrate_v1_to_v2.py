@@ -413,10 +413,10 @@ def build_plan(src_cur, cal_months: set) -> _Plan:
             plan.error(f"{_row_id('techno_data', cols, r)}: {e}")
             continue
         uploads.append((d["report_month"], d["plant"], uid, has_m, has_t, d["source_file"], created,
-                        created_iso))
+                        created_iso, d["id"]))          # seq = v1 id (insertion order, MAX(id))
         values.extend((d["report_month"], d["plant"], uid) + leaf for leaf in leaves)
     plan.tables["techno_upload"] = (["report_month", "plant_code", "unit_id", "has_month", "has_till_month",
-                                     "source_file", "created_at", "created_at_iso"], uploads)
+                                     "source_file", "created_at", "created_at_iso", "seq"], uploads)
     plan.tables["techno_value"] = (["report_month", "plant_code", "unit_id", "period", "param_key", "num",
                                     "is_int", "raw"], values)
 
