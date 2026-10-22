@@ -563,6 +563,9 @@ def test_v2_modules_write_and_read_the_same_public_functions_as_v1():
         v1 = importlib.import_module(f"repo.{module}")
         v2 = importlib.import_module(f"repo.v2.{module}")
         assert set(ro.public_functions(v2)) == set(ro.public_functions(v1)), module
+        import inspect
+        for name in ro.public_functions(v1):
+            assert inspect.signature(getattr(v2, name)) == inspect.signature(getattr(v1, name)),                 f"{module}.{name}"
 
 
 def test_every_public_function_is_classified_once():

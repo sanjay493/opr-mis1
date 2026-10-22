@@ -40,6 +40,11 @@ WRITES (every write bumps data_version first; none in a dry run)
     item is resolved by the EXACT string (created when missing) and that
     (month, plant, item) row gets the measure (inserted, or completed when
     the row already holds other measures).
+  - Concurrency: every writer takes the data_version row lock first (the
+    bump), and every lookup a write decides on (the case-variant row, the
+    item / plant / cal_month master rows) is a locking read (FOR UPDATE /
+    FOR SHARE), so it sees the latest committed rows, never an older
+    snapshot: two concurrent writes cannot create two ai_ci-equal rows.
   - delete of one measure: clears its flag and sets its value to NULL;
     a row left with no flag is deleted (ck_production_source).
   - Months / plants: a write creates the cal_month / plant master row it
@@ -48,7 +53,6 @@ WRITES (every write bumps data_version first; none in a dry run)
     'YYYY-MM' at all is refused (_keys.check_month). Deletes resolve
     nothing (they match nothing, as in v1).
 """
-import re
 from typing import Any, Dict, Iterable, List, Literal, Optional
 
 import activity_context
@@ -90,7 +94,7 @@ def _cols(measure):
 def _src_sql(col, flag, extra=""):
     return ("(SELECT pm.report_month AS report_month, pm.plant_code AS plant_name, "
             "i.item_name COLLATE utf8mb4_0900_ai_ci AS item_name, "
-            f"pm.{col} AS month_actual{extra} "
+            f"pm.{col} AS month_actual, pm.item_id AS item_id{extra} "
             "FROM production_monthly pm JOIN item i ON i.item_id = pm.item_id "
             + ("JOIN cal_month cm ON cm.report_month = pm.report_month " if extra else "")
             + f"WHERE pm.{flag} = 1) AS t")
@@ -120,6 +124,23 @@ def _in(col, vals):
 
 def _ph(vals):
     return ",".join(["%s"] * len(vals))
+
+
+def _item_ids(cur, names):
+    """item_ids of every item whose name equals one of `names` under ai_ci
+    (all case variants), [0] when none does (no item has id 0). Item-first
+    reads filter `item_id IN (...)` with these, so idx_production_item_month
+    drives them (a COLLATE'd name filter cannot use an index)."""
+    names = list(names)
+    rows = cur.execute("SELECT item_id FROM item WHERE item_name COLLATE utf8mb4_0900_ai_ci "
+                       f"IN ({_ph(names)}) ORDER BY item_id", names).fetchall()
+    return [r[0] for r in rows] or [0]
+
+
+def _iw(cur, names):
+    """(\"item_id IN (%s, ...)\", ids) for the item names `names` (see _item_ids)."""
+    ids = _item_ids(cur, names)
+    return f"item_id IN ({_ph(ids)})", ids
 
 
 def _fetchall(cur, sql, params=()):
@@ -231,11 +252,11 @@ def _item_id_for_write(cur, item, *, bump):
     """item_id of the item spelled exactly `item`, created when missing."""
     if bump:
         _ver.bump(cur)
-    item_id = _keys.exact_item_id(cur, item)
+    item_id = _keys.exact_item_id(cur, item, lock=True)
     if item_id is None:
         cur.execute("INSERT INTO item (item_name) VALUES (%s) AS new "
                     "ON DUPLICATE KEY UPDATE item_name = item.item_name", (item,))
-        item_id = _keys.exact_item_id(cur, item)
+        item_id = _keys.exact_item_id(cur, item, lock=True)
     return item_id
 
 
@@ -251,7 +272,7 @@ def _put(cur, measure, month, plant, item, value, *, bump=True):
     hit = cur.execute(
         "SELECT pm.item_id FROM production_monthly pm JOIN item i ON i.item_id = pm.item_id "
         f"WHERE pm.report_month = %s AND pm.plant_code = %s AND pm.{flag} = 1 "
-        "AND i.item_name COLLATE utf8mb4_0900_ai_ci = %s LIMIT 1",
+        "AND i.item_name COLLATE utf8mb4_0900_ai_ci = %s LIMIT 1 FOR UPDATE OF pm",
         (month, plant, item)).fetchone()
     if hit is not None:
         cur.execute(f"UPDATE production_monthly SET {col} = %s "
@@ -358,13 +379,8 @@ def _cells_sum(cells, months, plants, item):
     """MySQL SUM(month_actual) over months x plants for one item, from cells."""
     fi = fold(item)
     fplants = sorted({fold(p) for p in plants})
-    total = None
-    for m in sorted(set(months)):
-        for fp in fplants:
-            hit = cells.get((m, fp, fi))
-            if hit is not None and hit[2] is not None:
-                total = (0.0 if total is None else total) + hit[2]
-    return total
+    return _msum(hit[2] for hit in (cells.get((m, fp, fi)) for m in sorted(set(months)) for fp in fplants)
+                 if hit is not None)
 
 
 def _cells_value(cells, month, plant, item):
@@ -859,11 +875,12 @@ def latest_actual_month(cur):
 
 
 def _sum_by_plant(cur, measure, months, item):
+    iw, ids = _iw(cur, [item])
     rows = _fetchall(cur,
                      f"SELECT plant_name, month_actual FROM {_src(measure)} "
-                     f"WHERE report_month IN ({_ph(months)}) AND item_name = %s "
+                     f"WHERE report_month IN ({_ph(months)}) AND {iw} "
                      "AND plant_name IN ('BSP','DSP','RSP','BSL','ISP')" + _O_MPI,
-                     list(months) + [item])
+                     list(months) + ids)
     groups = _groups(rows, lambda r: fold(r[0]))
     return _rows_like(cur, ["plant_name", "SUM(month_actual)"],
                       [(g[0][0], _msum(r[1] for r in g)) for g in groups.values()])
@@ -916,29 +933,31 @@ def plant_item_value_row(cur, measure: Measure, plant, item_name, month):
 
 def actual_history(cur, plant, item_name, start, end):
     """fetchall() of (report_month, month_actual) with start <= month < end."""
+    iw, ids = _iw(cur, [item_name])
     return _fetchall(cur,
                      f"SELECT report_month, month_actual FROM {_src('actual')} "
-                     "WHERE plant_name=%s AND item_name=%s AND report_month>=%s AND report_month<%s"
+                     f"WHERE plant_name=%s AND {iw} AND report_month>=%s AND report_month<%s"
                      " ORDER BY report_month",
-                     (plant, item_name, start, end))
+                     (plant, *ids, start, end))
 
 
 def hot_metal_by_plant(cur, report_month, months=None):
     """fetchall() of (plant_name, Hot Metal actual): the month's value, or
     SUM over `months` (YTD) when months is given."""
+    iw, ids = _iw(cur, ["Hot Metal"])
     if months is not None:
         rows = _fetchall(cur,
                          f"SELECT plant_name, month_actual FROM {_src('actual')} "
-                         f"WHERE report_month IN ({_ph(months)}) AND item_name='Hot Metal'"
+                         f"WHERE report_month IN ({_ph(months)}) AND {iw}"
                          " ORDER BY report_month, plant_name",
-                         months)
+                         list(months) + ids)
         groups = _groups(rows, lambda r: fold(r[0]))
         return _rows_like(cur, ["plant_name", "SUM(month_actual)"],
                           [(g[0][0], _msum(r[1] for r in g)) for g in groups.values()])
     return _fetchall(cur,
                      f"SELECT plant_name, month_actual FROM {_src('actual')} "
-                     "WHERE report_month=%s AND item_name='Hot Metal' ORDER BY plant_name",
-                     [report_month])
+                     f"WHERE report_month=%s AND {iw} ORDER BY plant_name",
+                     [report_month] + ids)
 
 
 def sum_plants_row(cur, measure: Measure, month, plants, item):
@@ -951,22 +970,24 @@ def sum_plants_row(cur, measure: Measure, month, plants, item):
 
 def month_values(cur, measure: Measure, plant, item, months):
     """fetchall() of (report_month, month_actual) for one plant/item over `months`."""
+    iw, ids = _iw(cur, [item])
     return _fetchall(cur,
                      f"SELECT report_month, month_actual FROM {_src(measure)} "
-                     f"WHERE plant_name=%s AND item_name=%s AND report_month IN ({_ph(months)})"
+                     f"WHERE plant_name=%s AND {iw} AND report_month IN ({_ph(months)})"
                      " ORDER BY report_month",
-                     (plant, item, *months))
+                     (plant, *ids, *months))
 
 
 # ── page3_highlights.py ─────────────────────────────────────────────────────
 
 def item_month_totals_upto(cur, item_names, plants, month):
     """fetchall() of (item_name, report_month, SUM) over plants, months <= month."""
+    iw, ids = _iw(cur, item_names)
     rows = _fetchall(cur,
                      f"SELECT item_name, report_month, month_actual FROM {_src('actual')} "
-                     f"WHERE item_name IN ({_ph(item_names)}) AND plant_name IN ({_ph(plants)}) "
+                     f"WHERE {iw} AND plant_name IN ({_ph(plants)}) "
                      "AND report_month <= %s" + _O_MPI,
-                     list(item_names) + list(plants) + [month])
+                     ids + list(plants) + [month])
     groups = _groups(rows, lambda r: (fold(r[0]), r[1]))
     return _rows_like(cur, ["item_name", "report_month", "total"],
                       [(g[0][0], g[0][1], _msum(r[2] for r in g)) for g in groups.values()])
@@ -974,58 +995,64 @@ def item_month_totals_upto(cur, item_names, plants, month):
 
 def sail_conversion_totals_upto(cur, month):
     """fetchall() of (report_month, SUM) of SAIL 'Conversion', months <= month."""
+    iw, ids = _iw(cur, ["Conversion"])
     rows = _fetchall(cur,
                      f"SELECT report_month, month_actual FROM {_src('actual')} "
-                     "WHERE item_name='Conversion' AND plant_name='SAIL' AND report_month <= %s"
+                     f"WHERE {iw} AND plant_name='SAIL' AND report_month <= %s"
                      " ORDER BY report_month",
-                     (month,))
+                     (*ids, month))
     return _rows_like(cur, ["report_month", "total"], [(r[0], _msum([r[1]])) for r in rows])
 
 
 def sum_months_row(cur, measure: Measure, plant, item, months):
     """fetchone() of SUM(month_actual) for one plant/item over `months`."""
+    iw, ids = _iw(cur, [item])
     total = _sum_sql(cur, measure,
-                     f"plant_name=%s AND item_name=%s AND report_month IN ({_ph(months)})",
-                     (plant, item, *months), " ORDER BY report_month")
+                     f"plant_name=%s AND {iw} AND report_month IN ({_ph(months)})",
+                     (plant, *ids, *months), " ORDER BY report_month")
     return _row_like(cur, ["SUM(month_actual)"], (total,))
 
 
 def item_plants_range(cur, measure: Measure, item, plants, start, end):
     """fetchall() of (plant_name, report_month, month_actual) for one item,
     `plants`, start <= report_month <= end."""
+    iw, ids = _iw(cur, [item])
     return _fetchall(cur,
                      f"SELECT plant_name, report_month, month_actual FROM {_src(measure)} "
-                     f"WHERE item_name=%s AND plant_name IN ({_ph(plants)}) "
+                     f"WHERE {iw} AND plant_name IN ({_ph(plants)}) "
                      "AND report_month>=%s AND report_month<=%s ORDER BY report_month, plant_name",
-                     [item] + list(plants) + [start, end])
+                     ids + list(plants) + [start, end])
 
 
 def item_plant_range(cur, measure: Measure, item, plant, start, end):
     """fetchall() of (report_month, month_actual) for one item/plant,
     start <= report_month <= end."""
+    iw, ids = _iw(cur, [item])
     return _fetchall(cur,
                      f"SELECT report_month, month_actual FROM {_src(measure)} "
-                     "WHERE item_name=%s AND plant_name=%s "
+                     f"WHERE {iw} AND plant_name=%s "
                      "AND report_month>=%s AND report_month<=%s ORDER BY report_month",
-                     [item, plant, start, end])
+                     ids + [plant, start, end])
 
 
 def item_month_by_plant(cur, item, month, plants):
     """fetchall() of (plant_name, month_actual) actuals for one item/month."""
+    iw, ids = _iw(cur, [item])
     return _fetchall(cur,
                      f"SELECT plant_name, month_actual FROM {_src('actual')} "
-                     f"WHERE item_name=%s AND report_month=%s AND plant_name IN ({_ph(plants)})"
+                     f"WHERE {iw} AND report_month=%s AND plant_name IN ({_ph(plants)})"
                      " ORDER BY plant_name",
-                     [item, month] + list(plants))
+                     ids + [month] + list(plants))
 
 
 def item_all_months_by_plant(cur, item, plants):
     """fetchall() of (report_month, plant_name, month_actual) actuals, all months."""
+    iw, ids = _iw(cur, [item])
     return _fetchall(cur,
                      f"SELECT report_month, plant_name, month_actual FROM {_src('actual')} "
-                     f"WHERE item_name=%s AND plant_name IN ({_ph(plants)})"
+                     f"WHERE {iw} AND plant_name IN ({_ph(plants)})"
                      " ORDER BY report_month, plant_name",
-                     [item] + list(plants))
+                     ids + list(plants))
 
 
 # ── page_finished_steel_report.py ───────────────────────────────────────────
@@ -1033,8 +1060,7 @@ def item_all_months_by_plant(cur, item, plants):
 def item_alias_rows(cur, aliases, months=None):
     """fetchall() of (report_month, plant_name, item_name, month_actual) for
     any of `aliases`, optionally limited to `months`, ORDER BY report_month."""
-    where = f"item_name IN ({_ph(aliases)})"
-    params = list(aliases)
+    where, params = _iw(cur, aliases)
     if months is not None:
         where += f" AND report_month IN ({_ph(months)})"
         params += list(months)
@@ -1046,10 +1072,10 @@ def item_alias_rows(cur, aliases, months=None):
 
 def item_alias_report_months(cur, aliases):
     """fetchall() of DISTINCT report_month for any of `aliases`."""
+    iw, ids = _iw(cur, aliases)
     rows = _fetchall(cur,
-                     f"SELECT report_month FROM {_src('actual')} "
-                     f"WHERE item_name IN ({_ph(aliases)})" + _O_IMP,
-                     list(aliases))
+                     f"SELECT report_month FROM {_src('actual')} WHERE {iw}" + _O_IMP,
+                     ids)
     return _distinct_first(rows, key=lambda r: r[0])
 
 
@@ -1059,10 +1085,11 @@ def plant_items_monthly_sum_upto(cur, plant, item_names, upto_month):
     """fetchall() of (report_month, SUM) over item_names for a plant, months
     <= upto_month (all months when upto_month is None)."""
     upto = "" if upto_month is None else " AND report_month <= %s"
+    iw, ids = _iw(cur, item_names)
     rows = _fetchall(cur,
                      f"SELECT report_month, month_actual FROM {_src('actual')} "
-                     f"WHERE plant_name = %s AND item_name IN ({_ph(item_names)}){upto}" + _O_PIM,
-                     [plant] + list(item_names) + ([] if upto_month is None else [upto_month]))
+                     f"WHERE plant_name = %s AND {iw}{upto}" + _O_PIM,
+                     [plant] + ids + ([] if upto_month is None else [upto_month]))
     groups = _groups(rows, lambda r: r[0])
     return _rows_like(cur, ["report_month", "SUM(month_actual)"],
                       [(k, _msum(r[1] for r in g)) for k, g in groups.items()])
@@ -1074,27 +1101,77 @@ def _records_ph(lst):
     return ','.join(['%s'] * len(lst))
 
 
+def _scope_where(nitems, nplants, upto):
+    """records_scope's WHERE text for a scope shape (nitems None: no item
+    filter). records_scope builds it; _scope_shape inverts it."""
+    ph = ','.join(['%s'] * nplants)
+    where = f"plant_name IN ({ph})" if nitems is None else \
+        f"item_name IN ({','.join(['%s'] * nitems)}) AND plant_name IN ({ph})"
+    return where + (" AND report_month <= %s" if upto else "")
+
+
 def records_scope(plants, items=None, upto_month=None):
     """(where, args) selecting `plants` (and `items`, when given; and months
     <= upto_month, when given) for the records queries below. Opaque to
-    callers: pass it straight back to them."""
-    ph = _records_ph(plants)
-    if items is None:
-        where = f"plant_name IN ({ph})"
-        args = list(plants)
-    else:
-        where = f"item_name IN ({_records_ph(items)}) AND plant_name IN ({ph})"
-        args = list(items) + list(plants)
-    if upto_month:
-        where += " AND report_month <= %s"
-        args = args + [upto_month]
+    callers: pass it straight back to them. Kept a plain (where, args)
+    tuple, byte for byte v1's (the oracle compares it, and replays v1's
+    recorded scopes into the readers below)."""
+    plants = list(plants)
+    items = None if items is None else list(items)
+    where = _scope_where(None if items is None else len(items), len(plants), bool(upto_month))
+    args = (items or []) + plants + ([upto_month] if upto_month else [])
     return where, args
+
+
+_SHAPES = {}
+
+
+def _scope_shape(scope):
+    """(nitems or None, nplants, upto) of a records_scope (where, args): the
+    shape whose _scope_where is this where (no parsing of the SQL text; the
+    argument count bounds the search). A where records_scope cannot have
+    built raises ValueError."""
+    where, args = scope
+    key = (where, len(args))
+    shape = _SHAPES.get(key)
+    if shape is None:
+        for upto in (False, True):
+            for nitems in [None] + list(range(len(args) + 1)):
+                nplants = len(args) - (nitems or 0) - upto
+                if nplants >= 0 and _scope_where(nitems, nplants, upto) == where:
+                    shape = (nitems, nplants, upto)
+                    break
+            if shape is not None:
+                break
+        if shape is None:
+            raise ValueError(f"not a records_scope: {where!r}")
+        _SHAPES[key] = shape
+    return shape
+
+
+def _scope_sql(cur, scope):
+    """(v2 WHERE, params, shape) for a records scope: the items become an
+    item_id IN (...) filter (idx_production_item_month)."""
+    nitems, nplants, upto = shape = _scope_shape(scope)
+    args = list(scope[1])
+    items, rest = (args[:nitems], args[nitems:]) if nitems is not None else ([], args)
+    where = f"plant_name IN ({_ph(rest[:nplants])})" if nplants else "plant_name IN ()"
+    params = rest[:nplants]
+    if nitems is not None:
+        iw, ids = _iw(cur, items)
+        where = f"{iw} AND {where}"
+        params = ids + params
+    if upto:
+        where += " AND report_month <= %s"
+        params.append(rest[nplants])
+    return where, params, shape
 
 
 # The order v1's records queries read their rows in. v1 had no ORDER BY, so
 # the order was the access path MySQL's cost model picked for each scope
 # shape page_records builds (EXPLAIN on the v1 data, proven by the oracle
-# replay of every recorded scope):
+# replay of every recorded scope). PARITY SHIM: these rules reproduce v1's
+# optimizer choice; remove after the 7g gate with an announced order change.
 #   records_rows (and the zero-call bucket / FY-window cells, which v1 said
 #   share its access path):
 #     upto month                      PRIMARY range        (month, plant, item)
@@ -1105,33 +1182,18 @@ def records_scope(plants, items=None, upto_month=None):
 #     upto month                      PRIMARY range        (month, plant, item)
 #     items + 8 or more plants        idx_prod_item_month  (item, month, plant)
 #     otherwise                       idx_prod_plant_item  (plant, item, month)
-_SCOPE_PLANTS = re.compile(r"plant_name IN \(([^)]*)\)")
 
-
-_SCOPE_ITEMS = re.compile(r"^item_name IN \(([^)]*)\)")
-
-
-def _scope_shape(where):
-    """(number of items (0: no item filter), number of plants, has an upto
-    month) of a records_scope where clause."""
-    m = _SCOPE_PLANTS.search(where)
-    nplants = m.group(1).count("%s") if m else 0
-    i = _SCOPE_ITEMS.search(where)
-    nitems = i.group(1).count("%s") if i else 0
-    return nitems, nplants, "report_month <=" in where
-
-
-def _records_order(where):
-    nitems, nplants, upto = _scope_shape(where)
+def _records_order(shape):
+    nitems, nplants, upto = shape
     # v1 scanned the table once the (plant, item) ranges reached 35
     # (6 items x 5 plants: range scan; 7 x 5 and 6 x 8: table scan).
-    if upto or nitems * nplants >= 35:
+    if upto or (nitems or 0) * nplants >= 35:
         return _O_MPI
     return _O_PIM
 
 
-def _calendar_order(where):
-    nitems, nplants, upto = _scope_shape(where)
+def _calendar_order(shape):
+    nitems, nplants, upto = shape
     if upto:
         return _O_MPI
     if nitems and nplants >= 8:
@@ -1142,12 +1204,12 @@ def _calendar_order(where):
 def _records_fetch(cur, scope, extra_where="", extra_args=()):
     """(item_name, plant_name, report_month, month_actual, fy, fy_month,
     quarter, half, days) rows of `scope`, in v1's read order."""
-    where, args = scope
+    where, params, shape = _scope_sql(cur, scope)
     return _fetchall(cur,
                      "SELECT item_name, plant_name, report_month, month_actual, "
                      "cal_fy, cal_fy_month, cal_quarter, cal_half, cal_days "
-                     f"FROM {_REC_SRC} WHERE {where}{extra_where}" + _records_order(where),
-                     list(args) + list(extra_args))
+                     f"FROM {_REC_SRC} WHERE {where}{extra_where}" + _records_order(shape),
+                     params + list(extra_args))
 
 
 def _fy_start(fy):
@@ -1186,12 +1248,12 @@ def records_calendar_month_totals(cur, scope):
     item, month number, total DESC. v1 grouped in its read order and then
     filesorted the groups, so groups with equal (item, mon_num, total)
     come out in MySQL's std::sort order (repo.v2._mysqlsort)."""
-    where, args = scope
+    where, params, shape = _scope_sql(cur, scope)
     rows = _fetchall(cur,
                      "SELECT item_name, plant_name, report_month, month_actual, "
                      "WEIGHT_STRING(item_name) AS w "
-                     f"FROM {_SRC['actual']} WHERE {where}" + _calendar_order(where),
-                     list(args))
+                     f"FROM {_SRC['actual']} WHERE {where}" + _calendar_order(shape),
+                     params)
     groups = _groups(rows, lambda r: (fold(r[0]), r[2]))
     totals = []
     for g in groups.values():
@@ -1225,11 +1287,12 @@ def records_rows(cur, scope):
     where, args = scope
 
     def fetch():
+        v2_where, params, shape = _scope_sql(cur, scope)
         return [tuple(r) for r in _fetchall(
             cur,
             f"SELECT item_name, plant_name, report_month, month_actual FROM {_SRC['actual']} "
-            f"WHERE {where}" + _records_order(where),
-            list(args))]
+            f"WHERE {v2_where}" + _records_order(shape),
+            params)]
 
     ctx = report_context.current()
     if ctx is None:
@@ -1278,26 +1341,29 @@ def dsp_bottom_pouring_ingot_sum(cur, months):
 
 def items_plants_all_months(cur, items, plants):
     """fetchall() of (plant_name, item_name, report_month, month_actual)."""
+    iw, ids = _iw(cur, items)
     return _fetchall(cur,
                      f"SELECT plant_name, item_name, report_month, month_actual FROM {_src('actual')} "
-                     f"WHERE item_name IN ({_ph(items)}) AND plant_name IN ({_ph(plants)})" + _O_PIM,
-                     list(items) + list(plants))
+                     f"WHERE {iw} AND plant_name IN ({_ph(plants)})" + _O_PIM,
+                     ids + list(plants))
 
 
 def item_plants_all_months(cur, item, plants):
     """fetchall() of (plant_name, report_month, month_actual) for one item."""
+    iw, ids = _iw(cur, [item])
     return _fetchall(cur,
                      f"SELECT plant_name, report_month, month_actual FROM {_src('actual')} "
-                     f"WHERE item_name=%s AND plant_name IN ({_ph(plants)}) ORDER BY report_month, plant_name",
-                     [item] + list(plants))
+                     f"WHERE {iw} AND plant_name IN ({_ph(plants)}) ORDER BY report_month, plant_name",
+                     ids + list(plants))
 
 
 def items_plant_all_months(cur, items, plant):
     """fetchall() of (item_name, report_month, month_actual) for one plant."""
+    iw, ids = _iw(cur, items)
     return _fetchall(cur,
                      f"SELECT item_name, report_month, month_actual FROM {_src('actual')} "
-                     f"WHERE item_name IN ({_ph(items)}) AND plant_name=%s" + _O_PIM,
-                     list(items) + [plant])
+                     f"WHERE {iw} AND plant_name=%s" + _O_PIM,
+                     ids + [plant])
 
 
 # ── page_sail8_trend_annexure.py ────────────────────────────────────────────
@@ -1305,28 +1371,31 @@ def items_plant_all_months(cur, items, plant):
 def items_plants_upto(cur, items, plants, month):
     """fetchall() of (plant_name, item_name, report_month, month_actual),
     report_month <= month."""
+    iw, ids = _iw(cur, items)
     return _fetchall(cur,
                      f"SELECT plant_name, item_name, report_month, month_actual FROM {_src('actual')} "
-                     f"WHERE item_name IN ({_ph(items)}) AND plant_name IN ({_ph(plants)}) "
+                     f"WHERE {iw} AND plant_name IN ({_ph(plants)}) "
                      "AND report_month <= %s" + _O_MPI,
-                     list(items) + list(plants) + [month])
+                     ids + list(plants) + [month])
 
 
 def items_sail_upto(cur, items, month):
     """fetchall() of (item_name, report_month, month_actual) for the stored
     SAIL rows, report_month <= month."""
+    iw, ids = _iw(cur, items)
     return _fetchall(cur,
                      f"SELECT item_name, report_month, month_actual FROM {_src('actual')} "
-                     f"WHERE item_name IN ({_ph(items)}) AND plant_name='SAIL' AND report_month <= %s" + _O_PIM,
-                     list(items) + [month])
+                     f"WHERE {iw} AND plant_name='SAIL' AND report_month <= %s" + _O_PIM,
+                     ids + [month])
 
 
 # ── page_secretary_review.py ────────────────────────────────────────────────
 
 def latest_hot_metal_month_row(cur):
     """fetchone() of the latest month with a non-NULL Hot Metal actual."""
+    iw, ids = _iw(cur, ["Hot Metal"])
     return _fetchone(cur, f"SELECT MAX(report_month) FROM {_src('actual')} "
-                          "WHERE item_name='Hot Metal' AND month_actual IS NOT NULL")
+                          f"WHERE {iw} AND month_actual IS NOT NULL", ids)
 
 
 def mou_items_for_month(cur, month):
@@ -1452,12 +1521,12 @@ def plant_item_rows_from(cur, measure: Measure, plants, items, from_month):
 def plan_hm_cs_by_plant_item(cur, months):
     """fetchall() of (plant_name, item_name, SUM ABP) for Hot Metal and Total
     Crude Steel over months, 5 ISPs."""
+    iw, ids = _iw(cur, ["Hot Metal", "Total Crude Steel"])
     rows = _fetchall(cur,
                      f"SELECT plant_name, item_name, month_actual FROM {_src('abp')} "
-                     f"WHERE report_month IN ({_ph(months)}) "
-                     "AND item_name IN ('Hot Metal', 'Total Crude Steel') "
+                     f"WHERE report_month IN ({_ph(months)}) AND {iw} "
                      "AND plant_name IN ('BSP','DSP','RSP','BSL','ISP')" + _O_MPI,
-                     months)
+                     list(months) + ids)
     groups = _groups(rows, lambda r: (fold(r[0]), fold(r[1])))
     return _rows_like(cur, ["plant_name", "item_name", "SUM(month_actual)"],
                       [(g[0][0], g[0][1], _msum(r[2] for r in g)) for g in groups.values()])
@@ -1466,27 +1535,29 @@ def plan_hm_cs_by_plant_item(cur, months):
 def item_by_plant_month(cur, item, months):
     """fetchall() of (plant_name, report_month, month_actual) actuals for one
     item over months, every plant."""
+    iw, ids = _iw(cur, [item])
     return _fetchall(cur,
                      f"SELECT plant_name, report_month, month_actual FROM {_src('actual')} "
-                     f"WHERE report_month IN ({_ph(months)}) AND item_name=%s ORDER BY report_month, plant_name",
-                     list(months) + [item])
+                     f"WHERE report_month IN ({_ph(months)}) AND {iw} ORDER BY report_month, plant_name",
+                     list(months) + ids)
 
 
 def items_by_plant_month(cur, items, months):
     """fetchall() of (plant_name, item_name, report_month, month_actual)
     actuals for items over months, every plant."""
+    iw, ids = _iw(cur, items)
     return _fetchall(cur,
                      f"SELECT plant_name, item_name, report_month, month_actual FROM {_src('actual')} "
-                     f"WHERE report_month IN ({_ph(months)}) AND item_name IN ({_ph(items)})" + _O_IMP,
-                     [*months, *items])
+                     f"WHERE report_month IN ({_ph(months)}) AND {iw}" + _O_IMP,
+                     [*months, *ids])
 
 
 def hm_cs_signature_row(cur, months):
     """fetchone() of (COUNT(*), SUM) of Hot Metal + Total Crude Steel actuals
     over months (page_techno_records' cache signature)."""
-    vals = _values_sql(cur, "actual",
-                       f"report_month IN ({_ph(months)}) AND item_name IN ('Hot Metal','Total Crude Steel')",
-                       months, _O_IMP)
+    iw, ids = _iw(cur, ["Hot Metal", "Total Crude Steel"])
+    vals = _values_sql(cur, "actual", f"report_month IN ({_ph(months)}) AND {iw}",
+                       list(months) + ids, _O_IMP)
     return _row_like(cur, ["COUNT(*)", "SUM(month_actual)"], (len(vals), _msum(vals)))
 
 
@@ -1495,11 +1566,11 @@ def hm_cs_signature_row(cur, months):
 def plant_items_month_values(cur, plant, items, months):
     """fetchall() of (report_month, month_actual) actuals for one plant, any
     of `items`, over months (one row per matching item)."""
+    iw, ids = _iw(cur, items)
     return _fetchall(cur,
                      f"SELECT report_month, month_actual FROM {_src('actual')} "
-                     f"WHERE plant_name=%s AND item_name IN ({_ph(items)}) AND report_month IN ({_ph(months)})"
-                     + _O_PIM,
-                     [plant, *items, *months])
+                     f"WHERE plant_name=%s AND {iw} AND report_month IN ({_ph(months)})" + _O_PIM,
+                     [plant, *ids, *months])
 
 
 # ── scripts/ (one-off backfills / validators) ──────────────────────────────
@@ -1515,10 +1586,11 @@ def plant_rows_for_months(cur, plant, months):
 
 def plant_item_months(cur, plant, item_name):
     """fetchall() of (report_month,) actual rows for one plant/item."""
+    iw, ids = _iw(cur, [item_name])
     return _fetchall(cur,
                      f"SELECT report_month FROM {_src('actual')} "
-                     "WHERE plant_name=%s AND item_name=%s ORDER BY report_month",
-                     (plant, item_name))
+                     f"WHERE plant_name=%s AND {iw} ORDER BY report_month",
+                     (plant, *ids))
 
 
 def plant_all_rows(cur, measure: Measure, plant):

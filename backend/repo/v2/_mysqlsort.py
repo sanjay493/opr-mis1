@@ -1,5 +1,10 @@
 """MySQL filesort tie order, reproduced in Python.
 
+PARITY SHIM - remove after the 7g gate with an announced tie-break change.
+It emulates a v1 optimizer / server artefact (std::sort's order of tied
+rows) only so that v2's output is byte-identical to v1's for the parity
+proof; nothing about the data requires it.
+
 Some v1 queries sort rows whose sort keys tie (GROUP BY executed as "Sort,
 then Group aggregate"; ORDER BY with equal keys). MySQL's filesort sorts its
 in-memory buffer with std::sort, which is not stable, and the order of

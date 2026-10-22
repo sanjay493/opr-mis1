@@ -33,6 +33,13 @@ where v1's ai_ci unique key would have updated an existing row instead.
 The ensure_* helpers write master rows, so they take `bump` like every repo
 write: the caller passes bump=False only after its own _ver.bump(cur) on
 the same cursor (one bump per repo write, as v1).
+
+LOCKING READS. Every lookup a write decides on is a locking read (FOR SHARE
+on master rows, FOR UPDATE on the fact row to be changed), taken after the
+bump. Under REPEATABLE READ a plain SELECT reads the transaction's snapshot,
+which can predate a concurrent writer's commit; a locking read sees the
+latest committed row, so two concurrent writes cannot both decide "missing"
+and create two ai_ci-equal rows. 7c-7f: do the same.
 """
 import datetime as _dt
 import re
@@ -78,7 +85,7 @@ def ensure_month(cur, month, *, bump) -> None:
     if bump:
         _ver.bump(cur)
     check_month(month)
-    if cur.execute("SELECT 1 FROM cal_month WHERE report_month = %s", (month,)).fetchone() is None:
+    if cur.execute("SELECT 1 FROM cal_month WHERE report_month = %s FOR SHARE", (month,)).fetchone() is None:
         cur.execute("INSERT INTO cal_month (report_month, month_start, fy, fy_month, quarter, half) "
                     "VALUES (%s, %s, %s, %s, %s, %s) AS new "
                     "ON DUPLICATE KEY UPDATE fy = cal_month.fy", cal_month_row(month))
@@ -88,13 +95,16 @@ def ensure_plant(cur, plant, *, bump) -> None:
     """The plant master holds `plant` (ai_ci) afterwards (created when missing)."""
     if bump:
         _ver.bump(cur)
-    if cur.execute("SELECT 1 FROM plant WHERE plant_code = %s", (plant,)).fetchone() is None:
+    if cur.execute("SELECT 1 FROM plant WHERE plant_code = %s FOR SHARE", (plant,)).fetchone() is None:
         cur.execute("INSERT INTO plant (plant_code, plant_name, plant_kind, sort_order) "
                     "VALUES (%s, NULL, 'external', 0) AS new "
                     "ON DUPLICATE KEY UPDATE plant_code = plant.plant_code", (plant,))
 
 
-def exact_item_id(cur, name):
-    """item_id of the item spelled exactly `name` (binary compare), or None."""
-    row = cur.execute("SELECT item_id FROM item WHERE item_name = %s", (name,)).fetchone()
+def exact_item_id(cur, name, *, lock=False):
+    """item_id of the item spelled exactly `name` (binary compare), or None.
+    lock=True (every write path): a locking read (FOR SHARE), so it sees the
+    latest committed master row, not the transaction's older snapshot."""
+    row = cur.execute("SELECT item_id FROM item WHERE item_name = %s" + (" FOR SHARE" if lock else ""),
+                      (name,)).fetchone()
     return None if row is None else row[0]

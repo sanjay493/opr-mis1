@@ -116,22 +116,25 @@ def _item_id_for_write(cur, item, *, bump):
     """item_id of the item spelled exactly `item`, created when missing."""
     if bump:
         _ver.bump(cur)
-    item_id = _keys.exact_item_id(cur, item)
+    item_id = _keys.exact_item_id(cur, item, lock=True)
     if item_id is None:
         cur.execute("INSERT INTO item (item_name) VALUES (%s) AS new "
                     "ON DUPLICATE KEY UPDATE item_name = item.item_name", (item,))
-        item_id = _keys.exact_item_id(cur, item)
+        item_id = _keys.exact_item_id(cur, item, lock=True)
     return item_id
 
 
 def _check_unique(cur, plant, item, effective_month, entry_id=None):
-    """v1's uq_capacity_plant_item_month (ai_ci): IntegrityError 1062."""
+    """v1's uq_capacity_plant_item_month (ai_ci): IntegrityError 1062. A
+    locking read (FOR SHARE, after the writer's bump), so a clash committed
+    by a concurrent writer is seen, not an older snapshot."""
     sql = ("SELECT ic.id FROM item_capacity ic JOIN item i ON i.item_id = ic.item_id "
            f"WHERE ic.plant_code=%s AND {_ITEM_CI}=%s AND ic.effective_month=%s")
     args = [plant, item, effective_month]
     if entry_id is not None:
         sql += " AND ic.id<>%s"
         args.append(entry_id)
+    sql += " FOR SHARE"
     if cur.execute(sql, args).fetchone() is not None:
         raise IntegrityError(1062, f"Duplicate entry '{plant}-{item}-{effective_month}' for key "
                                    "'item_capacity_table.uq_capacity_plant_item_month'")
