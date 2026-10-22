@@ -229,3 +229,12 @@ def mysql_db(_mysql_test_schema, monkeypatch):
 
     yield name
     dbengine._pool_clear()
+
+
+@pytest.fixture
+def dual(mysql_db, mysql_v2_db):
+    """tests/v2dual.Dual: the v1 test schema (mysql_db, wired into the app's
+    DB layer) and the v2 test schema (mysql_v2_db), both emptied, for the
+    Task 7 v1-vs-v2 repository equivalence tests."""
+    from v2dual import Dual
+    return Dual(mysql_db, mysql_v2_db)
