@@ -158,6 +158,15 @@ WRITE_FUNCTIONS = {
              "save_steel_sales_highlights", "save_texts", "upsert_do_letter_remark", "upsert_sail_sales_note"),
 }
 
+# Reads whose row order v1 itself does not hold stable -> why. Replay
+# compares their rows as a multiset (as it does for any function whose
+# order changed between identical calls while recording, index "conflicts").
+KNOWN_UNORDERED = {
+    ("techno", "rows_for_months"):
+        "no ORDER BY; seen returning the same 883 rows in two orders in a trial recording "
+        "(MySQL chose an idx_techno_month range scan in one process, a table scan in another)",
+}
+
 # Public non-write functions that are not recorded -> why.
 NOT_RECORDED = {
     ("ops", "get_lock_row"): "GET_LOCK: takes a session lock (admin backup); not a data read",
@@ -811,9 +820,10 @@ def replay_module(store_root, module, impl, *, passes=PASSES, functions=None, li
     total = 0
     idx = store.load_index()
     unordered = sorted({c["function"] for c in idx["conflicts"]
-                        if c["module"] == module and c.get("kind") == "order"})
+                        if c["module"] == module and c.get("kind") == "order"}
+                       | {f for (m, f) in KNOWN_UNORDERED if m == module})
     if unordered:
-        out(f"{module}: row order varied between identical v1 calls; compared as a multiset: "
+        out(f"{module}: v1 row order not stable (KNOWN_UNORDERED / order conflicts); compared as a multiset: "
             + ", ".join(unordered))
     for c in idx["conflicts"]:
         if c["module"] == module and c.get("kind") != "order":

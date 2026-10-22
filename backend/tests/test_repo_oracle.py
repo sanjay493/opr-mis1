@@ -233,6 +233,14 @@ def test_order_only_nondeterminism_is_classified_and_replayed_as_a_multiset(fake
     assert ro.replay_module(fake["store"], "fake", v1src, passes=("sql",), out=out.append) == 1
 
 
+def test_known_unordered_functions_replay_as_a_multiset(fake, monkeypatch):
+    _record(fake)
+    assert _replay(fake, "v2_order")[0] == 1
+    monkeypatch.setitem(ro.KNOWN_UNORDERED, ("fake", "ordered"), "test")
+    code, out = _replay(fake, "v2_order")
+    assert code == 0 and "multiset" in out
+
+
 def test_value_nondeterminism_is_kind_value(fake):
     _record(fake)
     v1 = fake["v1"]
@@ -351,6 +359,17 @@ def test_record_and_replay_rerun_with_a_fixed_hash_seed(monkeypatch):
 def test_refuses_live_and_baseline_databases(name):
     with pytest.raises(SystemExit):
         ro.check_db_name(name)
+
+
+@pytest.mark.parametrize("cmd", [["replay", "--module", "production"],
+                                 ["record", "--pass", "sql", "--months", "2026-08"]])
+@pytest.mark.parametrize("name", ["MIS_REPORTS", "mis_reports_Baseline"])
+def test_cli_refuses_live_and_baseline_before_connecting(cmd, name, monkeypatch):
+    import dbengine as _dbe
+    monkeypatch.setenv("PYTHONHASHSEED", "0")
+    monkeypatch.setattr(_dbe, "_open_raw", lambda: pytest.fail("connected"))
+    with pytest.raises(SystemExit, match="refusing"):
+        ro.main_cli(cmd + ["--db", name])
 
 
 @pytest.mark.parametrize("name", ["mis_reports_rehearsal", "mis_reports_v2_rehearsal"])
