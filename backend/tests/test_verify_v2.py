@@ -12,6 +12,7 @@ from contextlib import contextmanager
 import pytest
 
 import test_migrate_v1_to_v2 as m6a
+from repo import v2codec as vc
 from tools import migrate_v1_to_v2 as mig
 from tools import verify_v2 as ver
 
@@ -197,7 +198,99 @@ def test_wide_text_stamp_split(dbs):
     assert _verify(dbs) == []
 
 
+# ── independence from migrate's own maps (fix round 1) ─────────────────────
+
+_KEYWORDS = {"PRIMARY", "CONSTRAINT", "KEY", "UNIQUE", "INDEX", "FOREIGN", "CHECK", "FULLTEXT"}
+
+
+def _ddl_columns(path):
+    """{table: {column}} parsed from a CREATE TABLE dump (v1 or v2)."""
+    from pathlib import Path
+    text = Path(path).read_text(encoding="utf-8")
+    out = {}
+    for m in re.finditer(r"CREATE TABLE `?(\w+)`? \((.*?)\n\)", text, re.S):
+        cols = set()
+        for line in m.group(2).splitlines():
+            c = re.match(r"\s+`?(\w+)`?\s+[A-Za-z]", line)
+            if c and c.group(1).upper() not in _KEYWORDS:
+                cols.add(c.group(1))
+        out[m.group(1)] = cols
+    return out
+
+
+def test_map_matches_hand_written_oracle():
+    from pathlib import Path
+    tests = Path(__file__).resolve().parent
+    v1 = _ddl_columns(tests / "fixtures" / "schema_v1.sql")
+    v2 = _ddl_columns(tests.parent / "scripts" / "v2" / "schema_v2.sql")
+    assert len(ver.EXPECTED_RENAMES) == 46
+    # the oracle names real columns of both schemas
+    v2_of = {v1t: v2t for v1t, v2t, _ in mig.SIMPLE}
+    for (v1t, c1), c2 in ver.EXPECTED_RENAMES.items():
+        assert c1 in v1[v1t], (v1t, c1)
+        assert c2 in v2[v2_of[v1t]], (v2_of[v1t], c2)
+    # every SIMPLE column is same-named or an expected rename; both directions
+    seen = set()
+    for v1t, v2t, spec in mig.SIMPLE:
+        for c2, c1, _ in spec:
+            assert c1 in v1[v1t] and c2 in v2[v2t], (v1t, c1, v2t, c2)
+            if c1 != c2:
+                assert ver.EXPECTED_RENAMES.get((v1t, c1)) == c2, (v1t, c1, c2)
+                seen.add((v1t, c1))
+    assert seen == set(ver.EXPECTED_RENAMES)
+    assert ver.map_problems() == []
+    # literal production and text maps
+    assert vc.PRODUCTION_SOURCES == {"production_table": ("actual", "has_actual"),
+                                     "production_plan_table": ("abp_plan", "has_abp"),
+                                     "mou_plan_table": ("mou_plan", "has_mou")}
+    assert {s: spec["table"] for s, spec in vc.TEXT_SCOPES.items()} == {
+        "page3_narrative": "page3_narrative", "key_highlights": "key_highlights_narrative",
+        "steel_sales": "steel_sales_highlights", "secretary_review": "secretary_review_text",
+        "board_note": "board_note_manual_text", "do_letter": "do_letter_remark_table",
+        "sail_sales_note": "sail_sales_note_table", "rail_note": "rail_prod_despatch_note",
+        "ss_phys_note": "special_steel_phys_note"}
+
+
+def test_map_drift_reported(monkeypatch):
+    oracle = dict(ver.EXPECTED_RENAMES)
+    oracle[("stock_table", "stock_month")] = "month"
+    oracle[("users", "email")] = "user_email"
+    monkeypatch.setattr(ver, "EXPECTED_RENAMES", oracle)
+    problems = ver.map_problems()
+    _has(problems, r"map: stock_table\.stock_month -> stock_monthly\.report_month is not an expected rename")
+    _has(problems, r"map: expected rename users\.email -> user_email is not in migrate's map")
+
+
+def test_uncovered_v2_column(dbs):
+    v1, v2 = dbs
+    with _corrupt(v2, [], ["ALTER TABLE mine_group DROP COLUMN extra_col"]):
+        conn = m6a._connect(v2)
+        with conn.cursor() as cur:
+            cur.execute("ALTER TABLE mine_group ADD COLUMN extra_col INT NULL")
+        conn.close()
+        problems = _verify(dbs)
+    _has(problems, r"v2 column mine_group\.extra_col is not covered by the v1 -> v2 map")
+    assert _verify(dbs) == []
+
+
+def test_unparseable_v1_timestamp(dbs):
+    v1, v2 = dbs
+    with _corrupt(v1, ["UPDATE todo_jobs SET created_at = '2026-07-10 07:17:33.5' WHERE id = 2"],
+                  ["UPDATE todo_jobs SET created_at = '2026-07-10T07:17:33' WHERE id = 2"]):
+        problems = _verify(dbs)
+    _has(problems, r"todo_jobs -> todo_job: row \(2,\) created_at: unparseable v1 timestamp")
+    assert _verify(dbs) == []
+
+
 # ── CLI and guards ──────────────────────────────────────────────────────────
+
+def test_cli_refusal_is_one_line(monkeypatch, capsys):
+    def boom(*a, **k):
+        raise ver.VerifyError("'x' is not a v2 schema")
+    monkeypatch.setattr(ver, "verify", boom)
+    assert ver.main(["--src", "a", "--dst", "b"]) == 1
+    assert capsys.readouterr().out == "verify refused: 'x' is not a v2 schema\n"
+
 
 def test_cli_exit_code(monkeypatch, capsys):
     for problems, code in (([], 0), (["row count x: v1 1 != v2 0"], 1)):
