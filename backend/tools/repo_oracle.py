@@ -72,6 +72,10 @@ A result whose canonical JSON is over BIG_LIMIT (1 MB) is stored as
 {"sha256", "rows", "head" (first 3), "tail" (last 3), "chunks" (sha256 per
 256 rows)} instead of in full.
 
+record and replay re-run themselves with PYTHONHASHSEED=0: a few reads
+build dicts by iterating a set of strings, whose order otherwise differs
+between processes (and so between recording chunks and the replay).
+
 Databases: both commands refuse mis_reports and mis_reports_baseline
 (case-insensitive). --db (or MYSQL_DB in the environment) is required.
 """
@@ -884,6 +888,11 @@ def _drive(client, months, fy_months, scopes, only, exclude, log=print):
     """GET / POST the parity call set for `months`: month-scoped GETs and
     POST_EXPORTS ('month' in scopes), FY / global GETs ('nonmonth')."""
     import main
+    known = {p for p, _ in ps.enumerate_get_endpoints(main.app)} | {p for p, _ in ps.POST_EXPORTS}
+    unknown = sorted(((only or set()) | set(exclude)) - known)
+    if unknown:
+        # e.g. Git Bash rewrote "/api/x" to "C:/Program Files/Git/api/x": use MSYS_NO_PATHCONV=1
+        raise SystemExit(f"--only/--exclude names no endpoint: {unknown}")
     endpoints = [(p, prm) for p, prm in ps.enumerate_get_endpoints(main.app)
                  if not ps._is_skipped(p) and (not only or p in only) and p not in exclude]
     fys = sorted({ps.fy_start_year(m) for m in fy_months} | {ps.fy_start_year(m) - 1 for m in fy_months})
@@ -963,7 +972,8 @@ def cmd_record(a) -> int:
     exclude = {x.strip() for x in a.exclude.split(",") if x.strip()}
     today = _dt.date.fromisoformat(a.today) if a.today else None
     spec = {"db": db, "months": months, "scopes": sorted(scopes), "only": sorted(only or []),
-            "exclude": sorted(exclude), "today": a.today, "fy_months": a.fy_months}
+            "exclude": sorted(exclude), "today": a.today, "fy_months": a.fy_months,
+            "hash_seed": os.environ.get("PYTHONHASHSEED")}
     store = Store(a.store)
     if not a.force:
         for r in store.load_index()["runs"]:
@@ -1038,7 +1048,27 @@ def cmd_replay(a) -> int:
     return replay_module(a.store, a.module, impl, passes=passes, functions=functions, limit_diffs=a.limit_diffs)
 
 
+HASH_SEED = "0"
+
+
+def _reexec_with_fixed_hash_seed(argv):
+    """record / replay run with PYTHONHASHSEED=0: some repo reads build dicts
+    by iterating a set of strings (e.g. mines.get_iron_ore_group_rollup_monthly),
+    whose order otherwise changes from one process to the next. Returns the
+    child's exit code, or None when the seed is already fixed."""
+    if os.environ.get("PYTHONHASHSEED") == HASH_SEED:
+        return None
+    import subprocess
+    env = dict(os.environ, PYTHONHASHSEED=HASH_SEED)
+    return subprocess.call([sys.executable, "-m", "tools.repo_oracle", *argv], env=env, cwd=str(BACKEND_DIR))
+
+
 def main_cli(argv=None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] in ("record", "replay"):
+        code = _reexec_with_fixed_hash_seed(argv)
+        if code is not None:
+            return code
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     r = sub.add_parser("record")

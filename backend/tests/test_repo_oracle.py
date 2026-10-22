@@ -332,6 +332,21 @@ def test_bulk_pass_records_context_calls_and_loaders_and_replays_them_in_context
 
 # ── guards and classification ───────────────────────────────────────────────
 
+def test_record_and_replay_rerun_with_a_fixed_hash_seed(monkeypatch):
+    import subprocess
+    seen = []
+    monkeypatch.delenv("PYTHONHASHSEED", raising=False)
+    monkeypatch.setattr(subprocess, "call", lambda cmd, env, cwd: seen.append((cmd, env["PYTHONHASHSEED"])) or 7)
+    assert ro.main_cli(["replay", "--module", "production"]) == 7
+    assert seen[0][0][-3:] == ["replay", "--module", "production"] and seen[0][1] == "0"
+    monkeypatch.setenv("PYTHONHASHSEED", "0")
+    with pytest.raises(SystemExit):          # no --db / MYSQL_DB: refuses instead of re-running
+        monkeypatch.delenv("MYSQL_DB", raising=False)
+        ro.main_cli(["replay", "--module", "production"])
+    assert len(seen) == 1
+
+
+
 @pytest.mark.parametrize("name", ["mis_reports", "MIS_REPORTS", "mis_reports_baseline", "Mis_Reports_Baseline"])
 def test_refuses_live_and_baseline_databases(name):
     with pytest.raises(SystemExit):
