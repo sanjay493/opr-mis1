@@ -164,6 +164,51 @@ class Dual:
                             (r[0], r[1], item_id) + tuple(r[3:]))
 
 
+    def _v2_unit(self, cur, plant, unit):
+        cur.execute("INSERT IGNORE INTO plant_unit (plant_code, unit_code) VALUES (%s, %s)", (plant, unit))
+        cur.execute("SELECT unit_id FROM plant_unit WHERE plant_code = %s AND unit_code = %s", (plant, unit))
+        return cur.fetchone()[0]
+
+    def seed_techno(self, rows):
+        """rows: (report_month, plant, unit, blob (dict or JSON text),
+        source_file, created_at as the v1 string: NOW() form or isoformat()).
+        v1: techno_data rows in this order (ids ascending); v2: the
+        techno_upload + techno_value rows the migration would load
+        (repo.v2codec encode_techno / parse_ts_flagged)."""
+        import json
+        from repo.v2codec import encode_techno, parse_ts_flagged
+        self.sql_many(1, "INSERT INTO techno_data (plant, report_month, unit, techno_json, source_file, created_at) "
+                         "VALUES (%s, %s, %s, %s, %s, %s)",
+                      [(p, m, u, b if isinstance(b, str) else json.dumps(b), sf, at) for m, p, u, b, sf, at in rows])
+        with self.v2_conn.cursor() as cur:
+            for m, p, u, b, sf, at in rows:
+                unit_id = self._v2_unit(cur, p, u)
+                has_m, has_t, leaves = encode_techno(b)
+                ts, iso = parse_ts_flagged("techno_upload.created_at", at)
+                cur.execute("INSERT INTO techno_upload (report_month, plant_code, unit_id, has_month, has_till_month, "
+                            "source_file, created_at, created_at_iso) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                            (m, p, unit_id, has_m, has_t, sf, ts, iso))
+                cur.executemany("INSERT INTO techno_value (report_month, plant_code, unit_id, period, param_key, "
+                                "num, is_int, raw) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                                [(m, p, unit_id) + leaf for leaf in leaves])
+
+    def seed_techno_plan(self, rows):
+        """rows: (plant, unit, fy, techno_json dict, is_user_supplied,
+        calculated_json dict or None, calculation_method dict or None)."""
+        import json
+
+        def j(v):
+            return None if v is None else json.dumps(v)
+        self.sql_many(1, "INSERT INTO techno_plan_fy (plant_name, unit, fy, techno_json, is_user_supplied, "
+                         "calculated_json, calculation_method) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                      [(p, u, fy, j(t), us, j(c), j(cm)) for p, u, fy, t, us, c, cm in rows])
+        with self.v2_conn.cursor() as cur:
+            for p, u, fy, t, us, c, cm in rows:
+                cur.execute("INSERT INTO techno_plan_fy (plant_code, unit_id, fy, techno_json, is_user_supplied, "
+                            "calculated_json, calculation_method) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                            (p, self._v2_unit(cur, p, u), fy, j(t), us, j(c), j(cm)))
+
+
 def as_plain(v):
     """Rows / Row objects / tuples -> plain comparable Python values."""
     if isinstance(v, dbengine.Row):
