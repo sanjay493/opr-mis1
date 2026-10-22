@@ -56,6 +56,9 @@ def flags():
 def nested():
     return {"b": {"y": 1, "x": 2}, "a": {"z": 3}}
 
+def ties():
+    return [("a", 1, "x"), ("a", 1, "y"), ("b", 2, "z")]
+
 def save(x):
     return "written"
 '''
@@ -89,6 +92,12 @@ VARIANTS = {
     "v2_nested_value": _mutate(V1, 'return {"b": {"y": 1, "x": 2}, "a": {"z": 3}}',
                                'return {"a": {"z": 3}, "b": {"x": 2, "y": 9}}'),
     "v2_private_missing": V1.replace("_load", "_load2"),
+    "v2_ties_swapped": _mutate(V1, '[("a", 1, "x"), ("a", 1, "y"), ("b", 2, "z")]',
+                               '[("a", 1, "y"), ("a", 1, "x"), ("b", 2, "z")]'),
+    "v2_ties_value": _mutate(V1, '[("a", 1, "x"), ("a", 1, "y"), ("b", 2, "z")]',
+                             '[("a", 1, "y"), ("a", 1, "q"), ("b", 2, "z")]'),
+    "v2_ties_key_order": _mutate(V1, '[("a", 1, "x"), ("a", 1, "y"), ("b", 2, "z")]',
+                                 '[("b", 2, "z"), ("a", 1, "x"), ("a", 1, "y")]'),
 }
 
 
@@ -350,32 +359,45 @@ def test_replay_detects_a_value_change(fake):
     assert "values" in out and "[0]" in out and "'v'" in out
 
 
-def test_known_parity_exception_is_reported_not_a_diff_and_only_that_call(fake, monkeypatch):
-    v1 = fake["v1"]
+def _record_ties(fake):
     rec = _recorder(fake)
     with rec.installed():
-        v1.values("BSP", ["2026-08"])
-        v1.values("DSP", ["2026-08"])
+        fake["v1"].ties()
+    rec.commit()
+    r = next(iter(ro.Store(fake["store"]).iter_records("fake", "sql")))
+    return ("fake.ties", ro.dumps(r["a"]), ro.dumps(r["k"]))
+
+
+def test_known_parity_exception_accepts_only_its_relaxation(fake, monkeypatch):
+    key = _record_ties(fake)
+    monkeypatch.setattr(ro, "KNOWN_PARITY_EXCEPTIONS", {key: (("ties", (0, 1)), "a ruling")})
+    code, out = _replay(fake, "v2_ties_swapped")       # tied rows swapped: accepted
+    assert code == 0 and "KNOWN EXCEPTION fake.ties" in out and "1 known exceptions" in out
+    for variant in ("v2_ties_value", "v2_ties_key_order"):   # anything else: still a DIFF
+        code, out = _replay(fake, variant)
+        assert code == 1 and "DIFF fake.ties" in out and "KNOWN EXCEPTION" not in out, variant
+    code, out = _replay(fake, "v2_clean")              # equal: nothing reported
+    assert code == 0 and "KNOWN EXCEPTION" not in out
+
+
+def test_unlisted_call_of_a_listed_function_still_diffs(fake, monkeypatch):
+    rec = _recorder(fake)
+    with rec.installed():
+        fake["v1"].values("BSP", ["2026-08"])
+        fake["v1"].values("DSP", ["2026-08"])
     rec.commit()
     recs = {r["a"][0]: r for r in ro.Store(fake["store"]).iter_records("fake", "sql")}
     key = ("fake.values", ro.dumps(recs["BSP"]["a"]), ro.dumps(recs["BSP"]["k"]))
-    monkeypatch.setattr(ro, "KNOWN_PARITY_EXCEPTIONS", {key: "a ruling"})
-    code, out = _replay(fake, "v2_value")
-    assert code == 1                                   # DSP still differs
-    assert "KNOWN EXCEPTION fake.values" in out and "1 known exceptions" in out
-    assert "1 of 2 calls differ" in out
-    monkeypatch.setattr(ro, "KNOWN_PARITY_EXCEPTIONS",
-                        {key: "a ruling", (key[0], ro.dumps(recs["DSP"]["a"]), key[2]): "another"})
-    code, out = _replay(fake, "v2_value")
-    assert code == 0 and "2 known exceptions" in out
-    code, out = _replay(fake, "v2_clean")              # equal again: nothing reported
-    assert code == 0 and "KNOWN EXCEPTION" not in out
+    monkeypatch.setattr(ro, "KNOWN_PARITY_EXCEPTIONS", {key: (("ties", (0,)), "a ruling")})
+    code, out = _replay(fake, "v2_value")              # a value change, listed or not: DIFF
+    assert code == 1 and "2 of 2 calls differ" in out and "KNOWN EXCEPTION" not in out
 
 
 def test_known_parity_exceptions_table():
     import json
     assert len(ro.KNOWN_PARITY_EXCEPTIONS) == 5
-    for (fn, args, kwargs), why in ro.KNOWN_PARITY_EXCEPTIONS.items():
+    for (fn, args, kwargs), (relaxation, why) in ro.KNOWN_PARITY_EXCEPTIONS.items():
+        assert relaxation == ("ties", (0, 1, 3))
         assert fn == "production.records_calendar_month_totals" and kwargs == "[]"
         assert json.loads(args)[1]["$tuple"][0] == "plant_name IN (%s)"
         assert len(why) > 200

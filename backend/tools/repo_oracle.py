@@ -215,11 +215,16 @@ COMPARE_MODE = {
 }
 
 
-# Individual recorded calls whose v2 result is ACCEPTED as different from v1
-# (a controller ruling each): ("module.func", canonical args text, canonical
-# kwargs text) -> why. Replay reports such a call as KNOWN EXCEPTION instead
-# of a diff when it differs; every other call of the function is still
-# compared as usual. The user-visible effect of each is listed in
+# Individual recorded calls whose v2 result may differ from v1 in ONE
+# accepted way (a controller ruling each): ("module.func", canonical args
+# text, canonical kwargs text) -> (relaxation, why). Relaxations:
+#   ("ties", (col, ...))  the result is a list of rows; v2 may order rows
+#                         whose key (the values at those columns) is equal
+#                         differently. Accepted only when the key sequence
+#                         is identical AND the rows are the same multiset.
+# A listed call that differs in any other way (a value, a type, a key out
+# of order, a missing row) is still a DIFF; unlisted calls are compared as
+# usual. The user-visible effect of each entry is listed in
 # backend/tools/parity_exceptions.md (7g parity must show exactly those).
 _CALENDAR_TIES = (
     "Task 7b ruling (a): tie order only. v1 GROUP BY + ORDER BY item_name, mon_num, total DESC sorted "
@@ -232,14 +237,44 @@ _CALENDAR_TIES = (
 KNOWN_PARITY_EXCEPTIONS = {
     ("production.records_calendar_month_totals",
      '[{"$cursor":"dbengine","row_factory":null},{"$tuple":["plant_name IN (%s)",["' + plant + '"]]}]',
-     "[]"): _CALENDAR_TIES
+     "[]"): (("ties", (0, 1, 3)), _CALENDAR_TIES)       # (item_name, mon_num, total)
     for plant in ("BSP", "DSP", "RSP", "BSL", "ISP")
 }
 
 
 def known_exception(module, name, rec):
-    """The ruling text when this recorded call is a KNOWN_PARITY_EXCEPTIONS entry, else None."""
+    """(relaxation, why) when this recorded call is a KNOWN_PARITY_EXCEPTIONS entry, else None."""
     return KNOWN_PARITY_EXCEPTIONS.get((f"{module}.{name}", dumps(rec["a"]), dumps(rec["k"])))
+
+
+def _row_values(row):
+    """A canonical row ($tuple / $Row / $dict / list) -> its values in order."""
+    items = _items(row)
+    if items is None:
+        return None
+    if isinstance(row, dict) and next(iter(row)).startswith(("$Row", "$dict")):
+        return [it[2] for it in items]
+    return list(items)
+
+
+def within_relaxation(relaxation, expected, got):
+    """True when `got` equals `expected` up to `relaxation` (see KNOWN_PARITY_EXCEPTIONS)."""
+    kind, cols = relaxation
+    if kind != "ties":
+        raise ValueError(f"unknown relaxation {kind!r}")
+    e_rows, g_rows = _items(expected), _items(got)
+    if e_rows is None or g_rows is None or len(e_rows) != len(g_rows):
+        return False
+
+    def key(row):
+        vals = _row_values(row)
+        if vals is None or max(cols) >= len(vals):
+            return None
+        return dumps([vals[c] for c in cols])
+    e_keys, g_keys = [key(r) for r in e_rows], [key(r) for r in g_rows]
+    if None in e_keys or e_keys != g_keys:
+        return False
+    return sorted(dumps(r) for r in e_rows) == sorted(dumps(r) for r in g_rows)
 
 
 def parse_mode(mode):
@@ -935,7 +970,8 @@ def replay_records(records, impl, module, pass_name, *, functions=None, limit_di
         problems = _compare(rec, got, text, depth=compare_depth(module, name))
         if problems is None:
             continue
-        if known_exception(module, name, rec) is not None:
+        known = known_exception(module, name, rec)
+        if known is not None and "r" in rec and within_relaxation(known[0], rec["r"], got):
             stats["known"] = stats.get("known", 0) + 1
             ctx = f" ctx={rec['ctx']}" if "ctx" in rec else ""
             out(f"KNOWN EXCEPTION {module}.{name} [{pass_name}{ctx}] args {_short(rec['a'], 200)} "
