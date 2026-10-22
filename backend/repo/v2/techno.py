@@ -294,13 +294,20 @@ _UPLOAD_PUT = ("INSERT INTO techno_upload (report_month, plant_code, unit_id, ha
                "source_file = new.source_file, created_at = new.created_at, created_at_iso = new.created_at_iso")
 
 
-def _put_blob(cur, plant, report_month, unit, techno_json, source_file, created_at, *, bump):
+def _put_blob(cur, plant, report_month, unit, techno_json, source_file, created_at, *, bump, transform=None):
     """Replace the whole stored blob of (plant, month, unit), as v1's
     INSERT ... ON DUPLICATE KEY UPDATE techno_json, source_file, created_at
     did (an existing row keeps its plant spelling). created_at None = NOW()
-    (created_at_iso 0), else that datetime (created_at_iso 1). Returns the
-    stored (blob, source_file) it replaced, or None."""
-    has_month, has_till, leaves = encode_techno(techno_json)
+    (created_at_iso 0), else that datetime (created_at_iso 1).
+
+    transform (read-modify-write in one transaction): called after the bump
+    with the locking read of the stored row (_stored(): blob, source_file,
+    plant, unit) or None; returns the (techno_json, source_file) to write,
+    or None to write nothing.
+
+    Returns None when nothing was written, else (old, techno_json,
+    source_file): old is the stored (blob, source_file) replaced, or None."""
+    leaves = None if transform else encode_techno(techno_json)
     _keys.check_month(report_month)
     _check_unit(unit)
     if bump:
@@ -309,6 +316,13 @@ def _put_blob(cur, plant, report_month, unit, techno_json, source_file, created_
     _keys.ensure_plant(cur, plant, bump=False)
     unit_id = _unit_id_for_write(cur, plant, unit, bump=False)
     stored = _stored(cur, plant, report_month, unit)
+    if transform:
+        put = transform(stored)
+        if put is None:
+            return None
+        techno_json, source_file = put
+        leaves = encode_techno(techno_json)
+    has_month, has_till, leaves = leaves
     if stored is None:
         old, stored_plant = None, plant
     else:
@@ -325,7 +339,7 @@ def _put_blob(cur, plant, report_month, unit, techno_json, source_file, created_
         cur.executemany("INSERT INTO techno_value (report_month, plant_code, unit_id, period, param_key, "
                         "num, is_int, raw) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
                         [(report_month, stored_plant, unit_id) + leaf for leaf in leaves])
-    return old
+    return old, techno_json, source_file
 
 
 def _iso_write(plant, report_month, unit, techno_json, source_file):
@@ -381,25 +395,42 @@ def save_techno_json(plant: str, report_month: str, unit: str,
 # Techno Data helpers  (techno_data table — all plants)
 # ============================================================================
 
+def _raw_write(conn, plant, report_month, unit, techno_json, source_file, transform=None):
+    """_put_blob with created_at = NOW() on conn's transaction (uncommitted),
+    then the activity-log old/new of v1's _raw_upsert_techno_data. Returns
+    the blob written, or None when transform wrote nothing."""
+    put = _put_blob(conn.cursor(), plant, report_month, unit, techno_json, source_file, None,
+                    bump=True, transform=transform)
+    if put is None:
+        return None
+    old, techno_json, source_file = put
+    if old is not None:
+        old = {"techno_json": old[0], "source_file": old[1]}
+    new = {"techno_json": techno_json, "source_file": source_file}
+    activity_context.record(f"techno_data/{plant}/{unit}/{report_month}", old, new)
+    return techno_json
+
+
+def _owned(conn, fn):
+    """fn(conn) on `conn` (the caller commits), or on a connection of its
+    own committed as one transaction."""
+    if conn is not None:
+        return fn(conn)
+    conn = connect()
+    try:
+        out = fn(conn)
+        conn.commit()
+        return out
+    finally:
+        conn.close()
+
+
 def _raw_upsert_techno_data(plant: str, report_month: str, unit: str, techno_json: Dict, source_file: str = '', conn=None):
     """Bare INSERT/UPDATE with no post-save hooks (see repo/techno.py):
     replace the stored blob, created_at = NOW(), then record the activity
     log old/new. `conn`, if given, is reused and NOT committed (the caller
     owns the transaction); otherwise one transaction of its own."""
-    owns_conn = conn is None
-    if owns_conn:
-        conn = connect()
-    try:
-        old = _put_blob(conn.cursor(), plant, report_month, unit, techno_json, source_file, None, bump=True)
-        if owns_conn:
-            conn.commit()
-    finally:
-        if owns_conn:
-            conn.close()
-    if old is not None:
-        old = {"techno_json": old[0], "source_file": old[1]}
-    new = {"techno_json": techno_json, "source_file": source_file}
-    activity_context.record(f"techno_data/{plant}/{unit}/{report_month}", old, new)
+    _owned(conn, lambda c: _raw_write(c, plant, report_month, unit, techno_json, source_file))
 
 
 def upsert_techno_data(plant: str, report_month: str, unit: str, techno_json: Dict, source_file: str = '', conn=None):
@@ -407,20 +438,14 @@ def upsert_techno_data(plant: str, report_month: str, unit: str, techno_json: Di
     tmi / fuel_rate recompute and the extraction-log entry (see
     repo/techno.py). With `conn` everything runs on it, uncommitted;
     without, the chain is one transaction of its own."""
-    owns_conn = conn is None
-    if owns_conn:
-        conn = connect()
-    try:
-        _upsert_chain(conn, plant, report_month, unit, techno_json, source_file)
-        if owns_conn:
-            conn.commit()
-    finally:
-        if owns_conn:
-            conn.close()
+    _owned(conn, lambda c: _upsert_chain(c, plant, report_month, unit, techno_json, source_file))
 
 
-def _upsert_chain(conn, plant, report_month, unit, techno_json, source_file):
-    _raw_upsert_techno_data(plant, report_month, unit, techno_json, source_file, conn=conn)
+def _upsert_chain(conn, plant, report_month, unit, techno_json, source_file, transform=None):
+    """v1's upsert_techno_data on conn: the raw write (or, with transform,
+    the read-modify-write), the recompute, the extraction-log entry (of the
+    blob written, before the recompute, as v1)."""
+    techno_json = _raw_write(conn, plant, report_month, unit, techno_json, source_file, transform)
     _maybe_recompute_derived_params(plant, report_month, unit, conn=conn)
     _log_techno_save(plant, report_month, unit, techno_json, source_file, conn=conn)
 
@@ -475,37 +500,32 @@ def _derived(data):
     return updated, changed
 
 
+def _recompute(unit):
+    """_put_blob transform: v1's recompute of the locked stored row; None
+    (write nothing) when there is no row, the caller's unit spelling is
+    not the stored one (v1 read get_techno_data(...).get(unit)), the blob
+    is empty, or nothing changes. The stored source_file is kept."""
+    def transform(stored):
+        if stored is None or stored[3] != unit or not stored[0]:
+            return None
+        updated, changed = _derived(stored[0])
+        return (updated, stored[1]) if changed else None
+    return transform
+
+
 def _maybe_recompute_derived_params(plant: str, report_month: str, unit: str, conn=None) -> None:
     """Recompute tmi/fuel_rate for this (plant, report_month, unit) from
     whatever inputs are currently stored, and overwrite the stored value if
-    it differs (v1 rule, repo/techno.py). A plain read decides whether
-    anything changes (no bump for a no-op); a change bumps, re-reads with a
-    lock and writes through _raw_upsert_techno_data (NOW(), activity log).
+    it differs (v1 rule, repo/techno.py; written with created_at = NOW() and
+    an activity-log entry, as v1's _raw_upsert_techno_data). A plain read
+    decides whether anything changes (no bump for a no-op); a change is a
+    read-modify-write: bump, locking re-read, recompute, write.
     `conn`: see merge_upsert_techno_data."""
     try:
         data = get_techno_data(plant, report_month, unit, conn=conn).get(unit, {})
-        if not data:
+        if not data or not _derived(data)[1]:
             return
-        if not _derived(data)[1]:
-            return
-        owns_conn = conn is None
-        if owns_conn:
-            conn = connect()
-        try:
-            cur = conn.cursor()
-            _ver.bump(cur)
-            stored = _stored(cur, plant, report_month, unit)
-            # v1 read get_techno_data(...).get(unit): only the caller's exact spelling
-            if stored is None or stored[3] != unit or not stored[0]:
-                return
-            updated, changed = _derived(stored[0])
-            if changed:
-                _raw_upsert_techno_data(plant, report_month, unit, updated, source_file=stored[1], conn=conn)
-                if owns_conn:
-                    conn.commit()
-        finally:
-            if owns_conn:
-                conn.close()
+        _owned(conn, lambda c: _raw_write(c, plant, report_month, unit, None, None, _recompute(unit)))
     except Exception as e:
         print(f"[db] tmi/fuel_rate recompute failed for {plant}/{report_month}/{unit}: {e}")
 
@@ -543,24 +563,11 @@ def merge_upsert_techno_data(plant: str, report_month: str, unit: str, new_techn
         and not stored are dropped;
       - source_file is always replaced by the new one, created_at := NOW();
       - then the tmi / fuel_rate recompute and the extraction-log entry.
-    One transaction: bump, locking read, merge, write chain. With `conn`
-    it runs on it and the caller commits."""
-    owns_conn = conn is None
-    if owns_conn:
-        conn = connect()
-    try:
-        cur = conn.cursor()
-        _keys.check_month(report_month)
-        _check_unit(unit)
-        _ver.bump(cur)
-        stored = _stored(cur, plant, report_month, unit)
-        merged = _merged(None if stored is None else stored[0], new_techno_json, clear_keys)
-        _upsert_chain(conn, plant, report_month, unit, merged, source_file)
-        if owns_conn:
-            conn.commit()
-    finally:
-        if owns_conn:
-            conn.close()
+    One transaction: bump, locking read of the stored row, merge, write,
+    recompute, log. With `conn` it runs on it and the caller commits."""
+    def merge(stored):
+        return _merged(None if stored is None else stored[0], new_techno_json, clear_keys), source_file
+    _owned(conn, lambda c: _upsert_chain(c, plant, report_month, unit, None, source_file, merge))
 
 
 def enrich_techno_records_with_db(records: List[Dict[str, Any]], plant: str, report_month: str, conn=None) -> List[Dict[str, Any]]:
