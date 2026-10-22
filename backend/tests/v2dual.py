@@ -75,6 +75,16 @@ class Dual:
             cur.executemany("INSERT INTO plant (plant_code, plant_kind, sort_order) VALUES (%s, %s, %s)", PLANTS)
             cur.execute("INSERT INTO data_version (id, n) VALUES (1, 1)")
 
+    def restore(self):
+        """Teardown: leave the session-wide v2 schema as schema_v2.sql +
+        seed_cal_month.sql built it (data tables empty, the seeded
+        1960-04..2040-03 calendar only, data_version (1, 1)), so tests that
+        share mysql_v2_db after a dual test (test_schema_v2) see it pristine."""
+        with self.v2_conn.cursor() as cur:
+            _empty_tables(cur, keep=_KEEP_V2)
+            cur.execute("DELETE FROM cal_month WHERE report_month NOT BETWEEN '1960-04' AND '2040-03'")
+            cur.execute("INSERT INTO data_version (id, n) VALUES (1, 1)")
+
     @contextmanager
     def _use(self, name):
         prev = dbengine._MYSQL_CFG["database"]

@@ -237,4 +237,6 @@ def dual(mysql_db, mysql_v2_db):
     DB layer) and the v2 test schema (mysql_v2_db), both emptied, for the
     Task 7 v1-vs-v2 repository equivalence tests."""
     from v2dual import Dual
-    return Dual(mysql_db, mysql_v2_db)
+    d = Dual(mysql_db, mysql_v2_db)
+    yield d
+    d.restore()        # the v2 schema is session-wide: leave it as built
