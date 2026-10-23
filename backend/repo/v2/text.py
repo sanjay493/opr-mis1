@@ -161,11 +161,11 @@ def _write_wide(scope, month, make, updated_by):
         for col in cols:
             _fits(col, values[col], _TEXT_MAX, nbytes=True)
         _fits("updated_by", updated_by, 190)
+        tuples = ", ".join(["(%s, %s, %s, %s, %s, NOW())"] * len(cols))
         cur.execute(
-            "INSERT INTO report_text (scope, period, block_key, text, updated_by, updated_at) VALUES "
-            + ", ".join(["(%s, %s, %s, %s, %s, NOW())"] * len(cols))
-            + " AS new ON DUPLICATE KEY UPDATE text = new.text, updated_by = new.updated_by, "
-              "updated_at = new.updated_at",
+            f"INSERT INTO report_text (scope, period, block_key, text, updated_by, updated_at) VALUES {tuples} "
+            "AS new ON DUPLICATE KEY UPDATE text = new.text, updated_by = new.updated_by, "
+            "updated_at = new.updated_at",
             [v for col in cols for v in (scope, month, col, values[col], updated_by)])
 
 

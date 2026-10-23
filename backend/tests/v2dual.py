@@ -218,6 +218,25 @@ class Dual:
                             "calculated_json, calculation_method) VALUES (%s, %s, %s, %s, %s, %s, %s)",
                             (p, self._v2_unit(cur, p, u), fy, j(t), us, j(c), j(cm)))
 
+    def seed_text(self, scope, rows):
+        """rows: v1 rows of the scope's table as {column: value} (timestamps
+        as the v1 strings). v1: inserted into that table; v2: the
+        report_text rows the migration would load (repo.v2codec
+        encode_text_row; items by exact name)."""
+        from repo.v2codec import TEXT_SCOPES, encode_text_row, v1_text_columns
+        cols = v1_text_columns(scope)
+        self.sql_many(1, f"INSERT INTO {TEXT_SCOPES[scope]['table']} ({', '.join(cols)}) "
+                         f"VALUES ({', '.join(['%s'] * len(cols))})",
+                      [tuple(r.get(c) for c in cols) for r in rows])
+        with self.v2_conn.cursor() as cur:
+            for r in rows:
+                for x in encode_text_row(scope, r):
+                    item_id = None if x["item_name"] is None else self._v2_item(cur, x["item_name"])
+                    cur.execute("INSERT INTO report_text (scope, period, block_key, plant_code, item_id, seq, "
+                                "text, updated_by, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                                (scope, x["period"], x["block_key"], x["plant_code"], item_id, x["seq"],
+                                 x["text"], x["updated_by"], x["updated_at"]))
+
 
 def as_plain(v):
     """Rows / Row objects / tuples -> plain comparable Python values."""
