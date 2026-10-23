@@ -254,7 +254,7 @@ class Dual:
                      tuple(r[c] for c in c1))
         with self.v2_conn.cursor() as cur:
             for r in rows:
-                names, vals = [], []
+                names, vals, flags = [], [], {}
                 for c2, c1, kind in cols:
                     if c1 not in r:
                         continue
@@ -263,6 +263,13 @@ class Dual:
                         v = vc.parse_ts(vc.TS_COLUMNS[f"{v2t}.{c2}"][1], v)
                     elif kind == "date":
                         v = vc.parse_date(v)
+                    elif kind == "mixed":
+                        v, flags[c2] = vc.parse_ts_flagged(f"{v2t}.{c2}", v)
+                    elif isinstance(kind, str) and kind.startswith("flag:"):
+                        v = flags[kind[5:]]
+                    elif isinstance(kind, str) and kind.startswith("unit:"):
+                        if v is not None:
+                            v = self._v2_unit(cur, r[kind[5:]], v)
                     elif kind not in (None, "month"):
                         raise NotImplementedError(kind)
                     if c2 in ("plant_code", "from_plant_code", "to_plant_code") and v is not None:
@@ -285,17 +292,30 @@ class Dual:
         from repo import v2codec as vc
         from tools.migrate_v1_to_v2 import SIMPLE
         v2t, cols = {v1t: (v2t, cols) for v1t, v2t, cols in SIMPLE}[v1_table]
+        flagcols = [c for c in cols if isinstance(c[2], str) and c[2].startswith("flag:")]
         cols = [c for c in cols if c[1] not in skip]
-        r1 = self.sql(1, f"SELECT {', '.join(c1 for _, c1, _ in cols)} FROM {v1_table}")
-        r2 = self.sql(2, f"SELECT {', '.join(c2 for c2, _, _ in cols)} FROM {v2t}")
+        shown = [c for c in cols if c not in flagcols]
+        r1 = self.sql(1, f"SELECT {', '.join(c1 for _, c1, _ in shown)} FROM {v1_table}")
+
+        def sel(c2, kind):
+            if isinstance(kind, str) and kind.startswith("unit:"):
+                return f"(SELECT pu.unit_code FROM plant_unit pu WHERE pu.unit_id = t.{c2})"
+            return f"t.{c2}"
+        names = [c[0] for c in cols]
+        r2 = self.sql(2, f"SELECT {', '.join(sel(c2, k) for c2, _, k in cols)} FROM {v2t} t")
 
         def back(row):
+            vals = dict(zip(names, row))
             out = []
-            for (c2, _, kind), v in zip(cols, row):
+            for c2, _, kind in shown:
+                v = vals[c2]
                 if kind == "ts":
                     v = vc.render_ts(vc.TS_COLUMNS[f"{v2t}.{c2}"][1], v)
                 elif kind == "date":
                     v = vc.render_date(v)
+                elif kind == "mixed":
+                    flag = next(vals[f2] for f2, _, k2 in flagcols if k2 == f"flag:{c2}")
+                    v = vc.render_ts_flagged(f"{v2t}.{c2}", v, flag)
                 out.append(v)
             return tuple(out)
         return sorted((tuple(r) for r in r1), key=repr), sorted((back(r) for r in r2), key=repr)

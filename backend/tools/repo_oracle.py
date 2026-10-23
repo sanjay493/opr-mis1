@@ -230,6 +230,19 @@ COMPARE_MODE = {
         "qty_plan in the v1 data is an integer below 2^53, so those sums are exact in any order. The one "
         "visible difference is the JSON row order of that endpoint's despatch_plan list for fy_start=2026 "
         "(listed in tools/parity_exceptions.md). --impl current re-run in a fresh process first: 0 diffs."),
+    "breakdown.open_breakdown_rows": (
+        "multiset",
+        "No ORDER BY; v1's row order is a cost-model choice per call: an idx_breakdown_start range scan "
+        "(start_ts, id) for early report months, the idx_breakdown_capital_repair IS NULL ref scan (id) "
+        "for others (2 of the 32 recorded calls take the first; ORDER BY id and ORDER BY start_ts, id each "
+        "reproduce 30), which v2 cannot predict without fitting today's row counts. Caller audit "
+        "(2026-10-23, Task 7e2): the only caller, page_secretary_review_texts._fetch_breakdowns, feeds "
+        "unit_summaries, which groups the events by (plant, unit_type, unit_name) into a dict and sorts "
+        "the output by that key; per group it sums the point-event hours and merges the intervals (order "
+        "independent but for float rounding in the last bit, then rounded to whole days) and keeps the "
+        "cause of the first event with the strictly greatest hours, so only two events of one unit with "
+        "exactly equal hours could swap their cause. v2 reads in id order. --impl current re-run in a "
+        "fresh process first (2026-10-23): 0 diffs."),
     "capacity._capacity_load": (
         "deep_unordered(depth=2)",
         "{(fold(plant), fold(item)): [(effective_month, annual_capacity), ...]} from a SELECT with no "

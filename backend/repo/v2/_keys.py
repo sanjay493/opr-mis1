@@ -205,3 +205,17 @@ def exact_item_id(cur, name, *, lock=False):
     row = cur.execute("SELECT item_id FROM item WHERE item_name = %s" + (" FOR SHARE" if lock else ""),
                       (name,)).fetchone()
     return None if row is None else row[0]
+
+
+def exact_unit_id(cur, plant, unit):
+    """unit_id of the unit spelled EXACTLY `unit` (unit_code is binary) of
+    `plant` (ai_ci), created when missing (unit_type NULL). Locking reads:
+    call it after the writer's bump. Used where v1 stored the caller's
+    spelling per row (breakdown, capital_repair)."""
+    sql = "SELECT unit_id FROM plant_unit WHERE plant_code = %s AND unit_code = %s FOR SHARE"
+    row = cur.execute(sql, (plant, unit)).fetchone()
+    if row is None:
+        cur.execute("INSERT INTO plant_unit (plant_code, unit_code) VALUES (%s, %s) AS new "
+                    "ON DUPLICATE KEY UPDATE unit_code = plant_unit.unit_code", (plant, unit))
+        row = cur.execute(sql, (plant, unit)).fetchone()
+    return row[0]
