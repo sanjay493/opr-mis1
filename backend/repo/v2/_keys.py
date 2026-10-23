@@ -56,6 +56,7 @@ and create two ai_ci-equal rows. 7c-7f: do the same.
 """
 import datetime as _dt
 import re
+from contextlib import contextmanager
 
 import pymysql
 
@@ -164,6 +165,29 @@ def check_plant_model(plant, column, v1_limit):
     if isinstance(plant, str) and len(plant) > _PLANT_CODE_LEN:
         raise OutOfModelError(f"plant {plant!r}: v1's {column} held up to {v1_limit} characters, "
                               f"the v2 plant master holds {_PLANT_CODE_LEN}")
+
+
+_FK_FAILS = 1452
+_FK_MSG = re.compile(r"\(`([^`]*)`\.`[^`]*`, CONSTRAINT `([^`]*)`")
+
+
+@contextmanager
+def v1_fk_errors(v1_fks):
+    """Re-raise a foreign-key failure (IntegrityError 1452) of a v2
+    constraint in `v1_fks` with v1's message: v1_fks maps the v2 constraint
+    name to (v1 table, v1 constraint, column, referenced v1 table,
+    referenced column), for the FKs v1 itself declared (the database name
+    in the message is kept)."""
+    try:
+        yield
+    except pymysql.err.IntegrityError as e:
+        m = _FK_MSG.search(str(e.args[1])) if e.args and e.args[0] == _FK_FAILS and len(e.args) > 1 else None
+        if m is None or m.group(2) not in v1_fks:
+            raise
+        table, name, col, ref, ref_col = v1_fks[m.group(2)]
+        raise pymysql.err.IntegrityError(
+            _FK_FAILS, f"Cannot add or update a child row: a foreign key constraint fails (`{m.group(1)}`.`{table}`, "
+                       f"CONSTRAINT `{name}` FOREIGN KEY (`{col}`) REFERENCES `{ref}` (`{ref_col}`))") from None
 
 
 def exact_item_id(cur, name, *, lock=False):

@@ -331,11 +331,12 @@ def run_step(dual, v1, v2, fn, *, reads, tables=(), activity=None, skip=()):
     canonical form) and the stored rows of each v1 table in `tables` agree.
     Returns the outcome."""
     got = []
-    for side, mod in ((dual.v1, v1), (dual.v2, v2)):
+    for side, mod, name in ((dual.v1, v1, dual.v1_name), (dual.v2, v2, dual.v2_name)):
         if activity is not None:
             activity.clear()
         with side():
             o = outcome(lambda: fn(mod))
+        o = (o[0], o[1].replace(f"`{name}`", "`<db>`"))      # FK messages name the database
         got.append((o, list(activity or ())))
     assert got[0] == got[1], got
     assert_same_reads(dual, v1, v2, reads)
