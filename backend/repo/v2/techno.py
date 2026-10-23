@@ -1025,13 +1025,19 @@ def months_signature_row(cur, months):
     strings (render_ts_flagged), as v1's VARCHAR MAX compared them (the two
     formats differ only at ' ' vs 'T' and a trailing fraction, where ai_ci
     and code-point order agree)."""
-    cur.execute(f"SELECT seq, created_at, created_at_iso FROM techno_upload "
-                f"WHERE report_month IN ({_ph(months)})", months)
-    rows = cur.fetchall()
-    stamps = [s for s in (render_ts_flagged("techno_upload.created_at", r[1], r[2]) for r in rows)
-              if s is not None]
+    # One aggregate row. Within one form the rendered string grows with the
+    # DATETIME (fixed-width 'YYYY-MM-DD HH:MM:SS'; isoformat()'s optional
+    # '.ffffff' only extends an equal prefix), so each form's MAX(created_at)
+    # renders to that form's largest v1 string, and the larger of the two is
+    # v1's MAX over all of them.
+    n, max_seq, max_now, max_iso = cur.execute(
+        "SELECT COUNT(*), MAX(seq), MAX(CASE WHEN created_at_iso = 0 THEN created_at END), "
+        "MAX(CASE WHEN created_at_iso = 1 THEN created_at END) "
+        f"FROM techno_upload WHERE report_month IN ({_ph(months)})", months).fetchone()
+    stamps = [s for s in (render_ts_flagged("techno_upload.created_at", max_now, 0),
+                          render_ts_flagged("techno_upload.created_at", max_iso, 1)) if s is not None]
     return _row_like(cur, ("COUNT(*)", "MAX(id)", "MAX(created_at)"),
-                     (len(rows), max((r[0] for r in rows), default=None), max(stamps) if stamps else None))
+                     (n, max_seq, max(stamps) if stamps else None))
 
 
 def five_plant_unit_rows(cur, units):
