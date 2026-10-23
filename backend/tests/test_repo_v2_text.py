@@ -256,7 +256,7 @@ def _outcome(fn):
 def _step(dual, fn):
     """fn(module) on both sides; same outcome, same reads, same stored data."""
     o1, o2 = dual.both(lambda m: _outcome(lambda: fn(m)), v1=t1, v2=t2)
-    assert o1 == o2
+    assert o1 == o2, (o1, o2)
     _assert_same(dual)
     return o1
 
@@ -365,6 +365,34 @@ def test_board_note_writes(seeded):
                lambda m: m.put("board_note", "2025-26:q1", "why_narrative", "via put", "u", plant="ASP"),
                lambda m: m.put("board_note", "2025-26:Q1", "why_narrative", "", "u", plant="BSP"),
                lambda m: m.put("board_note", "2026-27:Q4", "additional_highlights", "n", "u", plant="VISL")):
+        _step(seeded, fn)
+
+
+def test_months_and_fys_with_trailing_spaces(seeded):
+    """Task 7e1 (_keys.fit_month / fit_fy): v1 stored the value cut to
+    CHAR(7) (its ON DUPLICATE KEY updated the stored row) while its own
+    reads and DELETEs with the raw value matched nothing: a put() merges
+    onto nothing, a note replace deletes nothing and clashes (1062) with
+    the stored notes, a board-note blank deletes nothing."""
+    for fn in (lambda m: m.save_page3_narrative("2025-04 ", "spaced", ["s"]),
+               lambda m: m.put("page3_narrative", "2025-06  ", "highlights", "h only", "u"),
+               lambda m: m.put("key_highlights", "2025-04 ", "shortfalls", '["k"]', "u"),
+               lambda m: m.save_steel_sales_highlights("2025-06 ", ["m"], None, "s@x"),
+               lambda m: m.save_texts("2025-04 ", {"hl_SAIL": "sp", "delay_fs": "d"}),
+               lambda m: m.delete_texts("2025-04 ", ["hl_SAIL"]),                     # matches nothing
+               lambda m: m.put("secretary_review", "2025-05 ", "bd_ISP_MILL", "p", "u"),
+               lambda m: m.save_ss_phys_notes("2025-26 ", [{"sort_order": 1, "note_text": "clash"}]),
+               lambda m: m.save_ss_phys_notes("2025-26 ", [{"sort_order": 5, "note_text": "added"}]),
+               lambda m: m.put("ss_phys_note", "2025-26 ", "6", "via put", "u"),
+               lambda m: m.save_manual_text("2025-26 ", 1, [
+                   {"plant": "BSP", "field": "why_narrative", "text": "upd"},
+                   {"plant": "DSP", "field": "why_narrative", "text": ""}]),       # delete matches nothing
+               lambda m: m.save_manual_text("2025-26", "x", []),                  # nothing to do: 0
+               lambda m: m.save_manual_text("2025-26", "x", [{"plant": "BSP", "field": "f", "text": ""}]),
+               _on_tx(lambda m, cur: m.upsert_do_letter_remark(cur, "2025-04 ", "crude steel", "BSP", "sp")),
+               _on_tx(lambda m, cur: m.delete_do_letter_remark(cur, "2025-04 ", "Crude Steel", "DSP")),
+               _on_tx(lambda m, cur: m.upsert_sail_sales_note(cur, "2025-05 ", "note sp")),
+               lambda m: m.save_page3_narrative("2025-04 x", "too long", [])):         # 1406
         _step(seeded, fn)
 
 

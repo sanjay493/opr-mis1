@@ -151,8 +151,12 @@ def _get_wide(scope, month):
 
 def _write_wide(scope, month, make, updated_by):
     """One transaction: bump, lock the stored rows, values = make(the v1
-    get_* result or None) as {column: text}, upsert one row per column."""
-    _fits("report_month", month, 7, nullable=False)
+    get_* result or None) as {column: text}, upsert one row per column.
+    The stored rows are read with the raw month and written with the month
+    cut to v1's CHAR(7) (_keys.fit_month): v1's get_* found nothing for
+    '2025-04 ', its INSERT ... ON DUPLICATE KEY updated '2025-04'."""
+    period = _keys.fit_month(month)
+    _fits("report_month", period, 7, nullable=False)
     cols = _WIDE[scope]
     with rc.tx() as cur:
         _ver.bump(cur)
@@ -166,7 +170,7 @@ def _write_wide(scope, month, make, updated_by):
             f"INSERT INTO report_text (scope, period, block_key, text, updated_by, updated_at) VALUES {tuples} "
             "AS new ON DUPLICATE KEY UPDATE text = new.text, updated_by = new.updated_by, "
             "updated_at = new.updated_at",
-            [v for col in cols for v in (scope, month, col, values[col], updated_by)])
+            [v for col in cols for v in (scope, period, col, values[col], updated_by)])
 
 
 def _page3_values(production_narrative, highlights):
@@ -240,29 +244,36 @@ def _replace_notes(scope, period, make):
     """One transaction: bump, lock the stored notes, rows = make([(sort_order,
     text), ...]) as [{sort_order, note_text}], then v1's replace: delete
     every note of the period and insert each non-blank row (each checked
-    in v1's order: sort_order range, note_text length, duplicate key)."""
+    in v1's order: sort_order range, note_text length, duplicate key).
+
+    An FY with trailing spaces past v1's CHAR(7) (_keys.fit_fy): v1's
+    read and DELETE used the raw FY and matched nothing, its INSERTs stored
+    the cut FY, so they clash with the cut FY's stored notes (1062)."""
+    stored_period = _keys.fit_fy(period)
     with rc.tx() as cur:
         _ver.bump(cur)
         stored = [(so, t) for so, t in cur.execute(_NOTE_SELECT + " FOR UPDATE", (scope, period)).fetchall()]
         rows = make(stored)
         cur.execute("DELETE FROM report_text WHERE scope = %s AND period = %s", (scope, period))
         seen = set()
+        if stored_period != period:
+            seen = {r[0] for r in cur.execute(_NOTE_SELECT + " FOR UPDATE", (scope, stored_period)).fetchall()}
         for r in rows:
             text = (r.get("note_text") or "").strip()
             if not text:
                 continue
             so = int(r.get("sort_order") or 0)
             if scope == "ss_phys_note":
-                _fits("financial_year", period, 7, nullable=False)
+                _fits("financial_year", stored_period, 7, nullable=False)
             _in_range("sort_order", so, _INT_MIN, _INT_MAX)
             _fits("note_text", text, 500)
             if so in seen:
-                key = f"{period}-{so}" if scope == "ss_phys_note" else f"{so}"
+                key = f"{stored_period}-{so}" if scope == "ss_phys_note" else f"{so}"
                 table = "special_steel_phys_note" if scope == "ss_phys_note" else "rail_prod_despatch_note"
                 raise rc.IntegrityError(1062, f"Duplicate entry '{key}' for key '{table}.PRIMARY'")
             seen.add(so)
             cur.execute("INSERT INTO report_text (scope, period, block_key, seq, text) "
-                        "VALUES (%s, %s, 'note', %s, %s)", (scope, period, so, text))
+                        "VALUES (%s, %s, 'note', %s, %s)", (scope, stored_period, so, text))
         return len(rows)
 
 
@@ -297,10 +308,34 @@ def get_manual_text(fy: str, quarter: int) -> dict:
     return {(plant, field): text for plant, field, text in rows if text}
 
 
+def _delete_quarter(quarter):
+    """The integer quarter v1's DELETE ... WHERE quarter = %s matched, or
+    None when it matched nothing (NULL, a fractional value). A string is
+    compared as a DOUBLE, and in strict mode a non-numeric one fails the
+    statement: v1's OperationalError 1292."""
+    if quarter is None:
+        return None
+    if isinstance(quarter, str):
+        try:
+            q = float(quarter)
+        except ValueError:
+            raise pymysql.err.OperationalError(1292, f"Truncated incorrect DOUBLE value: '{quarter}'") from None
+    else:
+        q = float(quarter)
+    return int(q) if q.is_integer() else None
+
+
 def save_manual_text(fy: str, quarter: int, entries: list) -> int:
     """Upsert or delete each entry ({"plant", "field", "text"}). An empty
-    (after strip) text deletes the row. Returns the count processed."""
-    period = board_note_period(fy, quarter)
+    (after strip) text deletes the row. Returns the count processed.
+
+    The period is built only when an entry needs it (v1 never touched the
+    quarter for skipped entries). An upsert uses the FY cut to v1's CHAR(7)
+    (_keys.fit_fy; v1's ON DUPLICATE KEY matched the cut FY), a delete the
+    raw FY (v1's DELETE matched nothing for an FY with trailing spaces). A
+    delete's quarter is compared as v1's TINYINT comparison did
+    (_delete_quarter)."""
+    stored_fy = _keys.fit_fy(fy)
     with rc.tx() as cur:
         saved = 0
         _ver.bump(cur)
@@ -311,7 +346,8 @@ def save_manual_text(fy: str, quarter: int, entries: list) -> int:
             if not plant or not field:
                 continue
             if text:
-                _fits("report_fy", fy, 7, nullable=False)
+                period = board_note_period(stored_fy, quarter)
+                _fits("report_fy", stored_fy, 7, nullable=False)
                 _in_range("quarter", quarter, -128, 127)
                 _fits("plant", plant, 16)
                 _fits("field", field, 24)
@@ -328,8 +364,11 @@ def save_manual_text(fy: str, quarter: int, entries: list) -> int:
                     AS new ON DUPLICATE KEY UPDATE text = new.text
                 """, (period, field, plant, text))
             else:
-                cur.execute("DELETE FROM report_text WHERE scope = 'board_note' AND period = %s "
-                            "AND plant_code = %s AND block_key = %s", (period, plant, field))
+                q = _delete_quarter(quarter)
+                period = None if q is None else board_note_period(fy, q)
+                if period is not None:
+                    cur.execute("DELETE FROM report_text WHERE scope = 'board_note' AND period = %s "
+                                "AND plant_code = %s AND block_key = %s", (period, plant, field))
             saved += 1
     return saved
 
@@ -345,6 +384,7 @@ def get_texts(month: str) -> dict:
 
 def save_texts(month: str, texts: dict) -> int:
     now = _dt.datetime.now().replace(microsecond=0)     # v1: isoformat(timespec="seconds")
+    month = _keys.fit_month(month)                      # v1's CHAR(7) / ON DUPLICATE KEY
     with rc.tx() as cur:
         n = 0
         _ver.bump(cur)
@@ -406,6 +446,7 @@ def page3_narrative_any_row(report_month):
 def upsert_sail_sales_note(cur, month, note):
     """Upsert the Table A footnote on the caller's cursor; the caller commits.
     main POST /api/sail-1page/confirm."""
+    month = _keys.fit_month(month)                      # v1's CHAR(7) / ON DUPLICATE KEY
     _fits("report_month", month, 7, nullable=False)
     _fits("note", note, _TEXT_MAX, nbytes=True)
     _ver.bump(cur)
@@ -453,6 +494,7 @@ def do_letter_item_remark_rows(cur, report_month, item_name):
 def upsert_do_letter_remark(cur, report_month, item_name, plant_name, remark):
     """Upsert one remark on the caller's cursor; the caller commits.
     main POST /api/do-letter/remarks."""
+    report_month = _keys.fit_month(report_month)        # v1's CHAR(7) / ON DUPLICATE KEY
     _fits("report_month", report_month, 7, nullable=False)
     _fits("item_name", item_name, 32, nullable=False)
     _fits("plant_name", plant_name, 8, nullable=False)

@@ -324,6 +324,10 @@ def _put_blob(cur, plant, report_month, unit, techno_json, source_file, created_
     Returns None when nothing was written, else (old, techno_json,
     source_file): old is the stored (blob, source_file) replaced, or None."""
     leaves = None if transform else encode_techno(techno_json)
+    # v1 stored the month cut to CHAR(7) and its ON DUPLICATE KEY matched the
+    # cut month, while its own SELECTs (the merge read, the activity 'old')
+    # ran with the raw month and found nothing (NO PAD) - _keys.fit_char
+    seen_month, report_month = report_month, _keys.fit_month(report_month)
     _keys.check_month(report_month)
     _check_unit(unit)
     if bump:
@@ -333,17 +337,19 @@ def _put_blob(cur, plant, report_month, unit, techno_json, source_file, created_
     stored = _stored(cur, plant, report_month, unit)
     # v1's ON DUPLICATE KEY kept the stored (ai_ci-equal) key; else the exact spelling
     unit_id = stored[4] if stored is not None else _unit_id_for_write(cur, plant, unit, bump=False)
+    visible = stored if seen_month == report_month else None
     if transform:
-        put = transform(stored)
+        put = transform(visible)
         if put is None:
             return None
         techno_json, source_file = put
         leaves = encode_techno(techno_json)
     has_month, has_till, leaves = leaves
+    old = None if visible is None else visible[:2]
     if stored is None:
-        old, stored_plant = None, plant
+        stored_plant = plant
     else:
-        old, stored_plant = stored[:2], stored[2]
+        stored_plant = stored[2]
         cur.execute("DELETE FROM techno_value WHERE report_month = %s AND plant_code = %s AND unit_id = %s",
                     (report_month, stored_plant, unit_id))
     if created_at is None:
@@ -758,6 +764,7 @@ def save_techno_plan(plant: str, fy: str, unit: str, techno_json: Dict,
     path into techno_plan_fy; see repo/techno.py)."""
     _check_unit(unit)
     now = datetime.now().isoformat()
+    stored_fy = _keys.fit_fy(fy)        # v1's CHAR(7) (the raw fy's own SELECT found nothing)
     conn = connect()
     try:
         cur = conn.cursor()
@@ -768,10 +775,12 @@ def save_techno_plan(plant: str, fy: str, unit: str, techno_json: Dict,
         # the unit is resolved by the exact spelling
         old = cur.execute(f"SELECT p.techno_json, p.is_user_supplied, p.calculated_json, p.calculation_method, "
                           f"p.unit_id FROM {_P} WHERE p.plant_code = %s AND p.fy = %s AND {_UC} = %s "
-                          "FOR UPDATE OF p FOR SHARE OF pu", (plant, fy, unit)).fetchone()
+                          "FOR UPDATE OF p FOR SHARE OF pu", (plant, stored_fy, unit)).fetchone()
         if old is not None:
             unit_id = old[4]
             old = dict(zip(("techno_json", "is_user_supplied", "calculated_json", "calculation_method"), old[:4]))
+            if stored_fy != fy:
+                old = None
         else:
             unit_id = _unit_id_for_write(cur, plant, unit, bump=False)
         cur.execute("""
@@ -784,7 +793,7 @@ def save_techno_plan(plant: str, fy: str, unit: str, techno_json: Dict,
                 calculated_json = new.calculated_json,
                 calculation_method = new.calculation_method,
                 updated_at = new.updated_at
-        """, (plant, unit_id, fy, json.dumps(techno_json), int(is_user_supplied),
+        """, (plant, unit_id, stored_fy, json.dumps(techno_json), int(is_user_supplied),
               json.dumps(calculated_json or {}), json.dumps(calculation_method or {}), created_by, now, now))
         conn.commit()
     finally:

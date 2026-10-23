@@ -416,3 +416,73 @@ def test_capacity_months_and_plants_outside_the_masters(cap_seeded):
     a, b = cap_seeded.both(_cap_all, v1=cap1, v2=cap2)
     assert strip(a) == strip(b)
     _cap_same(cap_seeded, lambda m: m.get_effective_capacity("xyz", "hot metal", "2100-01"))
+
+
+# ── trailing spaces past CHAR(7) (Task 7e1, _keys.fit_month) ────────────────
+
+def _committed(fn):
+    """fn(module, cur) on a db.connect() cursor, committed."""
+    def run(mod):
+        import dbengine
+        conn = dbengine.connect()
+        try:
+            out = fn(mod, conn.cursor())
+            conn.commit()
+            return out
+        finally:
+            conn.close()
+    return run
+
+
+def _outcomes(dual, v1, v2, step):
+    out = []
+    for side, mod in ((1, v1), (2, v2)):
+        with (dual.v1() if side == 1 else dual.v2()):
+            try:
+                out.append(("ok", as_plain(step(mod))))
+            except Exception as e:      # noqa: BLE001
+                out.append((type(e).__name__, e.args))
+    return out
+
+
+def test_month_with_trailing_spaces_is_cut_as_v1_stored_it(seeded, monkeypatch):
+    """v1 stored '2025-04' for '2025-04 ' (its ON DUPLICATE KEY updated the
+    stored row) while its own SELECT / DELETE with '2025-04 ' matched
+    nothing; '2025-04 x' is still too long (1406)."""
+    calls = []
+    monkeypatch.setattr(activity_context, "record", lambda *a: calls.append(a))
+    steps = [lambda m: m.upsert("actual", [("2025-04 ", "BSP", "Hot Metal", 11.0),
+                                           ("2025-06   ", "RSP", "New One", 12.0)]),
+             lambda m: m.save_production_actual("2025-05  ", "BSP", "Hot Metal", 13.0),
+             lambda m: m.save_production_plan("2025-04 ", "BSP", "Hot Metal", None),    # DELETE matches nothing
+             lambda m: m.delete("actual", "2025-04 ", "BSP", None),                     # matches nothing
+             _committed(lambda m, cur: m.upsert_row(cur, "mou", "2025-04 ", "BSP", "cc billet", 1.0)),
+             lambda m: m.upsert("actual", [("2025-04 x", "BSP", "Hot Metal", 1.0)])]
+    for step in steps:
+        calls.clear()
+        out = _outcomes(seeded, p1, p2, step)
+        assert out[0] == out[1]
+        assert len(calls) in (0, 2) and (not calls or calls[0] == calls[1])
+        _assert_same_data(seeded)
+
+
+def test_capacity_month_with_trailing_spaces(cap_seeded, monkeypatch):
+    calls = []
+    monkeypatch.setattr(activity_context, "record", lambda *a: calls.append(a))
+    strip = lambda rows: [{k: v for k, v in r.items() if k not in ("created_at", "updated_at")} for r in rows]
+    # (the new id first: v1's refused INSERT burns an AUTO_INCREMENT value, v2 refuses before inserting)
+    steps = [lambda m: m.save_capacity_entry("RSP", "Hot Metal", "2026-01  ", 1.0, "", "c@x"),
+             lambda m: m.save_capacity_entry("BSP", "Hot Metal", "2024-04 ", 1.0, "", "c@x"),   # clash (1062)
+             lambda m: m.update_capacity_entry(2, "u@x", effective_month="2024-04 "),           # clash
+             lambda m: m.update_capacity_entry(3, "u@x", effective_month="2027-02 "),
+             lambda m: m.save_capacity_entry("RSP", "Hot Metal", "2026-01 1", 1.0, "", "c@x")]   # 1406
+    for step in steps:
+        calls.clear()
+        out = _outcomes(cap_seeded, cap1, cap2, step)
+        assert out[0] == out[1]
+        assert len(calls) in (0, 2)
+        if calls:
+            (k1, o1, n1), (k2, o2, n2) = calls
+            assert k1 == k2 and strip([o1 or {}, n1]) == strip([o2 or {}, n2])
+        a, b = cap_seeded.both(_cap_all, v1=cap1, v2=cap2)
+        assert strip(a) == strip(b)

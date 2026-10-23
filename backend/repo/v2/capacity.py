@@ -151,18 +151,19 @@ def save_capacity_entry(plant: str, item: str, effective_month: str,
     now = datetime.now().isoformat()
     try:
         cur = conn.cursor()
-        _keys.check_month(effective_month)
+        stored_month = _keys.fit_month(effective_month)     # what v1's CHAR(7) stored
+        _keys.check_month(stored_month, "effective_month")
         _ver.bump(cur)
-        _keys.ensure_month(cur, effective_month, bump=False)
+        _keys.ensure_month(cur, stored_month, bump=False)
         _keys.ensure_plant(cur, plant, bump=False)
         item_id = _item_id_for_write(cur, item, bump=False)
-        _check_unique(cur, plant, item, effective_month)
+        _check_unique(cur, plant, item, stored_month)
         cur.execute("""
             INSERT INTO item_capacity
                 (plant_code, item_id, effective_month, annual_capacity, reason,
                  created_by, created_at, updated_by, updated_at)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """, (plant, item_id, effective_month, annual_capacity, reason,
+        """, (plant, item_id, stored_month, annual_capacity, reason,
               created_by, now, created_by, now))
         new_id = cur.lastrowid
         conn.commit()
@@ -197,15 +198,18 @@ def update_capacity_entry(entry_id: int, updated_by: str, **fields) -> bool:
         return True
     try:
         cur = conn.cursor()
+        # what v1's CHAR(7) stored (the activity entry below keeps the raw value, as v1's did)
+        stored = dict(given)
         if "effective_month" in given:
-            _keys.check_month(given["effective_month"])
+            stored["effective_month"] = _keys.fit_month(given["effective_month"])
+            _keys.check_month(stored["effective_month"], "effective_month")
         _ver.bump(cur)
         if "effective_month" in given:
-            _keys.ensure_month(cur, given["effective_month"], bump=False)
+            _keys.ensure_month(cur, stored["effective_month"], bump=False)
         if "plant_name" in given:
             _keys.ensure_plant(cur, given["plant_name"], bump=False)
         sets, args = [], []
-        for k, v in given.items():
+        for k, v in stored.items():
             if k == "item_name":
                 sets.append("item_id=%s")
                 args.append(_item_id_for_write(cur, v, bump=False))
@@ -214,7 +218,7 @@ def update_capacity_entry(entry_id: int, updated_by: str, **fields) -> bool:
                 args.append(v)
         sets.append("updated_by=%s"); args.append(updated_by)
         sets.append("updated_at=%s"); args.append(datetime.now().isoformat())
-        after = {**old, **given}
+        after = {**old, **stored}
         _check_unique(cur, after["plant_name"], after["item_name"], after["effective_month"], entry_id)
         args.append(entry_id)
         cur.execute(f"UPDATE item_capacity SET {', '.join(sets)} WHERE id=%s", args)

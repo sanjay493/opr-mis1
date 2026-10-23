@@ -518,6 +518,30 @@ def test_techno_plan_writes(seeded, hooks):
         assert p1 == p2
 
 
+def test_month_and_fy_with_trailing_spaces(seeded, hooks):
+    """Task 7e1 (_keys.fit_month / fit_fy): v1's merge read and activity
+    'old' used the raw '2025-04 ' and found nothing, so the merge stored the
+    new blob as given; its ON DUPLICATE KEY then replaced the stored
+    '2025-04' row. A plan FY '2025-26 ' updates the stored '2025-26' plan
+    the same way (activity old None)."""
+    written = set()
+    steps = [(lambda m: m.merge_upsert_techno_data("BSP", "2025-04 ", "BF_Shop", {"month": {"zz": 1}}, "t.x"),
+              ("2025-04", "BSP", "BF_Shop")),
+             (lambda m: m.upsert_techno_data("DSP", "2025-04  ", "BF_Shop", {"month": {"coke_rate": 9}}),
+              ("2025-04", "DSP", "BF_Shop")),
+             (lambda m: m.merge_upsert("2025-06 ", "RSP", "General", {"month": {"q": 2.5}}),
+              ("2025-06", "RSP", "General"))]
+    for step, key in steps:
+        _both_hooked(seeded, hooks, step)
+        written.add(key)
+        _assert_same_data(seeded, now_written=written)
+    for step in (lambda m: m.save_techno_plan("BSP", "2025-26 ", "Shop", {"coke_rate": 3}),
+                 lambda m: m.save_techno_plan("BSP", "2027-28 ", "shop", {"coke_rate": 4})):
+        _both_hooked(seeded, hooks, lambda m: (_clear_plan_caches(m), step(m)))
+        p1, p2 = seeded.both(_plans, v1=t1, v2=t2)
+        assert p1 == p2
+
+
 def test_registry_writes_fail_alike(seeded):
     """The registry helpers name tables neither schema has: the same error."""
     def run(fn):

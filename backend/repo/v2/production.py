@@ -264,6 +264,7 @@ def _put(cur, measure, month, plant, item, value, *, bump=True):
     """Set one measure of (month, plant, item) to `value` (a v1 upsert of one
     row). `bump`: False only when the caller has already bumped on `cur`."""
     col, flag = _cols(measure)
+    month = _keys.fit_month(month)      # v1's ON DUPLICATE KEY saw the cut month
     _keys.check_month(month)
     if bump:
         _ver.bump(cur)
