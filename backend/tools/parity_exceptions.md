@@ -65,3 +65,37 @@ Rules for Task 7g:
 **How the table was made.** Measured 2026-10-22 on mis_reports_rehearsal (the v1 oracle) against mis_reports_v2_rehearsal. The items are page_records' items for each plant tab: `distinct_items(actual, plant)` minus `LEGACY_ITEM_NAMES`. The data is the data as of the parity `--today 2026-10-19`.
 
 **Upkeep.** If the data or `--today` changes, regenerate this table before 7g compares parity.
+
+## 2. Invalid-input deviations (writes)
+
+These are writes that v1 stored and v2 refuses, because the v2 model cannot hold the value. None of them is produced by the app's UI, extractors or scripts, and none occurs in the v1 data. They are listed so that a refusal is recognised as known, not taken for a regression. The parity snapshot has no write calls, so none of them shows up in 7g's parity diff.
+
+### 2a. Report months that are not 'YYYY-MM' (Task 7b)
+
+- **The input.** A month string of at most 7 characters that is not a real month, such as `'2025-4'`, `'2025-13'`, `'abc'` or `''`.
+- **v1** stored it as text in its CHAR(7) column.
+- **v2** cannot: cal_month needs a real month_start and FY. `repo/v2/_keys.check_month` raises `OutOfModelError` (a ValueError) before the bump, so nothing is written.
+- **Reachable** through the unvalidated production endpoints (`/api/production-entry`, `/api/production-item-range`, `/api/conversion-entry`, `/api/confirm-plan`), and through api_capacity, whose `_validate_month` accepts `'2026-4'`. Each gives a 500 where v1 returned 200.
+- Longer strings fail on both sides with the same DataError 1406.
+
+### 2b. Techno blob shapes v2's codec refuses (Task 7c, fix round 2)
+
+`repo.v2codec.encode_techno` refuses, with `CodecError` (a ValueError), three blob shapes that v1 stored verbatim as JSON. In the write chain the error is raised before the write; a merge rolls its transaction back. Audit, 2026-10-23, of every builder of a blob passed to upsert_techno_data, merge_upsert(_techno_data), save_techno_json, save_techno_data_from_extraction, save_sail_techno_actuals and _raw_upsert_techno_data:
+
+- **Callers covered:**
+  - the api_*_techno routers, through their extractors in techno_project/ and excel_extractors/pdf_extractor_bsp_flash;
+  - main.py's BSL BF PDF save and /api/techno-entries;
+  - api_techno_manual's /save and SAIL BF;
+  - page_techno.calculate_sail_actuals;
+  - api_coal_*, api_mcr_techno and api_unified_techno;
+  - the scripts/ backfills and techno_project/bulk_load_sail_csv.
+- **What they build.** Every one builds `{"month": {...}, "till_month": {...}}` or a subset of it, with dict periods and str keys. bulk_load_sail_csv validates its period column, and a merge onto a stored row always rebuilds both periods as dicts.
+
+| shape | v1 | v2 | reachable? |
+|---|---|---|---|
+| top-level keys other than `month` / `till_month` | stored | CodecError | No: no builder adds one |
+| a period that is not an object (`"till_month": None`, a list, ...) | stored (as a merge base, a later merge raised AttributeError in v1 too) | CodecError | No: every builder makes dict periods; SaveRequest's month_data / till_month_data are typed `Dict[str, ...]` |
+| a parameter key longer than 190 characters | stored | CodecError | **Only through a hand-crafted request:** the keys of SaveRequest.month_data / till_month_data (`/api/techno/manual/save`), and `key` / `parameter` of `/api/techno-entries` rows, are free strings. The UI sends its fixed PARAM_TEMPLATES keys, and the extractors map labels to fixed keys. The longest key in the v1 data has 37 characters. |
+| a non-str key (`{1: 5}`), or a tuple leaf | stored (json.dumps makes them `"1"` / a list) | CodecError | No: pydantic and every builder give str keys and list / scalar values |
+
+**Why the long key is not supported.** `techno_value.param_key` is VARCHAR(190) inside the primary key. Widening it is a schema change, and the InnoDB key limit (3072 bytes) would still cap a key at about 700 characters, while v1's JSON keys could reach 64 KB. Full support would need a different key design, for example a hashed key plus a text column. That is not cheap, so the case is reported here instead (7c report, fix round 2).
