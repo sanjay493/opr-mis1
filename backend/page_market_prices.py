@@ -18,7 +18,8 @@ missing point rather than interpolating through it.
 """
 from typing import Dict, List, Optional
 
-import db
+from repo import misc as rmisc
+import month_utils
 
 WINDOW_MONTHS = 12
 
@@ -313,8 +314,8 @@ def _line_chart_svg(title: str, chart: dict, label_below_lowest: bool = False) -
 
 
 def generate_market_prices(report_month: str) -> dict:
-    months = db.get_trailing_months(report_month, WINDOW_MONTHS)
-    monthly = db.get_market_price_trend(months)
+    months = month_utils.get_trailing_months(report_month, WINDOW_MONTHS)
+    monthly = rmisc.get_market_price_trend(months)
     labels = [_mon_label(m) for m in months]
 
     def chart(category: str) -> dict:

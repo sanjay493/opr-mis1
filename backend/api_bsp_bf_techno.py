@@ -26,7 +26,7 @@ if _TP_DIR not in sys.path:
     sys.path.insert(0, _TP_DIR)
 
 from bsp_bf_technopara_extractor import BspBfTechnoExtractor  # noqa: E402
-from db import init_db, upsert_techno_data, get_techno_data, get_techno_months  # noqa: E402
+from repo.techno import upsert_techno_data, get_techno_data, get_techno_months  # noqa: E402
 
 router = APIRouter(prefix="/api/bsp-bf-techno", tags=["bsp-bf-techno"])
 
@@ -126,7 +126,6 @@ async def insert_bsp_bf_techno(payload: dict):
         raise HTTPException(status_code=400, detail="No records to insert")
 
     try:
-        init_db()
         for rec in records:
             upsert_techno_data(
                 plant=PLANT,
@@ -158,7 +157,6 @@ async def get_data(
     """
     _validate_month(report_month)
     try:
-        init_db()
         result = get_techno_data(PLANT, report_month, unit)
 
         if not result:
@@ -185,7 +183,6 @@ async def get_data(
 async def get_months():
     """Return list of available report months for BSP BF techno data, newest first."""
     try:
-        init_db()
         months = get_techno_months(PLANT)
         return {"plant": PLANT, "months": months, "count": len(months)}
     except Exception as e:

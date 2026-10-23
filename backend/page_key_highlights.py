@@ -17,7 +17,9 @@ empty until an editor has entered something for that month.
 """
 import datetime as _dt
 
-import db
+from repo import text as rtx
+import dbengine
+import month_utils
 from report_utils import compute_item_row
 from page_techno import generate_key_highlights_te_table
 from page_special_steel import generate_special_steel_sail
@@ -77,9 +79,9 @@ def _ytd_section(report_month: str) -> dict:
     """Year-to-date (Apr..report_month) vs the same window CPLY, per
     production item, in '000T (production_table's native unit — matches
     the reference chart's own "Quantity in '000 T" label)."""
-    cply_month = db.get_cply_month(report_month)
-    cur_months = db.get_ytd_months(report_month)
-    cply_months = db.get_ytd_months(cply_month)
+    cply_month = month_utils.get_cply_month(report_month)
+    cur_months = month_utils.get_ytd_months(report_month)
+    cply_months = month_utils.get_ytd_months(cply_month)
 
     # Key "rows" (not "items") — a dict with a plain "items" key hits the
     # same dict.items()-shadows-item-lookup Jinja gotcha documented
@@ -110,12 +112,12 @@ def _value_added_section(report_month: str) -> dict:
     CPLY), the just-ended quarter's % transition, and the report month's
     own qty/%Fulfilment/vs CPLY — all reused from the same sources
     page_at_a_glance.py's Value Added Steel box already computes from."""
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
-        cur_months = db.get_ytd_months(report_month)
-        cply_month = db.get_cply_month(report_month)
-        cply_months = db.get_ytd_months(cply_month)
+        cur_months = month_utils.get_ytd_months(report_month)
+        cply_month = month_utils.get_cply_month(report_month)
+        cply_months = month_utils.get_ytd_months(cply_month)
         _, ytd_pct = _va_period_value(cur, cur_months)
         _, ytd_pct_cply = _va_period_value(cur, cply_months)
         ytd_pp = round(ytd_pct - ytd_pct_cply, 1) if ytd_pct is not None and ytd_pct_cply is not None else None
@@ -190,7 +192,7 @@ def generate_key_highlights(report_month: str) -> dict:
     dt = _dt.datetime.strptime(report_month, "%Y-%m")
     month_label = f"{_MON_ABBR[dt.month]}-{dt.year}"
 
-    narrative = db.get_key_highlights_narrative(report_month) or {
+    narrative = rtx.get_key_highlights_narrative(report_month) or {
         "achievements": [], "shortfalls": [], "focus_areas": [],
     }
 

@@ -32,7 +32,9 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
 
 import auth
-import db
+from repo import misc as rmisc
+from repo import ops as rop
+from repo import text as rtx
 import page_macro_indicators
 import page_market_prices
 from excel_extractors.pdf_extractor_market_commentary import extract_market_commentary_pdf
@@ -57,14 +59,14 @@ async def preview(file: UploadFile = File(...)):
         os.unlink(path)
 
     month = result["report_month"]
-    stored_bullets = db.get_steel_sales_highlights(month) if month else None
+    stored_bullets = rtx.get_steel_sales_highlights(month) if month else None
     months = result["market_prices"]["months"]
-    stored_prices = db.get_market_price_trend(months) if months else {}
+    stored_prices = rmisc.get_market_price_trend(months) if months else {}
 
     macro = result.get("macro") or {}
     stored_macro, stored_macro_prev = {}, {}
     if macro.get("month"):
-        got = db.get_macro_indicators([macro["month"], macro["prev_month"]])
+        got = rmisc.get_macro_indicators([macro["month"], macro["prev_month"]])
         stored_macro, stored_macro_prev = got.get(macro["month"], {}), got.get(macro["prev_month"], {})
         pairs = [(v, stored_macro_prev.get(c)) for c, v in macro.get("prev_values", {}).items()
                  if v is not None and stored_macro_prev.get(c) is not None]
@@ -126,19 +128,19 @@ async def insert(body: InsertRequest, user: dict = Depends(auth.require_editor_o
     ytd_items = [s.strip() for s in body.ytd_items if s.strip()]
     saved_bullets = 0
     if month_items or ytd_items:
-        db.save_steel_sales_highlights(body.report_month, month_items, ytd_items,
+        rtx.save_steel_sales_highlights(body.report_month, month_items, ytd_items,
                                        updated_by=user.get("email", ""))
         saved_bullets = len(month_items) + len(ytd_items)
 
     rows = [{"report_month": m, "series_code": code, "value": v}
             for code, vals in body.prices.items() for m, v in vals.items() if v is not None]
-    saved_prices = db.save_market_price_trend(rows) if rows else 0
+    saved_prices = rmisc.save_market_price_trend(rows) if rows else 0
 
     macro_rows = [{"report_month": body.macro_month, "metric_code": c, "value": v}
                   for c, v in body.macro.items() if v is not None]
-    saved_macro = db.save_macro_indicators(macro_rows) if macro_rows else 0
+    saved_macro = rmisc.save_macro_indicators(macro_rows) if macro_rows else 0
 
-    db.log_extraction("SAIL", body.report_month, body.file_name or "commentary-market.pdf",
+    rop.log_extraction("SAIL", body.report_month, body.file_name or "commentary-market.pdf",
                       "Key Performance Parameters / Key Prices", "Commentary & Market PDF",
                       saved_bullets + saved_prices + saved_macro)
     auth.log_activity(user, "update", "commentary_market_upload", body.report_month)

@@ -10,7 +10,6 @@ many rows a separate connection can see (0 until the single commit)."""
 import pytest
 from fastapi.testclient import TestClient
 
-import db
 import dbengine
 from repo import conn as rc
 from repo import cost_trend as rct
@@ -115,8 +114,6 @@ def test_cost_trend_monthly_route_commits_once(tc):
     got = tc.get("/api/cost-trend/monthly", params={"product": "HM", "report_month": "2026-08"}).json()
     assert got["entries"]["VARIABLE"]["BSP"] == {"month": 101.5, "till_month": 99.0}
     assert got["entries"]["TOTAL"] == {}
-    assert db.save_cost_trend_monthly is rct.save_cost_trend_monthly
-    assert db.COST_TREND_PLANTS is rct.COST_TREND_PLANTS
 
 
 def test_cost_trend_annual_and_field_update(tc):
@@ -230,7 +227,6 @@ def test_mines_production_despatch_route_commits_once(tc):
     assert len(series["production"]) == 2 and len(series["despatch"]) == 2
     assert series["despatch_plan"] == [{"report_month": "2026-08", "mine_code": "A", "group_code": "JG",
                                         "material_code": "LUMP", "end_use_code": "CAPTIVE", "plan": 9.0}]
-    assert db.save_mines_production_despatch_monthly is rmn.save_mines_production_despatch_monthly
 
 
 def test_sail_mines_route_commits_once_and_performance_load(tc):
@@ -323,7 +319,6 @@ def test_rake_detention_master_and_grid_routes(tc):
     assert (spy.connects, spy.commits, spy.visible_mid_call) == (1, 1, [0, 0])
     assert rrk.get_rake_detention_annual(["BSP", "DSP", "RSP"], ["2024-25"]) == {
         "BSP": {"2024-25": 6.0}, "DSP": {"2024-25": None}, "RSP": {}}
-    assert db.get_rake_detention_master is rrk.get_rake_detention_master
 
 
 # ── repo.misc ─────────────────────────────────────────────────────────────────
@@ -346,4 +341,3 @@ def test_market_intel_route_commits_once(tc):
     assert rmisc.get_macro_indicators(["2026-08"]) == {"2026-08": {"GDP": 7.1, "IIP": None}}
     assert _rows("SELECT report_month, metric_code, value FROM macro_indicators_monthly ORDER BY metric_code") == [
         ("2026-08", "GDP", 7.1), ("2026-08", "IIP", None)]
-    assert db.save_macro_indicators is rmisc.save_macro_indicators

@@ -2,7 +2,7 @@ import openpyxl
 import logging
 import os
 from typing import Optional
-import db
+import dbengine
 from repo import production as rp
 
 logger = logging.getLogger("excel_extractor_plan")
@@ -97,7 +97,7 @@ def extract_and_save_excel_plan(file_path: str, financial_year: str) -> bool:
         # --- Scan data rows ---
         # Col A: plant name (carried forward when blank)
         # Col B: item name (row skipped when blank)
-        conn = db.connect()
+        conn = dbengine.connect()
         cursor = conn.cursor()
         vals_written = 0
         current_plant = None

@@ -17,7 +17,12 @@ from pathlib import Path
 
 import data_version
 import report_context
-import db
+from repo import cost_trend as rct
+from repo import mines as rmn
+from repo import ops as rop
+from repo import pages as rpg
+from repo import rake as rrk
+import month_utils
 import dbengine
 from version_cache import VersionedCache
 from repo import production as rp
@@ -154,7 +159,7 @@ def _safe_te_table(month):
         m = int(month[5:7])
         fy_year = fy if m >= 4 else fy - 1
         fy_str = f"{fy_year}-{fy_year + 1}"
-        sail_plan_result = db.get_sail_techno_plan(fy_str)
+        sail_plan_result = rt.get_sail_techno_plan(fy_str)
         is_user_supplied = sail_plan_result.get('is_user_supplied', False)
 
         # Return with metadata if it's user-supplied
@@ -493,7 +498,6 @@ from api_secretary_review import router as secretary_review_router
 from api_cost_trend_extract import router as cost_trend_extract_router
 from api_cover import router as cover_router
 
-db.init_db()
 
 # Special Steel trend/performance-analysis page (line + bar charts) has no
 # slot of its own in the fixed 1-40 page numbering (see PAGE_LABELS in
@@ -1052,7 +1056,7 @@ def _get_data(month: str, page_number: Optional[float]):
     if not os.path.exists(FRONTEND_DATA_PATH):
         raise HTTPException(status_code=404, detail="Template data source not found.")
     try:
-        pages_config = db.get_all_page_configs(month)
+        pages_config = rpg.get_all_page_configs(month)
         if not pages_config:
             with open(FRONTEND_DATA_PATH, "r", encoding="utf-8-sig") as f:
                 pages_config = json.load(f)
@@ -1088,7 +1092,7 @@ def _get_data(month: str, page_number: Optional[float]):
                     raise HTTPException(status_code=404,
                                          detail=f"Page {page_number} not found for {month}")
 
-        conn = db.connect()
+        conn = dbengine.connect()
         cursor = conn.cursor()
         has_actuals, has_plans = rp.month_has_actual_and_plan(cursor, month)
         conn.close()
@@ -1114,7 +1118,7 @@ def _get_data(month: str, page_number: Optional[float]):
                     page["type"] = "page4_table"
                     # "Tentative" until every plant's final monthly report is in
                     # (see db.production_month_status).
-                    page["tentative"] = db.production_month_status(month)["tentative"]
+                    page["tentative"] = rop.production_month_status(month)["tentative"]
                 if page.get("page") == 5:
                     page["rows"] = _pc(month, page.get("page"), generate_page5_rows, month)
                     page["type"] = "performance_summary_table"
@@ -1473,7 +1477,7 @@ def _get_data(month: str, page_number: Optional[float]):
 def save_data(request: PDFRequest):
     try:
         for page in request.pages:
-            db.save_page_config(request.month, page.page, page.dict())
+            rpg.save_page_config(request.month, page.page, page.dict())
 
             if page.page == 3 or page.type == "summary":
                 for row in (page.production_table or []):
@@ -1496,8 +1500,8 @@ def save_data(request: PDFRequest):
                     elif item_name == "Finish Steel":
                         db_item = "Finished Steel"
 
-                    db.save_production_plan(request.month, "SAIL", db_item, parse_val(vals[0]))
-                    db.save_production_actual(request.month, "SAIL", db_item, parse_val(vals[1]))
+                    rp.save_production_plan(request.month, "SAIL", db_item, parse_val(vals[0]))
+                    rp.save_production_actual(request.month, "SAIL", db_item, parse_val(vals[1]))
 
         return {"status": "success", "message": f"Successfully saved data for {request.month}"}
     except Exception as e:
@@ -1512,7 +1516,7 @@ def save_page3_narrative(request: Page3NarrativeRequest):
     independently of page_configs, so this never touches the other 34
     pages' saved data — safe to call on its own without a full page save."""
     try:
-        db.save_page3_narrative(request.month, request.production_narrative, request.highlights)
+        rtx.save_page3_narrative(request.month, request.production_narrative, request.highlights)
         return {"status": "success"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save narrative: {str(e)}")
@@ -1748,7 +1752,7 @@ def _enrich_pdf_pages_impl(request: PDFRequest) -> tuple[list, dict]:
         if pg == 4 or p.get("type") == "page4_table":
             p["rows"] = _pc(request.month, pg, generate_page4_rows, request.month)
             p["type"] = "page4_table"
-            p["tentative"] = db.production_month_status(request.month)["tentative"]
+            p["tentative"] = rop.production_month_status(request.month)["tentative"]
         if pg == 13:
             concast = _pc(request.month, pg, generate_concast_data, request.month)
             p["monthly"] = concast["monthly"]
@@ -2233,7 +2237,7 @@ async def generate_pdf_result(job_id: str):
 @app.get("/api/special-steel-manual")
 def get_special_steel_manual(plant: str = Query(...), month: str = Query(...)):
     """Return all special_steel_orders rows for a plant+month for manual editing."""
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         rows = [
@@ -2253,7 +2257,7 @@ def get_special_steel_ssps_basis(month: str = Query(...)):
     _ssps_special_steel). Returns the raw Saleable Steel Despatch / Carbon
     Steel Despatch inputs alongside the computed result so the manual-entry
     screen can show how the SSPs figure was derived, for a single month."""
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         saleable_000t, carbon_000t = rp.ssp_despatch_basis(cur, month)
@@ -2272,9 +2276,9 @@ def get_special_steel_ssps_basis(month: str = Query(...)):
 @app.post("/api/special-steel-manual/save")
 def save_special_steel_manual(request: SpecialSteelSaveRequest):
     """Replace all special steel rows for a plant+month with the supplied data."""
-    db.clear_special_steel_orders(request.month, request.plant)
+    rss.clear_special_steel_orders(request.month, request.plant)
     for i, r in enumerate(request.rows):
-        db.save_special_steel_entry(
+        rss.save_special_steel_entry(
             request.month, request.plant,
             r.product, r.quality_grade,
             i,
@@ -2295,8 +2299,8 @@ def get_special_steel_abp(financial_year: str = Query(...)):
     """Return existing Special Steel ABP entries for all 12 months of a FY,
     for pre-filling the ABP Entry grid: {plant_name: {report_month: abp_qty}}."""
     fy_start_year = int(financial_year.split("-")[0])
-    months = db.get_fy_months(f"{fy_start_year}-04")
-    conn = db.connect()
+    months = month_utils.get_fy_months(f"{fy_start_year}-04")
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         abp_rows = rss.abp_rows(cur, months)
@@ -2311,7 +2315,7 @@ def get_special_steel_abp(financial_year: str = Query(...)):
 @app.post("/api/special-steel-abp")
 def save_special_steel_abp(request: SpecialSteelAbpSaveRequest):
     """Upsert a batch of Special Steel ABP entries (plant x month) for a FY."""
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         saved = 0
@@ -2337,7 +2341,7 @@ COST_TREND_PRODUCTS = ["HM", "CS", "SS", "COKE", "SINTER"]
 def get_cost_trend_annual_api(product: str = Query(...), fy: str = Query(...)):
     """Existing annual Cost Trend entries for one product/FY, for pre-filling
     the Annual tab of the Cost Trend Entry form: {cost_type: {plant: value}}."""
-    data = db.get_cost_trend_annual(product, [fy])
+    data = rct.get_cost_trend_annual(product, [fy])
     return {"product": product, "fy": fy, "entries": data.get(fy, {})}
 
 
@@ -2346,7 +2350,7 @@ def save_cost_trend_annual_api(request: CostTrendAnnualSaveRequest):
     """Upsert a batch of Cost Trend annual entries (cost_type x plant) for
     one product/FY."""
     entries = [{"cost_type": e.cost_type, "plant": e.plant, "value": e.value} for e in request.entries]
-    saved = db.save_cost_trend_annual(request.fy, request.product, entries)
+    saved = rct.save_cost_trend_annual(request.fy, request.product, entries)
     return {"status": "success", "saved": saved}
 
 
@@ -2355,7 +2359,7 @@ def get_cost_trend_monthly_api(product: str = Query(...), report_month: str = Qu
     """Existing monthly Cost Trend entries for one product/report_month, for
     pre-filling the Monthly tab of the Cost Trend Entry form:
     {cost_type: {plant: {"month": v, "till_month": v}}}."""
-    data = db.get_cost_trend_monthly(product, [report_month])
+    data = rct.get_cost_trend_monthly(product, [report_month])
     return {"product": product, "report_month": report_month, "entries": data.get(report_month, {})}
 
 
@@ -2365,7 +2369,7 @@ def save_cost_trend_monthly_api(request: CostTrendMonthlySaveRequest):
     month + till_month) for one product/report_month."""
     entries = [{"cost_type": e.cost_type, "plant": e.plant,
                 "month_value": e.month_value, "till_month_value": e.till_month_value} for e in request.entries]
-    saved = db.save_cost_trend_monthly(request.report_month, request.product, entries)
+    saved = rct.save_cost_trend_monthly(request.report_month, request.product, entries)
     return {"status": "success", "saved": saved}
 
 
@@ -2377,7 +2381,7 @@ def save_cost_trend_monthly_api(request: CostTrendMonthlySaveRequest):
 def get_sail_mines_monthly_api(report_month: str = Query(...)):
     """Existing SAIL Mines entries for one report_month, for pre-filling
     the SAIL Mines Entry form: {section: {item: {"actual": v, "plan": v}}}."""
-    data = db.get_sail_mines_monthly([report_month])
+    data = rmn.get_sail_mines_monthly([report_month])
     return {"report_month": report_month, "entries": data.get(report_month, {})}
 
 
@@ -2386,7 +2390,7 @@ def save_sail_mines_monthly_api(request: SailMinesSaveRequest):
     """Upsert a batch of SAIL Mines entries (section x item, actual + plan)
     for one report_month."""
     entries = [{"section": e.section, "item": e.item, "actual": e.actual, "plan": e.plan} for e in request.entries]
-    saved = db.save_sail_mines_monthly(request.report_month, entries)
+    saved = rmn.save_sail_mines_monthly(request.report_month, entries)
     return {"status": "success", "saved": saved}
 
 
@@ -2398,14 +2402,14 @@ def save_sail_mines_monthly_api(request: SailMinesSaveRequest):
 def get_mines_master_api():
     """Groups/mines/materials/end-uses/transport-modes for the Mines
     Production & Despatch entry form and reports."""
-    return db.get_mines_masters()
+    return rmn.get_mines_masters()
 
 
 @app.get("/api/mines-production-despatch/monthly")
 def get_mines_production_despatch_monthly_api(report_month: str = Query(...), mine_code: str = Query(...)):
     """Existing production, despatch, and booked-quantity (Sales) entries
     for one mine/report_month, for pre-filling the entry form."""
-    data = db.get_mines_production_despatch_monthly(report_month, mine_code)
+    data = rmn.get_mines_production_despatch_monthly(report_month, mine_code)
     return {"report_month": report_month, "mine_code": mine_code, **data}
 
 
@@ -2434,7 +2438,7 @@ def save_mines_production_despatch_monthly_api(request: MinesProductionDespatchS
     booked_qty_plan_entries = [
         {"material_code": e.material_code, "plan": e.plan} for e in request.booked_qty_plan
     ]
-    saved = db.save_mines_production_despatch_monthly(
+    saved = rmn.save_mines_production_despatch_monthly(
         request.report_month, request.mine_code, production_entries, despatch_entries, despatch_plan_entries,
         booked_qty_entries, booked_qty_plan_entries,
     )
@@ -2448,12 +2452,12 @@ def get_iron_ore_mines_series_api(fy_start: int = Query(...)):
     aggregates by scope (SAIL / group / mine), material and mode."""
     months = [f"{fy_start}-{m:02d}" for m in range(4, 13)] + \
              [f"{fy_start + 1}-{m:02d}" for m in range(1, 4)]
-    data = db.get_iron_ore_mines_series(months)
+    data = rmn.get_iron_ore_mines_series(months)
     return {
         "fy_start": fy_start,
         "fy_label": f"{fy_start}-{str(fy_start + 1)[2:]}",
         "months": months,
-        "masters": db.get_mines_masters(),
+        "masters": rmn.get_mines_masters(),
         **data,
     }
 
@@ -2713,7 +2717,7 @@ async def confirm_plan(payload: dict):
     if not plan_rows:
         raise HTTPException(status_code=400, detail="No plan rows provided.")
     try:
-        conn = db.connect()
+        conn = dbengine.connect()
         cur = conn.cursor()
         saved = 0
         for r in plan_rows:
@@ -2772,7 +2776,7 @@ async def extract_preview_endpoint(
 
         if plant_name == "DSP":
             import excel_extractor_dsp
-            aliases = db.get_pdf_item_aliases("DSP")
+            aliases = rmisc.get_pdf_item_aliases("DSP")
             pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
             try:
                 # Try with all_months parameter first, fall back if not supported
@@ -2887,7 +2891,7 @@ async def extract_preview_endpoint(
         # Attach current DB values to each production row so the UI can show
         # DB-vs-extracted side by side before the user confirms the insert.
         _resolved_month = result.get("month") or month
-        db.enrich_rows_with_db_production(result.get("production_rows", []), plant_name, _resolved_month)
+        rp.enrich_rows_with_db_production(result.get("production_rows", []), plant_name, _resolved_month)
         return result
     except HTTPException:
         raise
@@ -2934,7 +2938,7 @@ async def confirm_extraction(payload: dict):
 
         saved_prod = saved_plan = saved_te = saved_mill = 0
 
-        conn = db.connect()
+        conn = dbengine.connect()
         cur = conn.cursor()
         try:
             for r in payload.get("production_rows", []):
@@ -2967,7 +2971,7 @@ async def confirm_extraction(payload: dict):
         saved_aliases = 0
         for o in payload.get("item_overrides", []):
             if o.get("pdf_label") and o.get("item_name"):
-                db.save_pdf_item_alias(plant, o["pdf_label"], o["item_name"],
+                rmisc.save_pdf_item_alias(plant, o["pdf_label"], o["item_name"],
                                        1 if o.get("convert_t", 1) else 0)
                 saved_aliases += 1
 
@@ -2984,9 +2988,9 @@ async def confirm_extraction(payload: dict):
         saved_ss = 0
         _ss_rows_to_save = [r for r in payload.get("special_steel_rows", []) if r.get("status") == "ok"]
         if _ss_rows_to_save:
-            db.clear_special_steel_orders(month, plant)
+            rss.clear_special_steel_orders(month, plant)
         for r in _ss_rows_to_save:
-            db.save_special_steel_entry(
+            rss.save_special_steel_entry(
                 month, plant,
                 r.get("product", ""), r.get("quality_grade", ""),
                 r.get("sort_order", 0),
@@ -2999,7 +3003,7 @@ async def confirm_extraction(payload: dict):
         for r in payload.get("stock_rows", []):
             if r.get("value") is None:
                 continue
-            db.save_stock_entry(
+            rst.save_stock_entry(
                 r["stock_month"], r.get("plant", plant),
                 r["item_type"], r.get("stock_type", ""),
                 r.get("value"),
@@ -3008,7 +3012,7 @@ async def confirm_extraction(payload: dict):
 
         total = saved_prod + saved_plan + saved_te + saved_mill + saved_ss + saved_stock
         if total:
-            db.log_extraction(plant, month, payload.get("file_name", ""),
+            rop.log_extraction(plant, month, payload.get("file_name", ""),
                               payload.get("sheets", ""),
                               payload.get("source_type", "Preview Confirmed"), total)
         msg = (f"Inserted {saved_prod} production, {saved_plan} plan, {saved_te} techno, "
@@ -3168,7 +3172,7 @@ async def bsl_bf_techno_preview(
 
         # Current DB values per unit, for DB-vs-extracted comparison
         # in the UI before the user confirms the save.
-        _existing_bsl = db.get_techno_data("BSL", month)
+        _existing_bsl = rt.get_techno_data("BSL", month)
 
         # Convert to editable format. The PDF's value pairs are day/month, so
         # the editable grid carries MONTH values; the only genuine FY
@@ -3205,10 +3209,10 @@ async def bsl_bf_techno_preview(
             # BF_Shop has no production_table row of its own, so its "In DB"
             # figure is derived as the sum of the four furnaces.
             if unit.startswith("BF-"):
-                _db_prod_kt = db.get_production_actual_value("BSL", unit, month)
+                _db_prod_kt = rp.get_production_actual_value("BSL", unit, month)
                 row["db"]["production"] = _db_prod_kt * 1000.0 if _db_prod_kt is not None else None
             elif unit == "BF_Shop":
-                _conn = db.connect()
+                _conn = dbengine.connect()
                 _sum_kt = rp.bsl_bf_shop_production_sum(_conn.cursor(), month)
                 _conn.close()
                 row["db"]["production"] = _sum_kt * 1000.0 if _sum_kt is not None else None
@@ -3362,7 +3366,7 @@ async def bsl_bf_techno_save(payload: dict):
 
             # Merge-save: non-null values win, params from other sources
             # (Excel techno upload, manual entry) are preserved.
-            db.merge_upsert_techno_data(
+            rt.merge_upsert_techno_data(
                 plant="BSL",
                 report_month=month,
                 unit=unit,
@@ -3376,7 +3380,7 @@ async def bsl_bf_techno_save(payload: dict):
             # as RSP/DSP/BSP.
             prod = row.get("production")
             if is_furnace and isinstance(prod, (int, float)) and prod > 0:
-                conn = db.connect()
+                conn = dbengine.connect()
                 rp.upsert_bsl_furnace_production(conn.cursor(), month, unit, round(prod / 1000.0, 3))
                 conn.commit()
                 conn.close()
@@ -3409,14 +3413,14 @@ async def save_techno_entries(payload: dict):
 
     if saved > 0 and plant:
         # Save all rows to techno_data table in one call
-        db.save_techno_data_from_extraction(
+        rt.save_techno_data_from_extraction(
             plant=plant,
             report_month=month,
             extracted_rows=valid_rows,
             unit="BF_Shop",
             source_file=file_name
         )
-        db.log_extraction(plant, month, file_name, "techno", "techno_params", saved)
+        rop.log_extraction(plant, month, file_name, "techno", "techno_params", saved)
 
     return {"status": "success", "saved": saved,
             "message": f"Inserted {saved} techno parameter values for {plant} {month}."}
@@ -3428,7 +3432,7 @@ async def save_techno_entries(payload: dict):
 
 @app.get("/api/extraction-log")
 async def get_extraction_log(limit: int = 60, plant: str = None, source_type: str = None):
-    return {"logs": db.get_extraction_logs(limit=limit, plant=plant, source_type=source_type)}
+    return {"logs": rop.get_extraction_logs(limit=limit, plant=plant, source_type=source_type)}
 
 
 @app.post("/api/debug-column-detection")
@@ -3598,7 +3602,7 @@ async def get_item_mapping_suggestions(plant: str):
         "aliases": {pdf_label: (item_name, convert_t), ...}  # Saved PDF label → item mappings
       }
     """
-    conn = db.connect()
+    conn = dbengine.connect()
     cursor = conn.cursor()
 
     # Get all unique item names for this plant
@@ -3612,7 +3616,7 @@ async def get_item_mapping_suggestions(plant: str):
     conn.close()
 
     # Get aliases
-    aliases = db.get_pdf_item_aliases(plant)
+    aliases = rmisc.get_pdf_item_aliases(plant)
 
     return {
         "items": items,
@@ -3641,7 +3645,7 @@ async def save_item_alias(payload: dict):
         if not all([plant, pdf_label, item_name]):
             raise ValueError("Missing required fields: plant, pdf_label, item_name")
 
-        db.save_pdf_item_alias(plant, pdf_label, item_name, convert_t)
+        rmisc.save_pdf_item_alias(plant, pdf_label, item_name, convert_t)
         return {"message": f"Saved alias: {pdf_label} → {item_name}"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -3971,7 +3975,7 @@ def production_item_sort_key(item):
 
 @app.get("/api/production-items")
 async def get_production_items(plant: str, month: str):
-    conn = db.connect()
+    conn = dbengine.connect()
     cursor = conn.cursor()
     plan_rows = {}
     for row in rp.plant_month_plan_items(cursor, plant, month):
@@ -4026,10 +4030,10 @@ async def save_production_entry(request: ProductionEntryRequest):
     saved = []
     for entry in request.entries:
         if entry.actual_value is not None:
-            db.save_production_actual(request.month, request.plant, entry.item_name, entry.actual_value)
+            rp.save_production_actual(request.month, request.plant, entry.item_name, entry.actual_value)
             saved.append(f"actual:{entry.item_name}")
         if entry.plan_value is not None:
-            db.save_production_plan(request.month, request.plant, entry.item_name, entry.plan_value)
+            rp.save_production_plan(request.month, request.plant, entry.item_name, entry.plan_value)
             saved.append(f"plan:{entry.item_name}")
 
     # BSP MM/WRM group split: if only one side of a pair was entered (e.g.
@@ -4038,7 +4042,7 @@ async def save_production_entry(request: ProductionEntryRequest):
     # the paired item in this same request, which wins over the derivation.
     if request.plant == "BSP":
         entry_map = {e.item_name: e for e in request.entries}
-        conn = db.connect()
+        conn = dbengine.connect()
         cur = conn.cursor()
         for entry in request.entries:
             pair = BSP_SPLIT_PAIRS.get(entry.item_name)
@@ -4047,8 +4051,8 @@ async def save_production_entry(request: ProductionEntryRequest):
             paired_item, total_item = pair
             paired_entry = entry_map.get(paired_item)
             for value_type, table, save_fn in (
-                ("actual_value", "actual", db.save_production_actual),
-                ("plan_value", "abp", db.save_production_plan),
+                ("actual_value", "actual", rp.save_production_actual),
+                ("plan_value", "abp", rp.save_production_plan),
             ):
                 entered_val = getattr(entry, value_type)
                 if entered_val is None:
@@ -4086,7 +4090,7 @@ async def get_production_item_range(plant: str, item: str, months: str = Query(.
     in the order the caller wants them back. Returns the existing
     production_table value for each, null where nothing is saved yet."""
     month_list = [m.strip() for m in months.split(",") if m.strip()]
-    saved = db.get_production_actual_for_months(plant, item, month_list)
+    saved = rp.get_production_actual_for_months(plant, item, month_list)
     return {
         "plant": plant,
         "item": item,
@@ -4098,7 +4102,7 @@ async def get_production_item_range(plant: str, item: str, months: str = Query(.
 async def save_production_item_range(request: ProductionRangeSaveRequest):
     saved = 0
     for entry in request.entries:
-        db.save_production_actual(entry.report_month, request.plant, request.item, entry.value)
+        rp.save_production_actual(entry.report_month, request.plant, request.item, entry.value)
         saved += 1
     return {"status": "success", "count": saved}
 
@@ -4115,7 +4119,7 @@ async def get_conversion_data(fy_start: str = Query(...)):
         f"{y}-10", f"{y}-11", f"{y}-12",
         f"{y+1}-01", f"{y+1}-02", f"{y+1}-03",
     ]
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     data = {r[0]: r[1] for r in rp.sail_conversion_by_month(cur, months)}
     conn.close()
@@ -4132,7 +4136,7 @@ async def save_conversion_entry(payload: dict):
         value = e.get("value")
         if not month or value is None:
             continue
-        db.save_production_actual(month, "SAIL", "Conversion", float(value))
+        rp.save_production_actual(month, "SAIL", "Conversion", float(value))
         saved += 1
     return {"status": "success", "saved": saved}
 
@@ -4426,7 +4430,7 @@ async def techno_custom_standard_pdf(payload: dict):
 async def list_production_fys():
     """List financial years that have actual or plan production data.
     Response: { fys: [{"fy_start": 2026, "label": "2026-27"}, ...] } (newest first)"""
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     fy_starts = set()
     for (m,) in rp.production_report_months(cur):
@@ -4489,7 +4493,7 @@ def _production_fy_data(fy_start: int) -> dict:
     months = [f"{fy_start}-{m:02d}" for m in range(4, 13)] + \
              [f"{fy_start + 1}-{m:02d}" for m in range(1, 4)]
 
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     # data[plant][item] = {"actual": {month: val}, "plan": {month: val}}
     data = {}
@@ -4620,7 +4624,7 @@ def _special_steel_fy_data(fy_start: int) -> dict:
     _production_fy_data's shape/conventions above."""
     months = [f"{fy_start}-{m:02d}" for m in range(4, 13)] + \
              [f"{fy_start + 1}-{m:02d}" for m in range(1, 4)]
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         # data[plant][month] = {"order": val, "actual": val}
@@ -4668,7 +4672,7 @@ def _special_steel_fy_data(fy_start: int) -> dict:
 async def list_special_steel_fys():
     """List financial years that have Special Steel order-book data.
     Response: { fys: [{"fy_start": 2026, "label": "2026-27"}, ...] } (newest first)"""
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     fy_starts = set()
     for (m,) in rss.order_months(cur):
@@ -4758,7 +4762,7 @@ async def sail_1page_confirm(payload: dict):
     if not month:
         raise HTTPException(status_code=400, detail="report_month is required")
 
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         saved_sales = saved_stock = 0
@@ -4893,7 +4897,7 @@ async def steel_sector_performance_confirm(payload: dict):
     import datetime as _dt
     now = _dt.datetime.now().isoformat()
 
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         rmisc.upsert_steel_sector_performance(cur, month, json.dumps(payload), source_file, now)
@@ -4926,7 +4930,7 @@ async def production_query_meta():
     """Plants and available months for the ad-hoc production query page
     (union of production_table and production_plan_table).
     Response: { plants: [...], months: ["2026-06", ...] } (months newest first)"""
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     plants, months = set(), set()
     for plant, month in rp.production_plants_and_months(cur):
@@ -4952,7 +4956,7 @@ async def production_query_items(plants: str = Query(...)):
     Union of actual and plan tables so plan-only units are selectable too.
     Response: { items: {plant: [item, ...]} } in process order."""
     plant_list = [p.strip() for p in plants.split(",") if p.strip()]
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     items = {}
     for plant in plant_list:
@@ -5014,7 +5018,7 @@ def _production_query_data(start: str, end: str, units: list) -> dict:
         query_plants = sorted(set(plant_set) | (set(SAIL_MEMBER_PLANTS) if sail_items else set()))
         alias_plan = {k: {} for k in index if k in PLAN_SOURCE_ALIASES}
         member_sums = {"actual": {}, "plan": {}}  # {(item, month): sum over 5 plants}
-        conn = db.connect()
+        conn = dbengine.connect()
         cur = conn.cursor()
         for measure, key in (("actual", "actual"), ("abp", "plan")):
             for plant, item, month, value in rp.rows_for_months_plants(cur, measure, months, query_plants):
@@ -5205,7 +5209,7 @@ async def get_do_letter_remarks(month: str = Query(...)):
     item — {"Crude Steel": {plant: remark}, "Finished Steel": {plant: remark}}."""
     if not re.fullmatch(r"\d{4}-\d{2}", month):
         raise HTTPException(status_code=400, detail="month must be YYYY-MM")
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         rows = rtx.do_letter_remark_rows(cur, month)
@@ -5227,7 +5231,7 @@ async def save_do_letter_remarks(payload: dict):
     if not re.fullmatch(r"\d{4}-\d{2}", report_month):
         raise HTTPException(status_code=400, detail="report_month must be YYYY-MM")
     entries = payload.get("remarks", [])
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         saved = 0
@@ -5352,7 +5356,7 @@ async def jpc_report(month: str = Query(...)):
 @app.get("/api/stock-data")
 async def get_stock_data(plant: str = Query(...), stock_month: str = Query(...)):
     """Return all stock entries for a plant + stock_month."""
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     rows = [{"item_type": r[0], "stock_type": r[1] or "", "stock": r[2]}
             for r in rst.plant_month_rows(cur, plant, stock_month)]
@@ -5373,7 +5377,7 @@ async def save_stock_entry_manual(payload: dict):
         stock      = e.get("stock")
         if not plant or not stock_month or not item_type:
             continue
-        db.save_stock_entry(stock_month, plant, item_type, stock_type,
+        rst.save_stock_entry(stock_month, plant, item_type, stock_type,
                             float(stock) if stock is not None else None)
         saved += 1
     return {"status": "success", "saved": saved,
@@ -5388,7 +5392,7 @@ async def get_techno_targets(fy: str = Query("2026-27")):
     Response: { fy, data: {param: value} }
     """
     try:
-        plan_data = db.get_sail_techno_plan(fy)
+        plan_data = rt.get_sail_techno_plan(fy)
         return {"fy": fy, "data": plan_data}
     except Exception as e:
         return {"fy": fy, "data": {}, "error": str(e)}
@@ -5408,7 +5412,7 @@ async def save_techno_targets(payload: dict):
         if not fy:
             raise ValueError("fy is required")
 
-        db.save_sail_techno_plan(fy, data)
+        rt.save_sail_techno_plan(fy, data)
 
         return {"status": "success", "fy": fy, "saved": len(data)}
     except Exception as e:
@@ -5568,7 +5572,7 @@ def get_sail_sms_params(month: str = Query(..., description="YYYY-MM")):
 
 @app.get("/api/ipt-items")
 def get_ipt_items():
-    conn = db.connect()
+    conn = dbengine.connect()
     cur  = conn.cursor()
     items = [r[0] for r in ript.items(cur)]
     conn.close()
@@ -5577,7 +5581,7 @@ def get_ipt_items():
 
 @app.get("/api/ipt-entries")
 def get_ipt_entries(month: str = Query(..., description="YYYY-MM")):
-    conn = db.connect()
+    conn = dbengine.connect()
     cur  = conn.cursor()
     rows = [
         {"item": r[0], "from_plant": r[1], "to_plant": r[2],
@@ -5619,7 +5623,7 @@ async def save_ipt_entry_api(payload: dict):
 
     try:
         _check_ipt_plants(payload["from_plant"], payload["to_plant"])
-        db.save_ipt_entry(
+        ript.save_ipt_entry(
             month=month,
             item=payload["item"],
             from_plant=payload["from_plant"],
@@ -5671,9 +5675,9 @@ async def save_ipt_entries_bulk(payload: dict):
             orig_from = e.get("orig_from_plant")
             orig_to = e.get("orig_to_plant")
             if orig_item and (orig_item != item or orig_from != from_plant or orig_to != to_plant):
-                db.delete_ipt_entry(month, orig_item, orig_from, orig_to)
+                ript.delete_ipt_entry(month, orig_item, orig_from, orig_to)
 
-            db.save_ipt_entry(
+            ript.save_ipt_entry(
                 month=month, item=item, from_plant=from_plant, to_plant=to_plant,
                 unit=e.get("unit", "T"), sort_order=int(e.get("sort_order") or 0),
                 plan=_flt(e.get("plan")), actual=_flt(e.get("actual")),
@@ -5695,7 +5699,7 @@ async def delete_ipt_entry_api(payload: dict):
     to_plant   = payload.get("to_plant", "")
     if not all([month, item, from_plant, to_plant]):
         raise HTTPException(status_code=400, detail="month, item, from_plant, to_plant required")
-    db.delete_ipt_entry(month, item, from_plant, to_plant)
+    ript.delete_ipt_entry(month, item, from_plant, to_plant)
     return {"status": "ok", "message": "Deleted."}
 
 
@@ -5708,7 +5712,7 @@ def _ipt_fy_data(fy_start: int) -> dict:
     financial year. Mirrors _special_steel_fy_data's shape/conventions."""
     months = [f"{fy_start}-{m:02d}" for m in range(4, 13)] + \
              [f"{fy_start + 1}-{m:02d}" for m in range(1, 4)]
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         # union of routes seen across the FY, keeping first-appearance order
@@ -5750,7 +5754,7 @@ def _ipt_fy_data(fy_start: int) -> dict:
 async def list_ipt_fys():
     """List financial years that have IPT data.
     Response: { fys: [{"fy_start": 2026, "label": "2026-27"}, ...] } (newest first)"""
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     fy_starts = set()
     for (m,) in ript.report_months(cur):
@@ -5777,7 +5781,7 @@ async def get_ipt_fy(fy_start: int = Query(...)):
 # ---------------------------------------------------------------------------
 
 def _latest_report_month() -> str:
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     row = rp.latest_actual_month(cur)
     conn.close()
@@ -5798,7 +5802,7 @@ def api_ss_physical_grid(financial_year: str = Query(...)):
     prev_fy = f"{cur_start - 1}-{cur_start % 100:02d}"
     history_fys = [f"{y}-{(y + 1) % 100:02d}"
                    for y in range(page_special_steel_physical.HISTORY_START_FY_YEAR, cur_start - 1)]
-    meta, perf = db.get_ss_phys_perf()
+    meta, perf = rss.get_ss_phys_perf()
     rows = []
     for (plant, series), m in sorted(meta.items(), key=lambda kv: kv[1]["sort_order"]):
         rows.append({
@@ -5814,7 +5818,7 @@ def api_ss_physical_grid(financial_year: str = Query(...)):
     return {
         "financial_year": financial_year, "prev_fy": prev_fy,
         "history_fys": history_fys, "rows": rows,
-        "notes": [{"sort_order": so, "note_text": t} for so, t in db.get_ss_phys_notes(financial_year)],
+        "notes": [{"sort_order": so, "note_text": t} for so, t in rtx.get_ss_phys_notes(financial_year)],
     }
 
 
@@ -5837,8 +5841,8 @@ async def api_ss_physical_grid_save(payload: dict):
 
     if payload.get("meta"):
         # sort_order is owned by the seed, not the editor — preserve it.
-        cur_meta, _ = db.get_ss_phys_perf()
-        db.save_ss_phys_meta([{
+        cur_meta, _ = rss.get_ss_phys_perf()
+        rss.save_ss_phys_meta([{
             "plant": r["plant"], "series": r["series"],
             "capacity_kt": _f(r.get("capacity_kt")), "best_actual_kt": _f(r.get("best_actual_kt")),
             "best_year": (r.get("best_year") or "").strip() or None,
@@ -5846,12 +5850,12 @@ async def api_ss_physical_grid_save(payload: dict):
             "sort_order": cur_meta.get((r["plant"], r["series"]), {}).get("sort_order", 0),
         } for r in payload["meta"]])
     if payload.get("perf"):
-        db.save_ss_phys_perf([{
+        rss.save_ss_phys_perf([{
             "financial_year": r["financial_year"], "plant": r["plant"], "series": r["series"],
             "metric": r["metric"], "value_kt": _f(r.get("value_kt")),
         } for r in payload["perf"]])
     if payload.get("notes") is not None:
-        db.save_ss_phys_notes(fy, payload["notes"])
+        rtx.save_ss_phys_notes(fy, payload["notes"])
     return {"status": "ok"}
 
 
@@ -5871,7 +5875,7 @@ def api_rail_report_grid(financial_year: str = Query(...)):
     """Editable single-FY grid: {metric, label, value, note} for the 9
     entered metrics of one financial year, plus the standing footer
     remarks (shared across every FY, not scoped to financial_year)."""
-    fy_data = db.get_rail_report_data([financial_year]).get(financial_year, {})
+    fy_data = rmisc.get_rail_report_data([financial_year]).get(financial_year, {})
     rows = [
         {"metric": code, "label": page_rail_report.RAW_METRIC_LABEL[code],
          "value": fy_data.get(code, {}).get("value"), "note": fy_data.get(code, {}).get("note")}
@@ -5880,7 +5884,7 @@ def api_rail_report_grid(financial_year: str = Query(...)):
     return {
         "financial_year": financial_year,
         "rows": rows,
-        "notes": [{"sort_order": so, "note_text": t} for so, t in db.get_rail_report_notes()],
+        "notes": [{"sort_order": so, "note_text": t} for so, t in rtx.get_rail_report_notes()],
     }
 
 
@@ -5899,12 +5903,12 @@ async def api_rail_report_grid_save(payload: dict):
             return None
 
     if payload.get("rows"):
-        db.save_rail_report_data([{
+        rmisc.save_rail_report_data([{
             "financial_year": fy, "metric": r["metric"],
             "value": _f(r.get("value")), "note": (r.get("note") or "").strip() or None,
         } for r in payload["rows"]])
     if payload.get("notes") is not None:
-        db.save_rail_report_notes(payload["notes"])
+        rtx.save_rail_report_notes(payload["notes"])
     return {"status": "ok"}
 
 
@@ -5929,7 +5933,7 @@ def api_rake_detention_master():
     """Every master row (active and retired — the editor needs to see and
     reactivate a retired wagon type, unlike the report generator which only
     ever reads active_only=True)."""
-    return {"rows": db.get_rake_detention_master(active_only=False)}
+    return {"rows": rrk.get_rake_detention_master(active_only=False)}
 
 
 @app.post("/api/rake-detention/master")
@@ -5941,7 +5945,7 @@ def api_rake_detention_master_save(payload: dict):
     for field in ("plant", "section", "row_label"):
         if not payload.get(field):
             raise HTTPException(status_code=400, detail=f"{field} is required")
-    row_id = db.save_rake_detention_master_row(payload)
+    row_id = rrk.save_rake_detention_master_row(payload)
     return {"status": "ok", "id": row_id}
 
 
@@ -5951,7 +5955,7 @@ def api_rake_detention_master_deactivate(payload: dict):
     master_id = payload.get("id")
     if not master_id:
         raise HTTPException(status_code=400, detail="id is required")
-    db.deactivate_rake_detention_master_row(master_id)
+    rrk.deactivate_rake_detention_master_row(master_id)
     return {"status": "ok"}
 
 
@@ -5960,9 +5964,9 @@ def api_rake_detention_grid(report_month: str = Query(...)):
     """Editable single-month grid: every active master row alongside that
     row's report_month value (blank if not yet entered), plus the same
     month's 9-period x 6-plant "Improvement" summary figures."""
-    master_rows = db.get_rake_detention_master(active_only=True)
-    monthly = db.get_rake_detention_monthly(report_month, master_ids=[r["id"] for r in master_rows])
-    summary_data = db.get_rake_detention_summary(report_month)
+    master_rows = rrk.get_rake_detention_master(active_only=True)
+    monthly = rrk.get_rake_detention_monthly(report_month, master_ids=[r["id"] for r in master_rows])
+    summary_data = rrk.get_rake_detention_summary(report_month)
     from page_rake_detention import PERIOD_ROWS, SUMMARY_PLANTS, _period_row_labels
     labels = _period_row_labels(report_month)
     return {
@@ -6035,11 +6039,11 @@ async def api_rake_detention_grid_save(payload: dict):
             return None
 
     if payload.get("monthly"):
-        db.save_rake_detention_monthly(report_month, [{
+        rrk.save_rake_detention_monthly(report_month, [{
             "master_id": r["master_id"], "value_hours": _f(r.get("value_hours")),
         } for r in payload["monthly"]])
     if payload.get("summary"):
-        db.save_rake_detention_summary(report_month, [{
+        rrk.save_rake_detention_summary(report_month, [{
             "period_row": r["period_row"], "plant": r["plant"], "value": _f(r.get("value")),
         } for r in payload["summary"]])
     return {"status": "ok"}
@@ -6066,7 +6070,7 @@ async def api_rake_detention_grid_save(payload: dict):
 @app.get("/api/ready-reckoner")
 def api_ready_reckoner_list():
     """All 8 plants' current content, for the live preview."""
-    return {"rows": db.get_ready_reckoner_pages()}
+    return {"rows": rmisc.get_ready_reckoner_pages()}
 
 
 @app.post("/api/ready-reckoner/{plant_code}")
@@ -6076,7 +6080,7 @@ def api_ready_reckoner_save(plant_code: str, payload: dict, user: dict = Depends
     _READY_RECKONER_COLS), any subset; a field simply absent from the
     payload (not just empty) is left untouched (see db.
     save_ready_reckoner_content)."""
-    db.save_ready_reckoner_content(
+    rmisc.save_ready_reckoner_content(
         plant_code,
         capacity_rows=payload.get("capacity_rows"),
         product_mix_headers=payload.get("product_mix_headers"),
@@ -6096,7 +6100,7 @@ async def api_ready_reckoner_image(
     contents = await file.read()
     with open(dest, "wb") as f:
         f.write(contents)
-    db.save_ready_reckoner_image(plant_code, dest, user.get("email") or "")
+    rmisc.save_ready_reckoner_image(plant_code, dest, user.get("email") or "")
     return {"status": "ok"}
 
 
@@ -6117,7 +6121,7 @@ def api_major_unit_daily_get(plant_code: str):
     merged with its current Daily record, if any — the /data-entry form's
     row list. A registry unit with no saved row yet comes back with
     value/record_date/remarks all null."""
-    saved = {r["unit_label"]: r for r in db.get_major_unit_daily_records(plant_code)}
+    saved = {r["unit_label"]: r for r in rmisc.get_major_unit_daily_records(plant_code)}
     rows = []
     for i, unit in enumerate(page_major_unit_records.registry_for(plant_code)):
         row = saved.get(unit["label"])
@@ -6144,7 +6148,7 @@ def api_major_unit_daily_save(plant_code: str, payload: dict, user: dict = Depen
         if label not in registry_order:
             continue
         unit = next(u for u in page_major_unit_records.registry_for(plant_code) if u["label"] == label)
-        db.save_major_unit_daily_record(
+        rmisc.save_major_unit_daily_record(
             plant_code=plant_code, unit_label=label, value=row.get("value"),
             unit_of_measure=unit["unit"], record_date=row.get("record_date"),
             remarks=row.get("remarks"), sort_order=registry_order[label],
@@ -6176,8 +6180,8 @@ def api_market_intel_grid(report_month: str = Query(...)):
     label, unit/category, value} — used by /data-entry/market-intel to fill
     in one more month's BigMint figures without needing another file
     upload."""
-    prices = db.get_market_price_trend([report_month]).get(report_month, {})
-    macro = db.get_macro_indicators([report_month]).get(report_month, {})
+    prices = rmisc.get_market_price_trend([report_month]).get(report_month, {})
+    macro = rmisc.get_macro_indicators([report_month]).get(report_month, {})
     return {
         "report_month": report_month,
         "market_price_rows": [
@@ -6209,12 +6213,12 @@ async def api_market_intel_grid_save(payload: dict):
             return None
 
     if payload.get("market_price_rows"):
-        db.save_market_price_trend([
+        rmisc.save_market_price_trend([
             {"report_month": report_month, "series_code": r["series_code"], "value": _f(r.get("value"))}
             for r in payload["market_price_rows"]
         ])
     if payload.get("macro_rows"):
-        db.save_macro_indicators([
+        rmisc.save_macro_indicators([
             {"report_month": report_month, "metric_code": r["metric_code"], "value": _f(r.get("value"))}
             for r in payload["macro_rows"]
         ])
@@ -6223,8 +6227,8 @@ async def api_market_intel_grid_save(payload: dict):
 
 @app.get("/api/special-steel-ipt-requirement/fys")
 def api_ss_ipt_req_fys():
-    fys = db.list_ss_ipt_requirement_fys()
-    cur_fy = db.get_fy_for_month(_latest_report_month())
+    fys = rss.list_ss_ipt_requirement_fys()
+    cur_fy = month_utils.get_fy_for_month(_latest_report_month())
     nxt = int(cur_fy[:4]) + 1
     for extra in (cur_fy, f"{nxt}-{(nxt + 1) % 100:02d}"):
         if extra not in fys:
@@ -6234,7 +6238,7 @@ def api_ss_ipt_req_fys():
 
 @app.get("/api/special-steel-ipt-requirement")
 def api_ss_ipt_req_get(fy: str = Query(...)):
-    return {"fy": fy, "rows": db.get_ss_ipt_requirement(fy)}
+    return {"fy": fy, "rows": rss.get_ss_ipt_requirement(fy)}
 
 
 @app.post("/api/special-steel-ipt-requirement/bulk")
@@ -6252,7 +6256,7 @@ async def api_ss_ipt_req_bulk(payload: dict):
     entries = payload.get("entries", [])
     for e in entries:
         _check_ipt_plants(e.get("from_plant", ""), e.get("to_plant", ""))
-    saved = db.save_ss_ipt_requirement(fy, [{
+    saved = rss.save_ss_ipt_requirement(fy, [{
         "item": e.get("item"), "from_plant": e.get("from_plant"), "to_plant": e.get("to_plant"),
         "plan_kt": _f(e.get("plan_kt")), "sort_order": int(e.get("sort_order") or 0),
         "orig_item": e.get("orig_item"), "orig_from_plant": e.get("orig_from_plant"),
@@ -6267,7 +6271,7 @@ async def api_ss_ipt_req_delete(payload: dict):
     item, frm, to = payload.get("item", ""), payload.get("from_plant", ""), payload.get("to_plant", "")
     if not all([fy, item, frm, to]):
         raise HTTPException(status_code=400, detail="fy, item, from_plant, to_plant required")
-    db.delete_ss_ipt_requirement(fy, item, frm, to)
+    rss.delete_ss_ipt_requirement(fy, item, frm, to)
     return {"status": "ok"}
 
 
@@ -6279,7 +6283,7 @@ async def api_ss_ipt_req_delete(payload: dict):
 
 @app.get("/api/capital-repair")
 def get_capital_repair_entries(plant: str = Query(...), fy: str = Query(...)):
-    conn = db.connect()
+    conn = dbengine.connect()
     cur  = conn.cursor()
     rows = [
         {"id": r[0], "shop": r[1], "equipment": r[2], "activity": r[3],
@@ -6380,7 +6384,7 @@ async def save_capital_repair_entry(payload: dict):
         except (TypeError, ValueError):
             raise HTTPException(status_code=400, detail="planned_days must be a number")
 
-    conn = db.connect()
+    conn = dbengine.connect()
     cur  = conn.cursor()
     row = rbd.cr_plant_row(cur, row_id)
     if not row:
@@ -6454,7 +6458,7 @@ async def add_capital_repair_row(payload: dict):
         raise HTTPException(status_code=400, detail="plant and fy ('2026-27') are required")
     copy_from = payload.get("copy_from_id")
 
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     src = {}
     if copy_from is not None:
@@ -6482,7 +6486,7 @@ async def add_capital_repair_row(payload: dict):
 
 @app.delete("/api/capital-repair-row/{row_id}")
 async def delete_capital_repair_row(row_id: int):
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     old = rbd.cr_row_dict(conn, row_id)
     if not old:
@@ -6503,7 +6507,7 @@ async def reorder_capital_repair_rows(payload: dict):
     plant = (payload.get("plant") or "").strip()
     fy = (payload.get("fy") or "").strip()
     ids = payload.get("ids") or []
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     current = _cr_ordered_ids(cur, plant, fy)
     if sorted(current) != sorted(ids):
@@ -6574,7 +6578,7 @@ async def get_techno_parameters():
     """
     import json
     try:
-        conn = db.connect()
+        conn = dbengine.connect()
         cursor = conn.cursor()
         keys = set()
         for (techno_json,) in rt.all_json(cursor):
@@ -6621,7 +6625,7 @@ async def get_techno_data(plants: str = Query(""), parameters: str = Query("")):
         # Normalize parameter names to match database keys (lowercase, with underscores)
         param_keys = [p.lower().replace(' ', '_') for p in param_list]
 
-        conn = db.connect()
+        conn = dbengine.connect()
         conn.row_factory = Row
         cursor = conn.cursor()
 
@@ -6732,7 +6736,7 @@ async def get_techno_plan(plant: str = Query(...), report_month: str = Query(...
     Response: { plant, report_month, data: {unit: {param: value}} }
     """
     try:
-        plan_data = db.get_techno_plan(plant, report_month)
+        plan_data = rt.get_techno_plan(plant, report_month)
         return {"plant": plant, "report_month": report_month, "data": plan_data}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -6757,7 +6761,7 @@ async def save_techno_plan(payload: dict):
         if isinstance(techno_json, dict):
             techno_json = json.dumps(techno_json)
 
-        db.save_techno_plan(plant, report_month, unit, techno_json, source_file)
+        rt.save_techno_plan(plant, report_month, unit, techno_json, source_file)
         return {"status": "success", "plant": plant, "report_month": report_month}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -6770,7 +6774,7 @@ async def get_techno_plant_plan(plant: str = Query(...), fy: str = Query(...)):
     Response: { plant, fy, data: {}, is_user_supplied: bool, calculated: {} }
     """
     try:
-        result = db.get_techno_plant_plan(plant, fy)
+        result = rt.get_techno_plant_plan(plant, fy)
         return {"plant": plant, "fy": fy, **result}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -6793,7 +6797,7 @@ async def save_techno_plant_plan(payload: dict):
         if not all([plant, fy]):
             raise ValueError("plant and fy required")
 
-        db.save_techno_plant_plan(plant, fy, data, is_user_supplied, calculated, calculation_method)
+        rt.save_techno_plant_plan(plant, fy, data, is_user_supplied, calculated, calculation_method)
         return {"status": "success", "plant": plant, "fy": fy}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -6806,7 +6810,7 @@ async def get_sail_techno_plan(fy: str = Query(...)):
     Response: { fy, data: {}, is_user_supplied: bool, calculated: {} (if differs from data) }
     """
     try:
-        result = db.get_sail_techno_plan(fy)
+        result = rt.get_sail_techno_plan(fy)
         return {"fy": fy, **result}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -6828,7 +6832,7 @@ async def save_sail_techno_plan(payload: dict):
         if not fy:
             raise ValueError("fy required")
 
-        db.save_sail_techno_plan(fy, data, is_user_supplied, calculated, calculation_method)
+        rt.save_sail_techno_plan(fy, data, is_user_supplied, calculated, calculation_method)
         return {"status": "success", "fy": fy, "is_user_supplied": is_user_supplied}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -6863,7 +6867,7 @@ async def list_techno_plan_fys(plant: str = Query(None)):
     Response: { fys: ["2026-27", "2027-28", ...] }
     """
     try:
-        fys = db.list_techno_plan_fys(plant)
+        fys = rt.list_techno_plan_fys(plant)
         return {"fys": fys}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -6960,7 +6964,7 @@ async def get_techno_sail_targets(fy: str = Query("2026-27")):
     Response: { fy, targets: {param: value} }
     """
     try:
-        targets = db.get_sail_techno_plan(fy)
+        targets = rt.get_sail_techno_plan(fy)
         return {"fy": fy, "targets": targets}
     except Exception as e:
         return {"fy": fy, "targets": {}, "error": str(e)}
@@ -6986,7 +6990,7 @@ async def save_techno_sail_targets(payload: dict):
         if not fy:
             raise ValueError("fy is required")
 
-        db.save_sail_techno_plan(fy, targets, is_user_supplied=is_user_supplied, created_by=created_by)
+        rt.save_sail_techno_plan(fy, targets, is_user_supplied=is_user_supplied, created_by=created_by)
 
         if is_user_supplied and created_by:
             print(f"[AUDIT] User '{created_by}' supplied SAIL targets for FY {fy}")
@@ -7014,7 +7018,7 @@ async def recalculate_sail_targets(payload: dict):
 
         # Convert report_month to FY if fy not provided
         if not fy and report_month:
-            from db import get_fy_for_month
+            from month_utils import get_fy_for_month
             fy = get_fy_for_month(report_month)
 
         if not fy:
@@ -7043,7 +7047,7 @@ async def get_techno_plant_targets(fy: str = Query("2026-27"), plant: str = Quer
         result = {}
 
         for p in plants_to_fetch:
-            plan_result = db.get_techno_plant_plan(p, fy)
+            plan_result = rt.get_techno_plant_plan(p, fy)
             plan_data = plan_result.get('data', {})
             result[p] = {}
             for param_name, param_obj in plan_data.items():
@@ -7063,7 +7067,7 @@ async def get_techno_plant_targets(fy: str = Query("2026-27"), plant: str = Quer
             # possibly-stale Shop-level figure.
             shop_unit = _PLANT_SHOP_UNIT.get(p)
             if shop_unit:
-                bf5_data = db.get_techno_plan(p, fy, unit=shop_unit).get("data", {})
+                bf5_data = rt.get_techno_plan(p, fy, unit=shop_unit).get("data", {})
                 for label, key in _ISP_SHOP_BF5_OVERLAP.items():
                     v = bf5_data.get(key)
                     if v is not None:
@@ -7099,7 +7103,7 @@ async def save_techno_plant_targets(payload: dict):
                         # If just a value, try to infer unit or leave as is
                         formatted_params[param_name] = {"value": param_value, "unit": ""}
 
-                db.save_techno_plant_plan(plant, fy, formatted_params, is_user_supplied=True)
+                rt.save_techno_plant_plan(plant, fy, formatted_params, is_user_supplied=True)
                 saved_count += 1
 
                 # Keep this plant's BF-shop-level row (Iron Making's own
@@ -7110,7 +7114,7 @@ async def save_techno_plant_targets(payload: dict):
                 # keys like slag_rate/hot_blast_temp aren't wiped out.
                 shop_unit = _PLANT_SHOP_UNIT.get(plant)
                 if shop_unit:
-                    bf_data = dict(db.get_techno_plan(plant, fy, unit=shop_unit).get("data", {}))
+                    bf_data = dict(rt.get_techno_plan(plant, fy, unit=shop_unit).get("data", {}))
                     bf_changed = False
                     for label, key in _ISP_SHOP_BF5_OVERLAP.items():
                         if label not in formatted_params:
@@ -7123,7 +7127,7 @@ async def save_techno_plant_targets(payload: dict):
                         bf_data[key] = {"value": val, "unit": unit_str}
                         bf_changed = True
                     if bf_changed:
-                        db.save_techno_plan(plant, fy, shop_unit, bf_data, is_user_supplied=True)
+                        rt.save_techno_plan(plant, fy, shop_unit, bf_data, is_user_supplied=True)
 
         return {"status": "success", "fy": fy, "plants_saved": saved_count}
     except Exception as e:
@@ -7141,7 +7145,7 @@ async def get_techno_page_targets(page: float = Query(...), fy: str = Query(...)
     if not cfg:
         raise HTTPException(status_code=400, detail=f"Page {page} has no target-entry schema.")
 
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     cache = {}
     try:
@@ -7179,7 +7183,7 @@ async def save_techno_page_targets(payload: dict):
 
     saved = 0
     for (plant, unit), rows in grouped.items():
-        existing = db.get_techno_plan(plant, fy, unit)
+        existing = rt.get_techno_plan(plant, fy, unit)
         merged = dict(existing.get("data", {}))
         is_shop_unit = unit == _PLANT_SHOP_UNIT.get(plant)
         plant_shop_updates = {}
@@ -7210,10 +7214,10 @@ async def save_techno_page_targets(payload: dict):
             # again the moment either page is used on its own.
             if is_shop_unit and e["param_key"] in _bf_shop_to_plant_shop:
                 plant_shop_updates[_bf_shop_to_plant_shop[e["param_key"]]] = fv
-        db.save_techno_plan(plant, fy, unit, merged, is_user_supplied=True)
+        rt.save_techno_plan(plant, fy, unit, merged, is_user_supplied=True)
 
         if plant_shop_updates:
-            shop_existing = dict(db.get_techno_plan(plant, fy, unit="Shop").get("data", {}))
+            shop_existing = dict(rt.get_techno_plan(plant, fy, unit="Shop").get("data", {}))
             for label, fv in plant_shop_updates.items():
                 if fv is None:
                     shop_existing.pop(label, None)
@@ -7221,7 +7225,7 @@ async def save_techno_page_targets(payload: dict):
                 existing_obj = shop_existing.get(label)
                 unit_str = existing_obj.get("unit", "") if isinstance(existing_obj, dict) else ""
                 shop_existing[label] = {"value": fv, "unit": unit_str}
-            db.save_techno_plan(plant, fy, "Shop", shop_existing, is_user_supplied=True)
+            rt.save_techno_plan(plant, fy, "Shop", shop_existing, is_user_supplied=True)
 
     return {"status": "success", "fy": fy, "saved": saved}
 
@@ -7246,7 +7250,7 @@ _COAL_BLEND_TARGET_PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP", "SAIL"]
 async def get_coal_blend_targets(fy: str = Query(...)):
     targets = {}
     for plant in _COAL_BLEND_TARGET_PLANTS:
-        data = db.get_techno_plan(plant, fy, unit=_COAL_BLEND_TARGET_UNIT).get("data", {})
+        data = rt.get_techno_plan(plant, fy, unit=_COAL_BLEND_TARGET_UNIT).get("data", {})
         row = {}
         for kind, key in _COAL_BLEND_TARGET_KEY.items():
             v = data.get(key)
@@ -7273,7 +7277,7 @@ async def save_coal_blend_targets(payload: dict):
 
     saved = 0
     for plant, rows in grouped.items():
-        existing = db.get_techno_plan(plant, fy, _COAL_BLEND_TARGET_UNIT)
+        existing = rt.get_techno_plan(plant, fy, _COAL_BLEND_TARGET_UNIT)
         merged = dict(existing.get("data", {}))
         for e in rows:
             v = e.get("value")
@@ -7290,7 +7294,7 @@ async def save_coal_blend_targets(payload: dict):
                 saved += 1
             except (TypeError, ValueError):
                 continue
-        db.save_techno_plan(plant, fy, _COAL_BLEND_TARGET_UNIT, merged, is_user_supplied=True)
+        rt.save_techno_plan(plant, fy, _COAL_BLEND_TARGET_UNIT, merged, is_user_supplied=True)
 
     return {"status": "success", "fy": fy, "saved": saved}
 
@@ -7313,7 +7317,7 @@ async def get_techno_sms_targets(fy: str = Query("2026-27")):
 
         for shop in sms_shops:
             plant = shop.split()[0]
-            shop_result = db.get_techno_plan(plant, fy, shop)
+            shop_result = rt.get_techno_plan(plant, fy, shop)
             if shop_result and shop_result.get('data'):
                 raw_data = shop_result['data']
                 shop_params = {}
@@ -7357,7 +7361,7 @@ async def save_techno_sms_targets(payload: dict):
                     else:
                         formatted_params[param_name] = {"value": param_value, "unit": ""}
 
-                db.save_techno_plan(plant, fy, unit, formatted_params, is_user_supplied=True)
+                rt.save_techno_plan(plant, fy, unit, formatted_params, is_user_supplied=True)
                 saved_count += 1
 
         return {"status": "success", "fy": fy, "shops_saved": saved_count}
@@ -7389,7 +7393,7 @@ async def recalculate_sail_weighted(payload: dict):
             [f"{fy_year + 1}-{m:02d}" for m in range(1, 4)]
         )
 
-        conn = db.connect()
+        conn = dbengine.connect()
         cur = conn.cursor()
 
         # Fetch HM production targets by plant (for BF params)
@@ -7467,7 +7471,7 @@ async def recalculate_sail_weighted(payload: dict):
         plants = ['BSP', 'DSP', 'RSP', 'BSL', 'ISP']
         bf_targets = {}
         for plant in plants:
-            plan_result = db.get_techno_plant_plan(plant, fy)
+            plan_result = rt.get_techno_plant_plan(plant, fy)
             plant_data = plan_result.get('data', {}) if plan_result else {}
             if plant_data:
                 for param, param_obj in plant_data.items():
@@ -7539,7 +7543,7 @@ async def recalculate_sail_weighted(payload: dict):
                 # Get the shop-level (SMS-wise) data actually entered via
                 # /api/techno-sms-targets — stored under unit=<shop name>,
                 # not the plant-wide unit='Shop' record.
-                plan_result = db.get_techno_plan(plant, fy, shop)
+                plan_result = rt.get_techno_plan(plant, fy, shop)
                 shop_data = plan_result.get('data', {}) if plan_result else {}
                 weight = shop_cs_weights.get(shop, 0)
 
@@ -7606,7 +7610,7 @@ async def recalculate_sail_weighted(payload: dict):
         for param, value in {**sail_bf, **sail_sms}.items():
             computed_sail[param] = {"value": value, "unit": ""}
 
-        db.save_sail_techno_plan(fy, computed_sail, is_user_supplied=False,
+        rt.save_sail_techno_plan(fy, computed_sail, is_user_supplied=False,
                                 calculated_json=computed_sail, calculation_method={})
 
         return {
@@ -7653,7 +7657,7 @@ def _radar_default_month() -> str:
     entered, so the latest techno_data row is often sparse); falls back to
     the latest available month with any techno data at all if even that's
     empty."""
-    available = db.get_techno_months() or []
+    available = rt.get_techno_months() or []
     _now = _dt.datetime.now()
     last_month = (_now.replace(day=1) - _dt.timedelta(days=1)).strftime("%Y-%m")
     return last_month if last_month in available else (available[0] if available else None)
@@ -7718,7 +7722,7 @@ async def get_techno_plant_radar_summary(start: str = Query(None), end: str = Qu
         ey, em = int(end[:4]), int(end[5:7])
         period_label = f"{_MONTHS_SHORT[sm - 1]}'{str(sy)[2:]} – {_MONTHS_SHORT[em - 1]}'{str(ey)[2:]} (avg)"
 
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     plants_out = []
     try:
@@ -7751,14 +7755,14 @@ async def get_techno_summary(fy: str = Query("2026-27")):
     try:
         fy_year = int(fy.split("-")[0])
 
-        conn = db.connect()
+        conn = dbengine.connect()
         cur = conn.cursor()
 
         # Get all plants and their BF targets
         plants = ['BSP', 'DSP', 'RSP', 'BSL', 'ISP']
         bf_data = {}
         for plant in plants:
-            plan_result = db.get_techno_plant_plan(plant, fy)
+            plan_result = rt.get_techno_plant_plan(plant, fy)
             plan_data = plan_result.get('data', {}) if plan_result else {}
             if plan_data:
                 # Extract values from {param: {value, unit}} format
@@ -7781,13 +7785,13 @@ async def get_techno_summary(fy: str = Query("2026-27")):
         sms_data = {}
         for shop in sms_shops:
             plant = shop.split()[0]
-            shop_result = db.get_techno_plan(plant, fy, shop)
+            shop_result = rt.get_techno_plan(plant, fy, shop)
             shop_data = shop_result.get('data', {}) if shop_result else {}
             if shop_data:
                 sms_data[shop] = shop_data
 
         # Get SAIL targets
-        sail_result = db.get_sail_techno_plan(fy)
+        sail_result = rt.get_sail_techno_plan(fy)
         sail_data = sail_result.get('data', {}) if sail_result else {}
 
         # Get production data for context

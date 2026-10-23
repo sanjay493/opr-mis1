@@ -12,7 +12,7 @@ import io
 from dataclasses import dataclass, field
 
 import board_note_common as bnc
-import db
+import dbengine
 import page4
 from repo import production as rp
 import page_secretary_review_texts as pst
@@ -31,7 +31,7 @@ BASIS_LABEL = {"app": "APP", "mou": "MoU"}
 
 
 def latest_month():
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         row = rp.latest_hot_metal_month_row(cur)
@@ -181,7 +181,7 @@ def build_techno(labels, warnings):
 def build_context(month):
     labels = period_labels(month)
     warnings = []
-    conn = db.connect()
+    conn = dbengine.connect()
     try:
         cur = conn.cursor()
         basis = plan_basis(cur, month)

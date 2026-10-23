@@ -47,11 +47,7 @@ from coal_co2_epi_extractor import (  # noqa: E402
     PLANTS, ENVIRO_PARAM_ORDER, ENVIRO_KEY_UNITS,
     extract_report, mlabel_from_report_month, plant_techno_json, plant_till_techno_json,
 )
-from db import (  # noqa: E402
-    init_db, merge_upsert_techno_data, get_techno_data,
-    get_techno_plant_plan, save_techno_plant_plan,
-    get_sail_techno_plan, save_sail_techno_plan,
-)
+from repo.techno import merge_upsert_techno_data, get_techno_data, get_techno_plant_plan, save_techno_plant_plan, get_sail_techno_plan, save_sail_techno_plan  # noqa: E402
 from api_unified_techno import _validate_month  # noqa: E402
 
 router = APIRouter(prefix="/api/coal-co2", tags=["coal-co2-epi"])
@@ -166,7 +162,6 @@ async def preview_coal_co2(
             )
 
         enviro = blob["enviro"]
-        init_db()
         main = _month_group_preview(report_month, enviro)
 
         target_fy = _target_fy(report_month)
@@ -256,7 +251,6 @@ async def insert_coal_co2(payload: dict):
     if cply_records:
         _validate_month(cply_report_month)
 
-    init_db()
     conflicts = _existing_conflicts(report_month, plant_records)
     cply_conflicts = _existing_conflicts(cply_report_month, cply_records) if cply_records else []
     if (conflicts or cply_conflicts) and not confirm_replace:

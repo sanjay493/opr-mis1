@@ -26,7 +26,8 @@ states per metric, but the source's own look takes precedence now.
 """
 from typing import Dict, List, Optional
 
-import db
+from repo import misc as rmisc
+import month_utils
 
 WINDOW_MONTHS = 13
 
@@ -95,9 +96,9 @@ def _row_colors(values: List[Optional[float]]) -> List[Optional[tuple]]:
 
 
 def generate_macro_indicators(report_month: str) -> dict:
-    end_month = db.shift_month(report_month, -1)
-    months = db.get_trailing_months(end_month, WINDOW_MONTHS)
-    monthly = db.get_macro_indicators(months)
+    end_month = month_utils.shift_month(report_month, -1)
+    months = month_utils.get_trailing_months(end_month, WINDOW_MONTHS)
+    monthly = rmisc.get_macro_indicators(months)
     labels = [_mon_label(m) for m in months]
 
     rows = []

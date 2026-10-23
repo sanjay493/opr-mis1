@@ -17,7 +17,6 @@ ROW = {"item": "HOT METAL", "plant": "BSP", "capacity": 7000.0,
 @pytest.fixture
 def tc(monkeypatch):
     monkeypatch.setattr(app_mod, "_rows", lambda month, basis: [dict(ROW)])
-    monkeypatch.setattr(app_mod.db, "init_db", lambda: None)
     app = FastAPI()
     app.include_router(app_mod.router)
     return TestClient(app)

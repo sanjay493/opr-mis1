@@ -36,7 +36,7 @@ BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BACKEND_DIR)
 sys.path.insert(0, os.path.join(BACKEND_DIR, "excel_extractors"))
 
-import db  # noqa: E402
+import dbengine  # noqa: E402
 from repo import production as rp  # noqa: E402
 import excel_extractor_bsp as bsp  # noqa: E402
 
@@ -90,7 +90,7 @@ def main():
               f"Re-run with --apply to save.")
         return
 
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     saved = 0
     try:

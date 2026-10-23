@@ -35,7 +35,8 @@ now its own directly-entered figure like any other plant, since SAIL's
 own cost of production isn't necessarily the arithmetic sum of the 5
 plants' figures.
 """
-import db
+from repo import cost_trend as rct
+import month_utils
 
 _PRODUCT_TITLE = {
     "HM": "Trend in Cost of Production of Hot Metal",
@@ -71,7 +72,7 @@ def _ytd_col_label(ytd_months: list) -> str:
 def _annual_fys(report_month: str, n: int = 6) -> list:
     """N full FY labels (e.g. "2020-21") for the N closed FYs immediately
     before report_month's own FY."""
-    fy_start_year = int(db.get_fy_months(report_month)[0][:4])
+    fy_start_year = int(month_utils.get_fy_months(report_month)[0][:4])
     return [f"{y}-{(y + 1) % 100:02d}" for y in range(fy_start_year - n, fy_start_year)]
 
 
@@ -92,12 +93,12 @@ def _cost_value(cost_type: str, plant: str, get_raw) -> "float | None":
 
 
 def generate_cost_trend(report_month: str, product: str) -> dict:
-    fy_months = db.get_fy_months(report_month)
+    fy_months = month_utils.get_fy_months(report_month)
     ytd_months = [m for m in fy_months if m <= report_month]
     annual_fys = _annual_fys(report_month, 6)
 
-    annual_data = db.get_cost_trend_annual(product, annual_fys)
-    monthly_data = db.get_cost_trend_monthly(product, ytd_months)
+    annual_data = rct.get_cost_trend_annual(product, annual_fys)
+    monthly_data = rct.get_cost_trend_monthly(product, ytd_months)
 
     periods = (
         [{"key": f"annual:{fy}", "label": fy[2:], "kind": "annual"} for fy in annual_fys]
@@ -106,9 +107,9 @@ def generate_cost_trend(report_month: str, product: str) -> dict:
     )
 
     blocks = []
-    for cost_type in db.COST_TREND_COST_TYPES:
+    for cost_type in rct.COST_TREND_COST_TYPES:
         rows = []
-        for plant in db.COST_TREND_PLANTS:
+        for plant in rct.COST_TREND_PLANTS:
             cells = {}
             for fy in annual_fys:
                 get_raw = lambda ct, p, fy=fy: annual_data.get(fy, {}).get(ct, {}).get(p)

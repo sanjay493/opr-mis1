@@ -46,7 +46,7 @@ import json as _json
 import sys
 from pathlib import Path
 
-import db
+import dbengine
 from repo import production as rp
 from repo import techno as rt
 from repo import special_steel as rss
@@ -84,7 +84,7 @@ def _techno_data_presence(report_month: str) -> dict:
     """One pass over techno_data for report_month -> presence sets for the
     4 things it feeds that this checklist tracks (see module docstring for
     why unit-level detail beyond this split isn't attempted)."""
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         rows = rt.month_rows(cur, report_month)

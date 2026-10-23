@@ -40,7 +40,7 @@ BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BACKEND_DIR)
 sys.path.insert(0, os.path.join(BACKEND_DIR, "excel_extractors"))
 
-import db  # noqa: E402
+import dbengine  # noqa: E402
 from repo import production as rp  # noqa: E402
 import excel_extractor_dsp as dsp  # noqa: E402
 
@@ -70,7 +70,7 @@ def main():
                         help="Actually write to the live DB. Default is a dry-run.")
     args = parser.parse_args()
 
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     existing = {item: existing_months(cur, item) for item in GAP_FILL_ONLY_ITEMS}
     conn.close()
@@ -120,7 +120,7 @@ def main():
         print(f"\nDry-run only — {len(to_write)} values NOT written. Re-run with --apply to save.")
         return
 
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     saved = 0
     try:

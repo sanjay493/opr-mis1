@@ -24,7 +24,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
-import db as _db
+import dbengine
 from repo import ops as rop
 import activity_context as _activity_context
 
@@ -96,8 +96,7 @@ async def list_entries(
         params.append(to_date)
     where_sql = f"WHERE {' AND '.join(where)}" if where else ""
 
-    _db.init_db()
-    conn = _db.connect()
+    conn = dbengine.connect()
     conn.row_factory = Row
     try:
         cur = rop.worklog_rows(conn, where_sql, params)
@@ -113,8 +112,7 @@ async def add_entry(body: EntryRequest):
     if not body.description.strip():
         raise HTTPException(400, "description is required")
 
-    _db.init_db()
-    conn = _db.connect()
+    conn = dbengine.connect()
     try:
         cur = rop.insert_worklog_entry(conn, body.work_date, body.description.strip(), body.remarks,
                                        datetime.now().isoformat())
@@ -142,7 +140,7 @@ async def update_entry(entry_id: int, body: EntryUpdateRequest):
     if not fields:
         raise HTTPException(400, "No fields provided to update.")
 
-    conn = _db.connect()
+    conn = dbengine.connect()
     try:
         old = _fetch_entry(conn, entry_id)
         cur = rop.update_worklog_entry(conn, fields, values, entry_id)
@@ -158,7 +156,7 @@ async def update_entry(entry_id: int, body: EntryUpdateRequest):
 
 @router.post("/{entry_id}/delete")
 async def delete_entry(entry_id: int):
-    conn = _db.connect()
+    conn = dbengine.connect()
     try:
         old = _fetch_entry(conn, entry_id)
         cur = rop.delete_worklog_entry(conn, entry_id)

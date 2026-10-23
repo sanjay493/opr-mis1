@@ -30,7 +30,7 @@ from typing import Optional, List, Dict, Any
 import openpyxl
 from openpyxl.utils import get_column_letter
 
-import db
+import dbengine
 from repo import production as rp
 from extraction_utils import calculate_tmi_consumption
 
@@ -628,7 +628,7 @@ def extract_and_save_excel(file_path: str, report_month: str = None,
 
         production_cells = _resolve_ppc_mis_cells(ws)
 
-        conn = db.connect()
+        conn = dbengine.connect()
         cursor = conn.cursor()
         vals_extracted = 0
 
@@ -654,8 +654,8 @@ def extract_and_save_excel(file_path: str, report_month: str = None,
 
         import sys
         sys.path.insert(0, os.path.dirname(__file__))
-        import db as _db
-        _db.log_extraction(
+        from repo import ops as rop
+        rop.log_extraction(
             plant="BSP", report_month=db_report_month,
             file_name=source_file_name, sheet_name="S1",
             source_type="Daily PPC MIS Report",
@@ -1673,7 +1673,7 @@ def _extract_mis2_furnace_preview(wb, report_month: str) -> dict:
     if mc2_val is not None and not mid_month:
         sp3_total = None
         try:
-            _conn = db.connect()
+            _conn = dbengine.connect()
             _cur = _conn.cursor()
             _row = rp.value_row(_cur, "actual", db_month, "BSP", "SP-3")
             _conn.close()

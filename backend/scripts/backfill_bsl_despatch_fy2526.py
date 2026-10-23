@@ -59,7 +59,7 @@ BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BACKEND_DIR)
 
 import pdfplumber  # noqa: E402
-import db  # noqa: E402
+import dbengine  # noqa: E402
 from repo import production as rp  # noqa: E402
 
 PDF_PATH = r"C:\Users\sanja\Downloads\BSL Annual Statistics 2025-26.pdf"
@@ -190,7 +190,7 @@ def main():
         print(f"\nDry-run only — {len(by_month) * 4} values NOT written. Re-run with --apply to save.")
         return
 
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     saved = 0
     try:

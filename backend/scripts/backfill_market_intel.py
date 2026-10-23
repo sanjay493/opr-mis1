@@ -32,7 +32,7 @@ import sys
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BACKEND_DIR)
 
-import db  # noqa: E402
+from repo import misc as rmisc  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Market prices — {series_code: {report_month: value}}
@@ -101,8 +101,8 @@ def main():
         print("\nDry-run only — nothing written. Re-run with --apply to save.")
         return
 
-    n1 = db.save_market_price_trend(price_rows)
-    n2 = db.save_macro_indicators(macro_rows)
+    n1 = rmisc.save_market_price_trend(price_rows)
+    n2 = rmisc.save_macro_indicators(macro_rows)
     print(f"\nSaved {n1} market price rows and {n2} macro indicator rows.")
 
 

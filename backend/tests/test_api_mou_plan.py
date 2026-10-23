@@ -4,11 +4,12 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import api_mou_plan
+import dbengine
 
 
 @pytest.fixture
 def client(mysql_db, monkeypatch):
-    monkeypatch.setattr(api_mou_plan.db, "log_extraction", lambda **kw: None)
+    monkeypatch.setattr(api_mou_plan.rop, "log_extraction", lambda **kw: None)
     app = FastAPI()
     app.include_router(api_mou_plan.router)
     return TestClient(app), None
@@ -24,7 +25,7 @@ def test_insert_then_conflict_then_replace(client):
     assert r.status_code == 409
     r = tc.post("/api/mou-plan/insert", json={"records": [dict(REC[0], value=600.0)], "confirm_replace": True})
     assert r.status_code == 200
-    conn = api_mou_plan.db.connect()
+    conn = dbengine.connect()
     rows = conn.execute("SELECT month_actual FROM mou_plan_table").fetchall()
     conn.close()
     assert rows == [(600.0,)]

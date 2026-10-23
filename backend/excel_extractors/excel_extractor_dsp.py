@@ -138,7 +138,8 @@ def _extract_mcr_report(file_path: str, source_file_name: str, column_shift: int
     """
     import sys
     sys.path.insert(0, os.path.dirname(__file__))
-    import db
+    from repo import ops as rop
+    import dbengine
     from repo import production as rp
 
     with open(file_path, encoding='utf-8', errors='replace') as f:
@@ -201,7 +202,7 @@ def _extract_mcr_report(file_path: str, source_file_name: str, column_shift: int
         (40, COL_E, "Saleable Steel"),
     ] + _mcr_despatch_specs(lines, COL_E)      # CC Billets / Blooms/BCB / Bloom/BRC / Plant Saleable steel despatch
 
-    conn = db.connect()
+    conn = dbengine.connect()
     cursor = conn.cursor()
     vals_extracted = 0
 
@@ -226,7 +227,7 @@ def _extract_mcr_report(file_path: str, source_file_name: str, column_shift: int
     conn.commit()
     conn.close()
 
-    db.log_extraction(
+    rop.log_extraction(
         plant="DSP",
         report_month=db_report_month,
         file_name=source_file_name,

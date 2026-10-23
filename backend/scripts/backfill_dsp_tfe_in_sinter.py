@@ -37,7 +37,7 @@ BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BACKEND_DIR)
 sys.path.insert(0, os.path.join(BACKEND_DIR, "techno_project"))
 
-import db  # noqa: E402
+from repo import techno as rt  # noqa: E402
 from dsp_mcr_techno_extractor import DspMcrTechnoExtractor  # noqa: E402
 
 PLANT = "DSP"
@@ -101,7 +101,7 @@ def main():
 
     saved = 0
     for month, (val, fname) in to_write.items():
-        db.merge_upsert_techno_data(
+        rt.merge_upsert_techno_data(
             plant=PLANT, report_month=month, unit=UNIT,
             new_techno_json={"month": {KEY: val}, "till_month": {}},
             source_file=fname,

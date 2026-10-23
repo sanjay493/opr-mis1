@@ -10,7 +10,7 @@ Steel, same SSP/VISL Finished-Steel-from-Saleable-Steel fallback), but
 reshapes it into one row per year across all 4 items instead of one PDF
 page per item with every plant group shown at once.
 """
-import db
+import dbengine
 from constants import ALL_PLANTS
 from repo import production as rp
 
@@ -66,7 +66,7 @@ def get_trend_data(basis: str, group: str) -> dict:
 
     db_items = [it for it, _ in TREND_ITEMS]
 
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     data = {it: {} for it in db_items}
     for plant, item, rm, val in rp.items_plants_all_months(cur, db_items, plants):

@@ -49,7 +49,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import db
+from repo import mines as rmn
 
 import openpyxl
 
@@ -174,7 +174,7 @@ def diff_and_apply(apply: bool):
     changed = 0
     for (rm, mine_code) in sorted(entries_by_rm_mine):
         entries = entries_by_rm_mine[(rm, mine_code)]
-        current = db.get_mines_production_despatch_monthly(rm, mine_code)["despatch_plan"]
+        current = rmn.get_mines_production_despatch_monthly(rm, mine_code)["despatch_plan"]
         to_apply = []
         for e in entries:
             cur_p = current.get(e["material_code"], {}).get(e["end_use_code"])
@@ -185,7 +185,7 @@ def diff_and_apply(apply: bool):
                 changed += 1
             to_apply.append(e)
         if apply:
-            db.save_mines_production_despatch_monthly(rm, mine_code, [], [], to_apply)
+            rmn.save_mines_production_despatch_monthly(rm, mine_code, [], [], to_apply)
     print(f"{changed} cell(s) changed" + (" (applied)" if apply else " (dry run)"))
 
 

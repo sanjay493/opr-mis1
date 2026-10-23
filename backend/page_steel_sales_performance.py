@@ -21,7 +21,8 @@ for that month.
 """
 import datetime as _dt
 
-import db
+from repo import text as rtx
+import month_utils
 
 
 def _month_label(report_month: str) -> str:
@@ -30,7 +31,7 @@ def _month_label(report_month: str) -> str:
 
 
 def _ytd_label(report_month: str) -> str:
-    ytd_months = db.get_ytd_months(report_month)
+    ytd_months = month_utils.get_ytd_months(report_month)
     end = _month_label(report_month)
     if len(ytd_months) <= 1:
         return f"Apr - {end}"
@@ -42,7 +43,7 @@ def generate_steel_sales_performance(report_month: str) -> dict:
     month_label = _month_label(report_month)
     ytd_label = _ytd_label(report_month)
 
-    saved = db.get_steel_sales_highlights(report_month) or {"month_items": [], "ytd_items": []}
+    saved = rtx.get_steel_sales_highlights(report_month) or {"month_items": [], "ytd_items": []}
 
     return {
         "type": "steel_sales_performance",

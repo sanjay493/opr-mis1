@@ -27,7 +27,7 @@ from datetime import datetime as dt
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BACKEND_DIR)
 
-import db  # noqa: E402
+import dbengine  # noqa: E402
 from repo import production as rp  # noqa: E402
 
 SOURCE_FILE = r"D:\opr-mis1\Report_format\RSPBSL_INGOT.xlsx"
@@ -60,7 +60,7 @@ def extract_rows():
 
 
 def current_db_values():
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     out = {(plant, month): value
            for plant, month, value in rp.item_plants_all_months(cur, ITEM_NAME, list(PLANTS.keys()))}
@@ -69,7 +69,7 @@ def current_db_values():
 
 
 def upsert(plant, report_month, value):
-    conn = db.connect()
+    conn = dbengine.connect()
     rp.upsert_row(conn, "actual", report_month, plant, ITEM_NAME, value)
     conn.commit()
     conn.close()

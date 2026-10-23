@@ -6,7 +6,7 @@ Plate), in the BSL block and in the SAIL rollup. The Pmix FY report keeps
 its own row mapping rather than reusing the JPC report's."""
 import pytest
 
-import db
+import dbengine
 import page_jpc_report as jpc
 import page_pmix_fy_report as pfy
 from repo.conn import tx
@@ -22,7 +22,7 @@ def cur(mysql_db):
         for plant, items in (("BSL", BSL), ("RSP", RSP)):
             seed.executemany("INSERT INTO production_table VALUES ('2026-09', %s, %s, %s)",
                              [(plant, k, v) for k, v in items.items()])
-    c = db.connect()
+    c = dbengine.connect()
     yield c.cursor()
     c.close()
 

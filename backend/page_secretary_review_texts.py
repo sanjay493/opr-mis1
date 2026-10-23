@@ -16,7 +16,7 @@ import datetime as dt
 import re
 
 import board_note_common as bnc
-import db
+import dbengine
 import secretary_review_text as srt
 from repo import breakdown as rbd
 from secretary_review_layout import BD_GROUPS, BD_PLANTS, BLOCKS, PLANTS, period_labels
@@ -262,7 +262,7 @@ def default_texts(month, keys=None):
             fns.append(fn)
     out = {}
     if fns:
-        conn = db.connect()
+        conn = dbengine.connect()
         cur = conn.cursor()
         try:
             for fn in fns:

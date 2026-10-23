@@ -104,7 +104,7 @@ def _kind_spies(monkeypatch):
             return {k: kind for k, _, _ in t.BLOCKS if k.startswith(prefix)}
         return fn
 
-    monkeypatch.setattr(t.db, "connect", lambda: _FakeConn())
+    monkeypatch.setattr(t.dbengine, "connect", lambda: _FakeConn())
     monkeypatch.setattr(t, "_hl_texts", spy("hl", ("hl_",)))
     monkeypatch.setattr(t, "_bd_texts", spy("bd", ("delay_", "bd_")))
     monkeypatch.setattr(t, "_cr_texts", spy("cr", ("cr_",)))

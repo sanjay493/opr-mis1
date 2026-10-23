@@ -46,7 +46,7 @@ import argparse
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BACKEND_DIR)
 
-import db  # noqa: E402
+import dbengine  # noqa: E402
 from repo import production as rp  # noqa: E402
 from excel_extractors.pdf_extractor_asp import (  # noqa: E402
     _load_pdf_word_rows, _detect_fl_report_month, parse_fl_last_year_column,
@@ -90,7 +90,7 @@ def _collect_source_files():
 
 
 def current_db_values(months):
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     out = {(m, item): val for m, item, val in rp.plant_rows_for_months(cur, PLANT, months)}
     conn.close()
@@ -98,7 +98,7 @@ def current_db_values(months):
 
 
 def upsert(report_month, item_name, value):
-    conn = db.connect()
+    conn = dbengine.connect()
     rp.upsert_row(conn, "actual", report_month, PLANT, item_name, value)
     conn.commit()
     conn.close()

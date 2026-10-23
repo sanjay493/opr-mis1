@@ -27,7 +27,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import db
+from repo import cost_trend as rct
 
 REPORT_MONTH = "2026-07"
 COST_TYPE = "VARIABLE"
@@ -44,10 +44,9 @@ DATA = {
 
 
 def main(apply: bool):
-    db.init_db()
     changed = 0
     for product, by_plant in DATA.items():
-        current = db.get_cost_trend_monthly(product, [REPORT_MONTH]).get(REPORT_MONTH, {})
+        current = rct.get_cost_trend_monthly(product, [REPORT_MONTH]).get(REPORT_MONTH, {})
         entries = []
         for plant, new_val in by_plant.items():
             cur_cell = current.get(COST_TYPE, {}).get(plant, {})
@@ -59,7 +58,7 @@ def main(apply: bool):
             print(f"  {product:<7} {plant:<4} {COST_TYPE} till_month: {cur_val!r} -> {new_val}")
             changed += 1
         if apply:
-            db.save_cost_trend_monthly_field(REPORT_MONTH, product, entries, "till_month_value")
+            rct.save_cost_trend_monthly_field(REPORT_MONTH, product, entries, "till_month_value")
     print(f"\nCoP BF Coke / Sinter: {changed} cell(s) {'applied' if apply else 'to change (dry run)'}")
 
 

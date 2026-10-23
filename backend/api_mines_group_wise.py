@@ -10,7 +10,6 @@ import io
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
-import db
 import mines_group_wise
 
 router = APIRouter(prefix="/api/mines-group-wise", tags=["mines-group-wise"])
@@ -22,7 +21,6 @@ def _check_fy_start(fy_start: int):
 
 
 def _data(fy_start: int) -> dict:
-    db.init_db()
     return mines_group_wise.generate(fy_start)
 
 

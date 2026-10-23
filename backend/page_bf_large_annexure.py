@@ -95,7 +95,8 @@ bigger call than this rewrite's brief covers; flagged to the user rather
 than silently removed.
 """
 import json as _json
-import db
+import dbengine
+import month_utils
 from repo import misc as rmisc
 from repo import production as rp
 from repo import techno as rt
@@ -208,7 +209,7 @@ def _production_table_tonnes(plant: str, months: list) -> dict:
     item = _PRODUCTION_ITEM.get(plant)
     if not months or not item:
         return {}
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         return {rm: v * 1000 for rm, v in rp.month_values(cur, "actual", plant, item, months)
@@ -231,7 +232,7 @@ def _production_plan_annual_tonnes(plant: str, fy_months: list) -> float:
     item = _PRODUCTION_ITEM.get(plant)
     if not fy_months or not item:
         return None
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         r = rp.sum_months_row(cur, "abp", plant, item, fy_months)
@@ -265,7 +266,7 @@ def _prev_fy_end_month(report_month: str) -> str:
     """March of the FY immediately before report_month's own FY — e.g. for
     report_month in FY2026-27 (starts April 2026), the previous FY (2025-26)
     ends March 2026, i.e. the SAME calendar year the current FY starts in."""
-    fy_start = db.get_fy_months(report_month)[0]  # "<fy_start_year>-04"
+    fy_start = month_utils.get_fy_months(report_month)[0]  # "<fy_start_year>-04"
     fy_start_year = int(fy_start[:4])
     return f"{fy_start_year}-03"
 
@@ -275,7 +276,7 @@ def _fetch_bf_rows(plant, unit, months):
     plant/unit across the given months (only rows that exist)."""
     if not months:
         return {}
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         return {rm: _json.loads(tj) for rm, tj in rt.plant_unit_month_rows(cur, plant, unit, months)}
@@ -297,13 +298,13 @@ def _sail_bf_values(plant, unit, report_month, agg_periods=None):
     """{key: {"prev_fy": v, <ytd_month>: v, ..., "ytd": v}} for every
     non-special row, for one SAIL BF. "abp" is NOT included here — see
     _sail_bf_abp, a separate data source (techno_plan_fy, not techno_data)."""
-    fy_months = db.get_fy_months(report_month)          # this FY, Apr..Mar
+    fy_months = month_utils.get_fy_months(report_month)          # this FY, Apr..Mar
     ytd_months = [m for m in fy_months if m <= report_month]
     # Shift report_month back exactly one calendar year and ask for THAT
     # month's FY — correct even for report_months in Jan/Feb/Mar, where a
     # flat "subtract 1 from fy_months[0]'s year" would mislabel every month
     # after the calendar-year rollover within the FY (e.g. Jan/Feb/Mar).
-    prev_fy_months = db.get_fy_months(f"{int(report_month[:4]) - 1}-{report_month[5:]}")
+    prev_fy_months = month_utils.get_fy_months(f"{int(report_month[:4]) - 1}-{report_month[5:]}")
     prev_fy_end = _prev_fy_end_month(report_month)
 
     all_months = list(dict.fromkeys(prev_fy_months + fy_months))
@@ -395,7 +396,7 @@ def _sail_bf_abp(plant, unit, fy_label):
     (e.g. "2026-27"), from techno_plan_fy (the same store the Techno Manual
     Entry form's annual-target tab writes into). A key with nothing entered
     is simply absent — shown as "—", never computed or guessed."""
-    data = db.get_techno_plan(plant, fy_label, unit=unit).get("data", {})
+    data = rt.get_techno_plan(plant, fy_label, unit=unit).get("data", {})
     out = {}
     for key in PARAM_BY_KEY:
         v = data.get(key)
@@ -415,7 +416,7 @@ def _sail_bf_abp(plant, unit, fy_label):
 
 
 def _sail_static_working_volume(plant, unit):
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         r = rmisc.bf_sail_working_volume_row(cur, plant, unit)
@@ -450,7 +451,7 @@ def _coke_ash_and_sinter_fe(plant, unit, report_month, ytd_months, agg_periods=N
     all_months = list(dict.fromkeys(period_months.values()))
 
     rows = {}
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         for row_unit, rm, tj in rt.plant_units_month_rows(cur, plant, all_units, all_months):
@@ -506,7 +507,7 @@ def _coke_ash_and_sinter_fe(plant, unit, report_month, ytd_months, agg_periods=N
 def _avg_daily_rate(production_vals, report_month, ytd_months, prev_fy_months, agg_periods=None):
     out = {}
     month_days = _days_in_month(report_month)
-    prev_fy_days = _days_in_fy(db.get_fy_for_month(prev_fy_months[0])) if prev_fy_months else 1
+    prev_fy_days = _days_in_fy(month_utils.get_fy_for_month(prev_fy_months[0])) if prev_fy_months else 1
     for m in ytd_months:
         v = production_vals.get(m)
         out[m] = _round(v / _days_in_month(m), 0) if v else None
@@ -605,12 +606,12 @@ def _ytd_col_label(ytd_months: list) -> str:
 
 
 def generate_bf_large_annexure(report_month: str) -> dict:
-    fy_months = db.get_fy_months(report_month)
+    fy_months = month_utils.get_fy_months(report_month)
     prev_fy_start_year = int(fy_months[0][:4]) - 1
     # Short "YY-YY" form, matching page_ipt.py's/page_special_steel_trend.py's
     # own fy_label convention elsewhere in this app.
     prev_fy_col_label = f"{prev_fy_start_year % 100:02d}-{(prev_fy_start_year + 1) % 100:02d}"
-    fy_label = db.get_fy_for_month(report_month)  # e.g. "2026-27"
+    fy_label = month_utils.get_fy_for_month(report_month)  # e.g. "2026-27"
 
     sail_cols = []
     sail_values = {}   # {bf_label: {key: {period: value}}}

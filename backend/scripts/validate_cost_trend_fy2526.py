@@ -30,7 +30,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import db
+import dbengine
 from repo import production as rp
 from backfill_cost_trend_202608 import DATA, PLANTS
 
@@ -54,7 +54,7 @@ ANNUAL_2526_IDX = 20
 
 
 def get_production(plant: str, item: str, months: list) -> float:
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     row = rp.sum_months_row(cur, "actual", plant, item, months)
     conn.close()

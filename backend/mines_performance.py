@@ -15,7 +15,7 @@ A "series" is {report_month: (actual, plan)}; rows are built by combining
 series and then deriving the 11 values, so totals' percentages come from
 the summed quantities, never from averaging percentages.
 """
-import db
+import dbengine
 from repo import mines as rmn
 
 PCT_IDX = (3, 5, 8, 10)
@@ -156,7 +156,7 @@ def _load(months: list) -> dict:
     prod[(mine, material)], desp[(mine, material, end_use)] (Rail + Road
     summed), booked[(mine, material)] (Rail + Road summed),
     sail[(section, item)]."""
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     stores = {"prod": {}, "desp": {}, "booked": {}, "sail": {}}
 

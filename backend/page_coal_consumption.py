@@ -17,7 +17,7 @@ upload) and its own validation live entirely in api_coal_omi_techno.py —
 this module only reads what's already been saved there.
 """
 import json
-import db
+import dbengine
 from repo import techno as rt
 from chart_utils import axis_break_svg, own_scale
 from page_special_steel_trend import (
@@ -204,14 +204,14 @@ def generate_coal_consumption(report_month: str) -> dict:
     closed_fys, cur_fy = fys[:-1], fys[-1]
     closed_fy_months = [m for fy in closed_fys for m in _fy_months(fy)]
 
-    conn = db.connect()
+    conn = dbengine.connect()
     try:
         target_pcts = _fy_target_pcts(conn, plants, cur_fy, _UNIT)
 
         groups = []
         import_pct_charts = []
         for plant in plants:
-            stored = db.get_techno_data(plant, report_month, unit=_UNIT, conn=conn).get(_UNIT, {})
+            stored = rt.get_techno_data(plant, report_month, unit=_UNIT, conn=conn).get(_UNIT, {})
             month_row = stored.get("month") or {}
             till_row = stored.get("till_month") or {}
             # NOT "values" — Jinja2's dot-notation resolves that to dict.values

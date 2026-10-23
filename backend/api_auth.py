@@ -16,7 +16,7 @@ from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, EmailStr
 
 import auth
-import db
+import dbengine
 from repo import ops as rop
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -92,7 +92,7 @@ def register_verify(body: RegisterVerify, response: Response):
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters.")
 
     now = datetime.now(timezone.utc).isoformat()
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     rop.insert_user(cur, email, auth.hash_password(body.password), body.name.strip(), now, now)
     user_id = cur.lastrowid
@@ -126,7 +126,7 @@ def _start_session(user: dict, request: Request, response: Response) -> dict:
     token = auth.create_session_token(user["id"], user["email"], user.get("role"))
     response.set_cookie(auth.COOKIE_NAME, token, **_COOKIE_KW)
     if user.get("role") != "admin":
-        db.add_admin_notification("sign_in", auth.client_ip(request), user=user)
+        rop.add_admin_notification("sign_in", auth.client_ip(request), user=user)
     return {"status": "ok", "user": _public_user(user)}
 
 
@@ -234,7 +234,7 @@ def password_verify(body: ResetVerify):
     if len(body.new_password) < 8:
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters.")
 
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     rop.update_password(cur, auth.hash_password(body.new_password), datetime.now(timezone.utc).isoformat(), email)
     conn.commit()
@@ -255,7 +255,7 @@ def update_profile(
     picture: Optional[UploadFile] = File(default=None),
     user: dict = Depends(auth.get_current_user),
 ):
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     updates = []
     params = []

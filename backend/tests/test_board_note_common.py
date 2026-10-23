@@ -83,7 +83,7 @@ def test_items_for_plant_visl_is_saleable_and_finished_only():
 
 
 from repo.conn import tx
-import db
+import dbengine
 
 
 def _seeded_cursor():
@@ -100,7 +100,7 @@ def _seeded_cursor():
             c.execute("INSERT INTO production_table VALUES (%s,%s,%s,%s)", (m, p, i, v))
         for m, p, i, v in rows_plan:
             c.execute("INSERT INTO production_plan_table VALUES (%s,%s,%s,%s)", (m, p, i, v))
-    return db.connect().cursor()
+    return dbengine.connect().cursor()
 
 def test_period_sum_adds_three_months(mysql_db):
     cur = _seeded_cursor()
@@ -150,7 +150,7 @@ def _seeded_cursor_finished_steel_no_conversion():
     with tx() as c:
         for m, p, i, v in rows_act:
             c.execute("INSERT INTO production_table VALUES (%s,%s,%s,%s)", (m, p, i, v))
-    return db.connect().cursor()
+    return dbengine.connect().cursor()
 
 def test_row_values_blanks_act_when_conversion_missing_for_sail_finished_steel(mysql_db):
     cur = _seeded_cursor_finished_steel_no_conversion()
@@ -175,7 +175,7 @@ def test_imp_phrase_returns_empty_for_none():
 def _mou_cursor(rows):
     with tx() as c:
         c.executemany("INSERT INTO mou_plan_table VALUES (%s,%s,%s,%s)", rows)
-    return db.connect().cursor()
+    return dbengine.connect().cursor()
 
 def test_fs_mou_sums_plants_and_months(mysql_db):
     cur = _mou_cursor([(m, p, "Finished Steel", v) for m in ("2026-07", "2026-08")
@@ -202,7 +202,7 @@ def cursor_without_mou_table(mysql_db):
     try:
         with tx() as ddl:
             ddl.execute("DROP TABLE mou_plan_table")
-        conn = db.connect()
+        conn = dbengine.connect()
         yield conn.cursor()
     finally:
         if conn is not None:

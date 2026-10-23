@@ -34,7 +34,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import db
+from repo import mines as rmn
 
 ACTUAL_MONTHS = ["2025-04", "2025-05", "2025-06", "2025-07", "2025-08", "2025-09",
                   "2025-10", "2025-11", "2025-12", "2026-01", "2026-02", "2026-03",
@@ -97,7 +97,7 @@ def diff_and_apply(apply: bool):
     changed = 0
     for rm in sorted(entries_by_month):
         entries = entries_by_month[rm]
-        current = db.get_sail_mines_monthly([rm])[rm]
+        current = rmn.get_sail_mines_monthly([rm])[rm]
         for e in entries:
             cur = current.get(e["section"], {}).get(e["item"], {})
             cur_a, cur_p = cur.get("actual"), cur.get("plan")
@@ -122,7 +122,7 @@ def diff_and_apply(apply: bool):
                     "actual": e["actual"] if "actual" in e else cur.get("actual"),
                     "plan": e["plan"] if "plan" in e else cur.get("plan"),
                 })
-            db.save_sail_mines_monthly(rm, merged)
+            rmn.save_sail_mines_monthly(rm, merged)
     print(f"{changed} cell(s) changed" + (" (applied)" if apply else " (dry run)"))
 
 

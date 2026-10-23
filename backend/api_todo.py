@@ -24,7 +24,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
-import db as _db
+import dbengine
 from repo import ops as rop
 import activity_context as _activity_context
 
@@ -91,8 +91,7 @@ def _row_to_dict(row: Row) -> dict:
 async def list_jobs(status: str = Query("pending", description="pending | done | all")):
     if status not in ("pending", "done", "all"):
         raise HTTPException(400, "status must be 'pending', 'done', or 'all'")
-    _db.init_db()
-    conn = _db.connect()
+    conn = dbengine.connect()
     conn.row_factory = Row
     try:
         if status == "all":
@@ -112,8 +111,7 @@ async def add_job(body: JobRequest):
     if not body.subject.strip():
         raise HTTPException(400, "subject is required")
 
-    _db.init_db()
-    conn = _db.connect()
+    conn = dbengine.connect()
     try:
         cur = rop.insert_todo_job(conn, body.subject.strip(), body.details, body.recipient, body.due_date,
                                   body.priority, datetime.now().isoformat())
@@ -141,7 +139,7 @@ async def update_job(job_id: int, body: JobUpdateRequest):
     if not fields:
         raise HTTPException(400, "No fields provided to update.")
 
-    conn = _db.connect()
+    conn = dbengine.connect()
     try:
         old = _fetch_job(conn, job_id)
         cur = rop.update_todo_job(conn, fields, values, job_id)
@@ -157,7 +155,7 @@ async def update_job(job_id: int, body: JobUpdateRequest):
 
 @router.post("/{job_id}/complete")
 async def complete_job(job_id: int):
-    conn = _db.connect()
+    conn = dbengine.connect()
     try:
         old = _fetch_job(conn, job_id)
         cur = rop.complete_todo_job(conn, datetime.now().isoformat(), job_id)
@@ -173,7 +171,7 @@ async def complete_job(job_id: int):
 
 @router.post("/{job_id}/reopen")
 async def reopen_job(job_id: int):
-    conn = _db.connect()
+    conn = dbengine.connect()
     try:
         old = _fetch_job(conn, job_id)
         cur = rop.reopen_todo_job(conn, job_id)
@@ -189,7 +187,7 @@ async def reopen_job(job_id: int):
 
 @router.post("/{job_id}/delete")
 async def delete_job(job_id: int):
-    conn = _db.connect()
+    conn = dbengine.connect()
     try:
         old = _fetch_job(conn, job_id)
         cur = rop.delete_todo_job(conn, job_id)

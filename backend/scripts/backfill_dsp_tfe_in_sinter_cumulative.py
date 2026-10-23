@@ -27,7 +27,7 @@ import sys
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BACKEND_DIR)
 
-import db  # noqa: E402
+from repo import techno as rt  # noqa: E402
 from techno_cumulative import compute_cumulative_preview  # noqa: E402
 
 PLANT = "DSP"
@@ -71,7 +71,7 @@ def main():
 
     saved = 0
     for month, val in to_write.items():
-        db.merge_upsert_techno_data(
+        rt.merge_upsert_techno_data(
             plant=PLANT, report_month=month, unit=UNIT,
             new_techno_json={"month": {}, "till_month": {KEY: val}},
             source_file="cumulative_calc",

@@ -60,6 +60,14 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 LIVE_DB = "mis_reports"
+# Live databases a snapshot never touches (compared case-insensitively):
+# the v1 live DB and the v2 DB that replaces it at the Task 8 cut-over.
+LIVE_DBS = frozenset({LIVE_DB, "mis_reports_v2"})
+
+
+def _is_live(name) -> bool:
+    return (name or "").strip().lower() in LIVE_DBS
+
 DEFAULT_MONTHS = "2024-04..2026-09,2016-03,2021-03"
 DEFAULT_PDF_MONTHS = "2026-08,2026-09"
 
@@ -466,23 +474,22 @@ def _split_path_params(path, params, call):
 # ---------------------------------------------------------------------------
 
 def _select_database(db_name: str):
-    if db_name == LIVE_DB:
-        raise SystemExit(f"refusing to snapshot the live database {LIVE_DB!r}; "
+    if _is_live(db_name):
+        raise SystemExit(f"refusing to snapshot the live database {db_name!r}; "
                          f"use a restored copy such as mis_reports_baseline")
     os.environ["MYSQL_DB"] = db_name
     import dbengine
     if dbengine._MYSQL_CFG["database"] != db_name:
         dbengine._MYSQL_CFG["database"] = db_name
         dbengine._pool_clear()
-    import db
-    conn = db.connect()
+    conn = dbengine.connect()
     try:
         cur = conn.cursor()
         cur.execute("SELECT DATABASE()")
         actual = cur.fetchone()[0]
     finally:
         conn.close()
-    if actual != db_name or actual == LIVE_DB:
+    if actual != db_name or _is_live(actual):
         raise SystemExit(f"connected to {actual!r}, expected {db_name!r}")
     return actual
 

@@ -31,7 +31,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import db
+import dbengine
 from repo import techno as rt
 
 _RENAMES = {
@@ -42,8 +42,7 @@ _PERIODS = ("month", "till_month")
 
 
 def main(apply: bool):
-    db.init_db()
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     rows = rt.general_rows_with_source(cur)
 
@@ -80,7 +79,7 @@ def main(apply: bool):
         if row_changed:
             changed += 1
             if apply:
-                db._raw_upsert_techno_data(plant, report_month, unit, data, source_file=source_file or '', conn=conn)
+                rt._raw_upsert_techno_data(plant, report_month, unit, data, source_file=source_file or '', conn=conn)
 
     if apply:
         conn.commit()

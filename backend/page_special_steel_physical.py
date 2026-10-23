@@ -35,7 +35,10 @@ Data sources:
     /data-entry/production, plant SSP.)
 Stored figures are '000 T; this page displays Tonnes (× 1000).
 """
-import db
+from repo import special_steel as rss
+from repo import text as rtx
+import dbengine
+import month_utils
 import hardcoded_loader
 from repo import production as rp
 
@@ -152,21 +155,21 @@ def _ipt_item_rowspans(rows):
 
 
 def generate_special_steel_physical(report_month: str) -> dict:
-    cur_fy = db.get_fy_for_month(report_month)
+    cur_fy = month_utils.get_fy_for_month(report_month)
     cur_start = _fy_start_year(cur_fy)
     prev_start = cur_start - 1
     history_starts = list(range(HISTORY_START_FY_YEAR, prev_start))
     history_fys = [_fy_label(y) for y in history_starts]        # full keys
     history_fys_disp = [_yy(fy) for fy in history_fys]          # yy-yy display
 
-    ytd_months = db.get_ytd_months(report_month)
-    cply_months = [db.get_cply_month(m) for m in ytd_months]
+    ytd_months = month_utils.get_ytd_months(report_month)
+    cply_months = [month_utils.get_cply_month(m) for m in ytd_months]
     ytd_label = f"{_MON[int(ytd_months[0][5:7])]}-{_MON[int(report_month[5:7])]}'{cur_start % 100:02d}"
 
-    meta, perf = db.get_ss_phys_perf()
+    meta, perf = rss.get_ss_phys_perf()
     ytd_actual_override = hardcoded_loader.section("special_steel_physical")["ytd_actual_override"]
 
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         db_fy = _prod_fy_sums(cur, "actual", 2000)
@@ -281,12 +284,12 @@ def generate_special_steel_physical(report_month: str) -> dict:
         if rows:
             sections.append({"plant": plant, "rows": rows})
 
-    notes = [t for _so, t in db.get_ss_phys_notes(cur_fy)]
+    notes = [t for _so, t in rtx.get_ss_phys_notes(cur_fy)]
 
     ipt_rows = [
         {"item": r["item"], "from": r["from_plant"], "to": r["to_plant"],
          "plan": ("" if r["plan_kt"] is None else f"{r['plan_kt']:g}")}
-        for r in db.get_ss_ipt_requirement(cur_fy)
+        for r in rss.get_ss_ipt_requirement(cur_fy)
     ]
     _ipt_item_rowspans(ipt_rows)
 

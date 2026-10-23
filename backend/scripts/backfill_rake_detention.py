@@ -26,7 +26,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-import db
+from repo import rake as rrk
 
 REPORT_MONTH = "2026-08"
 CUR_FY_MONTHS = ["2026-04", "2026-05", "2026-06", "2026-07", "2026-08"]
@@ -263,7 +263,7 @@ def backfill():
     # (e.g. "BOXN") legitimately repeats under several different commodities
     # within one plant/section (see BSP INWARD), so commodity has to be part
     # of the identity or those rows collide/overwrite each other.
-    existing = db.get_rake_detention_master(active_only=False)
+    existing = rrk.get_rake_detention_master(active_only=False)
     existing_by_key = {
         (r["plant"], r["section"], r["commodity"], r["row_label"]): r["id"]
         for r in existing
@@ -284,7 +284,7 @@ def backfill():
             "freetime_effective_from": "2022-09-01" if freetime else None,
             "sort_order": sort_order,
         }
-        mid = db.save_rake_detention_master_row(row)
+        mid = rrk.save_rake_detention_master_row(row)
         existing_by_key[key] = mid
         _master_upsert_count += 1
         return mid
@@ -326,7 +326,7 @@ def backfill():
         monthly_rows.append((month, sail_overall_id, val))
 
     for month, mid, val in monthly_rows:
-        db.save_rake_detention_monthly(month, [{"master_id": mid, "value_hours": val}])
+        rrk.save_rake_detention_monthly(month, [{"master_id": mid, "value_hours": val}])
     print(f"Seeded {_master_upsert_count} master rows, {len(monthly_rows)} monthly (Apr-Aug'26) values.")
 
     # Page 4: older closed-FY history, for each plant's own "Overall Wagon"
@@ -344,7 +344,7 @@ def backfill():
         for fy_start, values in fys.items():
             months = _fy_month_keys(fy_start)
             for month, val in zip(months, values):
-                db.save_rake_detention_monthly(month, [{"master_id": mid, "value_hours": val}])
+                rrk.save_rake_detention_monthly(month, [{"master_id": mid, "value_hours": val}])
                 trend_rows += 1
     print(f"Seeded {trend_rows} historical (FY2021-22..2025-26) trend values.")
 
@@ -353,7 +353,7 @@ def backfill():
         for plant, fys in ANNUAL_DATA.items()
         for fy, val in fys.items()
     ]
-    db.save_rake_detention_annual(annual_rows)
+    rrk.save_rake_detention_annual(annual_rows)
     print(f"Seeded {len(annual_rows)} annual (APR-MAR) figures.")
 
     summary_rows = [
@@ -361,7 +361,7 @@ def backfill():
         for period, plants in SUMMARY_DATA.items()
         for plant, val in plants.items()
     ]
-    db.save_rake_detention_summary(REPORT_MONTH, summary_rows)
+    rrk.save_rake_detention_summary(REPORT_MONTH, summary_rows)
     print(f"Seeded {len(summary_rows)} summary (Improvement table) values for {REPORT_MONTH}.")
 
 

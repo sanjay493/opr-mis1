@@ -21,7 +21,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import db
+from repo import techno as rt
 
 REPORT_MONTH = "2026-07"
 UNIT = "General"
@@ -38,10 +38,9 @@ VALUES = {
 
 
 def main(apply: bool):
-    db.init_db()
     changed = 0
     for plant, new_val in VALUES.items():
-        existing = db.get_techno_data(plant, REPORT_MONTH, UNIT)
+        existing = rt.get_techno_data(plant, REPORT_MONTH, UNIT)
         cur_val = existing.get(UNIT, {}).get("till_month", {}).get(KEY)
         if cur_val is not None and abs(cur_val - new_val) < 1e-9:
             print(f"  {plant} {REPORT_MONTH} {UNIT}/{KEY}: {cur_val!r} (unchanged)")
@@ -49,7 +48,7 @@ def main(apply: bool):
         print(f"  {plant} {REPORT_MONTH} {UNIT}/{KEY}: {cur_val!r} -> {new_val}")
         changed += 1
         if apply:
-            db.merge_upsert_techno_data(
+            rt.merge_upsert_techno_data(
                 plant=plant,
                 report_month=REPORT_MONTH,
                 unit=UNIT,

@@ -27,7 +27,6 @@ import calendar as _cal
 import datetime as _dt
 from typing import Dict, List, Optional
 
-import db as _db
 import techno_cumulative as _tc
 from techno_period import _weighted_combine
 from bf_benchmark_registry import BF_BENCHMARK_PARAMS, DYNAMIC_PARAM_KEYS, PARAM_BY_KEY, SAIL_BF_UNITS_BY_PLANT

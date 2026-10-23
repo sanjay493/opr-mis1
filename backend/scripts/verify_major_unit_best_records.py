@@ -37,7 +37,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import db
+import dbengine
 import page_major_unit_records as mur
 import major_unit_xlsx_parse as xp
 
@@ -48,7 +48,7 @@ def main():
                      help="absolute value difference below which a mismatch is still counted MATCH (rounding)")
     args = ap.parse_args()
 
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
 
     totals = {"MATCH": 0, "DB_LOWER": 0, "DB_HIGHER": 0, "UNMAPPED": 0, "NO_DB_HISTORY": 0, "NOT_IN_WORKBOOK": 0}

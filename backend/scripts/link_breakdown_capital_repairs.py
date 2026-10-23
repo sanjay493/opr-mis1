@@ -21,7 +21,7 @@ BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BACKEND_DIR)
 
 import bd_cr_link  # noqa: E402
-import db  # noqa: E402
+from repo import breakdown as rbd  # noqa: E402
 from api_breakdown import _actual_crs  # noqa: E402
 
 
@@ -30,7 +30,7 @@ def main():
     ap.add_argument("--apply", action="store_true", help="write the links (default: dry-run)")
     args = ap.parse_args()
 
-    breakdowns = [b for b in db.list_breakdown_entries() if not b.get("capital_repair_id")]
+    breakdowns = [b for b in rbd.list_breakdown_entries() if not b.get("capital_repair_id")]
     crs_by_plant = {}
     pairs = []
     for b in sorted(breakdowns, key=lambda r: (r["plant"], str(r["start_ts"]))):
@@ -52,7 +52,7 @@ def main():
         print("Dry-run: nothing written. Re-run with --apply to link these.")
         return
     for b, cr in pairs:
-        db.update_breakdown_entry(b["id"], updated_by="link_breakdown_capital_repairs.py",
+        rbd.update_breakdown_entry(b["id"], updated_by="link_breakdown_capital_repairs.py",
                                   capital_repair_id=cr["id"])
     print(f"Linked {len(pairs)} entr{'y' if len(pairs) == 1 else 'ies'}.")
 

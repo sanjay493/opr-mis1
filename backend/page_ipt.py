@@ -23,7 +23,8 @@ a future manual edit. An item not in the list (a new one someone starts
 transferring) sorts after all known ones, alphabetically among itself, so it
 still shows up rather than erroring.
 """
-import db
+import dbengine
+import month_utils
 from page_prod_by_process import _sankey_svg
 from repo import ipt as ript
 
@@ -149,9 +150,9 @@ def _add_col_rowspans(rows, key):
 
 
 def generate_ipt(report_month: str) -> dict:
-    ytd_months = db.get_ytd_months(report_month)
+    ytd_months = month_utils.get_ytd_months(report_month)
 
-    conn = db.connect()
+    conn = dbengine.connect()
     cur  = conn.cursor()
     try:
         # union of routes seen this FY, keeping entry order

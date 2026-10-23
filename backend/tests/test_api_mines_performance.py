@@ -29,7 +29,6 @@ DATA = {"labels": LABELS, "pct_idx": [3, 5, 8, 10], "blocks": [
 @pytest.fixture
 def tc(monkeypatch):
     monkeypatch.setattr(app_mod.mines_performance, "generate", lambda month: DATA)
-    monkeypatch.setattr(app_mod.db, "init_db", lambda: None)
     app = FastAPI()
     app.include_router(app_mod.router)
     return TestClient(app)

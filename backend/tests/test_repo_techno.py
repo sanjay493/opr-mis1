@@ -87,10 +87,9 @@ def test_blobs_filters(mysql_db):
 
 
 def test_blobs_matches_get_techno_data(mysql_db):
-    import db
     _insert(_SEED)
     for (m, p, u), blob in rt.blobs(["2026-04", "2026-05"]).items():
-        assert db.get_techno_data(p, m, u) == {u: blob}
+        assert rt.get_techno_data(p, m, u) == {u: blob}
 
 
 def test_merge_upsert_inserts_new_row(mysql_db):
@@ -122,7 +121,6 @@ def test_merge_upsert_updates_source_file(mysql_db):
 
 
 def test_merge_upsert_matches_db_merge(mysql_db):
-    import db
     _insert(_SEED)
     new = {"month": {"coke_rate": 1.5, "nut_coke_rate": None}, "till_month": {"x": 2}}
     rt.merge_upsert("2026-04", "DSP", "BF_Shop", new, "s1")
@@ -130,7 +128,7 @@ def test_merge_upsert_matches_db_merge(mysql_db):
     with rc.tx() as cur:
         cur.execute("DELETE FROM techno_data WHERE plant='DSP'")
     _insert([s for s in _SEED if s[1] == "DSP"])
-    db.merge_upsert_techno_data("DSP", "2026-04", "BF_Shop", new, "s1")
+    rt.merge_upsert_techno_data("DSP", "2026-04", "BF_Shop", new, "s1")
     assert _row("2026-04", "DSP", "BF_Shop") == via_repo
 
 
@@ -150,14 +148,13 @@ def test_merge_upsert_logs_extraction_and_recomputes(mysql_db):
 
 
 def test_techno_plan_save_clears_cache_and_returns_copies(mysql_db):
-    import db
-    db._get_techno_plan_cached.cache_clear()
-    assert db.get_techno_plan("BSP", "2026-27", "Shop") == {
+    rt._get_techno_plan_cached.cache_clear()
+    assert rt.get_techno_plan("BSP", "2026-27", "Shop") == {
         "data": {}, "is_user_supplied": False, "calculated": {}}
-    db.save_techno_plan("BSP", "2026-27", "Shop", {"coke_rate": {"value": 410}})
-    got = db.get_techno_plan("BSP", "2026-27", "Shop")
+    rt.save_techno_plan("BSP", "2026-27", "Shop", {"coke_rate": {"value": 410}})
+    got = rt.get_techno_plan("BSP", "2026-27", "Shop")
     assert got["data"] == {"coke_rate": {"value": 410}}
     got["data"]["coke_rate"]["value"] = 0          # caller mutation ...
-    assert db.get_techno_plant_plan("BSP", "2026-27")["data"] == {"coke_rate": {"value": 410}}
-    assert db.get_techno_plan("BSP", "2026-27", "Shop")["data"] == {"coke_rate": {"value": 410}}
-    assert db.list_techno_plan_fys("BSP") == ["2026-27"]
+    assert rt.get_techno_plant_plan("BSP", "2026-27")["data"] == {"coke_rate": {"value": 410}}
+    assert rt.get_techno_plan("BSP", "2026-27", "Shop")["data"] == {"coke_rate": {"value": 410}}
+    assert rt.list_techno_plan_fys("BSP") == ["2026-27"]

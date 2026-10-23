@@ -56,7 +56,8 @@ the data-entry page) is shown.
 import html
 import re
 
-import db
+from repo import misc as rmisc
+import dbengine
 from repo import production as rp
 
 ISP_PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP"]
@@ -403,10 +404,10 @@ def generate_major_unit_page(plant_code: str, report_month: str = None) -> dict:
     ignore later months, and a stored Daily best dated after it is not
     shown (only the current best-ever day is stored, so the best as of an
     earlier month isn't known)."""
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
-        daily_by_unit = db.get_major_unit_daily_records_all().get(plant_code, {})
+        daily_by_unit = rmisc.get_major_unit_daily_records_all().get(plant_code, {})
         rows = []
         for unit in registry_for(plant_code):
             live = best_for_unit(cur, plant_code, unit["item_names"], unit["unit"] == _RATE,

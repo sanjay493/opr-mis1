@@ -27,7 +27,7 @@ FY).
 """
 import datetime as _dt
 
-import db
+import dbengine
 from constants import ALL_PLANTS
 from repo import production as rp
 
@@ -96,7 +96,7 @@ def generate_page3_highlights(month: str) -> list:
     item_names = [n for n, _ in _ITEMS]
     display_of = dict(_ITEMS)
 
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         monthly = {n: {} for n in item_names}

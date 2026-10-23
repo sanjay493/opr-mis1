@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
 import auth
-import db
+from repo import ops as rop
 
 router = APIRouter(prefix="/api", tags=["visits"])
 
@@ -30,7 +30,7 @@ def log_visit(
 ):
     ip = auth.client_ip(request)
     path = body.path[:255]
-    db.log_page_visit(ip, user, path)
+    rop.log_page_visit(ip, user, path)
     if user is None:
-        db.add_admin_notification("anon_visit", ip, path=path)
+        rop.add_admin_notification("anon_visit", ip, path=path)
     return {"status": "ok"}

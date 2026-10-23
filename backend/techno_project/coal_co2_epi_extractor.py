@@ -716,7 +716,7 @@ def load_xlsx(xlsx_path, report_month: str, write: bool = True) -> dict:
     Returns {report_month: {...}, cply_report_month: {...}} for inspection
     either way, mirroring load_folder's return shape."""
     sys.path.insert(0, str(Path(__file__).parent.parent))
-    import db  # noqa: E402
+    from repo import techno as rt  # noqa: E402
 
     mlabel = mlabel_from_report_month(report_month)
     results = extract_xlsx(xlsx_path, report_month, mlabel)
@@ -727,7 +727,7 @@ def load_xlsx(xlsx_path, report_month: str, write: bool = True) -> dict:
                 month_json = plant_techno_json(enviro, plant)
                 till_json = plant_till_techno_json(enviro, plant)
                 if month_json or till_json:
-                    db.merge_upsert_techno_data(
+                    rt.merge_upsert_techno_data(
                         plant, rm, "General", {"month": month_json, "till_month": till_json},
                         source_file=f"Coal_co2/{Path(xlsx_path).name}")
 
@@ -798,7 +798,7 @@ def load_folder(folder: str, write: bool = True) -> dict:
     each file's own report_month, matching load_xlsx's narrower script
     entry point instead (which does write both)."""
     sys.path.insert(0, str(Path(__file__).parent.parent))
-    import db  # noqa: E402
+    from repo import techno as rt  # noqa: E402
 
     results = {}
     for path in sorted(list(Path(folder).glob("*.pdf")) + list(Path(folder).glob("*.docx"))):
@@ -816,7 +816,7 @@ def load_folder(folder: str, write: bool = True) -> dict:
             month_json = plant_techno_json(blob["enviro"], plant)
             till_json = plant_till_techno_json(blob["enviro"], plant)
             if month_json or till_json:
-                db.merge_upsert_techno_data(plant, report_month, "General",
+                rt.merge_upsert_techno_data(plant, report_month, "General",
                                              {"month": month_json, "till_month": till_json},
                                              source_file=f"Coal_co2/{Path(folder).name}")
 
@@ -827,23 +827,23 @@ def load_folder(folder: str, write: bool = True) -> dict:
         enviro = results[last_month]["enviro"]
 
         for plant in PLANTS:
-            plan = db.get_techno_plant_plan(plant, target_fy)
+            plan = rt.get_techno_plant_plan(plant, target_fy)
             plan_data = dict(plan.get("data") or {})
             for key, label, _jk in ENVIRO_PARAM_ORDER:
                 v = enviro.get(key, {}).get("target", {}).get(plant)
                 if v is not None:
                     plan_data[label] = {"value": v, "unit": ENVIRO_KEY_UNITS[_jk]}
-            db.save_techno_plant_plan(plant, target_fy, plan_data,
+            rt.save_techno_plant_plan(plant, target_fy, plan_data,
                                        is_user_supplied=plan.get("is_user_supplied", False),
                                        created_by="coal_co2_epi_extractor")
 
-        sail_plan = db.get_sail_techno_plan(target_fy)
+        sail_plan = rt.get_sail_techno_plan(target_fy)
         sail_plan_data = dict(sail_plan.get("data") or {})
         for key, label, _jk in ENVIRO_PARAM_ORDER:
             v = enviro.get(key, {}).get("target", {}).get("SAIL")
             if v is not None:
                 sail_plan_data[label] = {"value": v, "unit": ENVIRO_KEY_UNITS[_jk]}
-        db.save_sail_techno_plan(target_fy, sail_plan_data,
+        rt.save_sail_techno_plan(target_fy, sail_plan_data,
                                   is_user_supplied=sail_plan.get("is_user_supplied", False),
                                   created_by="coal_co2_epi_extractor")
 

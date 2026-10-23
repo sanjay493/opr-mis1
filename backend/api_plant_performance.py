@@ -17,7 +17,6 @@ import re
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response, StreamingResponse
 
-import db
 import plant_performance_pdf
 from colors_loader import load_colors_config
 from page4 import generate_page4_rows
@@ -98,7 +97,6 @@ def _qty_fmt(decimals: int) -> str:
 def plant_performance(month: str = Query(...), basis: str = Query("app")):
     _check_month(month)
     _check_basis(basis)
-    db.init_db()
     return {"month": month, "basis": basis, **_section(month, basis)}
 
 
@@ -205,7 +203,6 @@ def plant_performance_xlsx(month: str = Query(...), decimals: int = Query(3)):
     _check_decimals(decimals)
     from openpyxl import Workbook
 
-    db.init_db()
     wb = Workbook()
     ws = wb.active
     ws.title = "w.r.t APP"
@@ -229,7 +226,6 @@ def plant_performance_pdf_download(month: str = Query(...), decimals: int = Quer
     # the synchronous Playwright render must not block the event loop.
     _check_month(month)
     _check_decimals(decimals)
-    db.init_db()
     sections = [_section(month, "app"), _section(month, "mou")]
     html = plant_performance_pdf.build_html(sections, decimals, load_colors_config())
     content = plant_performance_pdf.render(html)

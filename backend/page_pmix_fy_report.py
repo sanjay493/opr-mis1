@@ -26,7 +26,7 @@ import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
 
-import db
+import dbengine
 from constants import FIVE_PLANTS as _5P
 from page_jpc_report import _one, _one_of, _sum, _fs, _sub, _mou_value
 
@@ -429,7 +429,7 @@ def build_pmix_fy_workbook(fy_start: int):
     fy_label = f"{fy_start}-{str(fy_start + 1)[2:]}"
     months = _fy_months(fy_start)
 
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         rows_by_month = {m: compute_pmix_fy_rows(cur, m) for m in months}

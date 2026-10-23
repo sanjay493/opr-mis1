@@ -20,7 +20,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 import auth
-import db
+from repo import text as rtx
 
 router = APIRouter(prefix="/api/key-highlights", tags=["key-highlights"])
 
@@ -53,7 +53,7 @@ class SaveRequest(BaseModel):
 @router.get("")
 async def get_narrative(report_month: str = Query(..., description="YYYY-MM")):
     _validate_month(report_month)
-    saved = db.get_key_highlights_narrative(report_month)
+    saved = rtx.get_key_highlights_narrative(report_month)
     return {
         "report_month": report_month,
         "achievements": (saved or {}).get("achievements", []),
@@ -81,7 +81,7 @@ async def save_narrative(body: SaveRequest, user: dict = Depends(auth.require_ed
         for f in body.focus_areas if f.title.strip() or f.description.strip()
     ]
 
-    db.save_key_highlights_narrative(
+    rtx.save_key_highlights_narrative(
         body.report_month, achievements, shortfalls, focus_areas,
         updated_by=user.get("email", ""),
     )

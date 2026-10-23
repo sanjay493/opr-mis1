@@ -5,7 +5,7 @@ import pytest
 from pptx import Presentation
 from pptx.util import Inches
 
-import db
+import dbengine
 import page_secretary_review as psr
 from repo.conn import tx
 
@@ -15,7 +15,7 @@ _ITEMS = [db_item for _, db_item in psr.ITEMS]
 def _cursor(mou_rows):
     with tx() as seed:
         seed.executemany("INSERT INTO mou_plan_table VALUES (%s,%s,%s,%s)", mou_rows)
-    return db.connect().cursor()
+    return dbengine.connect().cursor()
 
 
 def test_basis_mou_when_every_item_has_mou_for_month(mysql_db):
@@ -40,7 +40,7 @@ def test_basis_app_when_table_missing(mysql_db):
         create_sql = ddl.fetchone()[1]
         ddl.execute("DROP TABLE mou_plan_table")
     try:
-        cur = db.connect().cursor()
+        cur = dbengine.connect().cursor()
         assert psr.plan_basis(cur, "2026-08") == "app"
     finally:
         with tx() as ddl:

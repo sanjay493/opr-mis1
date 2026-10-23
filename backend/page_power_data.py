@@ -14,7 +14,8 @@ same FY shows the same 12-month grid: only the "Cum." row (the latest
 available cumulative snapshot at-or-before the selected month) actually
 depends on which month is selected.
 """
-import db
+import dbengine
+import month_utils
 from repo import misc as rmisc
 
 
@@ -67,11 +68,11 @@ def _row_dict(vals: dict, items: list, prefix: str = "") -> dict:
 
 
 def generate_power_data(report_month: str) -> dict:
-    fy_months = db.get_fy_months(report_month)
+    fy_months = month_utils.get_fy_months(report_month)
     if not fy_months:
         fy_months = [report_month]
 
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         all_rows = rmisc.power_rows_for_months(cur, fy_months)

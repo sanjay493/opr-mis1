@@ -13,7 +13,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import db
+from repo import cost_trend as rct
 from excel_extractors.excel_extractor_cost_trend import PLANT_ORDER, extract_cost_trend_workbook
 
 _COST_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "Report_format", "Cost")
@@ -37,7 +37,7 @@ def _save(extracted: dict, field: str, report_month_override: str = None):
     report_month = report_month_override or extracted["report_month"]
     for product, plants in extracted["products"].items():
         entries = _entries_for_product(plants)
-        n = db.save_cost_trend_monthly_field(report_month, product, entries, field)
+        n = rct.save_cost_trend_monthly_field(report_month, product, entries, field)
         print(f"  {report_month} {product} {field}: {n} cells")
 
 

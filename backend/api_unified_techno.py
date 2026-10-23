@@ -18,7 +18,8 @@ _TP_DIR = str(Path(__file__).parent / "techno_project")
 if _TP_DIR not in sys.path:
     sys.path.insert(0, _TP_DIR)
 
-from db import init_db, merge_upsert_techno_data, get_techno_data, get_techno_months, enrich_techno_records_with_db, connect as db_connect
+from repo.techno import merge_upsert_techno_data, get_techno_data, get_techno_months, enrich_techno_records_with_db
+from dbengine import connect as db_connect
 from repo import techno as rt
 
 router = APIRouter(prefix="/api/techno", tags=["unified-techno"])
@@ -174,7 +175,6 @@ async def extract_techno(
             )
 
         # Save to database
-        init_db()
         saved_count = 0
 
         for rec in records:
@@ -306,7 +306,6 @@ async def insert_techno(payload: dict):
         raise HTTPException(status_code=400, detail="No records to insert")
     validate_units_for_plant(plant, (rec.get("unit", "") for rec in records))
 
-    init_db()
     saved_count = 0
     for rec in records:
         try:
@@ -472,7 +471,6 @@ async def insert_techno_months(payload: dict):
     # error instead of Starlette's plain-text "Internal Server Error" (which
     # the frontend's res.json() previously choked on).
     def _save_all():
-        init_db()
         conn = db_connect()
         try:
             saved = {}
@@ -531,7 +529,6 @@ async def get_data(
     _validate_month(report_month)
 
     try:
-        init_db()
         result = get_techno_data(plant, report_month, unit)
 
         if not result:
@@ -561,7 +558,6 @@ async def get_months(
     List available report months for a plant or all plants.
     """
     try:
-        init_db()
         months = get_techno_months(plant)
         return {
             "plant": plant or "all",
@@ -578,7 +574,6 @@ async def get_plants():
     Get list of plants with available techno data.
     """
     try:
-        init_db()
         conn = db.connect()
         cursor = conn.cursor()
         plants = [row[0] for row in rt.distinct_plants(cursor)]

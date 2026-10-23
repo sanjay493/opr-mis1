@@ -54,7 +54,7 @@ sys.path.insert(0, BACKEND_DIR)
 sys.path.insert(0, os.path.join(BACKEND_DIR, "excel_extractors"))
 
 import openpyxl  # noqa: E402
-import db  # noqa: E402
+import dbengine  # noqa: E402
 from repo import production as rp  # noqa: E402
 from excel_extractors.excel_extractor_bsl import (  # noqa: E402
     extract_preview_main_products_pdf, _dpr_config, _resolve_dpr_cells,
@@ -205,7 +205,7 @@ def main():
               f"Re-run with --apply to save.")
         return
 
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     saved = 0
     try:

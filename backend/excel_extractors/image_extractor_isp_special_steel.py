@@ -147,23 +147,24 @@ def extract_preview(image_path: str, report_month: str) -> dict:
 def extract_and_save_image(image_path: str, report_month: str, source_file_name: str = "") -> bool:
     """Parse + save directly (no confirm step) — mirrors extract_and_save_excel
     in the other plant extractors, for callers that don't need a preview."""
-    import db as _db
+    from repo import ops as rop
+    from repo import special_steel as rss
     result = extract_preview(image_path, report_month)
     db_month = result["month"]
     rows = [r for r in result["special_steel_rows"]
             if r["status"] == "ok" and (r.get("order_qty") is not None or r.get("actual_despatch") is not None)]
     if not rows:
         return False
-    _db.clear_special_steel_orders(db_month, "ISP")
+    rss.clear_special_steel_orders(db_month, "ISP")
     for r in rows:
-        _db.save_special_steel_entry(
+        rss.save_special_steel_entry(
             db_month, "ISP",
             r["product"], r["quality_grade"],
             r["sort_order"],
             r.get("order_qty"), r.get("actual_despatch"),
             section="",
         )
-    _db.log_extraction(
+    rop.log_extraction(
         plant="ISP", report_month=db_month,
         file_name=source_file_name, sheet_name="",
         source_type="Special Steel Report (Image/OCR)",

@@ -302,7 +302,7 @@ def _log_techno_save(plant: str, report_month: str, unit: str, techno_json: Dict
     funnels through: extraction inserts, manual entry, and the SAIL BF_Shop
     auto-refresh) so it can't be missed by adding a new save path later."""
     try:
-        import db  # db imports this module; bind at call time
+        from repo import ops as db  # bind at call time
         items = len(techno_json.get("month", {})) + len(techno_json.get("till_month", {}))
         db.log_extraction(
             plant=plant,

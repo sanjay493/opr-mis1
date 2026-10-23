@@ -33,7 +33,8 @@ import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side, Color
 from openpyxl.utils import get_column_letter
 
-import db
+import dbengine
+import month_utils
 from constants import FIVE_PLANTS as _5P
 from repo import production as rp
 from repo import text as rtx
@@ -472,11 +473,11 @@ _COL_WIDTHS = {
 
 
 def build_one_page_workbook(report_month: str):
-    cply_month = db.get_cply_month(report_month)
-    ytd_months = db.get_ytd_months(report_month)
-    cply_ytd_months = [db.get_cply_month(m) for m in ytd_months]
+    cply_month = month_utils.get_cply_month(report_month)
+    ytd_months = month_utils.get_ytd_months(report_month)
+    cply_ytd_months = [month_utils.get_cply_month(m) for m in ytd_months]
 
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         sales_rows = _build_sales_rows(cur, report_month)

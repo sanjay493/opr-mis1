@@ -20,7 +20,8 @@ re-hardcoding a 3rd/4th copy of any of it.
 
 from typing import Dict, List, Optional
 
-import db as _db
+from repo import techno as rt
+import dbengine
 from repo import production as _rp
 import page_techno as _pt
 import techno_cumulative as _tc
@@ -140,9 +141,9 @@ def _get_month_data(dcache: Optional[dict], plant: str, month: str) -> Dict:
     responding with one)."""
     key = (plant, month)
     if dcache is None:
-        return _db.get_techno_data(plant, month)
+        return rt.get_techno_data(plant, month)
     if key not in dcache:
-        dcache[key] = _db.get_techno_data(plant, month)
+        dcache[key] = rt.get_techno_data(plant, month)
     return dcache[key]
 
 
@@ -213,7 +214,7 @@ def _shop_period_weights(plant: str, shop: str, months: List[str]) -> Dict[str, 
     items = _pt._VERIFY_SMS_PRODUCTION_ITEMS.get((plant, shop))
     own: Dict[str, float] = {}
     if items:
-        conn = _db.connect()
+        conn = dbengine.connect()
         cur = conn.cursor()
         for rm, v in _rp.plant_items_month_values(cur, plant, items, months):
             if v is not None:
@@ -436,7 +437,7 @@ def _shop_period_own_cs(plant: str, shop: str, months: List[str]) -> Dict[str, f
     items = _pt._VERIFY_SMS_PRODUCTION_ITEMS.get((plant, shop))
     if not items:
         return {}
-    conn = _db.connect()
+    conn = dbengine.connect()
     try:
         cur = conn.cursor()
         out: Dict[str, float] = {}

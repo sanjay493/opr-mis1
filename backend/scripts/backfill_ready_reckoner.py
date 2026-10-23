@@ -42,7 +42,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-import db
+from repo import misc as rmisc
 
 _STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "static", "ready_reckoner")
 
@@ -304,14 +304,14 @@ def run():
           "(obsolete — see this module's own docstring); only plant-identity fields "
           "and process-flow images are upserted below.")
     for plant_code, (plant_name, plant_group, sort_order, image_filename) in PLANTS.items():
-        db.upsert_ready_reckoner_master({
+        rmisc.upsert_ready_reckoner_master({
             "plant_code": plant_code, "plant_name": plant_name,
             "plant_group": plant_group, "sort_order": sort_order,
         })
         if image_filename:
             image_path = os.path.join(_STATIC_DIR, image_filename)
             if os.path.exists(image_path):
-                db.save_ready_reckoner_image(plant_code, image_path, "backfill_script")
+                rmisc.save_ready_reckoner_image(plant_code, image_path, "backfill_script")
             else:
                 print(f"WARNING: image not found for {plant_code}: {image_path}")
         print(f"seeded {plant_code} ({plant_name})")

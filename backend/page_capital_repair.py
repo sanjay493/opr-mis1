@@ -18,7 +18,7 @@ equipment rows (BAND-1/2/3), matching how BSP has two separate shops
 import re
 from datetime import date, timedelta
 
-import db
+import dbengine
 from repo import breakdown as rbd
 
 CR_PAGES = {
@@ -171,7 +171,7 @@ def generate_capital_repair(plant: str, fy: str = "2026-27", report_month: str |
     """report_month ('YYYY-MM'): the report being generated - the Actual
     column is shown as of that month (see _actual_cell). Without it the
     stored Actual text is shown as-is."""
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         rows = rbd.cr_report_rows(cur, plant, fy)
@@ -301,7 +301,7 @@ def generate_capital_repair_calendar(plant: str, fy: str) -> dict:
     executed prints "Deferred") or "pending" (planned for this month or
     later). summary counts repairs by state; a row's status is its most
     pressing one: ongoing > deferred > done > "" (nothing started yet)."""
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         rows = rbd.cr_calendar_rows(cur, plant, fy)

@@ -14,7 +14,9 @@ on-screen — see get_data()'s page_number handling and PageRenderer.js's
 import datetime as _dt
 import re as _re
 
-import db
+from repo import production as rp
+import dbengine
+import month_utils
 import report_context
 from repo import techno as rt
 from chart_utils import axis_break_svg, own_scale
@@ -175,12 +177,12 @@ def _semis_breakdown_data(months: list) -> dict:
     for m in months:
         plants = []
         for p in _SEMIS_PLANTS:
-            saleable = db.get_production_actual_value(p, "Saleable Steel", m)
+            saleable = rp.get_production_actual_value(p, "Saleable Steel", m)
             if p == "ASP":
-                finished = db.get_production_actual_value(p, "Finished Steel", m)
+                finished = rp.get_production_actual_value(p, "Finished Steel", m)
                 semis = (saleable - finished) if (saleable is not None and finished is not None) else None
             else:
-                semis = db.get_production_actual_value(p, "Saleable Semis", m)
+                semis = rp.get_production_actual_value(p, "Saleable Semis", m)
             if semis is None:
                 continue
             plants.append({
@@ -518,14 +520,14 @@ def _ytd_trend_section(report_month: str) -> dict:
     """Last-4-FY grouped bar chart: for each production item, YTD (Apr through
     the report month, replayed on each of the last 4 FYs) side by side, plus
     the growth from the immediately preceding FY to the current one."""
-    n_months = len(db.get_ytd_months(report_month))
+    n_months = len(month_utils.get_ytd_months(report_month))
     fy_starts = _last4_fy_starts(report_month)
     fy_labels = [_fy_label(fs) for fs in fy_starts]
 
     data, growth = {}, {}
     for item in _PROD_ITEMS:
         db_item = _YTD_DB_ITEM.get(item, item)
-        vals = [db.get_sail_production_ytd_actual(_ytd_months_for_fy(fs, n_months), db_item)
+        vals = [rp.get_sail_production_ytd_actual(_ytd_months_for_fy(fs, n_months), db_item)
                 for fs in fy_starts]
         data[item] = list(zip(fy_labels, vals))
         prev, current = vals[-2], vals[-1]
@@ -559,7 +561,7 @@ def _imported_coal_blend_pct(report_month: str):
     Coal OMI upload's single stored copy); falls back to the older
     unit="General" keys for months uploaded before 2026-10-02, when the
     upload still wrote that duplicate (see api_coal_omi_techno.py)."""
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         rows = rt.coal_blend_rows(cur, report_month, _COAL_BLEND_PLANTS)
@@ -598,8 +600,8 @@ def _imported_coal_blend_target(report_month: str):
     Blend %" tab) — a different (plant_name, unit) pair than page 27's own
     SAIL techno target row ('SAIL', 'Shop'), since this concept lives
     outside that table entirely (see page_key_parameters.py's module note)."""
-    fy = db.get_fy_for_month(report_month)
-    data = db.get_techno_plan("SAIL", fy, unit="Coal_Consumption").get("data", {})
+    fy = month_utils.get_fy_for_month(report_month)
+    data = rt.get_techno_plan("SAIL", fy, unit="Coal_Consumption").get("data", {})
     v = data.get("imported_total_pct")
     return v.get("value") if isinstance(v, dict) else v
 
@@ -919,14 +921,14 @@ def _special_steel_section(report_month: str, month_label: str) -> dict:
     month_qty_raw = total.get("actual", "")
     month_qty = _fmt_int(float(month_qty_raw)) if month_qty_raw not in ("", None) else ""
 
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         fys = _last_n_fys(report_month, 5)
         fy_cats, fy_pct, fy_qty = [], [], []
         for j, fy in enumerate(fys):
             is_current = j == len(fys) - 1
-            months = db.get_ytd_months(report_month) if is_current else _fy_months(fy)
+            months = month_utils.get_ytd_months(report_month) if is_current else _fy_months(fy)
             qty, pct = _va_period_value(cur, months)
             if is_current:
                 qty = _current_fy_rate(cur, report_month, "SAIL")
@@ -982,7 +984,7 @@ def _trend_section(report_month: str) -> dict:
     labels = [_dt.datetime.strptime(m, "%Y-%m").strftime("%b'%y") for m in months]
     series, colors = {}, {}
     for name, color in _TREND_SERIES:
-        series[name] = [db.get_sail_production_actual(m, name) for m in months]
+        series[name] = [rp.get_sail_production_actual(m, name) for m in months]
         colors[name] = color
     semis_by_month = _semis_breakdown_data(months)
     return {

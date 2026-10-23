@@ -36,7 +36,8 @@ from fastapi import APIRouter, HTTPException, Query, Response
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
-import db as _db
+from repo import techno as rt
+import dbengine
 from repo import misc as rmisc
 import page_bf_benchmark_export as _export
 from page_key_parameters import _COKE_UNITS
@@ -144,7 +145,7 @@ async def get_params():
     SAIL_BF_UNITS_BY_PLANT with its Working Volume attached (one query, no
     separate /compare round-trip needed just to seed it) — the report
     page's size-based (Large/Medium/Small) selector is built from this."""
-    conn = _db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     wv_by_key = {f"{p}:{u}": wv for p, u, wv in rmisc.bf_sail_working_volume_rows(cur)}
     conn.close()
@@ -173,7 +174,7 @@ async def get_params():
 # ── Non-SAIL BF registry ──────────────────────────────────────────────────────
 @router.get("/external-bfs")
 async def list_external_bfs(active_only: bool = Query(False)):
-    conn = _db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     rows = [
         {"id": r[0], "name": r[1], "company": r[2], "location": r[3], "working_volume_m3": r[4],
@@ -189,7 +190,7 @@ async def add_external_bf(body: ExternalBFCreate):
     name = body.name.strip()
     if not name:
         raise HTTPException(400, "name is required")
-    conn = _db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     rmisc.insert_external_bf(cur, name, body.company.strip(), body.location.strip(), _now())
     conn.commit()
@@ -200,7 +201,7 @@ async def add_external_bf(body: ExternalBFCreate):
 
 @router.patch("/external-bfs/{bf_id}")
 async def update_external_bf(bf_id: int, body: ExternalBFUpdate):
-    conn = _db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     if not rmisc.external_bf_id_row(cur, bf_id):
         conn.close()
@@ -233,7 +234,7 @@ async def update_external_bf(bf_id: int, body: ExternalBFUpdate):
 @router.get("/external-bfs/{bf_id}/entry")
 async def get_external_entry(bf_id: int, fy: str = Query(...)):
     _validate_fy(fy)
-    conn = _db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     row = rmisc.external_bf_data_row(cur, bf_id, fy)
     conn.close()
@@ -244,7 +245,7 @@ async def get_external_entry(bf_id: int, fy: str = Query(...)):
 @router.post("/external-bfs/{bf_id}/entry")
 async def save_external_entry(bf_id: int, body: EntrySaveRequest):
     _validate_fy(body.fy)
-    conn = _db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     if not rmisc.external_bf_id_row(cur, bf_id):
         conn.close()
@@ -279,7 +280,7 @@ async def save_external_entry(bf_id: int, body: EntrySaveRequest):
 # list is ever widened.
 @router.get("/sail-meta")
 async def list_sail_meta():
-    conn = _db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     rows = [
         {"plant": p, "unit": u, "working_volume_m3": wv, "updated_at": ts}
@@ -297,7 +298,7 @@ async def set_sail_meta(body: SailMetaRequest):
         raise HTTPException(400, f"Unknown plant: {body.plant}. Expected one of {sorted(SAIL_BF_UNITS_BY_PLANT)}")
     if not unit:
         raise HTTPException(400, "unit is required")
-    conn = _db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     now = _now()
     rmisc.upsert_bf_sail_meta(cur, plant, unit, body.working_volume_m3, now)
@@ -307,7 +308,7 @@ async def set_sail_meta(body: SailMetaRequest):
 
 
 def _sail_working_volumes() -> Dict[str, Optional[float]]:
-    conn = _db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     result = {f"{p}:{u}": wv for p, u, wv in rmisc.bf_sail_working_volume_rows(cur)}
     conn.close()
@@ -324,7 +325,7 @@ def _sail_period_values(plant: str, unit: str, report_month: str, period: str) -
     report_month=<FY's March> with period="till_month": SAIL's techno data
     already stores the full-FY cumulative there, so that IS the FY figure,
     not something to recompute from the 12 monthly values."""
-    unit_data = _db.get_techno_data(plant, report_month, unit).get(unit, {})
+    unit_data = rt.get_techno_data(plant, report_month, unit).get(unit, {})
     src = unit_data.get(period, {})
     out = {}
     for key in DYNAMIC_PARAM_KEYS:
@@ -339,7 +340,7 @@ def _sail_period_values(plant: str, unit: str, report_month: str, period: str) -
     # page_bf_large_annexure.py's _sail_bf_values for the same fallback and
     # its full rationale.
     if out.get("sulphur_in_hm") is None and unit != "BF_Shop":
-        shop_src = _db.get_techno_data(plant, report_month, "BF_Shop").get("BF_Shop", {}).get(period, {})
+        shop_src = rt.get_techno_data(plant, report_month, "BF_Shop").get("BF_Shop", {}).get(period, {})
         v = shop_src.get("sulphur_in_hm")
         try:
             out["sulphur_in_hm"] = float(v) if v is not None else None
@@ -353,7 +354,7 @@ def _sail_period_values(plant: str, unit: str, report_month: str, period: str) -
     # record.
     if out.get("ash_in_coke") is None:
         for coke_unit in _COKE_UNITS:
-            coke_src = _db.get_techno_data(plant, report_month, coke_unit).get(coke_unit, {}).get(period, {})
+            coke_src = rt.get_techno_data(plant, report_month, coke_unit).get(coke_unit, {}).get(period, {})
             v = coke_src.get("ash_in_coke") or coke_src.get("average_ash_in_coke")
             if v is not None:
                 try:
@@ -383,7 +384,7 @@ def _external_bf_values(bf_id: int, fy_label: str) -> "tuple[bool, Dict[str, Opt
     scaling) — non-SAIL BFs are entered directly in Million T (see
     dynamicParams in the data-entry page), matching how these companies
     themselves publish figures, so the stored value already needs none."""
-    conn = _db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     row = rmisc.external_bf_data_row(cur, bf_id, fy_label)
     conn.close()
@@ -425,7 +426,7 @@ def build_compare(body: CompareRequest) -> Dict:
 
     ext_meta = {}
     if body.external_bf_ids:
-        conn = _db.connect()
+        conn = dbengine.connect()
         cur = conn.cursor()
         ext_meta = {r[0]: {"name": r[1], "company": r[2], "location": r[3], "working_volume_m3": r[4]}
                     for r in rmisc.external_bf_meta_rows(cur, body.external_bf_ids)}

@@ -69,7 +69,8 @@ A few rows are computed, never entered directly:
 """
 import math
 
-import db
+from repo import mines as rmn
+import month_utils
 import hardcoded_loader
 
 # Fixed-order categorical hues from pdf.py's _BADGE_COLORS / globals.css's
@@ -429,7 +430,7 @@ def _despatch_mix_values(report_months: list) -> list:
     code with no despatch at all across these months reads as 0.0 (an empty
     donut slice) rather than None, since _share_donut_svg needs a number to
     plot."""
-    mix = db.get_iron_ore_despatch_mix(report_months)
+    mix = rmn.get_iron_ore_despatch_mix(report_months)
     return [round((mix.get(code) or 0.0) / 1000, 3) for code in _DESPATCH_MIX_END_USE_CODES]
 
 
@@ -453,9 +454,9 @@ def _mines_charts_html(report_month: str) -> str:
         _mini_bar_svg("Sales Booking", fys, cfg["sales_booking_mt"], _C_SALES),
     ]
 
-    prev_fy_months = db.get_fy_months(db.get_cply_month(report_month))
-    ytd_months = db.get_ytd_months(report_month)
-    prev_fy_label = f"FY {db.get_fy_for_month(prev_fy_months[0])}"
+    prev_fy_months = month_utils.get_fy_months(month_utils.get_cply_month(report_month))
+    ytd_months = month_utils.get_ytd_months(report_month)
+    prev_fy_label = f"FY {month_utils.get_fy_for_month(prev_fy_months[0])}"
     ytd_label = _mon_label(report_month)
     ytd_label = f"Apr-{ytd_label}"
 
@@ -498,9 +499,9 @@ def _sales_waterfall_data(report_month: str) -> dict:
     so summing it across groups/months for the FY total needs no further
     combining; Actual is per transport_mode but this rollup already sums
     that away."""
-    fy_months = db.get_fy_months(report_month)
-    ytd_months = db.get_ytd_months(report_month)
-    rollup = db.get_iron_ore_sales_group_rollup_monthly(fy_months)
+    fy_months = month_utils.get_fy_months(report_month)
+    ytd_months = month_utils.get_ytd_months(report_month)
+    rollup = rmn.get_iron_ore_sales_group_rollup_monthly(fy_months)
 
     def month_actual(rm):
         return sum(
@@ -519,11 +520,11 @@ def _sales_waterfall_data(report_month: str) -> dict:
 
 
 def generate_sail_mines(report_month: str) -> dict:
-    ytd_months = db.get_ytd_months(report_month)
-    cply_months = [db.get_cply_month(m) for m in ytd_months]
+    ytd_months = month_utils.get_ytd_months(report_month)
+    cply_months = [month_utils.get_cply_month(m) for m in ytd_months]
 
-    monthly = db.get_sail_mines_monthly(ytd_months)
-    cply_monthly = db.get_sail_mines_monthly(cply_months)
+    monthly = rmn.get_sail_mines_monthly(ytd_months)
+    cply_monthly = rmn.get_sail_mines_monthly(cply_months)
 
     # Iron Ore Production/Despatch (iron_ore_prod / iron_ore_despatch) are
     # rolled up live from the mine-level tables via
@@ -533,8 +534,8 @@ def generate_sail_mines(report_month: str) -> dict:
     # Lump+Fines plus Dump Fines despatch to SALES or CAPTIVE, Tailings SALES
     # despatch, and Pellets despatch of any end_use, none of which has its
     # own production entry). Every other section stays on sail_mines_monthly.
-    iron_ore_monthly = db.get_iron_ore_group_rollup_monthly(ytd_months)
-    iron_ore_cply_monthly = db.get_iron_ore_group_rollup_monthly(cply_months)
+    iron_ore_monthly = rmn.get_iron_ore_group_rollup_monthly(ytd_months)
+    iron_ore_cply_monthly = rmn.get_iron_ore_group_rollup_monthly(cply_months)
     for mo in ytd_months:
         monthly.setdefault(mo, {})["iron_ore_prod"] = iron_ore_monthly[mo]["iron_ore_prod"]
         monthly[mo]["iron_ore_despatch"] = iron_ore_monthly[mo]["iron_ore_despatch"]
@@ -548,8 +549,8 @@ def generate_sail_mines(report_month: str) -> dict:
     # exist — mines_booked_qty_actual_monthly/_plan_monthly, and despatch to
     # end_use_code='SALES' specifically, NOT every end-use like iron_ore_
     # despatch above). Same merge pattern as iron_ore_prod/iron_ore_despatch.
-    iron_ore_sales_monthly = db.get_iron_ore_sales_group_rollup_monthly(ytd_months)
-    iron_ore_sales_cply_monthly = db.get_iron_ore_sales_group_rollup_monthly(cply_months)
+    iron_ore_sales_monthly = rmn.get_iron_ore_sales_group_rollup_monthly(ytd_months)
+    iron_ore_sales_cply_monthly = rmn.get_iron_ore_sales_group_rollup_monthly(cply_months)
     for mo in ytd_months:
         monthly[mo]["iron_ore_sales"] = iron_ore_sales_monthly[mo]["iron_ore_sales"]
         monthly[mo]["iron_ore_sales_despatch"] = iron_ore_sales_monthly[mo]["iron_ore_sales_despatch"]

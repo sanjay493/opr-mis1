@@ -7,7 +7,7 @@ Used by the /api/production-records endpoint.
 """
 import functools
 
-import db
+import dbengine
 import report_context
 from page_production_fy_export import is_rate_item
 from repo import production as rp
@@ -296,7 +296,7 @@ def _latest_production_month(cur) -> str:
 def generate_records() -> dict:
     # One records_rows fetch per scope, shared by every period kind.
     with report_context.ensure():
-        conn = db.connect()
+        conn = dbengine.connect()
         cur  = conn.cursor()
         sort_key = _item_sort_key()
         try:
@@ -430,7 +430,7 @@ def generate_best_period(start_mon: int, end_mon: int, scope: str = 'sail5',
     columns = _BEST_PERIOD_SCOPES[scope]
     # One records_rows fetch per scope, shared by every period kind.
     with report_context.ensure():
-        conn = db.connect()
+        conn = dbengine.connect()
         cur = conn.cursor()
         sort_key = _item_sort_key()
         try:
@@ -489,7 +489,7 @@ def _build_group_records(items: list, upto_month: str = None) -> dict:
     latest_month is capped to it too."""
     # One records_rows fetch per scope, shared by every period kind.
     with report_context.ensure():
-        conn = db.connect()
+        conn = dbengine.connect()
         cur  = conn.cursor()
         try:
             result = {}

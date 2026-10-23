@@ -26,7 +26,7 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 
-import db as _db
+import dbengine
 from repo import breakdown as rbd
 from repo import capacity as _cap_repo
 from repo import misc as rmisc
@@ -41,7 +41,7 @@ def _production_value(measure: str, plant: str, month: str, item_name: str) -> O
     store this in '000 T (repo-wide convention); the loss engine and the
     frontend both work in plain tonnes (fields named *_t, axis/tiles labelled
     "T"), so scale up here — the one place the two units meet."""
-    conn = _db.connect()
+    conn = dbengine.connect()
     try:
         row = rp.plant_item_value_row(conn.cursor(), measure, plant, item_name, month)
         return round(float(row[0]) * 1000, 3) if row and row[0] is not None else None
@@ -50,7 +50,7 @@ def _production_value(measure: str, plant: str, month: str, item_name: str) -> O
 
 
 def _cr_rows_for_plant(plant: str):
-    conn = _db.connect()
+    conn = dbengine.connect()
     try:
         rows = rbd.cr_rows_for_plant(conn, plant)
         cols = ["id", "shop", "equipment", "activity", "unit_type", "unit_name", "sms_subtag",
@@ -61,7 +61,7 @@ def _cr_rows_for_plant(plant: str):
 
 
 def _bd_rows_for_plant(plant: str):
-    conn = _db.connect()
+    conn = dbengine.connect()
     try:
         rows = rbd.breakdown_rows_for_plant(conn, plant)
         cols = ["id", "unit_type", "unit_name", "sms_subtag", "start_ts", "end_ts", "is_ongoing", "cause",
@@ -91,7 +91,7 @@ def _unit_weights(plant: str) -> dict:
     - each unit's best-ever day (major_unit_daily_record), used only as a
     relative weight for splitting its stage's capacity between units (so a
     plant storing them in '000 T, like ISP, works the same)."""
-    conn = _db.connect()
+    conn = dbengine.connect()
     try:
         rows = rmisc.major_unit_daily_values(conn, plant)
     finally:
@@ -117,7 +117,7 @@ def _stage_capacity_tpd(plant: str, item_name: str, month: str) -> Optional[floa
     (item_capacity_table, '000 T/yr) and what the plant has demonstrated -
     its best month in the last 3 years. Plants routinely run above rated
     capacity, so rated alone would leave no headroom at all."""
-    conn = _db.connect()
+    conn = dbengine.connect()
     try:
         row = _cap_repo.capacity_row_at(conn.cursor(), plant, item_name, month)
         y, m = int(month[:4]), int(month[5:7])

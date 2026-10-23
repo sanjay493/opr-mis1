@@ -32,7 +32,7 @@ if _EX_DIR not in sys.path:
 
 from bsp_extractor import BspTechnoExtractor            # noqa: E402
 from bsp_oisco_extractor import BspOiscoExtractor       # noqa: E402
-from db import init_db, merge_upsert_techno_data, enrich_techno_records_with_db  # noqa: E402
+from repo.techno import merge_upsert_techno_data, enrich_techno_records_with_db  # noqa: E402
 
 router = APIRouter(prefix="/api/bsp-techno", tags=["bsp-techno"])
 
@@ -175,7 +175,6 @@ async def insert_bsp_techno(payload: dict):
     from api_unified_techno import validate_units_for_plant
     validate_units_for_plant("BSP", (rec.get("unit", "") for rec in records))
     try:
-        init_db()
         for rec in records:
             merge_upsert_techno_data(
                 plant="BSP", report_month=report_month,
@@ -205,7 +204,6 @@ async def extract_bsp_techno(
             raise HTTPException(status_code=422,
                 detail="No data extracted. Use POST /api/bsp-techno/inspect to check "
                        "sheet names and header rows, then fix bsp_techno_map.json.")
-        init_db()
         for rec in records:
             merge_upsert_techno_data(
                 plant="BSP", report_month=rec["report_month"],
@@ -240,7 +238,6 @@ async def extract_bsp_oisco(
             raise HTTPException(status_code=422,
                 detail="No data extracted. Use POST /api/bsp-techno/inspect to check "
                        "sheet names and header rows, then fix bsp_oisco_map.json.")
-        init_db()
         for rec in records:
             merge_upsert_techno_data(
                 plant="BSP", report_month=rec["report_month"],

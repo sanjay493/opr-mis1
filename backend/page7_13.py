@@ -14,7 +14,7 @@ import os
 # Each page config lists display groups as (label, [plants_to_sum]).
 # A single-plant group sums only that plant; an aggregate sums all listed plants.
 from constants import ALL_PLANTS as _SAIL_8
-import db
+import dbengine
 from repo import production as rp
 
 _PIG_IRON_CFG = {
@@ -353,7 +353,7 @@ def _generate_rows_for_config(report_month: str, config: dict) -> list:
     plan_min = f"{cur_fy}-04"
     plan_max = f"{cur_fy + 1}-03"
 
-    conn = db.connect()
+    conn = dbengine.connect()
     cur  = conn.cursor()
 
     act_data = {p: {} for p in all_plants}

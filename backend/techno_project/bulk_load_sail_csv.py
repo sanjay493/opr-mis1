@@ -36,7 +36,7 @@ from collections import defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-import db
+from repo import techno as rt
 
 _MONTH_RE = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
 _VALID_PERIODS = {"month", "till_month"}
@@ -115,7 +115,7 @@ def main():
         return
 
     for (plant, rm, unit), patch in groups.items():
-        db.merge_upsert_techno_data(
+        rt.merge_upsert_techno_data(
             plant=plant, report_month=rm, unit=unit,
             new_techno_json=patch, source_file="manual_bulk_csv",
         )

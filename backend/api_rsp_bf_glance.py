@@ -23,7 +23,7 @@ if _TP_DIR not in sys.path:
     sys.path.insert(0, _TP_DIR)
 
 from rsp_bf_glance_extractor import RspBfGlanceExtractor  # noqa: E402
-from db import init_db, merge_upsert_techno_data, enrich_techno_records_with_db  # noqa: E402
+from repo.techno import merge_upsert_techno_data, enrich_techno_records_with_db  # noqa: E402
 from api_unified_techno import validate_units_for_plant, _validate_month  # noqa: E402
 
 router = APIRouter(prefix="/api/rsp-bf-glance", tags=["rsp-bf-glance"])
@@ -59,7 +59,6 @@ async def preview_rsp_bf_glance(
             for r in preview_records
         )
 
-        init_db()
         enrich_techno_records_with_db(preview_records, "RSP", report_month)
 
         return {
@@ -99,7 +98,6 @@ async def insert_rsp_bf_glance(payload: dict):
         raise HTTPException(status_code=400, detail="No records to insert")
     validate_units_for_plant("RSP", (rec.get("unit", "") for rec in records))
 
-    init_db()
     saved_count = 0
     for rec in records:
         try:

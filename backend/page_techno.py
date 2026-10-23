@@ -26,7 +26,8 @@ SAIL row computation (MAJOR page + Summary page te_table):
       weighted average of plant values, weight = plant Crude Steel production
 """
 from decimal import Decimal, ROUND_HALF_UP
-import db
+import dbengine
+import month_utils
 from repo import production as rp
 from repo import techno as rt
 from techno_cumulative import compute_cumulative_preview, compute_cumulative_from_values
@@ -347,10 +348,10 @@ def calculate_sail_actuals(report_month: str) -> dict:
 
     try:
         fy = _fy_start(report_month)
-        ytd = db.get_ytd_months(report_month)
+        ytd = month_utils.get_ytd_months(report_month)
         all_months = sorted(set(ytd) | {report_month})
 
-        conn = db.connect()
+        conn = dbengine.connect()
         cur = conn.cursor()
 
         try:
@@ -530,7 +531,7 @@ def calculate_sail_actuals_strict(report_month: str) -> dict:
     """
     import json as _json
 
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         plant_data = {}
@@ -607,7 +608,7 @@ def calculate_and_store_sail_actuals(report_month: str) -> dict:
     """
     result = calculate_sail_actuals(report_month)
     if result["success"] and (result["sail_data"].get("month") or result["sail_data"].get("till_month")):
-        db.save_sail_techno_actuals(report_month, "Shop", result["sail_data"], {})
+        rt.save_sail_techno_actuals(report_month, "Shop", result["sail_data"], {})
         result["message"] = f"SAIL actuals calculated and stored for {report_month}"
     return result
 
@@ -653,7 +654,7 @@ def _sail_manual_value(param_name, month, period):
     if not spec:
         return None
     unit, keys = spec
-    conn = db.connect()
+    conn = dbengine.connect()
     try:
         return _sail_stored_json_value(conn.cursor(), month, unit, keys, period)
     finally:
@@ -695,7 +696,7 @@ def generate_summary_chart_data(report_month: str) -> dict:
             if row:
                 sail_by_section[sec.get("label")] = row
 
-        ytd_months = db.get_ytd_months(report_month)
+        ytd_months = month_utils.get_ytd_months(report_month)
 
         result = []
         for chart_name, unit, section_label in param_specs:
@@ -742,8 +743,8 @@ def _get_plant_techno_plan_targets(plant: str, report_month: str) -> dict:
     Returns {(row_label, param_name): value} dictionary.
     """
     try:
-        fy = db.get_fy_for_month(report_month)
-        plan_result = db.get_techno_plant_plan(plant, fy)
+        fy = month_utils.get_fy_for_month(report_month)
+        plan_result = rt.get_techno_plant_plan(plant, fy)
         plant_data = plan_result.get('data', {}) if plan_result else {}
         # Convert from {param_name: {value, unit}} to {(plant, param_name): value}
         tgt = {}
@@ -773,7 +774,7 @@ def compute_sail_targets(fy: str) -> dict:
     try:
         print(f"[DEBUG] Fetching SAIL plan from techno_plan_fy for fy={fy}")
         # Try to fetch from techno_plan_fy
-        sail_result = db.get_sail_techno_plan(fy)
+        sail_result = rt.get_sail_techno_plan(fy)
         sail_data = sail_result.get('data', {})
         print(f"[DEBUG] SAIL result retrieved: is_user_supplied={sail_result.get('is_user_supplied')}, data_count={len(sail_data)}")
 
@@ -789,7 +790,7 @@ def compute_sail_targets(fy: str) -> dict:
 
         # If no data, compute from plant-level targets
         print(f"[DEBUG] Computing SAIL from plant-level targets")
-        conn = db.connect()
+        conn = dbengine.connect()
         cur  = conn.cursor()
     except Exception as e:
         import traceback
@@ -899,7 +900,7 @@ def compute_sail_targets(fy: str) -> dict:
 
     if sail_data_formatted:
         # Save calculated SAIL targets (not user-supplied)
-        db.save_sail_techno_plan(fy, sail_data_formatted, is_user_supplied=False,
+        rt.save_sail_techno_plan(fy, sail_data_formatted, is_user_supplied=False,
                                 calculated_json=sail_data_formatted, calculation_method={})
 
     # Return in format expected by callers
@@ -1181,8 +1182,8 @@ def generate_major_techno_from_db(report_month: str, exclude_labels: set = None)
     import json as _json
 
     fy         = _fy_start(report_month)
-    ytd        = db.get_ytd_months(report_month)
-    cply_month = db.get_cply_month(report_month)
+    ytd        = month_utils.get_ytd_months(report_month)
+    cply_month = month_utils.get_cply_month(report_month)
 
     # For plan data, use FY format (e.g., "2026-27" for current FY)
     # This is used to fetch from techno_plan_fy table
@@ -1203,13 +1204,13 @@ def generate_major_techno_from_db(report_month: str, exclude_labels: set = None)
     # HM for an Apr-May YTD ratio), not just the production of the cutoff month
     # alone.
     _weight_months = sorted(set().union(
-        db.get_ytd_months(report_month), db.get_ytd_months(cply_month),
-        db.get_ytd_months(fy1_march), db.get_ytd_months(fy2_march), db.get_ytd_months(fy3_march),
+        month_utils.get_ytd_months(report_month), month_utils.get_ytd_months(cply_month),
+        month_utils.get_ytd_months(fy1_march), month_utils.get_ytd_months(fy2_march), month_utils.get_ytd_months(fy3_march),
     ))
 
     # store[(plant, month)][unit] = {"month": {...}, "till_month": {...}}
     store = {}
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         for plant, rm, unit, tj in rt.rows_for_months(cur, all_months):
@@ -1231,7 +1232,7 @@ def generate_major_techno_from_db(report_month: str, exclude_labels: set = None)
 
     # Fetch Total Crude Steel production for SAIL SMS weighted-average computation
     _cs_monthly = {}  # {plant: {month: month_actual}}
-    conn3 = db.connect()
+    conn3 = dbengine.connect()
     cur3 = conn3.cursor()
     try:
         for _pn, _rm, _val in rp.item_by_plant_month(cur3, "Total Crude Steel", _weight_months):
@@ -1241,7 +1242,7 @@ def generate_major_techno_from_db(report_month: str, exclude_labels: set = None)
 
     # Fetch Hot Metal production for SAIL BF weighted-average computation
     _hm_monthly = {}  # {plant: {month: month_actual}}
-    conn4 = db.connect()
+    conn4 = dbengine.connect()
     cur4 = conn4.cursor()
     try:
         for _pn, _rm, _val in rp.item_by_plant_month(cur4, "Hot Metal", _weight_months):
@@ -1255,7 +1256,7 @@ def generate_major_techno_from_db(report_month: str, exclude_labels: set = None)
         (cumulative) SAIL figure, as opposed to a single month's production."""
         return sum(
             monthly_dict.get(plant, {}).get(m, 0) or 0
-            for m in db.get_ytd_months(ref_month)
+            for m in month_utils.get_ytd_months(ref_month)
         )
 
     # SMS unit mapping and shop counts for SAIL weighting
@@ -1271,7 +1272,7 @@ def generate_major_techno_from_db(report_month: str, exclude_labels: set = None)
     _cs_shop_monthly = {}  # {(plant, shop): {month: value}}
     _shop_items = sorted({item for items in _VERIFY_SMS_PRODUCTION_ITEMS.values() for item in items})
     if _shop_items:
-        conn5 = db.connect()
+        conn5 = dbengine.connect()
         cur5 = conn5.cursor()
         try:
             _item_monthly = {}
@@ -1296,7 +1297,7 @@ def generate_major_techno_from_db(report_month: str, exclude_labels: set = None)
         that span."""
         own = _cs_shop_monthly.get((plant, shop), {})
         if period == "till_month":
-            months = db.get_ytd_months(ref_month)
+            months = month_utils.get_ytd_months(ref_month)
             total = sum(own.get(m, 0) or 0 for m in months)
             has_data = any(m in own for m in months)
         else:
@@ -1355,7 +1356,7 @@ def generate_major_techno_from_db(report_month: str, exclude_labels: set = None)
     plants_from_data = {p for (p, rm) in store if rm in _relevant_months and p != "SAIL"}
     plants_with_targets = set()
     for p in _PLANT_ORDER:
-        plan_data = db.get_techno_plant_plan(p, target_fy)
+        plan_data = rt.get_techno_plant_plan(p, target_fy)
         if plan_data and plan_data.get('data'):
             plants_with_targets.add(p)
 
@@ -1481,7 +1482,7 @@ def generate_major_techno_from_db(report_month: str, exclude_labels: set = None)
         rows = []
         for p in plants_with_data:
             # Fetch plan data from techno_plan_fy table
-            plan_data = db.get_techno_plant_plan(p, target_fy)
+            plan_data = rt.get_techno_plant_plan(p, target_fy)
             if param_name == "Fuel Rate":
                 # Never entered directly (same rule as the Iron Making page's
                 # _get_plan_value and the ACTUAL figure everywhere else -
@@ -1584,7 +1585,7 @@ def generate_major_techno_from_db(report_month: str, exclude_labels: set = None)
                 for _pu in _plan_unit_candidates:
                     if not _pu:
                         continue
-                    _pd = db.get_techno_plan(p, target_fy, _pu)
+                    _pd = rt.get_techno_plan(p, target_fy, _pu)
                     if _pd and _pd.get('data'):
                         plan_data = _pd
                         break
@@ -1650,7 +1651,7 @@ def generate_major_techno_from_db(report_month: str, exclude_labels: set = None)
 
     # Fetch SAIL plan data from techno_plan_fy (where plant_name='SAIL')
     # Using get_sail_techno_plan to get both data and is_user_supplied flag
-    sail_plan_fetch = db.get_sail_techno_plan(target_fy)
+    sail_plan_fetch = rt.get_sail_techno_plan(target_fy)
     sail_plan_data = sail_plan_fetch.get('data', {}) if sail_plan_fetch else {}
     sail_is_user_supplied = sail_plan_fetch.get('is_user_supplied', False) if sail_plan_fetch else False
 
@@ -1776,7 +1777,7 @@ def generate_major_techno_from_db(report_month: str, exclude_labels: set = None)
         "month_labels":   [_mlabel(m) for m in ytd],
         "cply_label":     _mlabel(cply_month),
         "cum_label":      _cum_label(ytd),
-        "cum_cply_label": _cum_label([db.get_cply_month(m) for m in ytd]),
+        "cum_cply_label": _cum_label([month_utils.get_cply_month(m) for m in ytd]),
         "sections":       sections,
         "sail_is_user_supplied": sail_is_user_supplied,
     }
@@ -1870,14 +1871,14 @@ def generate_major_techno_verification(report_month: str) -> dict:
     import json as _json
 
     fy         = _fy_start(report_month)
-    ytd        = db.get_ytd_months(report_month)
+    ytd        = month_utils.get_ytd_months(report_month)
     fy1_march  = f"{fy}-03"
     fy2_march  = f"{fy - 1}-03"
     fy3_march  = f"{fy - 2}-03"
     all_months = sorted(set(ytd) | {fy1_march, fy2_march, fy3_march})
 
     store = {}
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         for plant, rm, unit, tj in rt.rows_for_months(cur, all_months):
@@ -1886,7 +1887,7 @@ def generate_major_techno_verification(report_month: str) -> dict:
         conn.close()
 
     _hm_monthly, _cs_monthly = {}, {}
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         for pn, rm, val in rp.item_by_plant_month(cur, "Hot Metal", ytd):
@@ -1903,7 +1904,7 @@ def generate_major_techno_verification(report_month: str) -> dict:
     _cs_shop_monthly = {}
     _shop_items = sorted({item for items in _VERIFY_SMS_PRODUCTION_ITEMS.values() for item in items})
     if _shop_items:
-        conn = db.connect()
+        conn = dbengine.connect()
         cur = conn.cursor()
         try:
             _item_monthly = {}
@@ -2857,7 +2858,7 @@ def generate_techno_target_columns(page_no: int) -> dict:
     # (RSP never reports conditioned_slab_caster_yield; only BSP does).
     import json as _json
     available_keys = set()
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         for plant, unit, tj in rt.non_sail_rows(cur):
@@ -2956,8 +2957,8 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
     cfg = _TECHNO_DB_SCHEMA[page_no]
 
     fy         = _fy_start(report_month)
-    ytd        = db.get_ytd_months(report_month)
-    cply_month = db.get_cply_month(report_month)
+    ytd        = month_utils.get_ytd_months(report_month)
+    cply_month = month_utils.get_cply_month(report_month)
     fy1_march  = f"{fy}-03"
     fy2_march  = f"{fy - 1}-03"
     fy3_march  = f"{fy - 2}-03"
@@ -2965,7 +2966,7 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
     all_months = sorted(set(ytd) | {cply_month, fy1_march, fy2_march, fy3_march})
 
     store = {}
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         for plant, rm, unit, tj in rt.rows_for_months(cur, all_months):
@@ -2976,7 +2977,7 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
     # Fetch plan data from techno_plan_fy for the current FY
     fy_str = _fy_label(fy)  # e.g., "2026-27"
     plan_store = {}
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         for plant_name, unit, tj in rt.plan_rows_for_fy(cur, fy_str):
@@ -3224,6 +3225,6 @@ def generate_techno_from_db(report_month: str, page_no: int) -> dict:
         "month_labels":   [_mlabel(m) for m in ytd],
         "cply_label":     _mlabel(cply_month),
         "cum_label":      _cum_label(ytd),
-        "cum_cply_label": _cum_label([db.get_cply_month(m) for m in ytd]),
+        "cum_cply_label": _cum_label([month_utils.get_cply_month(m) for m in ytd]),
         "sections":       sections,
     }

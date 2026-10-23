@@ -25,7 +25,7 @@ Column selection for a report month:
   • highest / lowest SAIL total-inventory months in between
   • Var. column = (1st of next month) − (1st Apr of same FY)
 """
-import db
+import dbengine
 from repo import stock as rst
 
 PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP"]
@@ -157,7 +157,7 @@ def _row(sub, plant, vals, apr_i, nxt_i, bold=False, sail=False):
 
 
 def generate_opening_stock(report_month: str) -> dict:
-    conn = db.connect()
+    conn = dbengine.connect()
     cur  = conn.cursor()
     try:
         months, apr, nxt = _select_months(cur, report_month)

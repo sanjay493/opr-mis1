@@ -37,7 +37,9 @@ whole series."""
 import json
 import re
 
-import db
+from repo import production as rp
+import dbengine
+import month_utils
 from repo import misc as rmisc
 
 # PDF's Table 1a item label -> production_table's own item_name.
@@ -55,7 +57,7 @@ def _load_row(report_month: str):
     "latest snapshot at-or-before" convention page_power_data.py uses for
     its Cum. row, so a month gets last month's release shown (labelled as
     such) rather than a blank page until that month's own PDF is uploaded."""
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         row = rmisc.steel_sector_latest_row(cur, report_month)
@@ -125,7 +127,7 @@ def _series_from_archive(table_key: str, label_match, floor_month: str) -> dict:
     across releases. label_match(row_label) -> series name to bucket under,
     or None to skip that row. Only columns whose header parses as a real
     month >= floor_month ('YYYY-MM') are kept."""
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         archives = [json.loads(r[0]) for r in rmisc.steel_sector_data_json_rows(cur) if r[0]]
@@ -274,7 +276,7 @@ def _sail_value(item_db_name: str, months: list) -> float:
     is computed off the real value, not off an already-rounded display
     figure. Display rounding to 1 decimal happens separately, in the
     dict built by _augment_production_overview."""
-    v = db.get_sail_production_ytd_actual(months, item_db_name)
+    v = rp.get_sail_production_ytd_actual(months, item_db_name)
     return v / _KT_TO_MT if v is not None else None
 
 
@@ -305,9 +307,9 @@ def _augment_production_overview(items: list, report_month: str) -> list:
     SAIL-row value cell shows its own SAIL-share-of-India % underneath in
     brackets (see page_templates/steel_sector_performance.html /
     SteelSectorPerformanceTemplate.js)."""
-    cply_month = db.get_cply_month(report_month)
-    ytd_months = db.get_ytd_months(report_month)
-    cply_ytd_months = db.get_ytd_months(cply_month)
+    cply_month = month_utils.get_cply_month(report_month)
+    ytd_months = month_utils.get_ytd_months(report_month)
+    cply_ytd_months = month_utils.get_ytd_months(cply_month)
 
     out = []
     for row in items:
@@ -366,7 +368,7 @@ def generate_steel_sector_performance(report_month: str, section: str = "all") -
         ),
     })
 
-    floor_month = db.get_fy_months(report_month)[0]  # this FY's April, e.g. "2026-04"
+    floor_month = month_utils.get_fy_months(report_month)[0]  # this FY's April, e.g. "2026-04"
     if section in ("prod_prices", "all"):
         page["steel_price_chart_html"] = _price_chart_html(
             "Steel Prices Trend (₹/tonne)", "1c", _match_steel_price_item,

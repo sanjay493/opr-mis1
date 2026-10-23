@@ -19,7 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 import auth
-import db
+from repo import text as rtx
 
 router = APIRouter(prefix="/api/steel-sales-highlights", tags=["steel-sales-highlights"])
 
@@ -41,7 +41,7 @@ class SaveRequest(BaseModel):
 @router.get("")
 async def get_highlights(report_month: str = Query(..., description="YYYY-MM")):
     _validate_month(report_month)
-    saved = db.get_steel_sales_highlights(report_month)
+    saved = rtx.get_steel_sales_highlights(report_month)
     return {
         "report_month": report_month,
         "month_items": (saved or {}).get("month_items", []),
@@ -61,7 +61,7 @@ async def save_highlights(body: SaveRequest, user: dict = Depends(auth.require_e
     month_items = [s.strip() for s in body.month_items if s.strip()]
     ytd_items = [s.strip() for s in body.ytd_items if s.strip()]
 
-    db.save_steel_sales_highlights(
+    rtx.save_steel_sales_highlights(
         body.report_month, month_items, ytd_items,
         updated_by=user.get("email", ""),
     )

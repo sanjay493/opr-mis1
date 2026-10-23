@@ -18,7 +18,7 @@ if _TP_DIR not in sys.path:
     sys.path.insert(0, _TP_DIR)
 
 from isp_technopara_extractor import IspTechnoExtractor  # noqa: E402
-from db import init_db, upsert_techno_data, get_techno_data, get_techno_months
+from repo.techno import upsert_techno_data, get_techno_data, get_techno_months
 from repo import techno as rt
 
 router = APIRouter(prefix="/api/isp-techno", tags=["isp-techno"])
@@ -119,7 +119,6 @@ async def extract_isp_techno(
                 detail="No data extracted — verify the sheet contains month headers in row 3.",
             )
 
-        init_db()
         for rec in records:
             upsert_techno_data(
                 plant="ISP",
@@ -160,7 +159,6 @@ async def get_data(
     """
     _validate_month(report_month)
     try:
-        init_db()
         result = get_techno_data(plant, report_month, unit)
 
         if not result:
@@ -189,7 +187,6 @@ async def get_months(
 ):
     """Return list of available report months in techno_data for ISP, newest first."""
     try:
-        init_db()
         months = get_techno_months(plant)
         return {"plant": plant, "months": months, "count": len(months)}
     except Exception as e:
@@ -204,7 +201,6 @@ async def get_units(
     """Return list of unit names stored for ISP and report month."""
     _validate_month(report_month)
     try:
-        init_db()
         conn = db.connect()
         cursor = conn.cursor()
         units = [row[0] for row in rt.units_for_plant_month(cursor, plant, report_month)]

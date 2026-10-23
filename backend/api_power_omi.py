@@ -20,7 +20,8 @@ from fastapi import APIRouter, HTTPException, UploadFile, File
 sys.path.insert(0, str(Path(__file__).parent / "excel_extractors"))
 from excel_extractor_power_omi import extract_power_omi  # noqa: E402
 
-import db  # noqa: E402
+from repo import ops as rop  # noqa: E402
+import dbengine  # noqa: E402
 from repo import misc as rmisc  # noqa: E402
 
 router = APIRouter(prefix="/api/power-omi", tags=["power-omi"])
@@ -29,7 +30,7 @@ router = APIRouter(prefix="/api/power-omi", tags=["power-omi"])
 def _existing_conflicts(records: list) -> list:
     """Records whose (report_month, plant_name, item_name) already holds a
     non-null value in power_data_table."""
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     conflicts = []
     try:
@@ -102,7 +103,7 @@ async def insert_power_omi(payload: dict):
             ),
         )
 
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     saved = 0
     try:
@@ -116,7 +117,7 @@ async def insert_power_omi(payload: dict):
     # report_month column is CHAR(7) — log against the latest month actually
     # present among the saved records (a single upload spans many months).
     latest_month = max((r["report_month"] for r in records), default="0000-00")
-    db.log_extraction(
+    rop.log_extraction(
         plant="SAIL", report_month=latest_month,
         file_name=source_file, sheet_name="",
         source_type="Power-OIS Monthly Report",

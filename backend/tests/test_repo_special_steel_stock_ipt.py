@@ -9,7 +9,6 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-import db
 import dbengine
 from repo import conn as rc
 from repo import ipt as ript
@@ -103,8 +102,6 @@ def test_special_steel_entry_save_and_clear(mysql_db):
     assert rss.clear_special_steel_orders("2026-08", "BSP") == 1
     assert _rows("SELECT plant_name FROM special_steel_orders") == [("DSP",)]
     # db.py re-exports the moved functions
-    assert db.save_special_steel_entry is rss.save_special_steel_entry
-    assert db.clear_special_steel_orders is rss.clear_special_steel_orders
 
 
 def test_special_steel_manual_save_route(tc):
@@ -122,9 +119,9 @@ def test_special_steel_manual_save_route(tc):
 
 
 def test_special_steel_abp_save_commits_once(tc):
-    spy = _CommitSpy(db.connect, "special_steel_abp_table")
+    spy = _CommitSpy(dbengine.connect, "special_steel_abp_table")
     with pytest.MonkeyPatch.context() as mp:
-        mp.setattr(db, "connect", spy)
+        mp.setattr(dbengine, "connect", spy)
         r = tc.post("/api/special-steel-abp", json={"financial_year": "2026-27", "entries": [
             {"plant_name": "BSP", "report_month": "2026-04", "abp_qty": 12.5},
             {"plant_name": "DSP", "report_month": "2026-05", "abp_qty": None},
@@ -193,7 +190,7 @@ def test_ss_phys_perf_and_meta_save(mysql_db):
     rss.save_ss_phys_meta([{"plant": "ASP", "series": "liquid", "capacity_kt": 100,
                             "best_actual_kt": 90, "best_year": "2019-20", "remark": "r", "sort_order": "2"}])
     mp.undo()
-    meta, perf = db.get_ss_phys_perf()
+    meta, perf = rss.get_ss_phys_perf()
     assert perf == {("2025-26", "ASP", "liquid", "actual"): 9.0,
                     ("2025-26", "VISL", "liquid", "abp"): 3.0}
     assert meta == {("ASP", "liquid"): {"capacity_kt": 100.0, "best_actual_kt": 90.0,
@@ -208,10 +205,10 @@ def test_ss_ipt_requirement_save_rename_delete(mysql_db):
     assert rss.save_ss_ipt_requirement("2026-27", [
         {"item": "Slab", "from_plant": "BSP", "to_plant": "SSP", "plan_kt": 6, "sort_order": 1,
          "orig_item": "Slabs", "orig_from_plant": "BSP", "orig_to_plant": "SSP"}]) == 1
-    assert db.get_ss_ipt_requirement("2026-27") == [
+    assert rss.get_ss_ipt_requirement("2026-27") == [
         {"item": "Slab", "from_plant": "BSP", "to_plant": "SSP", "plan_kt": 6.0, "sort_order": 1}]
-    assert db.list_ss_ipt_requirement_fys() == ["2026-27"]
-    db.delete_ss_ipt_requirement("2026-27", "Slab", "BSP", "SSP")
+    assert rss.list_ss_ipt_requirement_fys() == ["2026-27"]
+    rss.delete_ss_ipt_requirement("2026-27", "Slab", "BSP", "SSP")
     assert _rows("SELECT * FROM special_steel_ipt_requirement") == []
 
 
@@ -227,13 +224,12 @@ def test_stock_entry_route(tc):
         ("2026-09", "BSP", "SLABS", "FOR SALE", 13.0)]
     got = tc.get("/api/stock-data", params={"plant": "BSP", "stock_month": "2026-09"}).json()
     assert got["data"] == [{"item_type": "SLABS", "stock_type": "FOR SALE", "stock": 13.0}]
-    assert db.save_stock_entry is rst.save_stock_entry
 
 
 def test_sail_1page_confirm_commits_once(tc):
-    spy = _CommitSpy(db.connect, "sail_sales_table")
+    spy = _CommitSpy(dbengine.connect, "sail_sales_table")
     with pytest.MonkeyPatch.context() as mp:
-        mp.setattr(db, "connect", spy)
+        mp.setattr(dbengine, "connect", spy)
         r = tc.post("/api/sail-1page/confirm", json={
         "report_month": "2026-08",
         "sales_rows": [{"item_name": "Total Sales", "data": {"month": 10.5, "ytd": None}},
@@ -263,7 +259,6 @@ def test_ipt_entry_save_delete(mysql_db):
         ("2026-08", "CC Slabs", "BSP", "ASP", "Rake", 2, 3.0, 2.0, 300.0, 200.0)]
     assert ript.delete_ipt_entry("2026-08", "CC Slabs", "BSP", "ASP") == 1
     assert _rows("SELECT * FROM ipt_table") == []
-    assert db.save_ipt_entry is ript.save_ipt_entry and db.delete_ipt_entry is ript.delete_ipt_entry
 
 
 def test_ipt_bulk_route_renames_key(tc):

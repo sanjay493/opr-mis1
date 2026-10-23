@@ -43,7 +43,7 @@ code to remove, not a value to keep updating (same convention as
 page_major_unit_records.py's _ANNUAL_RECORD_FLOOR). Only the still-open
 current FY (not in the source table) comes from the live computation.
 """
-import db
+import dbengine
 from constants import ALL_PLANTS as _SAIL_8
 from repo import production as rp
 
@@ -231,7 +231,7 @@ def generate_sail8_trend_annexure(report_month: str) -> dict:
                   "Finished Steel", "Saleable Semis"]
     direct_items = ["Hot Metal", "Total Crude Steel", "Pig Iron", "Saleable Steel", "Finished Steel", "Conversion"]
 
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     data = {}
     for plant, item, rm, val in rp.items_plants_upto(cur, item_names, _SAIL_8, report_month):

@@ -17,7 +17,8 @@ import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
 
-import db
+import dbengine
+import month_utils
 from constants import FIVE_PLANTS as _5P
 from repo import production as rp
 
@@ -532,9 +533,9 @@ def _build_mou_sheet(ws, cur, month, cply_month):
 
 def build_jpc_workbook(month: str) -> "openpyxl.Workbook":
     """month: 'YYYY-MM'. Builds the full 4-sheet JPC report workbook."""
-    cply_month = db.get_cply_month(month)
+    cply_month = month_utils.get_cply_month(month)
 
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         wb = openpyxl.Workbook()

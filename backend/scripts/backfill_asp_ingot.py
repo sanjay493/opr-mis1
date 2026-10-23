@@ -25,7 +25,7 @@ BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BACKEND_DIR)
 sys.path.insert(0, os.path.join(BACKEND_DIR, "excel_extractors"))
 
-import db  # noqa: E402
+import dbengine  # noqa: E402
 from repo import production as rp  # noqa: E402
 from main import normalize_item_name  # noqa: E402
 from excel_extractors import pdf_extractor_asp  # noqa: E402
@@ -128,7 +128,7 @@ def extract_plan_preview():
 
 def current_db_values(table):
     """table: repo.production measure ('actual' | 'abp')."""
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     out = {(item, month): value for item, month, value in rp.plant_all_rows(cur, table, PLANT)}
     conn.close()
@@ -137,7 +137,7 @@ def current_db_values(table):
 
 def upsert(table, report_month, item_name, value):
     """table: repo.production measure ('actual' | 'abp')."""
-    conn = db.connect()
+    conn = dbengine.connect()
     rp.upsert_row(conn, table, report_month, PLANT, item_name, value)
     conn.commit()
     conn.close()

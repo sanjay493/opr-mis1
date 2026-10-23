@@ -29,7 +29,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import db
+from repo import cost_trend as rct
 
 ANNUAL_FYS = ["2020-21", "2021-22", "2022-23", "2023-24", "2024-25", "2025-26"]
 PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP", "SAIL"]
@@ -177,7 +177,7 @@ def diff_annual(apply: bool):
     changed = 0
     for fy, by_product in entries_by_fy.items():
         for product, entries in by_product.items():
-            current = db.get_cost_trend_annual(product, [fy])[fy]
+            current = rct.get_cost_trend_annual(product, [fy])[fy]
             for e in entries:
                 cur_val = current.get(e["cost_type"], {}).get(e["plant"])
                 new_val = e["value"]
@@ -186,7 +186,7 @@ def diff_annual(apply: bool):
                           f"{cur_val!r} -> {new_val}")
                     changed += 1
             if apply:
-                db.save_cost_trend_annual(fy, product, entries)
+                rct.save_cost_trend_annual(fy, product, entries)
     print(f"Annual: {changed} cell(s) changed" + (" (applied)" if apply else " (dry run)"))
 
 
@@ -195,7 +195,7 @@ def diff_monthly(apply: bool):
     changed = 0
     for rm, by_product in entries_by_rm.items():
         for product, entries in by_product.items():
-            current = db.get_cost_trend_monthly(product, [rm])[rm]
+            current = rct.get_cost_trend_monthly(product, [rm])[rm]
             for e in entries:
                 cur = current.get(e["cost_type"], {}).get(e["plant"], {})
                 cur_m, cur_t = cur.get("month"), cur.get("till_month")
@@ -213,9 +213,9 @@ def diff_monthly(apply: bool):
                 # save on 04/05/06 would otherwise NULL out any till_month
                 # value already entered there.
                 if rm == "2026-07":
-                    db.save_cost_trend_monthly(rm, product, entries)
+                    rct.save_cost_trend_monthly(rm, product, entries)
                 else:
-                    db.save_cost_trend_monthly_field(
+                    rct.save_cost_trend_monthly_field(
                         rm, product,
                         [{"cost_type": e["cost_type"], "plant": e["plant"], "value": e["month_value"]} for e in entries],
                         "month_value",

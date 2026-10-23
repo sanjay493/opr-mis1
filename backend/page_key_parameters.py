@@ -56,7 +56,10 @@ figure (a % only, no qty row) that had no DB source at all.
 import calendar as _calendar
 import json as _json
 
-import db
+from repo import cost_trend as rct
+from repo import rake as rrk
+import dbengine
+import month_utils
 from repo import production as rp
 from repo import techno as rt
 
@@ -118,7 +121,7 @@ def _fetch_techno(report_month: str) -> dict:
     "till_month" dict (April→report_month cumulative), the same figure the
     Techno Manual Entry form computes/saves via techno_cumulative.py, not
     the report month's own "month" value."""
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         out = {}
@@ -133,7 +136,7 @@ def _fetch_production(ytd_months: list) -> dict:
     """{(plant, item_name): {month: month_actual}} across April→report_month,
     for _prod_val to aggregate (sum, or day-weighted average for Nos./day
     items)."""
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         out = {}
@@ -269,14 +272,14 @@ def _coal_blend_pct(plant, kind, report_month, dp):
     so without this fallback every month uploaded before that point would
     go blank here despite the raw quantities already sitting in the DB
     under the older "General" unit."""
-    d = db.get_techno_data(plant, report_month, unit=_COAL_CONSUMPTION_UNIT).get(_COAL_CONSUMPTION_UNIT, {})
+    d = rt.get_techno_data(plant, report_month, unit=_COAL_CONSUMPTION_UNIT).get(_COAL_CONSUMPTION_UNIT, {})
     tm = d.get("till_month", {})
     key = "imported_total_pct" if kind == "total" else "soft_pct"
     v = tm.get(key)
     if v is not None:
         return _round(v, dp)
 
-    g = db.get_techno_data(plant, report_month, unit=_GENERAL_UNIT).get(_GENERAL_UNIT, {})
+    g = rt.get_techno_data(plant, report_month, unit=_GENERAL_UNIT).get(_GENERAL_UNIT, {})
     gtm = g.get("till_month", {})
     pcc, mcc = gtm.get("indigenous_pcc"), gtm.get("indigenous_mcc")
     hard, soft = gtm.get("imported_hard_coal"), gtm.get("imported_soft_coal")
@@ -303,7 +306,7 @@ def _value_added_qty_and_pct(plant, ytd_months, production):
     together (not as two separate lookups) since both rows share the same
     qty/saleable-steel inputs."""
     from page_special_steel_trend import _sum_actual
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         qty, has = _sum_actual(cur, ytd_months, plant)
@@ -340,7 +343,7 @@ def _ss_in_fs_qty_and_pct(plant, ytd_months, production):
     by product) — reused here via a fresh cursor since it reads a table
     the shared `production` dict doesn't cover."""
     from page_special_steel_donut import _special_fin_semis_split
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         spl_fin, _spl_semis = _special_fin_semis_split(cur, ytd_months, plant)
@@ -384,7 +387,7 @@ def _demurrage_by_plant(ytd_months: list) -> dict:
     One batched query for every plant/month rather than a per-plant loop
     of single-month lookups, then picked in Python — same shape as
     _fetch_production's history reads elsewhere on this page."""
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         by_plant_month = {}
@@ -420,7 +423,7 @@ def _fetch_cop(report_month: str) -> dict:
     of production per product at report_month (see _COP_PRODUCTS)."""
     out = {}
     for product in _COP_PRODUCTS:
-        data = db.get_cost_trend_monthly(product, [report_month]).get(report_month, {})
+        data = rct.get_cost_trend_monthly(product, [report_month]).get(report_month, {})
         for cost_type in ("FIXED", "VARIABLE"):
             for plant, cell in data.get(cost_type, {}).items():
                 v = cell.get("till_month")
@@ -533,11 +536,11 @@ _ROWS = [
 
 
 def generate_key_parameters(report_month: str) -> dict:
-    ytd_months = db.get_ytd_months(report_month)
+    ytd_months = month_utils.get_ytd_months(report_month)
     techno = _fetch_techno(report_month)
     production = _fetch_production(ytd_months)
     cop = _fetch_cop(report_month)
-    rake_ytd = db.get_rake_detention_summary(report_month).get("YTD_TY", {})
+    rake_ytd = rrk.get_rake_detention_summary(report_month).get("YTD_TY", {})
 
     import datetime as _dt
     period_label = _dt.datetime.strptime(ytd_months[0], "%Y-%m").strftime("%b")

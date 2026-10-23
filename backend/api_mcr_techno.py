@@ -37,10 +37,7 @@ from bsp_monthend_techno_extractor import BspMonthendTechnoExtractor  # noqa: E4
 from rsp_monthend_techno_extractor import RspMonthendTechnoExtractor  # noqa: E402
 from isp_monthend_techno_extractor import IspMonthendTechnoExtractor  # noqa: E402
 from bsl_monthend_techno_extractor import BslMonthendTechnoExtractor  # noqa: E402
-from db import (  # noqa: E402
-    init_db, merge_upsert_techno_data, get_techno_data,
-    enrich_techno_records_with_db,
-)
+from repo.techno import merge_upsert_techno_data, get_techno_data, enrich_techno_records_with_db  # noqa: E402
 from api_unified_techno import validate_units_for_plant, _validate_month  # noqa: E402
 from techno_cumulative import compute_cumulative_preview, production_cumulative_from_table  # noqa: E402
 
@@ -127,7 +124,6 @@ async def preview_mcr_techno(
             for r in preview_records
         )
 
-        init_db()
         enrich_techno_records_with_db(preview_records, plant, report_month)
         conflicts = _existing_conflicts(plant, report_month, preview_records)
 
@@ -182,7 +178,6 @@ async def calc_cumulative(payload: dict):
     if not records:
         raise HTTPException(status_code=400, detail="No records to calculate")
 
-    init_db()
     computed = 0
     warnings = []
     details = []
@@ -285,7 +280,6 @@ async def calc_cumulative_all(payload: dict):
     if not plant:
         raise HTTPException(status_code=400, detail="plant is required")
 
-    init_db()
     existing = get_techno_data(plant, report_month)
     if not existing:
         raise HTTPException(
@@ -403,7 +397,6 @@ async def insert_mcr_techno(payload: dict):
         raise HTTPException(status_code=400, detail="No records to insert")
     validate_units_for_plant(plant, (rec.get("unit", "") for rec in records))
 
-    init_db()
     conflicts = _existing_conflicts(plant, report_month, records)
     if conflicts and not confirm_replace:
         summary = "; ".join(

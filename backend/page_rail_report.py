@@ -23,7 +23,9 @@ value (e.g. "9 Rakes" in the source PDF), shown under the figure.
 Footer remarks (rail_prod_despatch_note) are standing footnotes, not scoped
 to a FY — see db.py's table comment.
 """
-import db
+from repo import misc as rmisc
+from repo import text as rtx
+import month_utils
 
 RAIL_HISTORY_START_FY_YEAR = 2015  # first column (2015-16), per the source PDF
 
@@ -90,11 +92,11 @@ def _row(label, cells, band=None, bold=False, notes=None):
 
 
 def generate_rail_report(report_month: str) -> dict:
-    cur_fy = db.get_fy_for_month(report_month)
+    cur_fy = month_utils.get_fy_for_month(report_month)
     cur_start = int(cur_fy[:4])
     fys = [_fy_label(y) for y in range(RAIL_HISTORY_START_FY_YEAR, cur_start + 1)]
 
-    data = db.get_rail_report_data(fys)
+    data = rmisc.get_rail_report_data(fys)
 
     def v(fy, metric):
         cell = data.get(fy, {}).get(metric)
@@ -149,7 +151,7 @@ def generate_rail_report(report_month: str) -> dict:
              {fy: _fmt_raw("lr_rakes_sabarmati", rakes[fy]) for fy in fys}, band="blue"),
     ]
 
-    notes = [t for _so, t in db.get_rail_report_notes()]
+    notes = [t for _so, t in rtx.get_rail_report_notes()]
 
     return {
         "type": "rail_report",

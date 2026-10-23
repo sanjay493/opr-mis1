@@ -63,7 +63,7 @@ import datetime as _dt
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BACKEND_DIR)
 
-import db  # noqa: E402
+import dbengine  # noqa: E402
 from repo import special_steel as rss  # noqa: E402
 
 SRC_FILE = os.path.join(BACKEND_DIR, "..", "Report_format", "22-23 Special Steel.xlsx")
@@ -179,7 +179,7 @@ def _parse_bsp(wb) -> list:
 
 
 def current_db_values(plants, months):
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     out = {(p, m, prod, grade, sec): val
            for p, m, prod, grade, sec, val in rss.despatch_rows(cur, plants, months)}
@@ -224,9 +224,9 @@ def main():
         by_plant_month.setdefault((r["plant"], r["report_month"]), []).append(r)
 
     for (plant, month), rows in by_plant_month.items():
-        db.clear_special_steel_orders(month, plant)
+        rss.clear_special_steel_orders(month, plant)
         for r in rows:
-            db.save_special_steel_entry(
+            rss.save_special_steel_entry(
                 month, plant, r["product"], r["quality_grade"], r["sort_order"],
                 r["order_qty"], r["actual_despatch"], section=r["section"],
             )

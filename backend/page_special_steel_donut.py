@@ -122,7 +122,8 @@ distribution is taken to be the same whichever side it's read from.
 """
 import math
 import datetime as _dt
-import db
+import dbengine
+import month_utils
 from constants import ALL_PLANTS
 from repo import production as rp
 from repo import special_steel as rss
@@ -710,10 +711,10 @@ def _bubble_chart_svg(points: list, vw: float = 1000, vh: float = 750) -> str:
 # ── public API ──────────────────────────────────────────────────────────────
 
 def generate_special_steel_donut(report_month: str) -> dict:
-    fy_months = db.get_fy_months(report_month)
-    ytd_months = db.get_ytd_months(report_month)
+    fy_months = month_utils.get_fy_months(report_month)
+    ytd_months = month_utils.get_ytd_months(report_month)
 
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         entities = [_entity_metrics(cur, ent, fy_months, report_month, ytd_months) for ent in _ROWS]
@@ -729,7 +730,7 @@ def generate_special_steel_donut(report_month: str) -> dict:
     return {
         "type": "special_steel_donut",
         "title": "Special Steel — Saleable Steel Composition & Value-Added Share in Despatch",
-        "fy_label": db.get_fy_for_month(report_month)[2:],
+        "fy_label": month_utils.get_fy_for_month(report_month)[2:],
         "month_label": month_label,
         "cum_label": cum_label,
         "entities": entities,

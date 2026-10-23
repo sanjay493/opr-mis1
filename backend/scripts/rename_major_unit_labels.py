@@ -17,7 +17,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import db
+import dbengine
 from repo import misc as rmisc
 
 # (plant_code, old_label, new_label)
@@ -42,7 +42,7 @@ RENAMES = [
 
 
 def main():
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         for plant_code, old_label, new_label in RENAMES:

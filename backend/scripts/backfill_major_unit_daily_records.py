@@ -35,7 +35,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import db
+from repo import misc as rmisc
 import page_major_unit_records as mur
 import major_unit_xlsx_parse as xp
 
@@ -114,7 +114,7 @@ def main():
         return
 
     for plant, label, value, uom, record_date, remarks, sort_order in rows_to_write:
-        db.save_major_unit_daily_record(
+        rmisc.save_major_unit_daily_record(
             plant_code=plant, unit_label=label, value=value, unit_of_measure=uom,
             record_date=record_date, remarks=remarks, sort_order=sort_order,
             updated_by="backfill_major_unit_daily_records.py",

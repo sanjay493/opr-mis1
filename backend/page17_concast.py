@@ -4,7 +4,8 @@ Two tables on one page: Monthly and YTD (Apr-to-month).
 Unit displayed: Tonnes  (DB stores '000 T → multiply × 1000, round to integer)
 """
 import math
-import db
+import dbengine
+import month_utils
 import report_context
 from repo import production as rp
 
@@ -133,12 +134,12 @@ def generate_concast_data(report_month: str) -> dict:
 
 
 def _generate_concast_data(report_month: str) -> dict:
-    ytd_months      = db.get_ytd_months(report_month)
-    all_fy          = db.get_fy_months(report_month)
-    prev_month      = db.get_cply_month(report_month)
-    prev_ytd_months = db.get_ytd_months(prev_month)
+    ytd_months      = month_utils.get_ytd_months(report_month)
+    all_fy          = month_utils.get_fy_months(report_month)
+    prev_month      = month_utils.get_cply_month(report_month)
+    prev_ytd_months = month_utils.get_ytd_months(prev_month)
 
-    conn = db.connect()
+    conn = dbengine.connect()
     cur  = conn.cursor()
 
     monthly_rows, ytd_rows = [], []

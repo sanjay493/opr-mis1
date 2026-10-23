@@ -1,13 +1,13 @@
 import pytest
 
 import board_note_common as bnc
-import db
+import dbengine
 import page_secretary_review as psr
 
 
 def _has_month(month):
     try:
-        c = db.connect()
+        c = dbengine.connect()
         cur = c.cursor()
         cur.execute("SELECT COUNT(*) FROM production_table WHERE report_month=%s AND item_name='Hot Metal'", (month,))
         n = cur.fetchone()[0]
@@ -19,7 +19,7 @@ def _has_month(month):
 
 def _db_up():
     try:
-        db.connect().close()
+        dbengine.connect().close()
         return True
     except Exception:
         return False
@@ -37,7 +37,7 @@ def _r(row):
 
 @live
 def test_production_matches_reference_deck():
-    c = db.connect()
+    c = dbengine.connect()
     prod = psr.build_production(c.cursor(), "2026-09")
     c.close()
     assert _r(prod["HM"]["SAIL"]) == [21113, 1945, 1594, -1, 92, 11286, 10203, 2, 96]

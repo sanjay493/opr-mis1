@@ -26,7 +26,7 @@ import board_note_common as bnc
 import board_note_docx_utils as bdu
 import board_note_manual_text as bnm
 import board_note_q2 as bq2
-import db
+import dbengine
 import page_techno as pt
 import techno_period as tp
 
@@ -215,7 +215,7 @@ def generate(fy: str) -> bytes:
 
     manual = bnm.get_manual_text(fy, 3)
 
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         doc = docx.Document(TEMPLATE_PATH)

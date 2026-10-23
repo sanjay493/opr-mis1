@@ -143,7 +143,8 @@ def _extract_morning_report(wb, source_file_name: str) -> bool:
     """
     import sys
     sys.path.insert(0, os.path.dirname(__file__))
-    import db
+    from repo import ops as rop
+    import dbengine
     from repo import production as rp
 
     ws = wb["DAILYREPORT1"]
@@ -171,7 +172,7 @@ def _extract_morning_report(wb, source_file_name: str) -> bool:
 
     production_cells, NO_CONVERT, derived_rules = _morning_report_config()
 
-    conn = db.connect()
+    conn = dbengine.connect()
     cursor = conn.cursor()
     vals_extracted = 0
 
@@ -211,7 +212,7 @@ def _extract_morning_report(wb, source_file_name: str) -> bool:
     conn.commit()
     conn.close()
 
-    db.log_extraction(
+    rop.log_extraction(
         plant="ISP",
         report_month=db_report_month,
         file_name=source_file_name,
@@ -519,7 +520,8 @@ def _extract_monthly_report(wb, report_month: str, source_file_name: str) -> boo
     """
     import sys
     sys.path.insert(0, os.path.dirname(__file__))
-    import db
+    from repo import ops as rop
+    import dbengine
     from repo import production as rp
 
     if not report_month:
@@ -564,7 +566,7 @@ def _extract_monthly_report(wb, report_month: str, source_file_name: str) -> boo
         "Saleable Steel":        37,
     }
 
-    conn = db.connect()
+    conn = dbengine.connect()
     cursor = conn.cursor()
     vals_extracted = 0
 
@@ -610,7 +612,7 @@ def _extract_monthly_report(wb, report_month: str, source_file_name: str) -> boo
     conn.commit()
     conn.close()
 
-    db.log_extraction(
+    rop.log_extraction(
         plant="ISP",
         report_month=db_report_month,
         file_name=source_file_name,

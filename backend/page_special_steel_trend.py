@@ -25,7 +25,8 @@ the chart fill in on its own.
 import calendar
 import datetime as _dt
 import math
-import db
+import dbengine
+import month_utils
 import report_context
 from repo import production as rp
 from repo import special_steel as rss
@@ -70,7 +71,7 @@ def _fy_label_for_start(y: int) -> str:
 
 def _last_n_fys(report_month: str, n: int = 4) -> list:
     """Chronological FY labels ending with the FY containing report_month."""
-    cur_start = _fy_start_year(db.get_fy_for_month(report_month))
+    cur_start = _fy_start_year(month_utils.get_fy_for_month(report_month))
     return [_fy_label_for_start(cur_start - k) for k in range(n - 1, -1, -1)]
 
 
@@ -185,12 +186,12 @@ def _period_value_pct(cur, months: list, entity: str, item_name: str = "Saleable
 
 def _current_fy_rate(cur, report_month, entity):
     """Annualized '000T rate: actual-to-date / elapsed days * days-in-FY."""
-    ytd_months = db.get_ytd_months(report_month)
+    ytd_months = month_utils.get_ytd_months(report_month)
     total, has = _sum_actual(cur, ytd_months, entity)
     if not has:
         return None
     elapsed_days = sum(calendar.monthrange(int(m[:4]), int(m[5:7]))[1] for m in ytd_months)
-    days_in_fy = _days_in_fy(db.get_fy_for_month(report_month))
+    days_in_fy = _days_in_fy(month_utils.get_fy_for_month(report_month))
     return (total / elapsed_days * days_in_fy) / 1000.0
 
 
@@ -501,13 +502,13 @@ def generate_special_steel_trend(report_month: str) -> dict:
 
 def _generate_special_steel_trend(report_month: str) -> dict:
     fys = _last_n_fys(report_month, 4)
-    ytd_months = db.get_ytd_months(report_month)
+    ytd_months = month_utils.get_ytd_months(report_month)
 
     dt = _dt.datetime.strptime(report_month, "%Y-%m")
     month_label = dt.strftime("%b'%y")
     cum_label = _dt.datetime.strptime(ytd_months[0], "%Y-%m").strftime("%b'%y") + "-" + month_label
 
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         despatch = _build_trend_bundle(cur, report_month, fys, ytd_months, month_label, cum_label,

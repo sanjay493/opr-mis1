@@ -40,7 +40,8 @@ each one's freetime) lives in rake_detention_master, edited via
 a data change there, never a code change here. See db.py's matching
 comment and scripts/migrate_add_rake_detention.sql.
 """
-import db
+from repo import rake as rrk
+import month_utils
 from page_coal_consumption import PLANTS  # ["BSP", "DSP", "RSP", "BSL", "ISP"]
 from page_special_steel_trend import _last_n_fys, _fy_months
 
@@ -205,12 +206,12 @@ def generate_rake_detention_detail(report_month: str, plants: list) -> dict:
     """One detail page's worth of data for `plants`: full current-FY row
     (Apr-Mar) per wagon type/commodity, grouped Inward / Outward / Overall,
     each ending in its section's own directly-entered total row."""
-    fy_label = db.get_fy_for_month(report_month)
+    fy_label = month_utils.get_fy_for_month(report_month)
     months = _fy_months(fy_label)
 
-    master_rows = db.get_rake_detention_master(plants=plants)
+    master_rows = rrk.get_rake_detention_master(plants=plants)
     ids = [r["id"] for r in master_rows]
-    history = _upto(db.get_rake_detention_trend(ids), report_month)  # {master_id: {report_month: value}}
+    history = _upto(rrk.get_rake_detention_trend(ids), report_month)  # {master_id: {report_month: value}}
 
     by_plant = {}
     for r in master_rows:
@@ -251,7 +252,7 @@ def _period_row_labels(report_month: str) -> dict:
     """{code: display_label} for PERIOD_ROWS, e.g. 'AUG'26', 'APR'26-AUG'26',
     'APR'25-MAR'26' — computed from report_month, not stored (the label is
     always a pure function of which month the report is for)."""
-    fy_label = db.get_fy_for_month(report_month)
+    fy_label = month_utils.get_fy_for_month(report_month)
     fy_months_cur = _fy_months(fy_label)
     apr_cur = fy_months_cur[0]
     ly_month = _shift_year(report_month, -1)
@@ -280,7 +281,7 @@ def generate_rake_detention_summary(report_month: str) -> dict:
     """"Improvement in Average Detention per Wagon in Hrs" — 9 period rows
     (3 This-Year/Last-Year/CPLY% triples) x plant columns, straight from
     rake_detention_summary (never derived from the monthly detail)."""
-    data = db.get_rake_detention_summary(report_month)  # {period_row: {plant: value}}
+    data = rrk.get_rake_detention_summary(report_month)  # {period_row: {plant: value}}
     labels = _period_row_labels(report_month)
     rows = [
         {
@@ -311,14 +312,14 @@ def generate_rake_detention_trend(report_month: str) -> dict:
     fys = _last_n_fys(report_month, TREND_HISTORY_FYS)[::-1]  # newest first, matches source PDF
     plants = SUMMARY_PLANTS
 
-    master_rows = db.get_rake_detention_master(plants=plants)
+    master_rows = rrk.get_rake_detention_master(plants=plants)
     overall_id_by_plant = {
         r["plant"]: r["id"] for r in master_rows
         if r["section"] == "OVERALL" and r["is_total"]
     }
     ids = list(overall_id_by_plant.values())
-    history = _upto(db.get_rake_detention_trend(ids), report_month)  # {master_id: {report_month: value}}
-    annual = db.get_rake_detention_annual(plants, fys)  # {plant: {fy: avg_hours}}
+    history = _upto(rrk.get_rake_detention_trend(ids), report_month)  # {master_id: {report_month: value}}
+    annual = rrk.get_rake_detention_annual(plants, fys)  # {plant: {fy: avg_hours}}
 
     out_plants = []
     for plant in plants:

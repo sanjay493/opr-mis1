@@ -17,7 +17,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 
-import db as _db
+from repo import capacity as rcap
 
 router = APIRouter(prefix="/api/capacity", tags=["capacity"])
 
@@ -78,7 +78,7 @@ def _editor_email(request: Request) -> str:
 
 @router.get("")
 async def list_capacity(plant: Optional[str] = Query(None), item: Optional[str] = Query(None)):
-    rows = _db.list_capacity_entries(plant=plant, item=item)
+    rows = rcap.list_capacity_entries(plant=plant, item=item)
     return {"rows": rows, "items": CAPACITY_ITEMS, "plants": CAPACITY_PLANTS}
 
 
@@ -89,7 +89,7 @@ async def create_capacity(body: CapacityCreate, request: Request):
     if body.annual_capacity <= 0:
         raise HTTPException(400, "annual_capacity must be greater than 0")
     try:
-        new_id = _db.save_capacity_entry(
+        new_id = rcap.save_capacity_entry(
             plant=body.plant, item=body.item, effective_month=body.effective_month,
             annual_capacity=body.annual_capacity, reason=(body.reason or "").strip(),
             created_by=_editor_email(request),
@@ -108,7 +108,7 @@ async def update_capacity(entry_id: int, body: CapacityUpdate, request: Request)
     if not fields:
         return {"status": "ok"}
 
-    existing = _db.list_capacity_entries()
+    existing = rcap.list_capacity_entries()
     row = next((r for r in existing if r["id"] == entry_id), None)
     if row is None:
         raise HTTPException(404, "Capacity entry not found")
@@ -130,7 +130,7 @@ async def update_capacity(entry_id: int, body: CapacityUpdate, request: Request)
         fields["reason"] = (fields["reason"] or "").strip()
 
     try:
-        ok = _db.update_capacity_entry(entry_id, updated_by=_editor_email(request), **fields)
+        ok = rcap.update_capacity_entry(entry_id, updated_by=_editor_email(request), **fields)
     except IntegrityError:
         raise HTTPException(409, "Another entry already exists for that plant/item/effective month.")
     if not ok:
@@ -140,7 +140,7 @@ async def update_capacity(entry_id: int, body: CapacityUpdate, request: Request)
 
 @router.delete("/{entry_id}")
 async def delete_capacity(entry_id: int):
-    ok = _db.delete_capacity_entry(entry_id)
+    ok = rcap.delete_capacity_entry(entry_id)
     if not ok:
         raise HTTPException(404, "Capacity entry not found")
     return {"status": "ok"}

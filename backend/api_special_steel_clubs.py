@@ -16,7 +16,7 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
-import db as _db
+import dbengine
 from page_special_steel import _auto_club_label
 from repo import special_steel as rss
 
@@ -48,7 +48,7 @@ async def list_products(plant: str = Query(...)):
     plant = plant.upper()
     if plant not in GRADE_CLUB_PLANTS:
         raise HTTPException(400, f"Grade clubbing isn't applicable for {plant}")
-    conn = _db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     products = [r[0] for r in rss.products_for_plant(cur, plant)]
     conn.close()
@@ -60,7 +60,7 @@ async def list_grades(plant: str = Query(...), product: str = Query(...)):
     """Distinct quality grades for this plant+product, grouped by current club
     membership. Response: {ungrouped: [grade, ...], clubs: [{label, members}, ...]}."""
     plant = plant.upper()
-    conn = _db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     all_grades = [r[0] for r in rss.grades_for_product(cur, plant, product)]
 
@@ -92,7 +92,7 @@ async def create_club(body: ClubRequest):
     label = (body.label or "").strip() or _auto_club_label(sorted(grades))
     now = datetime.datetime.now().isoformat()
 
-    conn = _db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     for grade in grades:
         rss.upsert_grade_club(cur, plant, body.product, grade, label, now)
@@ -113,7 +113,7 @@ async def remove_from_club(body: UnclubRequest):
         (auto-dissolve back to a plain grade — a 1-member club renders
         identically anyway, but leaving a stray row is untidy)."""
     plant = body.plant.upper()
-    conn = _db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
 
     if body.label:

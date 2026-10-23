@@ -49,7 +49,7 @@ from coal_omi_extractor import (  # noqa: E402
 )
 
 _COAL_CONSUMPTION_UNIT = "Coal_Consumption"
-from db import init_db, merge_upsert_techno_data, get_techno_data  # noqa: E402
+from repo.techno import merge_upsert_techno_data, get_techno_data  # noqa: E402
 from api_unified_techno import _validate_month  # noqa: E402
 
 router = APIRouter(prefix="/api/coal-omi", tags=["coal-omi"])
@@ -176,7 +176,6 @@ async def preview_coal_omi(
         except ValueError as e:
             raise HTTPException(status_code=422, detail=str(e))
 
-        init_db()
         plant_records, sail_record, warnings = _build_plant_records(blob["ois1"], report_month)
         ois2_record = _build_ois2_record(blob["ois2"])
         detail_records = _build_ois1_detail_records(blob["ois1_detail"])
@@ -235,7 +234,6 @@ async def insert_coal_omi(payload: dict):
     if not all_records:
         raise HTTPException(status_code=400, detail="No records to insert")
 
-    init_db()
     conflicts = _existing_conflicts(report_month, all_records)
     if conflicts and not confirm_replace:
         summary = "; ".join(f"{c['plant']}/{c['unit']} ({len(c['params'])} params)" for c in conflicts)

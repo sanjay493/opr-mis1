@@ -114,9 +114,7 @@ def hooks(monkeypatch):
 
     def log(**k):
         calls["log"].append({kk: vv for kk, vv in k.items() if kk != "conn"})
-    import db
     from repo import ops
-    monkeypatch.setattr(db, "log_extraction", log)
     monkeypatch.setattr(ops, "log_extraction", log)
     return calls
 

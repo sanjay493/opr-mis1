@@ -4,7 +4,8 @@ Shows FLAT / PET / LONG breakdown across all 5 ISPs.
 Unit: '000 Tonnes.
 """
 import math
-import db
+import dbengine
+import month_utils
 import report_context
 from repo import production as rp
 
@@ -141,12 +142,12 @@ def generate_segment_wise(report_month: str) -> dict:
 
 
 def _generate_segment_wise(report_month: str) -> dict:
-    prev_month = db.get_cply_month(report_month)
-    fy         = db.get_fy_months(report_month)
-    ytd        = db.get_ytd_months(report_month)
+    prev_month = month_utils.get_cply_month(report_month)
+    fy         = month_utils.get_fy_months(report_month)
+    ytd        = month_utils.get_ytd_months(report_month)
     cply_ytd   = [f"{int(m[:4])-1}{m[4:]}" for m in ytd]
 
-    conn = db.connect()
+    conn = dbengine.connect()
     cur  = conn.cursor()
 
     rows = []

@@ -29,7 +29,7 @@ import re
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-import db  # noqa: E402
+from repo import rake as rrk  # noqa: E402
 import page_rake_detention_pdf_extractor as ex  # noqa: E402
 
 _PERIOD_RE = re.compile(r"01-(\d\d)-(\d{4})")
@@ -71,7 +71,7 @@ def main(folder, apply, overwrite=False):
     print()
     total_new = total_changed = 0
     for m in sorted(monthly):
-        existing = db.get_rake_detention_monthly(m)
+        existing = rrk.get_rake_detention_monthly(m)
         new = sum(1 for k in monthly[m] if existing.get(k) is None)
         changed = [(k, existing[k], v) for k, v in monthly[m].items()
                    if existing.get(k) is not None and v is not None and abs(existing[k] - v) > 1e-9]
@@ -84,7 +84,7 @@ def main(folder, apply, overwrite=False):
             if not overwrite:
                 del monthly[m][k]
     for m in sorted(summary):
-        existing = db.get_rake_detention_summary(m)
+        existing = rrk.get_rake_detention_summary(m)
         filled = sum(1 for d in existing.values() for v in d.values() if v is not None)
         print(f"  summary {m}: {len(summary[m])} values (DB has {filled})")
     print(f"\nmonthly values: {total_new} new, {total_changed} conflicting")
@@ -93,10 +93,10 @@ def main(folder, apply, overwrite=False):
         print("Dry run — nothing written. Re-run with --apply to save.")
         return 0
     for m in sorted(monthly):
-        db.save_rake_detention_monthly(m, [{"master_id": k, "value_hours": v} for k, v in monthly[m].items()])
+        rrk.save_rake_detention_monthly(m, [{"master_id": k, "value_hours": v} for k, v in monthly[m].items()])
     for m, rows in summary.items():
         if rows:
-            db.save_rake_detention_summary(m, rows)
+            rrk.save_rake_detention_summary(m, rows)
     print("Saved.")
     return 0
 

@@ -50,7 +50,7 @@ import os
 from PIL import Image
 
 from page_cover import _file_data_uri
-import db
+from repo import misc as rmisc
 
 ISP_PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP"]
 SSP_PLANTS = ["ASP", "SSP", "VISL"]
@@ -164,7 +164,7 @@ def generate_ready_reckoner_page(plant_code: str, subtype: str) -> dict:
     content actually gets rendered (see ready_reckoner_plant.html); the
     other fields are still included so a template branch never has to
     special-case a missing key."""
-    row = db.get_ready_reckoner_page(plant_code) or {}
+    row = rmisc.get_ready_reckoner_page(plant_code) or {}
     image_uri = ""
     image_landscape = False
     image_path = row.get("process_flow_image_path")

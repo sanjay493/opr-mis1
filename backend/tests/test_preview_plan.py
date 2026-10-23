@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+import dbengine
 import main
 
 PLAN_FILE = Path(__file__).resolve().parent / "fixtures" / "plan" / "isp_plan_min.xlsx"
@@ -19,7 +20,7 @@ SEED = [
 def tc(mysql_db, monkeypatch):
     # Skip the editor/admin session gate on write routes.
     monkeypatch.setattr(main, "_is_gated", lambda method, path: False)
-    conn = main.db.connect()
+    conn = dbengine.connect()
     for row in SEED:
         conn.execute("INSERT INTO production_plan_table VALUES (%s, %s, %s, %s)", row)
     conn.commit()
@@ -28,7 +29,7 @@ def tc(mysql_db, monkeypatch):
 
 
 def _plan_rows():
-    conn = main.db.connect()
+    conn = dbengine.connect()
     rows = conn.execute("SELECT report_month, plant_name, item_name, month_actual "
                         "FROM production_plan_table ORDER BY 1, 2, 3").fetchall()
     conn.close()

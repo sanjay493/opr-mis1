@@ -17,7 +17,7 @@ if _TP_DIR not in sys.path:
     sys.path.insert(0, _TP_DIR)
 
 from dsp_technopara_extractor import DspTechnoExtractor  # noqa: E402
-from db import init_db, upsert_techno_data, get_techno_data, get_techno_months  # noqa: E402
+from repo.techno import upsert_techno_data, get_techno_data, get_techno_months  # noqa: E402
 
 router = APIRouter(prefix="/api/dsp-techno", tags=["dsp-techno"])
 
@@ -71,7 +71,6 @@ async def extract_dsp_techno(
             )
 
         # Save to database
-        init_db()
         saved_count = 0
 
         for rec in records:
@@ -188,7 +187,6 @@ async def get_data(
         )
 
     try:
-        init_db()
         result = get_techno_data("DSP", report_month, unit)
 
         if not result:
@@ -216,7 +214,6 @@ async def get_months():
     List available report months for DSP.
     """
     try:
-        init_db()
         months = get_techno_months("DSP")
         return {
             "plant": "DSP",

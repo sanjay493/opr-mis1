@@ -29,7 +29,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 import auth
 import data_version
-import db
+import dbengine
 from repo import ops as rop
 
 router = APIRouter(prefix="/api/admin/backups", tags=["admin-backup"], dependencies=[Depends(auth.require_admin)])
@@ -232,7 +232,7 @@ def _source_table_counts(path: Path) -> dict:
 def _live_table_counts() -> dict:
     """{table: row_count} for every table currently in mis_reports, via the
     app's own MySQL connection (db.py) rather than shelling out."""
-    conn = db.connect()
+    conn = dbengine.connect()
     try:
         cur = conn.cursor()
         tables = [r[0] for r in rop.table_name_rows(cur)]
@@ -274,7 +274,7 @@ def _acquire_admin_lock():
     connection-scoped, so it serializes across processes too; held for the
     life of `conn`, released by closing it (or explicitly via
     RELEASE_LOCK before that)."""
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     if rop.get_lock_row(cur, _LOCK_NAME)[0] != 1:
         conn.close()

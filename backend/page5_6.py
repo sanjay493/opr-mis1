@@ -3,7 +3,8 @@ Page 5 & 6 – Plant-Wise Production Performance.
 Page 5: SAIL + BSP + DSP + RSP
 Page 6: BSL + ISP + ASP + SSP + VISP
 """
-import db
+import dbengine
+import month_utils
 import report_context
 from repo import production as rp
 
@@ -404,10 +405,10 @@ def _compute_row(cur, plant, db_item, is_nos_day, report_month, one_dp: bool = F
      cply_act, pct_growth,
      ytd_plan, ytd_actual, ytd_pct_ful, ytd_cply, ytd_growth]
     """
-    ytd_months = db.get_ytd_months(report_month)
-    all_fy = db.get_fy_months(report_month)
-    prev_month = db.get_cply_month(report_month)
-    prev_ytd_months = db.get_ytd_months(prev_month)
+    ytd_months = month_utils.get_ytd_months(report_month)
+    all_fy = month_utils.get_fy_months(report_month)
+    prev_month = month_utils.get_cply_month(report_month)
+    prev_ytd_months = month_utils.get_ytd_months(prev_month)
 
     # Annual plan: sum of all 12 monthly plans, or day-weighted average for nos/day items
     if is_nos_day:
@@ -452,7 +453,7 @@ def _compute_row(cur, plant, db_item, is_nos_day, report_month, one_dp: bool = F
 # ---------------------------------------------------------------------------
 
 def _build_rows(plant_defs, report_month):
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     rows = []
     try:
@@ -543,7 +544,7 @@ def _compute_ratio_series(report_month: str):
 
     all_months = sorted({mo for fy in hist_fys for mo in _fy_months_p6(fy)} | set(cur_months))
 
-    conn = db.connect()
+    conn = dbengine.connect()
     cur  = conn.cursor()
     try:
         cs, hm, pig, hm_asp = {}, {}, {}, {}

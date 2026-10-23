@@ -14,7 +14,6 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from PIL import Image
 
-import db
 import dbengine
 from repo import breakdown as rbd
 from repo import conn as rc
@@ -141,17 +140,13 @@ def test_breakdown_create_patch_delete_through_api(tc):
     assert _rows("SELECT * FROM breakdown_table") == []
     assert tc.delete(f"/api/breakdown/{bid}").status_code == 404
     # db.py re-exports the moved functions
-    assert db.list_breakdown_entries is rbd.list_breakdown_entries
-    assert db.save_breakdown_entry is rbd.save_breakdown_entry
-    assert db.update_breakdown_entry is rbd.update_breakdown_entry
-    assert db.delete_breakdown_entry is rbd.delete_breakdown_entry
 
 
 # ── repo.breakdown: capital_repair_table through main.py's routes ───────────
 
 def test_capital_repair_rows_entry_reorder_delete(tc):
     with pytest.MonkeyPatch.context() as mp:
-        spy = _spy(mp, db, "capital_repair_table")
+        spy = _spy(mp, dbengine, "capital_repair_table")
         r1 = tc.post("/api/capital-repair-row", json={"plant": "BSP", "fy": "2026-27"})
     assert r1.status_code == 200, r1.text
     assert (spy.conns, spy.commits, spy.visible_mid_call) == (1, 1, [0, 0])   # INSERT, renumber UPDATE
@@ -162,7 +157,7 @@ def test_capital_repair_rows_entry_reorder_delete(tc):
         "unit_type": "BF", "unit_name": "BF-4"})
     assert r.status_code == 200, r.text
     with pytest.MonkeyPatch.context() as mp:
-        spy = _spy(mp, db, "capital_repair_table")
+        spy = _spy(mp, dbengine, "capital_repair_table")
         r2 = tc.post("/api/capital-repair-row", json={"plant": "BSP", "fy": "2026-27", "copy_from_id": id1})
     assert r2.status_code == 200, r2.text
     assert (spy.conns, spy.commits, spy.visible_mid_call) == (1, 1, [1, 1, 1])  # INSERT + 2 renumbers
@@ -170,7 +165,7 @@ def test_capital_repair_rows_entry_reorder_delete(tc):
     assert r2.json()["row"]["equipment"] == "BF-4"
 
     with pytest.MonkeyPatch.context() as mp:
-        spy = _spy(mp, db, "capital_repair_table")
+        spy = _spy(mp, dbengine, "capital_repair_table")
         r = tc.post("/api/capital-repair-entry", json={
             "id": id2, "unit_type": "BF", "unit_name": "BF-4", "actual_start": "2026-08-01",
             "actual_end": "2026-08-05", "planned_days": "10", "period": "Aug'26"})
@@ -185,7 +180,7 @@ def test_capital_repair_rows_entry_reorder_delete(tc):
     assert [g["id"] for g in got] == [id1, id2]
 
     with pytest.MonkeyPatch.context() as mp:
-        spy = _spy(mp, db, "capital_repair_table")
+        spy = _spy(mp, dbengine, "capital_repair_table")
         r = tc.post("/api/capital-repair-reorder", json={"plant": "BSP", "fy": "2026-27", "ids": [id2, id1]})
     assert r.status_code == 200, r.text
     assert (spy.conns, spy.commits) == (1, 1)
@@ -203,7 +198,7 @@ def test_capital_repair_rows_entry_reorder_delete(tc):
     assert bad.status_code == 400 and "BSP" in bad.json()["detail"]
 
     with pytest.MonkeyPatch.context() as mp:
-        spy = _spy(mp, db, "capital_repair_table")
+        spy = _spy(mp, dbengine, "capital_repair_table")
         r = tc.delete(f"/api/capital-repair-row/{id1}")
     assert r.status_code == 200, r.text
     assert (spy.conns, spy.commits, spy.visible_mid_call) == (1, 1, [2, 2])   # DELETE, renumber
@@ -239,15 +234,13 @@ def test_pdf_item_alias_learn_and_lookup(tc):
                                                   "item_name": "Oven Pushing(nos/d)", "convert_t": 1})
     assert r.status_code == 200, r.text
     assert (spy.conns, spy.commits, spy.visible_mid_call) == (1, 1, [0])
-    db.save_pdf_item_alias("DSP", "HM prodn", "Hot Metal")
-    db.save_pdf_item_alias("DSP", "HM prodn", "Hot Metal ", 0)        # re-learn overwrites
-    db.save_pdf_item_alias("BSP", "HM prodn", "Hot Metal")
+    rmisc.save_pdf_item_alias("DSP", "HM prodn", "Hot Metal")
+    rmisc.save_pdf_item_alias("DSP", "HM prodn", "Hot Metal ", 0)        # re-learn overwrites
+    rmisc.save_pdf_item_alias("BSP", "HM prodn", "Hot Metal")
     # count-type items are forced to convert_t=0
-    assert db.get_pdf_item_aliases("DSP") == {"1 nos total": ("Oven Pushing(nos/d)", 0),
+    assert rmisc.get_pdf_item_aliases("DSP") == {"1 nos total": ("Oven Pushing(nos/d)", 0),
                                               "HM prodn": ("Hot Metal ", 0)}
-    assert db.get_pdf_item_aliases("BSP") == {"HM prodn": ("Hot Metal", 1)}
-    assert db.get_pdf_item_aliases is rmisc.get_pdf_item_aliases
-    assert db.save_pdf_item_alias is rmisc.save_pdf_item_alias
+    assert rmisc.get_pdf_item_aliases("BSP") == {"HM prodn": ("Hot Metal", 1)}
 
 
 # ── repo.misc: cover_photos / report_cover_settings ─────────────────────────
@@ -289,7 +282,7 @@ def test_power_omi_insert_route_and_conflict(tc):
     recs = [{"report_month": "2026-08", "plant_name": "BSP", "item_name": "purchased_power", "value": 1.5},
             {"report_month": "2026-08", "plant_name": "DSP", "item_name": "purchased_power", "value": 2.5}]
     with pytest.MonkeyPatch.context() as mp:
-        spy = _spy(mp, db, "power_data_table")
+        spy = _spy(mp, dbengine, "power_data_table")
         r = tc.post("/api/power-omi/insert", json={"records": recs, "source_file": "p.xlsx"})
     assert r.status_code == 200, r.text
     # conflict check + insert: 2 conns, one commit after both rows
@@ -304,19 +297,19 @@ def test_power_omi_insert_route_and_conflict(tc):
 
 def test_bf_benchmark_crud_routes(tc):
     with pytest.MonkeyPatch.context() as mp:
-        spy = _spy(mp, db, "bf_benchmark_external_bf")
+        spy = _spy(mp, dbengine, "bf_benchmark_external_bf")
         r = tc.post("/api/bf-benchmark/external-bfs", json={"name": " JSW BF-3 ", "company": "JSW", "location": "VJN"})
     assert r.status_code == 200, r.text
     assert (spy.conns, spy.commits, spy.visible_mid_call) == (1, 1, [0])
     bf = r.json()["id"]
     with pytest.MonkeyPatch.context() as mp:
-        spy = _spy(mp, db, "bf_benchmark_external_bf")
+        spy = _spy(mp, dbengine, "bf_benchmark_external_bf")
         assert tc.patch(f"/api/bf-benchmark/external-bfs/{bf}", json={"working_volume_m3": 4000}).status_code == 200
     assert (spy.conns, spy.commits) == (1, 1)
     assert tc.patch("/api/bf-benchmark/external-bfs/999999", json={"name": "x"}).status_code == 404
 
     with pytest.MonkeyPatch.context() as mp:
-        spy = _spy(mp, db, "bf_benchmark_external_data")
+        spy = _spy(mp, dbengine, "bf_benchmark_external_data")
         r = tc.post(f"/api/bf-benchmark/external-bfs/{bf}/entry", json={"fy": "2025-26", "param_data": {"coke_rate": 380}})
     assert r.status_code == 200, r.text
     assert (spy.conns, spy.commits, spy.visible_mid_call) == (1, 1, [0])
@@ -329,7 +322,7 @@ def test_bf_benchmark_crud_routes(tc):
     assert [(b["name"], b["working_volume_m3"], b["latest_fy"]) for b in lst] == [("JSW BF-3", 4000.0, "2025-26")]
 
     with pytest.MonkeyPatch.context() as mp:
-        spy = _spy(mp, db, "bf_benchmark_sail_meta")
+        spy = _spy(mp, dbengine, "bf_benchmark_sail_meta")
         r = tc.patch("/api/bf-benchmark/sail-meta", json={"plant": "bsp", "unit": "BF-8", "working_volume_m3": 4060})
     assert r.status_code == 200, r.text
     assert (spy.conns, spy.commits, spy.visible_mid_call) == (1, 1, [0])
@@ -348,7 +341,7 @@ def test_bf_benchmark_crud_routes(tc):
 def test_steel_sector_performance_confirm_and_read(tc):
     import page_steel_sector_performance as pssp
     with pytest.MonkeyPatch.context() as mp:
-        spy = _spy(mp, db, "steel_sector_performance_table")
+        spy = _spy(mp, dbengine, "steel_sector_performance_table")
         r = tc.post("/api/steel-sector-performance/confirm",
                     json={"report_month": "2026-07", "source_file": "jpc.pdf", "tables": {}})
     assert r.status_code == 200, r.text
@@ -367,20 +360,20 @@ def test_major_unit_ready_reckoner_and_rail_saves(tc):
         rmisc.save_major_unit_daily_record("BSP", "BF-8", 9100.0, "T", "2025-03-01", "rec", 2, "u@x")
     assert (spy.conns, spy.commits, spy.visible_mid_call) == (1, 1, [0])
     rmisc.save_major_unit_daily_record("BSP", "BF-8", 9200.0, "T", "2025-04-01", None, 2, "u@x")
-    assert [(r["unit_label"], r["value"]) for r in db.get_major_unit_daily_records("BSP")] == [("BF-8", 9200.0)]
-    assert db.get_major_unit_daily_records_all()["BSP"]["BF-8"]["record_date"] == "2025-04-01"
+    assert [(r["unit_label"], r["value"]) for r in rmisc.get_major_unit_daily_records("BSP")] == [("BF-8", 9200.0)]
+    assert rmisc.get_major_unit_daily_records_all()["BSP"]["BF-8"]["record_date"] == "2025-04-01"
 
-    db.upsert_ready_reckoner_master({"plant_code": "BSP", "plant_name": "Bhilai", "plant_group": "ISP", "sort_order": 1})
+    rmisc.upsert_ready_reckoner_master({"plant_code": "BSP", "plant_name": "Bhilai", "plant_group": "ISP", "sort_order": 1})
     with pytest.MonkeyPatch.context() as mp:
         spy = _spy(mp, rmisc, "ready_reckoner_pages")
-        db.save_ready_reckoner_content("BSP", capacity_rows=[{"item": "HM", "details": "", "capacity": "7.5",
+        rmisc.save_ready_reckoner_content("BSP", capacity_rows=[{"item": "HM", "details": "", "capacity": "7.5",
                                                               "is_total": False}], updated_by="u@x")
     assert (spy.conns, spy.commits) == (1, 1)
-    db.save_ready_reckoner_image("BSP", "x.png", "u@x")
-    page = db.get_ready_reckoner_page("BSP")
+    rmisc.save_ready_reckoner_image("BSP", "x.png", "u@x")
+    page = rmisc.get_ready_reckoner_page("BSP")
     assert (page["capacity_rows"][0]["capacity"], page["product_mix_rows"], page["process_flow_image_path"]) == (
         "7.5", [], "x.png")
-    assert [p["plant_code"] for p in db.get_ready_reckoner_pages()] == ["BSP"]
+    assert [p["plant_code"] for p in rmisc.get_ready_reckoner_pages()] == ["BSP"]
     assert tc.get("/api/ready-reckoner").json()["rows"][0]["plant_name"] == "Bhilai"
 
     with pytest.MonkeyPatch.context() as mp:
@@ -390,11 +383,8 @@ def test_major_unit_ready_reckoner_and_rail_saves(tc):
                                                              {"metric": "desp", "value": "-"}]})
     assert r.status_code == 200, r.text
     assert (spy.conns, spy.commits, spy.visible_mid_call) == (1, 1, [0, 0])
-    assert db.get_rail_report_data(["2025-26", "2024-25"]) == {
+    assert rmisc.get_rail_report_data(["2025-26", "2024-25"]) == {
         "2025-26": {"prod": {"value": 1.5, "note": "n"}, "desp": {"value": None, "note": None}}, "2024-25": {}}
-    for name in ("get_rail_report_data", "save_rail_report_data", "get_ready_reckoner_pages",
-                 "save_major_unit_daily_record", "upsert_ready_reckoner_master"):
-        assert getattr(db, name) is getattr(rmisc, name)
 
 
 # ── repo.ops: admin backup lock and table counts (never the real endpoints) ─

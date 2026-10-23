@@ -3,7 +3,8 @@ Category Wise Production of Saleable Steel — pages 15, 16, 17.
 Unit: '000 Tonnes. Monthly + Apr-Month cumulative data vs CPLY.
 """
 import math
-import db
+import dbengine
+import month_utils
 import report_context
 from repo import production as rp
 
@@ -627,12 +628,12 @@ def generate_catwise_saleable(report_month: str, plants: list) -> list:
 
 
 def _generate_catwise_saleable(report_month: str, plants: list) -> list:
-    prev_month  = db.get_cply_month(report_month)
-    fy_months   = db.get_fy_months(report_month)
-    ytd_months  = db.get_ytd_months(report_month)
+    prev_month  = month_utils.get_cply_month(report_month)
+    fy_months   = month_utils.get_fy_months(report_month)
+    ytd_months  = month_utils.get_ytd_months(report_month)
     cply_ytd    = [f"{int(m[:4])-1}{m[4:]}" for m in ytd_months]
 
-    conn = db.connect()
+    conn = dbengine.connect()
     cur  = conn.cursor()
     try:
         result = []

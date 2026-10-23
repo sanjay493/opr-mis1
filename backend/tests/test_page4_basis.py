@@ -13,7 +13,7 @@ def p4(mysql_db, monkeypatch):
         c.execute("INSERT INTO production_plan_table VALUES ('2026-08','BSP','Hot Metal',550)")
         c.execute("INSERT INTO mou_plan_table VALUES ('2026-08','BSP','Hot Metal',570)")
         c.execute("INSERT INTO production_plan_table VALUES ('2026-08','BSP','Total Sinter',900)")
-    monkeypatch.setattr(page4.db, "get_effective_capacity", lambda *a, **k: None)
+    monkeypatch.setattr(page4.rcap, "get_effective_capacity", lambda *a, **k: None)
     return page4
 
 

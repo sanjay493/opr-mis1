@@ -33,7 +33,9 @@ Weight source per month:
 
 from typing import Dict, Optional
 
-import db as _db
+from repo import techno as rt
+import dbengine
+import month_utils
 from repo import production as _rp
 from plant_registry import PLANT_UNITS
 
@@ -117,7 +119,7 @@ def production_cumulative_from_table(plant: str, unit: str, report_month: str) -
     techno_data (callers must keep excluding "production" from the actual
     till_month write)."""
     plant = plant.upper()
-    months = _db.get_ytd_months(report_month)
+    months = month_utils.get_ytd_months(report_month)
 
     if unit in SHOP_UNITS:
         item = PLANT_WEIGHT_ITEMS["hm"] if unit.startswith("BF") else PLANT_WEIGHT_ITEMS["crude_steel"]
@@ -151,7 +153,7 @@ def production_cumulative_from_table(plant: str, unit: str, report_month: str) -
 
 def _plant_production(plant: str, item: str, months) -> Dict[str, float]:
     """{month: production} for a plant-level item from production_table."""
-    conn = _db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     weights = {m: v for m, v in _rp.month_values(cur, "actual", plant, item, months)
                if v is not None and v > 0}
@@ -183,7 +185,7 @@ def _unit_production(plant: str, unit: str, months,
     if unit in UNIT_ITEM_ALIASES:
         candidates.append(UNIT_ITEM_ALIASES[unit])
 
-    conn = _db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     # A month recorded as 0 is kept as weight 0 (the furnace was down), not
     # treated as missing: a weighted average then leaves that month out
@@ -197,7 +199,7 @@ def _unit_production(plant: str, unit: str, months,
     for m in months:
         if m in weights:
             continue
-        ud = _db.get_techno_data(plant, m, unit).get(unit, {})
+        ud = rt.get_techno_data(plant, m, unit).get(unit, {})
         v = ud.get("month", {}).get("production")
         if v is not None and v > 0:
             weights[m] = v / 1000.0   # techno production is t; table is '000 t
@@ -233,7 +235,7 @@ def compute_cumulative_preview(
     Raises ValueError with a user-readable message when nothing can be computed.
     """
     plant = plant.upper()
-    months = _db.get_ytd_months(report_month)   # Apr → report_month inclusive
+    months = month_utils.get_ytd_months(report_month)   # Apr → report_month inclusive
     warnings = []
 
     # Monthly parameter values; the form value takes precedence for report_month
@@ -242,7 +244,7 @@ def compute_cumulative_preview(
         if m == report_month and current_value is not None:
             v = current_value
         else:
-            ud = _db.get_techno_data(plant, m, unit).get(unit, {})
+            ud = rt.get_techno_data(plant, m, unit).get(unit, {})
             v = ud.get("month", {}).get(param_key)
         if v is None:
             continue
@@ -287,7 +289,7 @@ def compute_cumulative_from_values(
     Raises ValueError with a user-readable message when nothing can be computed.
     """
     plant = plant.upper()
-    months = _db.get_ytd_months(report_month)   # Apr → report_month inclusive
+    months = month_utils.get_ytd_months(report_month)   # Apr → report_month inclusive
     warnings = list(warnings) if warnings else []
 
     if report_month not in values:

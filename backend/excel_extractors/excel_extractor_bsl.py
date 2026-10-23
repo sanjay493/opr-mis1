@@ -460,7 +460,8 @@ def _extract_dpr_report(wb, source_file_name: str) -> bool:
     """
     import sys
     sys.path.insert(0, os.path.dirname(__file__))
-    import db
+    from repo import ops as rop
+    import dbengine
     from repo import production as rp
 
     ws = wb["DPR"]
@@ -512,7 +513,7 @@ def _extract_dpr_report(wb, source_file_name: str) -> bool:
         return (clean_val(ws[addr].value),
                 clean_val(ws[_dpr_cum_cell(addr)].value))
 
-    conn = db.connect()
+    conn = dbengine.connect()
     cursor = conn.cursor()
     vals_extracted = 0
     # Final (post-conversion) value already saved for each item this run —
@@ -594,7 +595,7 @@ def _extract_dpr_report(wb, source_file_name: str) -> bool:
     conn.commit()
     conn.close()
 
-    db.log_extraction(
+    rop.log_extraction(
         plant="BSL",
         report_month=db_report_month,
         file_name=source_file_name,

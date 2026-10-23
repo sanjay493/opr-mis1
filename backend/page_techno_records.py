@@ -21,7 +21,7 @@ import json
 import threading
 from datetime import date
 
-import db
+import dbengine
 import page_techno as pt
 from repo import production as rp
 from repo import techno as rt
@@ -77,7 +77,7 @@ def _signature(fy: int):
     """Changes whenever techno or production data for that FY is added,
     re-uploaded or edited - so a cached FY is recomputed only then."""
     months = _fy_months(fy)
-    conn = db.connect()
+    conn = dbengine.connect()
     try:
         t = rt.months_signature_row(conn.cursor(), months)
         p = rp.hm_cs_signature_row(conn.cursor(), months)
@@ -117,7 +117,7 @@ def _bf_values() -> dict:
     """{(plant, BF, param): {'YYYY-MM': value}} from techno_data month values."""
     keys = {k for _l, k, _u, _b in BF_PARAMS}
     aliases = {k: [k] + pt.KEY_ALIASES.get(k, []) for k in keys}
-    conn = db.connect()
+    conn = dbengine.connect()
     try:
         rows = rt.five_plant_unit_rows(conn.cursor(), BF_UNITS)
     finally:
@@ -151,7 +151,7 @@ def _row(label: str, unit: str, better: str, series: dict) -> dict:
 def generate_techno_records() -> dict:
     today = date.today()
     last_month = f"{today.year:04d}-{today.month:02d}"
-    conn = db.connect()
+    conn = dbengine.connect()
     try:
         first = rt.five_plant_first_month_row(conn.cursor())[0]
     finally:
@@ -170,7 +170,7 @@ def generate_techno_records() -> dict:
     # SAIL only counts from the month all five plants have techno data - before
     # that (BSL from Nov'20, RSP from Apr'21) page 27's "SAIL" is really just
     # BSP+DSP(+ISP) and would set false records.
-    conn = db.connect()
+    conn = dbengine.connect()
     try:
         firsts = rt.five_plant_first_months(conn.cursor())
     finally:

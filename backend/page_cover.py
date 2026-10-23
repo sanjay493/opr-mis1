@@ -36,7 +36,8 @@ import os
 
 import cover_designs
 import cover_store
-import db
+from repo import mines as rmn
+from repo import production as rp
 import report_context
 from report_utils import compute_item_row
 
@@ -93,7 +94,7 @@ def _norm_growth(growth) -> int | None:
 def _kpi_row(report_month: str, item: str) -> dict:
     db_item = _DB_ITEM.get(item, item)
     v = compute_item_row(report_month, item)
-    raw_000t = db.get_sail_production_actual(report_month, db_item)
+    raw_000t = rp.get_sail_production_actual(report_month, db_item)
     mt = f"{raw_000t / 1000:.3f}" if raw_000t is not None else "—"
     g = _norm_growth(v[5])
     return {
@@ -121,10 +122,10 @@ def _mines_kpi_row(report_month: str, label: str, kind: str) -> dict:
     y = int(report_month[:4])
     cply_month = f"{y - 1}{report_month[4:]}"
     if kind == "prod":
-        roll = db.get_iron_ore_group_rollup_monthly([report_month, cply_month])
+        roll = rmn.get_iron_ore_group_rollup_monthly([report_month, cply_month])
         section = "iron_ore_prod"
     else:
-        roll = db.get_iron_ore_sales_group_rollup_monthly([report_month, cply_month])
+        roll = rmn.get_iron_ore_sales_group_rollup_monthly([report_month, cply_month])
         section = "iron_ore_sales_despatch"
 
     cur = (roll.get(report_month) or {}).get(section) or {}

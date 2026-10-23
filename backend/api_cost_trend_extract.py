@@ -29,7 +29,7 @@ import tempfile
 import openpyxl
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
-import db
+from repo import cost_trend as rct
 from excel_extractors.excel_extractor_cost_trend import (
     PLANT_ORDER,
     _BF_COKE_PLANTS,
@@ -112,7 +112,7 @@ def _preview_elementwise(tmp_path):
     counts = {"new": 0, "changed": 0, "unchanged": 0, "blank": 0}
     for product in ("HM", "CS", "SS"):
         plants = extracted["products"].get(product, {})
-        existing = db.get_cost_trend_monthly(product, [report_month]).get(report_month, {})
+        existing = rct.get_cost_trend_monthly(product, [report_month]).get(report_month, {})
         for plant in PLANT_ORDER:
             cell = plants.get(plant, {})
             for cost_type in _COST_TYPES:
@@ -132,7 +132,7 @@ def _preview_bf_coke(tmp_path):
     extracted = extract_bf_coke_workbook(tmp_path)
     report_month = extracted["report_month"]
     product = extracted["product"]
-    existing = db.get_cost_trend_monthly(product, [report_month]).get(report_month, {})
+    existing = rct.get_cost_trend_monthly(product, [report_month]).get(report_month, {})
 
     rows = []
     counts = {"new": 0, "changed": 0, "unchanged": 0, "blank": 0}
@@ -189,6 +189,6 @@ async def cost_trend_extract_confirm(payload: dict):
 
     saved = 0
     for (field, product), entries in by_field_product.items():
-        saved += db.save_cost_trend_monthly_field(report_month, product, entries, field)
+        saved += rct.save_cost_trend_monthly_field(report_month, product, entries, field)
 
     return {"status": "success", "saved": saved, "skipped": skipped}

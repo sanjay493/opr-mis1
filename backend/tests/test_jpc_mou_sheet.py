@@ -5,7 +5,7 @@ Left blank when the month has no MoU loaded."""
 import openpyxl
 import pytest
 
-import db
+import dbengine
 import page_jpc_report as jpc
 from repo.conn import tx
 
@@ -21,7 +21,7 @@ def cur(mysql_db):
         for t, data in (("production_table", ACT), ("mou_plan_table", MOU)):
             seed.executemany(f"INSERT INTO {t} VALUES ('2026-09', %s, %s, %s)",
                              [(p, i, v) for (p, i), v in data.items()])
-    c = db.connect()
+    c = dbengine.connect()
     yield c.cursor()
     c.close()
 

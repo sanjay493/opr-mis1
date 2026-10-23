@@ -1,4 +1,5 @@
-import db
+from repo import production as rp
+import month_utils
 from typing import List, Dict, Any, Optional
 
 from version_cache import VersionedCache
@@ -227,18 +228,18 @@ def _compute_item_row(month: str, item_name: str) -> list:
     elif item_name in ("Finish Steel", "Finished Steel"):
         db_item = "Finished Steel"
 
-    month_plan        = db.get_sail_production_plan(month, db_item)
-    month_actual      = db.get_sail_production_actual(month, db_item)
+    month_plan        = rp.get_sail_production_plan(month, db_item)
+    month_actual      = rp.get_sail_production_actual(month, db_item)
 
-    cply_month        = db.get_cply_month(month)
-    month_cply_actual = db.get_sail_production_actual(cply_month, db_item)
+    cply_month        = month_utils.get_cply_month(month)
+    month_cply_actual = rp.get_sail_production_actual(cply_month, db_item)
 
-    ytd_months        = db.get_ytd_months(month)
-    ytd_plan          = db.get_sail_production_ytd_plan(ytd_months, db_item)
-    ytd_actual        = db.get_sail_production_ytd_actual(ytd_months, db_item)
+    ytd_months        = month_utils.get_ytd_months(month)
+    ytd_plan          = rp.get_sail_production_ytd_plan(ytd_months, db_item)
+    ytd_actual        = rp.get_sail_production_ytd_actual(ytd_months, db_item)
 
-    ytd_cply_months   = db.get_ytd_months(cply_month)
-    ytd_cply_actual   = db.get_sail_production_ytd_actual(ytd_cply_months, db_item)
+    ytd_cply_months   = month_utils.get_ytd_months(cply_month)
+    ytd_cply_actual   = rp.get_sail_production_ytd_actual(ytd_cply_months, db_item)
 
     # Plain round() is banker's-rounding (round-half-to-even) — 1870.5
     # rounds to 1870, not 1871, purely because 1870 happens to be even.

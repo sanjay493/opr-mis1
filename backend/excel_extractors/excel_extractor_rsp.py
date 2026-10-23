@@ -1249,10 +1249,10 @@ def _rsp_ss_grade_case_map(db_month: str) -> dict:
     (e.g. a source workbook typo like "Cu Bearing" vs "CU BEARING") back onto
     the spelling already on record instead of letting it read as a new grade —
     see the caller in _extract_rsp_ss_preview for what breaks otherwise."""
-    import db as _db
+    import dbengine
     from repo import special_steel as rss
     try:
-        conn = _db.connect()
+        conn = dbengine.connect()
         cur = conn.cursor()
         out = {}
         for product, grade, _month in rss.rsp_prior_grade_rows(cur, db_month):
@@ -1374,16 +1374,17 @@ def _extract_rsp_ss_preview(wb, report_month: str) -> dict:
 
 def _save_rsp_special_steel(wb, report_month: str, source_file_name: str) -> bool:
     """Persist RSP special steel rows to special_steel_orders."""
-    import db as _db
+    from repo import ops as rop
+    from repo import special_steel as rss
     result  = _extract_rsp_ss_preview(wb, report_month)
     db_month = result["month"]
     saved = 0
     _ss_rows = [r for r in result["special_steel_rows"]
                 if r["status"] == "ok" and (r.get("order_qty") is not None or r.get("actual_despatch") is not None)]
     if _ss_rows:
-        _db.clear_special_steel_orders(db_month, "RSP")
+        rss.clear_special_steel_orders(db_month, "RSP")
     for r in _ss_rows:
-        _db.save_special_steel_entry(
+        rss.save_special_steel_entry(
             db_month, "RSP",
             r["product"], r["quality_grade"],
             r["sort_order"],
@@ -1392,7 +1393,7 @@ def _save_rsp_special_steel(wb, report_month: str, source_file_name: str) -> boo
         )
         saved += 1
     if saved:
-        _db.log_extraction(
+        rop.log_extraction(
             plant="RSP", report_month=db_month,
             file_name=source_file_name, sheet_name=result["sheets"],
             source_type="Special Steel Report",
@@ -1628,7 +1629,8 @@ def _extract_monthly_report(wb, report_month: str, source_file_name: str,
     if not p9_name:
         raise ValueError("No page-9 production sheet found — nothing to save.")
 
-    import db as _db
+    from repo import ops as rop
+    import dbengine
     from repo import production as rp
 
     db_report_month, month_num = _parse_report_month(report_month)
@@ -1639,7 +1641,7 @@ def _extract_monthly_report(wb, report_month: str, source_file_name: str,
     sheet_p9 = wb[p9_name]
     _assert_p9_month_year_match(sheet_p9, report_month)
 
-    conn   = _db.connect()
+    conn   = dbengine.connect()
     cursor = conn.cursor()
     vals_extracted = 0
 
@@ -1677,7 +1679,7 @@ def _extract_monthly_report(wb, report_month: str, source_file_name: str,
     conn.commit()
     conn.close()
 
-    _db.log_extraction(
+    rop.log_extraction(
         plant="RSP", report_month=db_report_month,
         file_name=source_file_name,
         sheet_name=", ".join(s for s in (p9_name, p18_name, despatch_name) if s),
@@ -1692,7 +1694,8 @@ def _extract_monthly_report(wb, report_month: str, source_file_name: str,
 # ---------------------------------------------------------------------------
 
 def _extract_morning_report(wb, sheet_name: str, source_file_name: str) -> bool:
-    import db as _db
+    from repo import ops as rop
+    import dbengine
     from repo import production as rp
 
     ws = wb[sheet_name]
@@ -1705,7 +1708,7 @@ def _extract_morning_report(wb, sheet_name: str, source_file_name: str) -> bool:
     else:
         logger.info(f"RSP Morning Report: month-end sheet for {db_report_month}.")
 
-    conn   = _db.connect()
+    conn   = dbengine.connect()
     cursor = conn.cursor()
     vals_extracted = 0
 
@@ -1727,7 +1730,7 @@ def _extract_morning_report(wb, sheet_name: str, source_file_name: str) -> bool:
     conn.commit()
     conn.close()
 
-    _db.log_extraction(
+    rop.log_extraction(
         plant="RSP", report_month=db_report_month,
         file_name=source_file_name, sheet_name=sheet_name,
         source_type="Daily Morning Report",

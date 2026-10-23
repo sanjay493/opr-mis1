@@ -52,7 +52,7 @@ import argparse
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BACKEND_DIR)
 
-import db  # noqa: E402
+import dbengine  # noqa: E402
 from repo import production as rp  # noqa: E402
 from excel_extractors.pdf_extractor_asp import (  # noqa: E402
     _load_pdf_word_rows, _detect_fl_report_month, _fl_prev_month,
@@ -170,7 +170,7 @@ def main():
         print("Dry-run only — nothing written. Re-run with --apply to save.")
         return
 
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     saved = 0
     try:

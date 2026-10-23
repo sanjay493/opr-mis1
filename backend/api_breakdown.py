@@ -22,7 +22,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 
 import bd_cr_link
-import db as _db
+import dbengine
 from plant_registry import UNIT_TYPES, is_valid_unit
 from repo import breakdown as rbd
 
@@ -59,7 +59,7 @@ _CR_COLS = ("id", "plant", "fy", "shop", "equipment", "activity", "actual_start"
 
 def _actual_crs(plant: str) -> list:
     """The plant's capital repairs that have actual dates (linkable)."""
-    conn = _db.connect()
+    conn = dbengine.connect()
     try:
         return [dict(zip(_CR_COLS, r)) for r in rbd.cr_actual_rows(conn, _CR_COLS, plant)]
     finally:
@@ -69,7 +69,7 @@ def _actual_crs(plant: str) -> list:
 def _validate_cr_link(plant: str, cr_id: Optional[int]):
     if cr_id is None:
         return
-    conn = _db.connect()
+    conn = dbengine.connect()
     try:
         row = rbd.cr_plant_row(conn, cr_id)
     finally:
@@ -127,7 +127,7 @@ def _editor_email(request: Request) -> str:
 @router.get("")
 async def list_breakdowns(plant: Optional[str] = Query(None), fy: Optional[str] = Query(None),
                            unit_type: Optional[str] = Query(None), unit_name: Optional[str] = Query(None)):
-    rows = _db.list_breakdown_entries(plant=plant, fy=fy, unit_type=unit_type, unit_name=unit_name)
+    rows = rbd.list_breakdown_entries(plant=plant, fy=fy, unit_type=unit_type, unit_name=unit_name)
     return {"rows": rows}
 
 
@@ -169,7 +169,7 @@ async def create_breakdown(body: BreakdownCreate, request: Request):
     _validate_ts(body.start_ts, body.end_ts, body.is_ongoing)
     _validate_cr_link(body.plant, body.capital_repair_id)
 
-    new_id = _db.save_breakdown_entry(
+    new_id = rbd.save_breakdown_entry(
         plant=body.plant, unit_type=body.unit_type, unit_name=body.unit_name, sms_subtag=sms_subtag,
         start_ts=body.start_ts, end_ts=None if body.is_ongoing else body.end_ts,
         is_ongoing=body.is_ongoing, cause=cause, hours_lost_override=body.hours_lost_override,
@@ -184,7 +184,7 @@ async def update_breakdown(breakdown_id: int, body: BreakdownUpdate, request: Re
     if not fields:
         return {"status": "ok"}
 
-    existing = _db.list_breakdown_entries()
+    existing = rbd.list_breakdown_entries()
     row = next((r for r in existing if r["id"] == breakdown_id), None)
     if row is None:
         raise HTTPException(404, "Breakdown event not found")
@@ -212,7 +212,7 @@ async def update_breakdown(breakdown_id: int, body: BreakdownUpdate, request: Re
     if "capital_repair_id" in fields or "plant" in fields:
         _validate_cr_link(plant, fields.get("capital_repair_id", row.get("capital_repair_id")))
 
-    ok = _db.update_breakdown_entry(breakdown_id, updated_by=_editor_email(request), **fields)
+    ok = rbd.update_breakdown_entry(breakdown_id, updated_by=_editor_email(request), **fields)
     if not ok:
         raise HTTPException(404, "Breakdown event not found")
     return {"status": "ok"}
@@ -220,7 +220,7 @@ async def update_breakdown(breakdown_id: int, body: BreakdownUpdate, request: Re
 
 @router.delete("/{breakdown_id}")
 async def delete_breakdown(breakdown_id: int):
-    ok = _db.delete_breakdown_entry(breakdown_id)
+    ok = rbd.delete_breakdown_entry(breakdown_id)
     if not ok:
         raise HTTPException(404, "Breakdown event not found")
     return {"status": "ok"}

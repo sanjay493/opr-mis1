@@ -13,7 +13,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 import auth
-import db
 import dbengine
 from repo import conn as rc
 from repo import ops as rop
@@ -133,9 +132,6 @@ def test_page_configs_save_load_round_trip_commit_once(mysql_db, monkeypatch):
     assert rpg.get_page_config("2026-08", 5) == {"page": 5, "title": "five v2"}
     assert rpg.get_page_config("2026-08", 7) is None
     assert rpg.get_all_page_configs("2026-08") == [{"page": 2, "title": "two"}, {"page": 5, "title": "five v2"}]
-    assert db.save_page_config is rpg.save_page_config
-    assert db.get_all_page_configs is rpg.get_all_page_configs
-    assert db.get_page_config is rpg.get_page_config
 
 
 # ── repo.text: narratives through their routes ───────────────────────────────
@@ -150,7 +146,7 @@ def test_page3_narrative_route_commit_once_and_missing_data(tc, monkeypatch):
         assert r.status_code == 200, r.text
         assert (spy.connects, spy.commits, spy.visible_mid_call) == (1, 1, [0])
     assert rtx.get_page3_narrative("2026-08") == {"production_narrative": "Steady.", "highlights": ["a", "b"]}
-    assert db.get_page3_narrative("2026-09") is None
+    assert rtx.get_page3_narrative("2026-09") is None
     assert rtx.page3_narrative_any_row("2026-08") is True
     sec = [s for s in page_missing_data.generate_missing_data("2026-08")["sections"] if s["id"] == "page3_narrative"]
     assert sec[0]["checks"][0]["present"] is True
@@ -162,7 +158,7 @@ def test_page3_narrative_route_commit_once_and_missing_data(tc, monkeypatch):
 def test_do_letter_remarks_routes_commit_once(tc, monkeypatch):
     import page_do_letter
     with pytest.MonkeyPatch.context() as mp:
-        spy = _spy(mp, db, "do_letter_remark_table")
+        spy = _spy(mp, dbengine, "do_letter_remark_table")
         r = tc.post("/api/do-letter/remarks", json={"report_month": "2026-08", "remarks": [
             {"item_name": "Crude Steel", "plant_name": "RSP", "remark": "BF-5 down"},
             {"item_name": "Finished Steel", "plant_name": "BSP", "remark": "mill reline"}]})
@@ -173,7 +169,7 @@ def test_do_letter_remarks_routes_commit_once(tc, monkeypatch):
     # an empty remark deletes the row
     tc.post("/api/do-letter/remarks", json={"report_month": "2026-08", "remarks": [
         {"item_name": "Finished Steel", "plant_name": "BSP", "remark": ""}]})
-    conn = db.connect()
+    conn = dbengine.connect()
     try:
         assert page_do_letter._fetch_remarks(conn.cursor(), "2026-08", "Crude Steel") == {"RSP": "BF-5 down"}
         assert page_do_letter._fetch_remarks(conn.cursor(), "2026-08", "Finished Steel") == {}
@@ -184,12 +180,12 @@ def test_do_letter_remarks_routes_commit_once(tc, monkeypatch):
 def test_sail_sales_note_confirm_route_and_one_page_read(tc, monkeypatch):
     import page_one_page_report
     with pytest.MonkeyPatch.context() as mp:
-        spy = _spy(mp, db, "sail_sales_note_table")
+        spy = _spy(mp, dbengine, "sail_sales_note_table")
         r = tc.post("/api/sail-1page/confirm", json={"report_month": "2026-08", "sales_rows": [],
                                                        "stock_rows": [], "sales_note": "* incl. NSL"})
         assert r.status_code == 200, r.text
         assert (spy.connects, spy.commits, spy.visible_mid_call) == (1, 1, [0])
-    conn = db.connect()
+    conn = dbengine.connect()
     try:
         assert page_one_page_report._sales_note(conn.cursor(), "2026-08") == "* incl. NSL"
         assert page_one_page_report._sales_note(conn.cursor(), "2026-09") is None
@@ -231,25 +227,23 @@ def test_phys_and_rail_notes_replace_commit_once(tc, monkeypatch):
                                                   {"sort_order": 3, "note_text": "  "}]) == 3
         # DELETE + 2 INSERTs on one connection, all invisible until the one commit
         assert (spy.connects, spy.commits, spy.visible_mid_call) == (1, 1, [1, 1, 1])
-    assert db.get_ss_phys_notes("2026-27") == [(1, "a"), (2, "b")]
+    assert rtx.get_ss_phys_notes("2026-27") == [(1, "a"), (2, "b")]
     with pytest.MonkeyPatch.context() as mp:
         spy = _spy(mp, rtx, "rail_prod_despatch_note")
         r = tc.post("/api/rail-report/grid", json={"financial_year": "2026-27",
                                                    "notes": [{"sort_order": 1, "note_text": "n1"}]})
         assert r.json() == {"status": "ok"}
         assert (spy.connects, spy.commits, spy.visible_mid_call) == (1, 1, [0, 0])
-    assert db.get_rail_report_notes() == [(1, "n1")]
+    assert rtx.get_rail_report_notes() == [(1, "n1")]
 
 
 def test_steel_sales_and_key_highlights_db_reexports(mysql_db):
-    db.save_steel_sales_highlights("2026-08", ["m1"], ["y1"], updated_by="e@x")
+    rtx.save_steel_sales_highlights("2026-08", ["m1"], ["y1"], updated_by="e@x")
     got = rtx.get_steel_sales_highlights("2026-08")
     assert (got["month_items"], got["ytd_items"], got["updated_by"]) == (["m1"], ["y1"], "e@x")
-    db.save_key_highlights_narrative("2026-08", [{"text": "a", "subs": []}], ["s"], [], updated_by="e@x")
+    rtx.save_key_highlights_narrative("2026-08", [{"text": "a", "subs": []}], ["s"], [], updated_by="e@x")
     got = rtx.get_key_highlights_narrative("2026-08")
     assert (got["achievements"], got["shortfalls"], got["focus_areas"]) == ([{"text": "a", "subs": []}], ["s"], [])
-    assert db.get_steel_sales_highlights is rtx.get_steel_sales_highlights
-    assert db.save_key_highlights_narrative is rtx.save_key_highlights_narrative
 
 
 # ── repo.text get/put: one test per scope ────────────────────────────────────
@@ -410,7 +404,7 @@ def test_auth_register_login_gated_write_activity_log(gated, monkeypatch):
     # not on the allow-list yet
     assert gated.post("/api/auth/register/request-otp", json={"email": email}).status_code == 403
     with pytest.MonkeyPatch.context() as mp:
-        spy = _spy(mp, db, "allowed_emails")
+        spy = _spy(mp, dbengine, "allowed_emails")
         r = gated.post("/api/admin/allowed-emails", json={"email": email}, cookies=admin)
         assert r.status_code == 200, r.text
         # the allow-list insert, then log_activity's own connection + commit
@@ -567,8 +561,7 @@ def test_log_visit_and_admin_notifications(gated, monkeypatch):
     assert gated.get("/api/admin/site-visits", params={"days": 0}, cookies=admin).status_code == 200
     # a failing notification insert is swallowed
     monkeypatch.setattr(rop, "_add_admin_notification", lambda *a: (_ for _ in ()).throw(RuntimeError("x")))
-    db.add_admin_notification("sign_in", "1.2.3.4")
-    assert db.log_page_visit is rop.log_page_visit and db.list_admin_notifications is rop.list_admin_notifications
+    rop.add_admin_notification("sign_in", "1.2.3.4")
 
 
 # ── repo.ops: extraction_log ─────────────────────────────────────────────────
@@ -576,10 +569,10 @@ def test_log_visit_and_admin_notifications(gated, monkeypatch):
 def test_extraction_log_own_and_caller_connection(tc, monkeypatch):
     with pytest.MonkeyPatch.context() as mp:
         spy = _spy(mp, rop, "extraction_log")
-        db.log_extraction("RSP", "2026-08", "Final Monthly Report Aug.xlsx", "s", "Final Monthly Report", 5)
+        rop.log_extraction("RSP", "2026-08", "Final Monthly Report Aug.xlsx", "s", "Final Monthly Report", 5)
         assert (spy.connects, spy.commits, spy.visible_mid_call) == (1, 1, [0])
     # with the caller's connection it neither commits nor closes
-    conn = db.connect()
+    conn = dbengine.connect()
     try:
         rop.log_extraction("ISP", "2026-08", "f.pdf", "s", "Final Monthly Report", 3, conn=conn)
         assert _other_conn_count("extraction_log") == 1
@@ -589,24 +582,23 @@ def test_extraction_log_own_and_caller_connection(tc, monkeypatch):
     assert _other_conn_count("extraction_log") == 2
     logs = tc.get("/api/extraction-log", params={"plant": "RSP"}).json()["logs"]
     assert [(l["plant_name"], l["items_extracted"]) for l in logs] == [("RSP", 5)]
-    assert [l["plant_name"] for l in db.get_extraction_logs()] == ["ISP", "RSP"]
-    st = db.production_month_status("2026-08")
+    assert [l["plant_name"] for l in rop.get_extraction_logs()] == ["ISP", "RSP"]
+    st = rop.production_month_status("2026-08")
     assert st == {"tentative": True, "missing": ["BSL", "DSP"]}
-    assert db._production_month_status is rop._production_month_status
 
 
 # ── repo.ops: to-do and work log routes ──────────────────────────────────────
 
 def test_todo_routes_commit_once(tc, monkeypatch):
     with pytest.MonkeyPatch.context() as mp:
-        spy = _spy(mp, db, "todo_jobs")
+        spy = _spy(mp, dbengine, "todo_jobs")
         r = tc.post("/api/todo/add", json={"subject": " Send note ", "due_date": "2026-10-30", "priority": "high"})
         assert r.status_code == 200, r.text
         assert (spy.connects, spy.commits, spy.visible_mid_call) == (1, 1, [0])
     job = r.json()["id"]
     assert tc.post(f"/api/todo/{job}/update", json={"remark": "r1"}).status_code == 200
     with pytest.MonkeyPatch.context() as mp:
-        spy = _spy(mp, db, "todo_jobs")
+        spy = _spy(mp, dbengine, "todo_jobs")
         assert tc.post(f"/api/todo/{job}/complete").status_code == 200
         assert (spy.connects, spy.commits) == (1, 1)
     jobs = tc.get("/api/todo/list", params={"status": "done"}).json()["jobs"]
@@ -623,7 +615,7 @@ def test_todo_routes_commit_once(tc, monkeypatch):
 
 def test_worklog_routes_commit_once(tc, monkeypatch):
     with pytest.MonkeyPatch.context() as mp:
-        spy = _spy(mp, db, "daily_work_log")
+        spy = _spy(mp, dbengine, "daily_work_log")
         r = tc.post("/api/worklog/add", json={"work_date": "2026-10-19", "description": " did x ", "remarks": "r"})
         assert r.status_code == 200, r.text
         assert (spy.connects, spy.commits, spy.visible_mid_call) == (1, 1, [0])

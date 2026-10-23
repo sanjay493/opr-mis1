@@ -417,7 +417,7 @@ def extract_rake_detention_pdf(file_path: str, report_month: str) -> dict:
     to keep this module import-safe / independently testable without a
     live DB)."""
     import pdfplumber
-    import db
+    from repo import rake as rrk
 
     warnings = []
     plant_blob = {}
@@ -460,7 +460,7 @@ def extract_rake_detention_pdf(file_path: str, report_month: str) -> dict:
 
     plants_out = {}
     for plant_code, sections in plant_blob.items():
-        master_rows = db.get_rake_detention_master(plants=[plant_code])
+        master_rows = rrk.get_rake_detention_master(plants=[plant_code])
         sections_out = {}
         for section, blob in sections.items():
             sec_master = [r for r in master_rows if r["section"] == section and not r["is_total"]]

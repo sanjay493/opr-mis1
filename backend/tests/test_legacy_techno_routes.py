@@ -4,6 +4,7 @@ before the dead code paths were deleted (MySQL-only, Task 2)."""
 import pytest
 from fastapi.testclient import TestClient
 
+import dbengine
 import main
 
 
@@ -15,7 +16,7 @@ def tc(mysql_db, monkeypatch):
 
 
 def _prod_rows():
-    conn = main.db.connect()
+    conn = dbengine.connect()
     rows = conn.execute("SELECT report_month, plant_name, item_name, month_actual "
                         "FROM production_table").fetchall()
     conn.close()

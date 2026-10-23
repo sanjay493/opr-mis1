@@ -39,7 +39,8 @@ item_name = 'Crude Steel' | 'Finished Steel') are entered ahead of time via
 import os
 import io
 
-import db
+import dbengine
+import month_utils
 import page4
 from repo import production as rp
 from repo import text as rtx
@@ -325,12 +326,12 @@ def best_ever_bullets(cur, report_month):
 def generate_do_letter_data(report_month: str) -> dict:
     """Everything the DOCX/XLSX builders need for one report_month —
     figures in '000T unless noted. No DB writes."""
-    cply_month = db.get_cply_month(report_month)
+    cply_month = month_utils.get_cply_month(report_month)
     prev_month = _prev_month(report_month)
-    ytd_months = db.get_ytd_months(report_month)
-    ytd_cply_months = [db.get_cply_month(m) for m in ytd_months]
+    ytd_months = month_utils.get_ytd_months(report_month)
+    ytd_cply_months = [month_utils.get_cply_month(m) for m in ytd_months]
 
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         cs_rows = crude_steel_annexure_rows(cur, report_month, cply_month, prev_month)

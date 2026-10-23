@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr
 
 import auth
-import db
+import dbengine
 from repo import ops as rop
 from constants import PAGE_MODULES
 
@@ -40,7 +40,7 @@ class PermissionsRequest(BaseModel):
 
 @router.get("/allowed-emails")
 def list_allowed_emails():
-    conn = db.connect()
+    conn = dbengine.connect()
     conn.row_factory = Row
     cur = conn.cursor()
     rows = [dict(r) for r in rop.allowed_email_rows(cur)]
@@ -52,7 +52,7 @@ def list_allowed_emails():
 def add_allowed_email(body: EmailOnly, admin: dict = Depends(auth.require_admin)):
     email = body.email.lower()
     now = datetime.now(timezone.utc).isoformat()
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     rop.upsert_allowed_email(cur, email, admin["email"], now)
     conn.commit()
@@ -64,7 +64,7 @@ def add_allowed_email(body: EmailOnly, admin: dict = Depends(auth.require_admin)
 @router.delete("/allowed-emails/{email}")
 def remove_allowed_email(email: str, admin: dict = Depends(auth.require_admin)):
     email = email.lower()
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     rop.delete_allowed_email(cur, email)
     conn.commit()
@@ -77,7 +77,7 @@ def remove_allowed_email(email: str, admin: dict = Depends(auth.require_admin)):
 def bar_allowed_email(email: str, body: BarRequest, admin: dict = Depends(auth.require_admin)):
     email = email.lower()
     now = datetime.now(timezone.utc).isoformat()
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     if not rop.allowed_email_exists_row(cur, email):
         conn.close()
@@ -99,7 +99,7 @@ def list_page_modules():
 
 @router.get("/users")
 def list_users():
-    conn = db.connect()
+    conn = dbengine.connect()
     conn.row_factory = Row
     cur = conn.cursor()
     rows = [dict(r) for r in rop.user_list_rows(cur)]
@@ -116,7 +116,7 @@ def set_user_permissions(user_id: int, body: PermissionsRequest, admin: dict = D
         unknown = set(body.allowed_pages) - set(PAGE_MODULES.keys())
         if unknown:
             raise HTTPException(status_code=400, detail=f"Unknown page module(s): {', '.join(sorted(unknown))}")
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     row = rop.user_email_row(cur, user_id)
     if not row:
@@ -143,7 +143,7 @@ def set_user_permissions(user_id: int, body: PermissionsRequest, admin: dict = D
 def set_user_role(user_id: int, body: RoleRequest, admin: dict = Depends(auth.require_admin)):
     if body.role not in (None, "editor", "admin"):
         raise HTTPException(status_code=400, detail="Role must be 'editor', 'admin', or null.")
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     row = rop.user_email_row(cur, user_id)
     if not row:
@@ -158,7 +158,7 @@ def set_user_role(user_id: int, body: RoleRequest, admin: dict = Depends(auth.re
 
 @router.delete("/users/{user_id}")
 def delete_user(user_id: int, admin: dict = Depends(auth.require_admin)):
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     row = rop.user_email_row(cur, user_id)
     if not row:
@@ -175,7 +175,7 @@ def delete_user(user_id: int, admin: dict = Depends(auth.require_admin)):
 
 @router.get("/activity-log/filters")
 def get_activity_log_filters():
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     users = [r[0] for r in rop.activity_log_user_rows(cur)]
     actions = [r[0] for r in rop.activity_log_action_rows(cur)]
@@ -185,7 +185,7 @@ def get_activity_log_filters():
 
 @router.get("/activity-log")
 def get_activity_log(limit: int = 200, offset: int = 0, user_email: Optional[str] = None, action: Optional[str] = None):
-    conn = db.connect()
+    conn = dbengine.connect()
     conn.row_factory = Row
     cur = conn.cursor()
     where = []
@@ -209,7 +209,7 @@ def get_admin_notifications(limit: int = 30):
     """Newest sign-ins and new anonymous visitors for the navbar bell
     (frontend/src/components/AdminNotifications.js). Unread state lives in
     the admin's browser as the last-seen id."""
-    return {"notifications": db.list_admin_notifications(max(1, min(limit, 100)))}
+    return {"notifications": rop.list_admin_notifications(max(1, min(limit, 100)))}
 
 
 # ── site visits ──────────────────────────────────────────────────────────────
@@ -221,7 +221,7 @@ def get_site_visits(days: int = 30):
     each with the list of pages they visited and how often. Grouped in
     Python — the row count in any
     reasonable window is small for an internal LAN tool."""
-    conn = db.connect()
+    conn = dbengine.connect()
     conn.row_factory = Row
     cur = conn.cursor()
     if days > 0:

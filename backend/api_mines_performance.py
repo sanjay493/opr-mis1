@@ -12,7 +12,6 @@ import re
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response, StreamingResponse
 
-import db
 import mines_performance
 import mines_performance_pdf
 from colors_loader import load_colors_config
@@ -31,7 +30,6 @@ def _check_decimals(decimals: int):
 
 
 def _data(month: str) -> dict:
-    db.init_db()
     return mines_performance.generate(month)
 
 

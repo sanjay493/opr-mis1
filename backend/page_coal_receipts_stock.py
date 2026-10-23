@@ -25,7 +25,8 @@ reflow column-by-column as they fill in.
 """
 import json as _json
 
-import db
+import dbengine
+import month_utils
 from repo import techno as rt
 
 _UNIT = "Coal_Receipt_Stock"
@@ -38,7 +39,7 @@ def _all_stock_snapshots() -> dict:
     Rows are read oldest-report_month-first and later entries simply
     overwrite earlier ones for the same target month, so a more recent
     upload's figure for a given month always wins over an older one's."""
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     try:
         rows = rt.sail_unit_rows(cur, _UNIT)
@@ -68,7 +69,7 @@ def _stock_history_fy_starts(report_month: str, n: int = 1) -> list:
     convention as page_cost_trend.py's _annual_fys — never hardcoded to
     specific years, so this keeps sliding forward on its own in future
     report months."""
-    fy_start_year = int(db.get_fy_months(report_month)[0][:4])
+    fy_start_year = int(month_utils.get_fy_months(report_month)[0][:4])
     return list(range(fy_start_year - (n - 1), fy_start_year + 1))
 
 
@@ -93,7 +94,7 @@ def _stock_history_tables(report_month: str) -> list:
         rows = []
         for fy_start in fy_starts:
             fy_label = f"{fy_start}-{(fy_start + 1) % 100:02d}"
-            fy_months = db.get_fy_months(f"{fy_start}-04")  # April always falls in FY fy_start
+            fy_months = month_utils.get_fy_months(f"{fy_start}-04")  # April always falls in FY fy_start
             values = [snapshots.get(mo, {}).get(key) for mo in fy_months]
             rows.append({"fy": fy_label, "values": values})
         tables.append({"label": label, "key": key, "rows": rows})
@@ -101,7 +102,7 @@ def _stock_history_tables(report_month: str) -> list:
 
 
 def generate_coal_receipts_sail(report_month: str) -> dict:
-    stored = db.get_techno_data("SAIL", report_month, unit=_UNIT).get(_UNIT, {})
+    stored = rt.get_techno_data("SAIL", report_month, unit=_UNIT).get(_UNIT, {})
     m = stored.get("month") or {}
 
     receipt_rows = [

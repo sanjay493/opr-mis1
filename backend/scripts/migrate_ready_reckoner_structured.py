@@ -37,7 +37,8 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from bs4 import BeautifulSoup
-import db
+from repo import misc as rmisc
+import dbengine
 
 
 PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP", "ASP", "SSP", "VISL"]
@@ -114,7 +115,7 @@ def build_structured():
         # migrated to db.py) — read the old HTML columns directly here
         # instead, since those still exist on disk until the separate DROP
         # step and db.py's own getters no longer know about them.
-        conn = db.connect()
+        conn = dbengine.connect()
         cur = conn.cursor()
         cur.execute(
             "SELECT capacity_html, product_mix_html FROM ready_reckoner_pages WHERE plant_code = %s",
@@ -144,7 +145,7 @@ def preview():
 
 
 def _ensure_columns():
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     cols = [
         ("capacity_rows", "LONGTEXT"), ("product_mix_headers", "LONGTEXT"),
@@ -166,7 +167,7 @@ def _ensure_columns():
 def apply():
     _ensure_columns()
     for plant, data in build_structured().items():
-        db.save_ready_reckoner_content(
+        rmisc.save_ready_reckoner_content(
             plant,
             capacity_rows=data["capacity_rows"],
             product_mix_headers=data["product_mix_headers"],

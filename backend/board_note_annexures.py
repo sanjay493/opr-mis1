@@ -22,7 +22,7 @@ Colours come from colors_config.json.
 """
 from html import escape
 
-import db
+import dbengine
 from repo import techno as rt
 import page_techno as pt
 import techno_period as tp
@@ -190,7 +190,7 @@ def _fmt(v, d):
 
 
 def _techno_months_present():
-    conn = db.connect()
+    conn = dbengine.connect()
     try:
         return {r[0] for r in rt.distinct_report_months(conn.cursor())}
     finally:
@@ -314,7 +314,7 @@ def annexure_iii(P) -> dict:
     groups = []
     for title, plant, unit in ANNEX_III_FURNACES:
         try:
-            tgt = (db.get_techno_plan(plant, fy, unit) or {}).get("data") or {}
+            tgt = (rt.get_techno_plan(plant, fy, unit) or {}).get("data") or {}
         except Exception:
             tgt = {}
         rows = []
@@ -600,7 +600,7 @@ def collect(fy: str, quarter: int, which=ANNEXURES) -> list:
     III, IV order -- shared by the PDF (build) and the workbook (build_xlsx)."""
     P = periods(int(fy[:4]), quarter)
     out = []
-    conn = db.connect()
+    conn = dbengine.connect()
     try:
         cur = conn.cursor()
         if "I" in which:

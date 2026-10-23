@@ -23,7 +23,8 @@ Each page carries two period sets side-by-side:
 import re
 import math
 import datetime as _dt
-import db
+import dbengine
+import month_utils
 from repo import production as rp
 from repo import special_steel as rss
 
@@ -113,7 +114,7 @@ def _resolve_clubs(plant: str, product: str) -> tuple:
     """Return (grade_to_club_index, club_specs) for this (plant, product),
     where club_specs[i] = (member_grades, display_label). Reads
     special_steel_grade_clubs — see module-level grade-clubbing note."""
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     rows = rss.ordered_club_rows(cur, plant, product)
     conn.close()
@@ -702,11 +703,11 @@ def _add_product_spans(rows):
 
 def generate_special_steel_plant(report_month: str, plant: str) -> dict:
     """Pages 19-23: single-plant special steel report."""
-    cply_month      = db.get_cply_month(report_month)
-    ytd_months      = db.get_ytd_months(report_month)
-    cply_ytd_months = [db.get_cply_month(m) for m in ytd_months]
+    cply_month      = month_utils.get_cply_month(report_month)
+    ytd_months      = month_utils.get_ytd_months(report_month)
+    cply_ytd_months = [month_utils.get_cply_month(m) for m in ytd_months]
 
-    conn = db.connect()
+    conn = dbengine.connect()
     cur  = conn.cursor()
     try:
         gen = _GENERATORS.get(plant)
@@ -760,13 +761,13 @@ def generate_special_steel_plant(report_month: str, plant: str) -> dict:
 
 def generate_special_steel_sail(report_month: str) -> dict:
     """Page 24: SAIL consolidated plant-wise special steel."""
-    cply_month      = db.get_cply_month(report_month)
-    ytd_months      = db.get_ytd_months(report_month)
-    cply_ytd_months = [db.get_cply_month(m) for m in ytd_months]
-    fy_months       = db.get_fy_months(report_month)
-    fy_label        = db.get_fy_for_month(report_month)[2:]  # '2026-27' -> '26-27'
+    cply_month      = month_utils.get_cply_month(report_month)
+    ytd_months      = month_utils.get_ytd_months(report_month)
+    cply_ytd_months = [month_utils.get_cply_month(m) for m in ytd_months]
+    fy_months       = month_utils.get_fy_months(report_month)
+    fy_label        = month_utils.get_fy_for_month(report_month)[2:]  # '2026-27' -> '26-27'
 
-    conn = db.connect()
+    conn = dbengine.connect()
     cur  = conn.cursor()
     try:
         plants  = ["BSP", "DSP", "RSP", "BSL", "ISP"]
@@ -862,17 +863,17 @@ def generate_special_steel_sail(report_month: str) -> dict:
         # Saleable Steel Despatch PLAN figure to substitute (despatch items
         # generally aren't ABP-planned the way production is).
         _t = lambda v: v * 1000 if v is not None else None
-        ss_cur  = _t(db.get_sail_production_actual(report_month, "Saleable Steel Despatch"))
-        ss_cply = _t(db.get_sail_production_actual(cply_month,   "Saleable Steel Despatch"))
-        ss_cum  = _t(db.get_sail_production_ytd_actual(ytd_months,      "Saleable Steel Despatch"))
-        ss_ccum = _t(db.get_sail_production_ytd_actual(cply_ytd_months, "Saleable Steel Despatch"))
+        ss_cur  = _t(rp.get_sail_production_actual(report_month, "Saleable Steel Despatch"))
+        ss_cply = _t(rp.get_sail_production_actual(cply_month,   "Saleable Steel Despatch"))
+        ss_cum  = _t(rp.get_sail_production_ytd_actual(ytd_months,      "Saleable Steel Despatch"))
+        ss_ccum = _t(rp.get_sail_production_ytd_actual(cply_ytd_months, "Saleable Steel Despatch"))
 
         # Saleable Steel production ABP (FY only — see _get_abp_sum): existing
         # production_plan_table ABP-plan data (same source as page 3's
         # Production Performance Summary), not special_steel_abp_table — this
         # row is overall saleable steel, not special steel specifically.
         # Deliberately still PRODUCTION plan, not despatch — see note above.
-        ss_abp_fy = sum(v * 1000 for m in fy_months for v in [db.get_sail_production_plan(m, "Saleable Steel")] if v)
+        ss_abp_fy = sum(v * 1000 for m in fy_months for v in [rp.get_sail_production_plan(m, "Saleable Steel")] if v)
 
         return {
             "title":   "Special Steel Performance of SAIL",

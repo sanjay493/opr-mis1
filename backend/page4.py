@@ -1,5 +1,7 @@
 import calendar
-import db
+from repo import capacity as rcap
+import dbengine
+import month_utils
 import report_context
 from constants import FIVE_PLANTS as _5P
 from repo import production as rp
@@ -200,7 +202,7 @@ def _p4_capacity_at(plant, db_item, month, five_plants, sail_set):
         members = [plant]
     total, found = 0.0, False
     for p in members:
-        v = db.get_effective_capacity(p, db_item, month)
+        v = rcap.get_effective_capacity(p, db_item, month)
         if v is not None:
             total += v
             found = True
@@ -255,9 +257,9 @@ def _p4_row_values(cur, month, plant, db_item, is_nos_day, five_plants, sail_set
     def gr(c, p):
         return "" if (c is None or p is None or p == 0) else str(round((c - p) / p * 100))
 
-    ytd_m = db.get_ytd_months(month)
-    prev = db.get_cply_month(month)
-    ytd_prev = db.get_ytd_months(prev)
+    ytd_m = month_utils.get_ytd_months(month)
+    prev = month_utils.get_cply_month(month)
+    ytd_prev = month_utils.get_ytd_months(prev)
 
     plan_m   = _p4_get(cur, plan, month, plant, db_item, five_plants, sail_set)
     act_m    = _p4_get(cur, "act",  month, plant, db_item, five_plants, sail_set)
@@ -320,9 +322,9 @@ _EXTRA_PLANTS = {"ASP", "SSP", "VISL"}
 
 def _p4_conv_actuals(cur, month: str):
     """Fetch Conversion (SAIL) actuals: current month, CPLY month, YTD, YTD CPLY."""
-    prev = db.get_cply_month(month)
-    ytd_m = db.get_ytd_months(month)
-    ytd_prev = db.get_ytd_months(prev)
+    prev = month_utils.get_cply_month(month)
+    ytd_m = month_utils.get_ytd_months(month)
+    ytd_prev = month_utils.get_ytd_months(prev)
 
     def fetch(m):
         r = rp.cell(cur, "actual", m, "SAIL", "Conversion")
@@ -405,7 +407,7 @@ def generate_page4_rows(month: str, raw: bool = False, basis: str = "app") -> li
 
 
 def _page4_rows(month: str, raw: bool, basis: str, plan: str) -> list:
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     rows = []
     try:
@@ -449,9 +451,9 @@ def _page4_rows(month: str, raw: bool, basis: str, plan: str) -> list:
         fs_sail_set = _5P + ["ASP", "SSP", "VISL"]
         conv_m, conv_cply, conv_ytd, conv_ytd_cply = _p4_conv_actuals(cur, month)
 
-        prev_m    = db.get_cply_month(month)
-        ytd_ms    = db.get_ytd_months(month)
-        ytd_prevs = db.get_ytd_months(prev_m)
+        prev_m    = month_utils.get_cply_month(month)
+        ytd_ms    = month_utils.get_ytd_months(month)
+        ytd_prevs = month_utils.get_ytd_months(prev_m)
         fs_m        = _p4_get(cur, "act", month,  "SAIL", "Finished Steel", _5P, fs_sail_set)
         fs_cply     = _p4_get(cur, "act", prev_m, "SAIL", "Finished Steel", _5P, fs_sail_set)
         fs_ytd      = _p4_ytd_sum(cur, "act", ytd_ms,    "SAIL", "Finished Steel", _5P, fs_sail_set)

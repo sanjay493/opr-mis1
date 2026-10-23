@@ -7,7 +7,8 @@ Unit: Tonnes  (DB stores '000 T — multiply × 1000)
 """
 import html
 import math
-import db
+import dbengine
+import month_utils
 import report_context
 from repo import production as rp
 from repo import ipt as ript
@@ -524,7 +525,7 @@ def _sankey_svg(nodes: list, links: list, vw: int = 980, vh: int = 300,
 
 
 def _flow_sankey_svg(cur, report_month: str) -> str:
-    ytd_months = db.get_ytd_months(report_month)
+    ytd_months = month_utils.get_ytd_months(report_month)
 
     hm_ytd  = _p4_ytd_sum(cur, "act", ytd_months, "SAIL", "Hot Metal",      _FIVE, _FIVE_VISL) or 0.0
     pig_ytd = _p4_ytd_sum(cur, "act", ytd_months, "SAIL", "Pig Iron",       _FIVE, _FIVE_VISL) or 0.0
@@ -659,11 +660,11 @@ def generate_prod_by_process(report_month: str) -> dict:
 
 
 def _generate_prod_by_process(report_month: str) -> dict:
-    prev_month      = db.get_cply_month(report_month)
-    ytd_months      = db.get_ytd_months(report_month)
-    prev_ytd_months = db.get_ytd_months(prev_month)
+    prev_month      = month_utils.get_cply_month(report_month)
+    ytd_months      = month_utils.get_ytd_months(report_month)
+    prev_ytd_months = month_utils.get_ytd_months(prev_month)
 
-    conn = db.connect()
+    conn = dbengine.connect()
     cur  = conn.cursor()
     m_cur, m_prev, y_cur, y_prev = [], [], [], []
 

@@ -35,7 +35,8 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import db
+from repo import special_steel as rss
+from repo import text as rtx
 
 import openpyxl
 
@@ -149,10 +150,10 @@ def _fnum(v):
 
 def diff_and_apply(apply: bool):
     meta, perf, notes, ipt = read_workbook()
-    cur_meta, cur_perf = db.get_ss_phys_perf()
-    cur_notes = {so: t for so, t in db.get_ss_phys_notes(NOTE_FY)}
+    cur_meta, cur_perf = rss.get_ss_phys_perf()
+    cur_notes = {so: t for so, t in rtx.get_ss_phys_notes(NOTE_FY)}
     cur_ipt = {(r["item"], r["from_plant"], r["to_plant"]): r
-               for r in db.get_ss_ipt_requirement(IPT_FY)}
+               for r in rss.get_ss_ipt_requirement(IPT_FY)}
     changed = 0
 
     for (plant, series), m in sorted(meta.items()):
@@ -185,15 +186,15 @@ def diff_and_apply(apply: bool):
             changed += 1
 
     if apply:
-        db.save_ss_phys_meta([
+        rss.save_ss_phys_meta([
             {"plant": p, "series": s, **m} for (p, s), m in meta.items()
         ])
-        db.save_ss_phys_perf([
+        rss.save_ss_phys_perf([
             {"financial_year": fy, "plant": p, "series": s, "metric": mt, "value_kt": v}
             for (fy, p, s, mt), v in perf.items()
         ])
-        db.save_ss_phys_notes(NOTE_FY, [{"sort_order": so, "note_text": t} for so, t in notes])
-        db.save_ss_ipt_requirement(IPT_FY, [
+        rtx.save_ss_phys_notes(NOTE_FY, [{"sort_order": so, "note_text": t} for so, t in notes])
+        rss.save_ss_ipt_requirement(IPT_FY, [
             {**r, "orig_item": None, "orig_from_plant": None, "orig_to_plant": None} for r in ipt
         ])
         print(f"{changed} value(s) changed (applied)")

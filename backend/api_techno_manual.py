@@ -14,7 +14,9 @@ from typing import Dict, Optional, Union
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
-import db as _db
+from repo import techno as rt
+import dbengine
+import month_utils
 from repo import production as _rp
 from repo import techno as _rt
 
@@ -97,11 +99,11 @@ def _month_range(from_month: str, to_month: str) -> list:
 
 def _get_hm_production(report_month: str, ytd: bool = False) -> Dict[str, float]:
     """Return {plant: HM_production} for the given month (or YTD sum)."""
-    conn = _db.connect()
+    conn = dbengine.connect()
     cur  = conn.cursor()
     try:
         if ytd:
-            months = _db.get_ytd_months(report_month)
+            months = month_utils.get_ytd_months(report_month)
             if not months:
                 return {}
             rows = _rp.hot_metal_by_plant(cur, report_month, months)
@@ -119,7 +121,7 @@ def _get_bf_shop_data(report_month: str, period: str = "month") -> Dict[str, dic
     'BF_Shop' row is ever stored. Same BF_Shop-then-BF-5 convention as
     page_techno.py's _VERIFY_PARAMS/_resolve_unit — without this fallback,
     ISP was silently excluded from every SAIL BF aggregate."""
-    conn = _db.connect()
+    conn = dbengine.connect()
     cur  = conn.cursor()
     try:
         by_plant_unit: Dict[str, Dict[str, dict]] = {}
@@ -194,17 +196,16 @@ async def get_entry(
 ):
     """Fetch all unit data for a plant + month (for form pre-population)."""
     _validate_month(report_month)
-    _db.init_db()
-    data = _db.get_techno_data(plant.upper(), report_month)
+    data = rt.get_techno_data(plant.upper(), report_month)
 
     # FY-to-date history (Apr .. month before report_month) per unit, used by
     # the frontend to auto-calculate the YTD/cumulative box as the user types
     # the current month's value.
-    ytd_months   = _db.get_ytd_months(report_month)
+    ytd_months   = month_utils.get_ytd_months(report_month)
     prior_months = [m for m in ytd_months if m < report_month]
     history: Dict[str, Dict[str, dict]] = {}
     for m in prior_months:
-        month_data = _db.get_techno_data(plant.upper(), m)
+        month_data = rt.get_techno_data(plant.upper(), m)
         for unit, ud in month_data.items():
             monthly_vals = ud.get("month", {})
             if monthly_vals:
@@ -231,7 +232,6 @@ async def save_entry(body: SaveRequest):
     row (see SaveRequest's own comment).
     """
     _validate_month(body.report_month)
-    _db.init_db()
 
     # Build techno_json only from non-None values
     month_clean     = {k: v for k, v in body.month_data.items()      if v is not None}
@@ -245,7 +245,7 @@ async def save_entry(body: SaveRequest):
         "till_month":  till_clean,
     }
 
-    _db.merge_upsert_techno_data(
+    rt.merge_upsert_techno_data(
         plant=body.plant.upper(),
         report_month=body.report_month,
         unit=body.unit,
@@ -283,7 +283,7 @@ def _apply_sail_bf(report_month: str, overwrite_manual: bool = False) -> Optiona
 
     if not overwrite_manual:
         # Preserve existing SAIL manual entries — only fill gaps
-        existing = _db.get_techno_data("SAIL", report_month, "BF_Shop")
+        existing = rt.get_techno_data("SAIL", report_month, "BF_Shop")
         ex_month = existing.get("BF_Shop", {}).get("month", {})
         ex_till  = existing.get("BF_Shop", {}).get("till_month", {})
 
@@ -295,7 +295,7 @@ def _apply_sail_bf(report_month: str, overwrite_manual: bool = False) -> Optiona
             if k in ex_till:
                 calc_till[k] = ex_till[k]
 
-    _db.upsert_techno_data(
+    rt.upsert_techno_data(
         plant="SAIL",
         report_month=report_month,
         unit="BF_Shop",
@@ -316,7 +316,6 @@ async def calculate_sail(body: SailCalcRequest):
     Set overwrite_manual=True to replace ALL SAIL BF_Shop values with calculated ones.
     """
     _validate_month(body.report_month)
-    _db.init_db()
 
     result = _apply_sail_bf(body.report_month, body.overwrite_manual)
     if result is None:
@@ -362,7 +361,6 @@ async def cumulative_preview(
     techno parameter — months without a weight are excluded, with a warning.
     """
     _validate_month(report_month)
-    _db.init_db()
     try:
         return compute_cumulative_preview(
             plant=plant, unit=unit, param_key=param_key,
@@ -379,8 +377,7 @@ async def list_months(
     plant: Optional[str] = Query(None, description="Plant filter (optional)"),
 ):
     """List report months that have techno data."""
-    _db.init_db()
-    months = _db.get_techno_months(plant.upper() if plant else None)
+    months = rt.get_techno_months(plant.upper() if plant else None)
     return {"months": months, "count": len(months)}
 
 
@@ -391,8 +388,7 @@ async def list_units(
     """Units that actually have techno data stored for this plant — feeds the
     Techno Data Correction page's Unit dropdown so it offers only this
     plant's real units (e.g. ISP: BF-5 only) instead of every known unit."""
-    _db.init_db()
-    conn = _db.connect()
+    conn = dbengine.connect()
     try:
         cur = conn.cursor()
         units = sorted(r[0] for r in _rt.distinct_units_for_plant(cur, plant.upper()))
@@ -417,10 +413,9 @@ async def param_history(
     """
     _validate_month(from_month)
     _validate_month(to_month)
-    _db.init_db()
     months = _month_range(from_month, to_month)
 
-    conn = _db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     by_month = {}
     for rm, tj in _rt.plant_unit_month_rows(cur, plant.upper(), unit, months):
@@ -449,12 +444,11 @@ async def preview_sail(
     Shows calculated vs existing SAIL values side-by-side.
     """
     _validate_month(report_month)
-    _db.init_db()
 
     calc_month = _compute_sail_bf(report_month, "month")
     calc_till  = _compute_sail_bf(report_month, "till_month")
 
-    existing   = _db.get_techno_data("SAIL", report_month, "BF_Shop")
+    existing   = rt.get_techno_data("SAIL", report_month, "BF_Shop")
     ex_month   = existing.get("BF_Shop", {}).get("month", {})
     ex_till    = existing.get("BF_Shop", {}).get("till_month", {})
 

@@ -16,7 +16,8 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 sys.path.insert(0, str(Path(__file__).parent / "excel_extractors"))
 from excel_extractor_mou_plan import extract_mou_plan  # noqa: E402
 
-import db  # noqa: E402
+from repo import ops as rop  # noqa: E402
+import dbengine  # noqa: E402
 from page4 import PAGE4_ITEMS  # noqa: E402
 from repo import production as rp  # noqa: E402
 
@@ -24,7 +25,7 @@ router = APIRouter(prefix="/api/mou-plan", tags=["mou-plan"])
 
 
 def _existing_conflicts(records: list) -> list:
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     conflicts = []
     try:
@@ -104,7 +105,7 @@ async def insert_mou_plan(payload: dict):
             detail=(f"{len(conflicts)} MoU value(s) already exist for {months[0]} to {months[-1]}. "
                     "Confirm to overwrite them with the newly extracted figures."),
         )
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     saved = 0
     try:
@@ -114,7 +115,7 @@ async def insert_mou_plan(payload: dict):
         conn.commit()
     finally:
         conn.close()
-    db.log_extraction(
+    rop.log_extraction(
         plant="SAIL", report_month=max(r["report_month"] for r in records),
         file_name=payload.get("source_file", ""), sheet_name="",
         source_type="MoU Plan", items_extracted=saved,

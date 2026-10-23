@@ -23,7 +23,7 @@ import jwt
 from dotenv import load_dotenv
 from fastapi import Cookie, Depends, HTTPException, status
 
-import db
+import dbengine
 from repo import ops as rop
 
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
@@ -220,7 +220,7 @@ def generate_and_store_otp(email: str, purpose: str) -> str:
     now = datetime.now(timezone.utc)
     expires_at = now + timedelta(minutes=OTP_EXPIRE_MINUTES)
 
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     rop.otp_invalidate_unused(cur, email, purpose)
     rop.otp_insert(cur, email, purpose, _hash_code(code), expires_at.isoformat(), now.isoformat())
@@ -231,7 +231,7 @@ def generate_and_store_otp(email: str, purpose: str) -> str:
 
 def otp_resend_wait_seconds(email: str, purpose: str) -> int:
     """Seconds until another code may be emailed for email+purpose (0 = now)."""
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     row = rop.otp_latest_created_row(cur, email, purpose)
     conn.close()
@@ -249,7 +249,7 @@ def verify_otp(email: str, purpose: str, code: str) -> bool:
     email+purpose. Marks it used on success so it can't be replayed, and
     after OTP_MAX_ATTEMPTS wrong guesses so a 6-digit code can't be
     brute-forced within its lifetime."""
-    conn = db.connect()
+    conn = dbengine.connect()
     cur = conn.cursor()
     row = rop.otp_latest_unused_row(cur, email, purpose)
     if not row:

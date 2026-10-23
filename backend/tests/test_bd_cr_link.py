@@ -90,8 +90,8 @@ def test_api_rejects_link_to_another_plants_capital_repair():
     import pytest
     from fastapi import HTTPException
     import api_breakdown
-    import db
-    conn = db.connect()
+    import dbengine
+    conn = dbengine.connect()
     try:
         row = conn.execute("SELECT id, plant FROM capital_repair_table ORDER BY id LIMIT 1").fetchone()
     finally:

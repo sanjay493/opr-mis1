@@ -9,15 +9,15 @@ report month has no stored figures to leak (nothing to test then).
 
 import pytest
 
-import db
+from repo import rake as rrk
 import page_rake_detention as rd
 
 REPORT_MONTH = "2026-08"
 
 
 def _later_month_has_data():
-    master = db.get_rake_detention_master(plants=rd.SUMMARY_PLANTS)
-    history = db.get_rake_detention_trend([r["id"] for r in master])
+    master = rrk.get_rake_detention_master(plants=rd.SUMMARY_PLANTS)
+    history = rrk.get_rake_detention_trend([r["id"] for r in master])
     return any(m > REPORT_MONTH for h in history.values() for m in h)
 
 

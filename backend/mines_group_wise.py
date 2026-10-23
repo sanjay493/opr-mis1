@@ -29,7 +29,7 @@ happen, so it counts the same as a real destination would here). Kept in
 sync by hand with that module, not shared code, since the two build
 differently-shaped output.
 """
-import db
+from repo import mines as rmn
 
 REPORTED_PARTS = (
     ("FRESH", "Fresh Production (Lump+Fines)", None, None),
@@ -85,8 +85,8 @@ def _combine(cells_list, months):
 
 def generate(fy_start: int) -> dict:
     months = _months(fy_start)
-    masters = db.get_mines_masters()
-    raw = db.get_iron_ore_mines_series(months)
+    masters = rmn.get_mines_masters()
+    raw = rmn.get_iron_ore_mines_series(months)
 
     mat_order = [m["material_code"] for m in masters["materials"]]
     mat_name = {m["material_code"]: m["material_name"] for m in masters["materials"]}
