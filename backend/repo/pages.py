@@ -19,7 +19,7 @@ from typing import List, Optional
 
 from dbengine import connect
 from repo import version as _ver
-from repo.v2 import _keys
+from repo import _keys
 
 
 def get_page_config(month: str, page_number: int) -> Optional[dict]:

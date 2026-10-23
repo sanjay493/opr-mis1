@@ -2,8 +2,8 @@
 
 The same rows are seeded into v1's breakdown_table / capital_repair_table
 and v2's breakdown / capital_repair (+ plant_unit, as the migration loads
-them, ids kept). Every write runs through repo.breakdown on v1 and
-repo.v2.breakdown on v2 with datetime.now() frozen; after each step both
+them, ids kept). Every write runs through _v1_frozen.breakdown on v1 and
+repo.breakdown (v2) on v2 with datetime.now() frozen; after each step both
 sides must agree on the outcome (result, or exception type and args), the
 activity-log entries, every read (canonical form) and the stored rows
 (unit names, DATE columns and timestamps rendered back to v1's strings).
@@ -13,9 +13,9 @@ import datetime as dt
 import pytest
 
 import dbengine
-from repo import breakdown as b1
+from _v1_frozen import breakdown as b1
 from repo import conn as rc
-from repo.v2 import breakdown as b2
+from repo import breakdown as b2
 from v2dual import FrozenNow, assert_same_reads, multiset, on_cursor, record_activity, run_step
 
 TABLES = ("breakdown_table", "capital_repair_table")
@@ -87,7 +87,10 @@ def _reads(m):
         out[("open", end)] = multiset(on_cursor(lambda mod, cur: mod.open_breakdown_rows(cur, end, start))(m))
     cols = ("id", "plant", "fy", "shop", "equipment", "activity", "actual_start", "actual_end", "actual_ongoing")
     for plant in ("BSP", "dsp", "RSP"):
-        out[("actual", plant)] = _conn(lambda mod, c: mod.cr_actual_rows(c, cols, plant))(m)
+        # v1 has no ORDER BY here: on these tiny tables its order is the
+        # access path of the moment (PK or the (plant, fy) index); the
+        # oracle replay proves v2's ORDER BY fy, id on the real data.
+        out[("actual", plant)] = multiset(_conn(lambda mod, c: mod.cr_actual_rows(c, cols, plant))(m))
         out[("crplant", plant)] = multiset(_conn(lambda mod, c: mod.cr_rows_for_plant(c, plant))(m))
         for fy in ("2026-27", "2025-26", "2024-25"):
             for fn in ("cr_report_rows", "cr_calendar_rows", "cr_entry_rows", "cr_ordered_ids"):
@@ -254,7 +257,7 @@ def test_insert_and_delete_cr_row(step):
 def test_inputs_v2_cannot_store_are_refused_before_any_write(seeded):
     """parity_exceptions.md §2: v1 stored these as text; v2's DATE / CHAR(7)
     cannot hold them. Nothing is written, not even the data_version bump."""
-    from repo.v2._keys import OutOfModelError
+    from repo._keys import OutOfModelError
     tried = [lambda cur: b2.update_cr_entry(cur, "", ("BF", "BF-8", None, "2026-6-1", None, 0, 1.0, "a", 1)),
              lambda cur: b2.update_cr_entry(cur, "", ("BF", "BF-8", None, None, "soon", 0, 1.0, "a", 1)),
              lambda cur: b2.update_cr_entry(cur, "", ("BF", "BF-8", None, "", None, 0, 1.0, "a", 1)),

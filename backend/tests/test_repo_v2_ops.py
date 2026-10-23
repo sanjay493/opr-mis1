@@ -15,9 +15,9 @@ import pytest
 import dbengine
 from dbengine import Row
 from repo import conn as rc
-from repo import ops as o1
-from repo.v2 import ops as o2
-from repo.v2._keys import OutOfModelError
+from _v1_frozen import ops as o1
+from repo import ops as o2
+from repo._keys import OutOfModelError
 from v2dual import FrozenNow, assert_same_reads, on_cursor, run_step
 
 NOW = dt.datetime(2026, 10, 23, 9, 0, 5, 250000)

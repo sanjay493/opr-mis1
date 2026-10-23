@@ -2,7 +2,7 @@
 
 The same rows are seeded into v1's and v2's rake_detention_master /
 _monthly / _summary / _annual (as the migration loads them, master ids
-kept). Every write runs through repo.rake on v1 and repo.v2.rake on v2;
+kept). Every write runs through _v1_frozen.rake on v1 and repo.rake (v2) on v2;
 after each step both sides must agree on the outcome (result, or exception
 type and args; the database name in an FK message is normalised), every
 read (canonical form: list / dict order and types count) and the stored
@@ -11,8 +11,8 @@ rows ('' vs NULL freetime_effective_from included).
 import pytest
 
 from repo import conn as rc
-from repo import rake as r1
-from repo.v2 import rake as r2
+from _v1_frozen import rake as r1
+from repo import rake as r2
 from v2dual import assert_same_reads, run_step
 
 TABLES = ("rake_detention_master", "rake_detention_monthly", "rake_detention_summary", "rake_detention_annual")

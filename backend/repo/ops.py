@@ -38,7 +38,7 @@ import pymysql
 
 from dbengine import Row, connect
 from repo import version as _ver
-from repo.v2 import _keys
+from repo import _keys
 from repo.v2codec import ISO_LOCAL, ISO_UTC, SQL_SECONDS
 
 _I = _keys.iso_sql

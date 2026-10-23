@@ -20,7 +20,7 @@ ranges of at most 32 rows, heap sort past 1.5 * log2(n) partition levels.
 Sort keys must compare like MySQL's sort keys (WEIGHT_STRING bytes for
 strings under their collation).
 
-Proven against the v1 oracle by tools/repo_oracle replay (repo.v2.production
+Proven against the v1 oracle by tools/repo_oracle replay (repo.production
 plant_item_sum_counts and records_calendar_month_totals).
 """
 

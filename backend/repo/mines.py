@@ -35,7 +35,7 @@ from typing import Any, Dict, List
 from dbengine import connect
 from repo import conn as rc
 from repo import version as _ver
-from repo.v2 import _keys
+from repo import _keys
 
 
 def _fk(table, n, col, ref):

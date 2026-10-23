@@ -11,12 +11,12 @@ access path MySQL picks, which the oracle replay proves on the real data.
 import pytest
 
 import activity_context
-from repo import capacity as cap1
+from _v1_frozen import capacity as cap1
 from repo import conn as rc
-from repo import production as p1
-from repo.v2 import _keys
-from repo.v2 import capacity as cap2
-from repo.v2 import production as p2
+from _v1_frozen import production as p1
+from repo import _keys
+from repo import capacity as cap2
+from repo import production as p2
 from v2dual import as_plain, multiset
 
 M = ["2025-04", "2025-05", "2025-06"]

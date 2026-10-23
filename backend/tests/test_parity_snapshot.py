@@ -20,9 +20,10 @@ def test_fy_helpers():
     assert [ps.quarter_of(m) for m in ("2026-04", "2026-07", "2026-10", "2027-01", "2027-03")] == [1, 2, 3, 4, 4]
 
 
-def test_snapshot_refuses_live_database(tmp_path):
+@pytest.mark.parametrize("name", ["mis_reports", "MIS_REPORTS", "mis_reports_v2", "MIS_Reports_V2"])
+def test_snapshot_refuses_live_database(tmp_path, name):
     with pytest.raises(SystemExit, match="live database"):
-        ps.snapshot(["2026-08"], tmp_path, "mis_reports")
+        ps.snapshot(["2026-08"], tmp_path, name)
     assert not any(tmp_path.iterdir())
 
 
@@ -127,7 +128,7 @@ def test_pin_today_reaches_main_default_month_helpers(monkeypatch):
     import datetime as real_dt
     import main
 
-    monkeypatch.setattr(main.db, "get_techno_months", lambda: ["2026-11", "2026-09"])
+    monkeypatch.setattr(main.rt, "get_techno_months", lambda: ["2026-11", "2026-09"])
     with ps.pin_today(real_dt.date(2026, 10, 19)):
         assert main._radar_default_month() == "2026-09"
     with ps.pin_today(real_dt.date(2026, 12, 5)):

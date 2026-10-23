@@ -3,7 +3,7 @@
 The same rows are seeded into v1's stock_table / sail_sales_table /
 sail_stock_snapshot_table and v2's stock_monthly / sail_sales_monthly /
 sail_stock_snapshot (as the migration loads them). Every write runs
-through repo.stock on v1 and repo.v2.stock on v2; after each step both
+through _v1_frozen.stock on v1 and repo.stock (v2) on v2; after each step both
 sides must agree on the outcome (result, or exception type and args), the
 activity-log entries, every read (cursor helpers on tuple and Row cursors,
 canonical form: order, key names and types count) and the stored rows
@@ -13,9 +13,9 @@ import pytest
 
 import dbengine
 from repo import conn as rc
-from repo import stock as s1
-from repo.v2 import _keys
-from repo.v2 import stock as s2
+from _v1_frozen import stock as s1
+from repo import _keys
+from repo import stock as s2
 from v2dual import on_cursor, record_activity, run_step
 
 ROW = dbengine.Row

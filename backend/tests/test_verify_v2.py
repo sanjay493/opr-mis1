@@ -20,8 +20,8 @@ pytestmark = pytest.mark.filterwarnings("ignore::Warning")
 
 
 @pytest.fixture(scope="module")
-def dbs(_mysql_test_schema, mysql_v2_db):
-    v1 = _mysql_test_schema
+def dbs(_mysql_v1_schema, mysql_v2_db):
+    v1 = _mysql_v1_schema
     with mysql_v2_db.cursor() as cur:
         cur.execute("SELECT DATABASE()")
         v2 = cur.fetchone()[0]

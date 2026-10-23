@@ -1,8 +1,8 @@
 """v1 vs v2 equivalence of repo.ipt (Task 7e1).
 
 The same rows are seeded into v1's ipt_table and v2's ipt_monthly (as the
-migration loads them). Every write runs through repo.ipt on v1 and
-repo.v2.ipt on v2; after each step both sides must agree on the outcome
+migration loads them). Every write runs through _v1_frozen.ipt on v1 and
+repo.ipt (v2) on v2; after each step both sides must agree on the outcome
 (result, or exception type and args), the activity-log entries, every read
 (cursor helpers on tuple and Row cursors, canonical form: order, key names
 and types count) and the stored rows.
@@ -11,9 +11,9 @@ import pytest
 
 import dbengine
 from repo import conn as rc
-from repo import ipt as i1
-from repo.v2 import _keys
-from repo.v2 import ipt as i2
+from _v1_frozen import ipt as i1
+from repo import _keys
+from repo import ipt as i2
 from v2dual import assert_same_reads, on_cursor, record_activity, run_step
 
 ROW = dbengine.Row

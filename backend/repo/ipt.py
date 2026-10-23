@@ -26,7 +26,7 @@ from dbengine import connect
 from repo import conn as rc
 from repo import version as _ver
 from repo.conn import row_dict as _row_dict
-from repo.v2 import _keys
+from repo import _keys
 
 _V1_ROW = ("SELECT report_month, item, from_plant_code AS from_plant, to_plant_code AS to_plant, unit, "
            "sort_order, plan, actual, plan_tonnage, actual_tonnage FROM ipt_monthly")

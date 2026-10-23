@@ -29,7 +29,7 @@ from repo import conn as rc
 from repo import version as _ver
 from repo.conn import IntegrityError
 from repo.conn import row_dict as _row_dict
-from repo.v2 import _keys
+from repo import _keys
 from repo.v2codec import ISO_LOCAL, render_ts
 
 # The v1 row, column for column.

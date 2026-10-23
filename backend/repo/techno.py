@@ -70,8 +70,8 @@ from dbengine import connect
 from report_context import fold
 from repo import version as _ver
 from repo import conn as rc
-from repo.v2 import _keys
-from repo.v2.production import _row_like
+from repo import _keys
+from repo.production import _row_like
 from repo.v2codec import TECHNO_LEAF_ORDER_BY, decode_techno, encode_techno, render_ts_flagged
 
 _V1_UNIT_LEN = 32          # v1 techno_data.unit / techno_plan_fy.unit VARCHAR(32)

@@ -74,7 +74,7 @@ import pymysql
 
 from repo import conn as rc
 from repo import version as _ver
-from repo.v2 import _keys
+from repo import _keys
 from repo.v2codec import ISO_SECONDS, SQL_SECONDS, board_note_period, render_ts
 from secretary_review_layout import BLOCKS as _SECRETARY_BLOCKS
 

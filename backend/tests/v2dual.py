@@ -1,11 +1,12 @@
-"""Dual-DB equivalence helper for the Task 7 v2 repositories.
+"""Dual-DB equivalence helper: the frozen v1 oracle (tests/_v1_frozen) vs the
+app's v2 repositories (repo.<m>).
 
     def test_x(dual):                       # fixture in tests/conftest.py
         dual.seed_production([("actual", "2025-04", "BSP", "Hot Metal", 1.5)])
-        r1, r2 = dual.both(lambda m: m.value_row(...), v1=repo.production, v2=repo.v2.production)
+        r1, r2 = dual.both(lambda m: m.value_row(...), v1=_v1_frozen.production, v2=repo.production)
         assert r1 == r2
 
-The same logical data is seeded into the v1 test schema (mysql_db) and the
+The same logical data is seeded into the v1 test schema (mysql_v1_db) and the
 v2 test schema (mysql_v2_db). `dual.v1()` / `dual.v2()` point the app's DB
 layer (dbengine / repo.conn) at one of them; `dual.both(fn)` runs fn on
 each side with that side's module and returns (v1 result, v2 result).
@@ -58,6 +59,23 @@ def _empty_tables(cur, keep=()):
     cur.execute("SET FOREIGN_KEY_CHECKS = 1")
 
 
+def reset_v2(cur):
+    """Empty every v2 data table (cal_month kept), then seed the plant master
+    (PLANTS) and data_version (1, 1): a test's starting state."""
+    _empty_tables(cur, keep=_KEEP_V2)
+    cur.executemany("INSERT INTO plant (plant_code, plant_kind, sort_order) VALUES (%s, %s, %s)", PLANTS)
+    cur.execute("INSERT INTO data_version (id, n) VALUES (1, 1)")
+
+
+def restore_v2(cur):
+    """Leave the session-wide v2 schema as schema_v2.sql + seed_cal_month.sql
+    built it: data tables empty, the seeded 1960-04..2040-03 calendar only,
+    data_version (1, 1)."""
+    _empty_tables(cur, keep=_KEEP_V2)
+    cur.execute("DELETE FROM cal_month WHERE report_month NOT BETWEEN '1960-04' AND '2040-03'")
+    cur.execute("INSERT INTO data_version (id, n) VALUES (1, 1)")
+
+
 class Dual:
     def __init__(self, v1_name, v2_conn):
         self.v1_name = v1_name
@@ -71,9 +89,7 @@ class Dual:
     # -- databases ------------------------------------------------------------
     def _reset_v2(self):
         with self.v2_conn.cursor() as cur:
-            _empty_tables(cur, keep=_KEEP_V2)
-            cur.executemany("INSERT INTO plant (plant_code, plant_kind, sort_order) VALUES (%s, %s, %s)", PLANTS)
-            cur.execute("INSERT INTO data_version (id, n) VALUES (1, 1)")
+            reset_v2(cur)
 
     def restore(self):
         """Teardown: leave the session-wide v2 schema as schema_v2.sql +
@@ -81,9 +97,7 @@ class Dual:
         1960-04..2040-03 calendar only, data_version (1, 1)), so tests that
         share mysql_v2_db after a dual test (test_schema_v2) see it pristine."""
         with self.v2_conn.cursor() as cur:
-            _empty_tables(cur, keep=_KEEP_V2)
-            cur.execute("DELETE FROM cal_month WHERE report_month NOT BETWEEN '1960-04' AND '2040-03'")
-            cur.execute("INSERT INTO data_version (id, n) VALUES (1, 1)")
+            restore_v2(cur)
 
     @contextmanager
     def _use(self, name):
@@ -278,7 +292,7 @@ class Dual:
                         cur.execute("INSERT IGNORE INTO plant (plant_code, plant_kind, sort_order) "
                                     "VALUES (%s, 'external', 0)", (v,))
                     if kind == "month" and v is not None:
-                        from repo.v2._keys import cal_month_row
+                        from repo._keys import cal_month_row
                         cur.execute("INSERT IGNORE INTO cal_month (report_month, month_start, fy, fy_month, "
                                     "quarter, half) VALUES (%s, %s, %s, %s, %s, %s)", cal_month_row(v))
                     names.append(c2)
@@ -452,3 +466,71 @@ class FrozenNow:
         for m in modules:
             if hasattr(m, "datetime"):
                 monkeypatch.setattr(m, "datetime", Fixed)
+
+
+class V2Seed(Dual):
+    """Dual's v1-shaped seeding API (seed_production / seed_techno /
+    seed_simple / seed_text / ..., and stored_v2) for tests that run only
+    the app's v2 repositories on `mysql_db`: the v1 side is skipped, the v2
+    side gets exactly the rows the v1 -> v2 migration would load for the
+    given v1 rows. Does not reset the schema (mysql_db did)."""
+
+    def __init__(self, v2_conn):
+        self.v1_name = None
+        self.v2_conn = v2_conn
+        with v2_conn.cursor() as cur:
+            cur.execute("SELECT DATABASE()")
+            self.v2_name = cur.fetchone()[0]
+        assert self.v2_name.startswith("mis_reports_test_"), self.v2_name
+
+    def sql(self, side, sql, params=()):
+        if side == 1:
+            return []
+        return super().sql(side, sql, params)
+
+    def sql_many(self, side, sql, rows):
+        if side == 1:
+            return None
+        return super().sql_many(side, sql, rows)
+
+    def stored_v2(self, v1_table, skip=()):
+        """The v2 rows of one SIMPLE table rendered in the v1 column order and
+        form (see Dual.stored), sorted."""
+        return self.stored(v1_table, skip)[1]
+
+
+# -- v1-shaped helpers on the app's (wired) v2 test schema ---------------------
+# For tests ported from v1 raw-SQL seeding: put / read production rows by
+# their v1 table name or measure, without a data_version bump (as the v1
+# raw INSERTs did). Plants the master lacks are added as 'external'.
+
+_MEASURE_OF = {**{t: m for m, t in _V1_TABLE.items()}, **{m: m for m in _V1_TABLE}}
+
+
+def put_production(table, rows):
+    """rows: (report_month, plant, item, value) into v1 `table`
+    ('production_table' / 'production_plan_table' / 'mou_plan_table') or
+    measure ('actual' / 'abp' / 'mou'), as v2 production_monthly rows."""
+    from repo import conn as rc
+    col, flag = _V2_COLS[_MEASURE_OF[table]]
+    with rc.tx() as cur:
+        for month, plant, item, value in rows:
+            cur.execute("INSERT IGNORE INTO plant (plant_code, plant_kind, sort_order) VALUES (%s, 'external', 0)",
+                        (plant,))
+            cur.execute("INSERT IGNORE INTO item (item_name) VALUES (%s)", (item,))
+            cur.execute("SELECT item_id FROM item WHERE item_name = %s", (item,))
+            item_id = cur.fetchone()[0]
+            cur.execute(f"INSERT INTO production_monthly (report_month, plant_code, item_id, {col}, {flag}) "
+                        "VALUES (%s, %s, %s, %s, 1) AS new "
+                        f"ON DUPLICATE KEY UPDATE {col} = new.{col}, {flag} = 1",
+                        (month, plant, item_id, value))
+
+
+def production_rows(table):
+    """[(report_month, plant, item, value)] of one v1 table / measure, sorted."""
+    from repo import conn as rc
+    col, flag = _V2_COLS[_MEASURE_OF[table]]
+    with rc.cursor() as cur:
+        cur.execute(f"SELECT pm.report_month, pm.plant_code, i.item_name, pm.{col} FROM production_monthly pm "
+                    f"JOIN item i ON i.item_id = pm.item_id WHERE pm.{flag} = 1")
+        return sorted((tuple(r) for r in cur.fetchall()), key=repr)

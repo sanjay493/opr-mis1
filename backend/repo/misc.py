@@ -51,7 +51,7 @@ from dbengine import connect
 from repo import version as _ver
 from repo import conn as rc
 from repo.conn import row_dict as _row_dict
-from repo.v2 import _keys
+from repo import _keys
 from repo.v2codec import (CodecError, ISO_LOCAL, ISO_SECONDS, ISO_UTC, SQL_SECONDS, parse_date, parse_ts,
                           parse_ts_flagged, render_ts)
 

@@ -2,16 +2,16 @@
 
 The same rows are seeded into v1's and v2's cost_trend_annual /
 cost_trend_monthly (as the migration loads them). Every write runs through
-repo.cost_trend on v1 and repo.v2.cost_trend on v2; after each step both
+_v1_frozen.cost_trend on v1 and repo.cost_trend (v2) on v2; after each step both
 sides must agree on the outcome (result, or exception type and args), every
 read (canonical form: dict key order and types count) and the stored rows.
 """
 import pytest
 
 from repo import conn as rc
-from repo import cost_trend as c1
-from repo.v2 import _keys
-from repo.v2 import cost_trend as c2
+from _v1_frozen import cost_trend as c1
+from repo import _keys
+from repo import cost_trend as c2
 from v2dual import assert_same_reads, run_step
 
 FYS = ["2023-24", "2024-25", "2025-26"]

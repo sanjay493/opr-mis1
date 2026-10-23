@@ -6,8 +6,8 @@ import json
 import pytest
 
 from repo import conn as rc
-from repo import pages as p1
-from repo.v2 import pages as p2
+from _v1_frozen import pages as p1
+from repo import pages as p2
 from v2dual import assert_same_reads, run_step
 
 ROWS = [
@@ -65,7 +65,7 @@ def test_save_page_config(step):
 
 
 def test_out_of_model_inputs_are_refused_before_any_write(seeded):
-    from repo.v2._keys import OutOfModelError
+    from repo._keys import OutOfModelError
     with seeded.v2():
         n = seeded.data_version(2)
         before = {k: repr(v) for k, v in _reads(p2).items()}

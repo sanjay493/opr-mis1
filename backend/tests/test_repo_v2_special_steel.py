@@ -3,8 +3,8 @@
 The same rows are seeded into v1's special_steel_orders / _abp_table /
 _grade_clubs / _phys_meta / _phys_perf / _ipt_requirement and their v2
 tables (as the migration loads them; grade-club created_at through
-repo.v2codec). Every write runs through repo.special_steel on v1 and
-repo.v2.special_steel on v2; after each step both sides must agree on the
+repo.v2codec). Every write runs through _v1_frozen.special_steel on v1 and
+repo.special_steel (v2) on v2; after each step both sides must agree on the
 outcome (result, or exception type and args), the activity-log entries,
 every read (the cursor helpers on tuple and Row cursors, canonical form:
 order, key names, float bits and types count), including the reads the
@@ -16,9 +16,9 @@ import pytest
 
 import dbengine
 from repo import conn as rc
-from repo import special_steel as s1
-from repo.v2 import _keys
-from repo.v2 import special_steel as s2
+from _v1_frozen import special_steel as s1
+from repo import _keys
+from repo import special_steel as s2
 from v2dual import assert_same_reads, on_cursor, record_activity, run_step
 
 ROW = dbengine.Row

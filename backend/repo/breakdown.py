@@ -40,7 +40,7 @@ import activity_context
 from dbengine import Row, connect
 from repo import version as _ver
 from repo.conn import row_dict as _row_dict
-from repo.v2 import _keys
+from repo import _keys
 from repo.v2codec import CodecError, ISO_LOCAL, parse_date, render_ts
 
 _UC = "pu.unit_code COLLATE utf8mb4_0900_ai_ci"

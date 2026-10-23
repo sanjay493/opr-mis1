@@ -34,7 +34,7 @@ from dbengine import connect
 from repo import conn as rc
 from repo import version as _ver
 from repo.conn import row_dict as _row_dict
-from repo.v2 import _keys
+from repo import _keys
 from repo.v2codec import CodecError, parse_date
 
 _STOCK_V1 = ("SELECT report_month AS stock_month, plant_code AS plant_name, item_type, stock_type, stock "

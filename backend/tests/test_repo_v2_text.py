@@ -3,7 +3,7 @@
 The same narrative data is seeded into the v1 schema (the 9 v1 tables) and
 the v2 schema (report_text, through repo.v2codec as the migration loads
 it), covering all 9 scopes with non-empty data and NULL vs '' vs absent.
-Every write function runs through repo.text on v1 and repo.v2.text on v2;
+Every write function runs through _v1_frozen.text on v1 and repo.text (v2) on v2;
 after each step both sides must agree on
 
   * every read function, called through each side's own module (the
@@ -26,9 +26,9 @@ import pytest
 
 import dbengine
 from repo import conn as rc
-from repo import text as t1
-from repo.v2 import _keys
-from repo.v2 import text as t2
+from _v1_frozen import text as t1
+from repo import _keys
+from repo import text as t2
 from repo.v2codec import TEXT_SCOPES, decode_text_rows, v1_text_columns
 from tools import repo_oracle as ro
 

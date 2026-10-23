@@ -2,8 +2,8 @@
 
 The same rows are seeded into v1's tables and v2's (as the migration loads
 them: units and items by name, timestamps through repo.v2codec, the BF
-*_at_plain flags). Every write runs through repo.misc on v1 and
-repo.v2.misc on v2 with datetime.now() frozen; after each step both sides
+*_at_plain flags). Every write runs through _v1_frozen.misc on v1 and
+repo.misc (v2) on v2 with datetime.now() frozen; after each step both sides
 must agree on the outcome (result, or exception type and args), the
 activity-log entries, every read of the group (canonical form) and the
 stored rows (v2 rendered back to v1's columns and strings).
@@ -14,9 +14,9 @@ import pytest
 
 import dbengine
 from repo import conn as rc
-from repo import misc as m1
-from repo.v2 import misc as m2
-from repo.v2._keys import OutOfModelError
+from _v1_frozen import misc as m1
+from repo import misc as m2
+from repo._keys import OutOfModelError
 from v2dual import FrozenNow, assert_same_reads, multiset, on_cursor, record_activity, run_step
 
 NOW = dt.datetime(2026, 10, 23, 14, 30, 5, 250000)

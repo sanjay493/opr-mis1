@@ -16,11 +16,8 @@ REPO = Path(__file__).resolve().parent.parent / "repo"
 
 
 def repo_sources():
-    """(module key, path) of every repo module: repo/<m>.py as "<m>", and
-    the Task 7 v2 implementations repo/v2/<m>.py as "v2.<m>"."""
-    out = [(p.stem, p) for p in sorted(REPO.glob("*.py"))]
-    out += [(f"v2.{p.stem}", p) for p in sorted((REPO / "v2").glob("*.py"))]
-    return out
+    """(module key, path) of every repo module: repo/<m>.py as "<m>"."""
+    return [(p.stem, p) for p in sorted(REPO.glob("*.py"))]
 
 WRITE_RE = re.compile(r"^\s*(INSERT|UPDATE|DELETE|REPLACE)\b")
 
@@ -55,8 +52,6 @@ EXEMPT = {
 }
 
 
-# the v2 implementation keeps v1's exemptions (Task 7f)
-EXEMPT.update({("v2." + m, f): why for (m, f), why in list(EXEMPT.items()) if m == "ops"})
 
 
 def _text(node):
@@ -219,12 +214,11 @@ def test_bump_precedes_the_first_write():
 
 def test_scan_finds_the_known_writers():
     found = _write_functions()
-    for key in [("production", "upsert"), ("production", "upsert_row"),
-                ("production", "save_production_actual"), ("techno", "save_techno_plan"),
+    for key in [("techno", "save_techno_plan"),
                 ("ops", "log_extraction"), ("misc", "replace_cover_setting"),
                 ("text", "save_texts"), ("breakdown", "delete_cr_row"),
-                ("v2.production", "_put"), ("v2.production", "_clear"),
-                ("v2.capacity", "save_capacity_entry")]:
+                ("production", "_put"), ("production", "_clear"),
+                ("capacity", "save_capacity_entry")]:
         assert key in found, key
     assert len(found) > 100
 

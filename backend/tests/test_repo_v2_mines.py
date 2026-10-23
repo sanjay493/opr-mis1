@@ -2,7 +2,7 @@
 
 The same masters and monthly rows are seeded into v1's mine*_master /
 mines_*_monthly / sail_mines_monthly and their v2 tables (as the migration
-loads them). Every write runs through repo.mines on v1 and repo.v2.mines
+loads them). Every write runs through _v1_frozen.mines on v1 and repo.mines (v2)
 on v2; after each step both sides must agree on the outcome (result, or
 exception type and args; the database name in an FK message normalised),
 every read (canonical form; the cursor helpers on tuple and Row cursors)
@@ -19,9 +19,9 @@ import pytest
 
 import dbengine
 from repo import conn as rc
-from repo import mines as m1
-from repo.v2 import _keys
-from repo.v2 import mines as m2
+from _v1_frozen import mines as m1
+from repo import _keys
+from repo import mines as m2
 from v2dual import assert_same_reads, multiset, on_cursor, run_step
 
 ROW = dbengine.Row

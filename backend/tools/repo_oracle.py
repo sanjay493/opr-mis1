@@ -4,12 +4,16 @@
         --pass sql|bulk --months 2024-04..2024-05 [--scopes month|nonmonth|all] \
         [--only PATHS] [--exclude PATHS] [--store DIR] [--force]
     python -m tools.repo_oracle replay --module production [--functions a,b] \
-        [--limit-diffs 20] [--impl v2|current] [--passes sql,bulk] [--db NAME] [--store DIR]
+        [--limit-diffs 20] [--impl current|v1] [--passes sql,bulk] [--db NAME] [--store DIR]
     python -m tools.repo_oracle report [--store DIR]
 
-Task 7 (ruling R12): v2 implementations (repo/v2/<domain>.py) are built
-beside the v1 modules and proven equal by replaying, call by call, what the
-v1 modules returned while the app served the parity endpoint set.
+Task 7 (ruling R12): v2 implementations were built beside the v1 modules
+and proven equal by replaying, call by call, what the v1 modules returned
+while the app served the parity endpoint set. Since Task 7g the v2 code IS
+repo/<domain>.py (the v1 modules survive only as the test oracle
+tests/_v1_frozen/). The v1 recording in the default store is frozen: a new
+`record` run wraps the current (v2) repo modules, so it can only make a new
+v2 baseline (on a v2 database, into another --store), never a v1 one.
 
 record
     Runs the app in-process (TestClient) on a v1 database and drives exactly
@@ -46,8 +50,9 @@ record
     deterministic and the run reports it (index.json "conflicts").
 
 replay
-    Imports repo.v2.<module> (--impl current: repo.<module>, a sanity check
-    of the oracle itself), replays every recorded call with the same args
+    Imports repo.<module> (since Task 7g the v2 implementation; --impl v1:
+    the frozen v1 copy tests/_v1_frozen/<module>, a sanity check of the
+    oracle itself on a v1 database), replays every recorded call with the same args
     (a recorded cursor / connection argument becomes a fresh one on the
     replay DB) and compares canonical results. Bulk-pass records are
     replayed inside a report_context for the recorded month (loaders
@@ -124,7 +129,7 @@ BIG_CHUNK = 256
 
 # repo modules with no domain reads of their own (connection plumbing, the
 # data_version counter, the v1<->v2 codec).
-SHARED_MODULES = ("conn", "version", "v2codec")
+SHARED_MODULES = ("conn", "version", "v2codec", "_keys", "_mysqlsort")
 DOMAIN_MODULES = ("breakdown", "capacity", "cost_trend", "ipt", "mines", "misc", "ops", "pages",
                   "production", "rake", "special_steel", "stock", "techno", "text")
 
@@ -269,7 +274,7 @@ _CALENDAR_TIES = (
     "Task 7b ruling (a): tie order only. v1 GROUP BY + ORDER BY item_name, mon_num, total DESC sorted "
     "2,700-8,800 groups for a single-plant scope with filesort; they exceed the default "
     "sort_buffer_size (256 KB), so v1 sorted chunks and merged them, and the order of groups with equal "
-    "(item, mon_num, total) is an artefact of that buffer size. v2 (repo.v2._mysqlsort) reproduces the "
+    "(item, mon_num, total) is an artefact of that buffer size. v2 (repo._mysqlsort) reproduces the "
     "tie order of a sort that fits one buffer - exactly v1's for the other 69 scopes, and v1's own output "
     "for these 5 when run with sort_buffer_size = 64M. Rows, keys and key sequence are equal; only tied "
     "rows swap. Effect: 33 top-2 month labels on the /records single-plant tabs (parity_exceptions.md).")
@@ -1278,7 +1283,11 @@ def cmd_report(a) -> int:
 def cmd_replay(a) -> int:
     db = _db_arg(a)
     select_database(db)
-    package = "repo.v2" if a.impl == "v2" else "repo"
+    if a.impl == "v1":
+        tests_dir = str(BACKEND_DIR / "tests")
+        if tests_dir not in sys.path:
+            sys.path.insert(0, tests_dir)
+    package = "_v1_frozen" if a.impl == "v1" else "repo"
     try:
         impl = importlib.import_module(f"{package}.{a.module}")
     except ModuleNotFoundError as e:
@@ -1329,7 +1338,7 @@ def main_cli(argv=None) -> int:
     p.add_argument("--module", required=True, choices=DOMAIN_MODULES)
     p.add_argument("--functions", default="")
     p.add_argument("--limit-diffs", type=int, default=20)
-    p.add_argument("--impl", choices=("v2", "current"), default="v2")
+    p.add_argument("--impl", choices=("current", "v1"), default="current")
     p.add_argument("--passes", default=",".join(PASSES))
     p.add_argument("--db", default=None)
     p.add_argument("--store", type=Path, default=DEFAULT_STORE)

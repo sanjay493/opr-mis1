@@ -1,7 +1,7 @@
 """v1 vs v2 equivalence of repo.techno (Task 7c).
 
 Every write function runs through repo.techno on the v1 test schema and
-through repo.v2.techno on the v2 test schema, seeded with the same logical
+through repo.techno (v2) on the v2 test schema, seeded with the same logical
 data; each side then reads back with its own module and the results must be
 equal: blobs as dicts in key order with each leaf's type (canonical form of
 tools/repo_oracle), the JSON TEXT the cursor helpers return byte for byte,
@@ -25,9 +25,9 @@ import activity_context
 import dbengine
 import report_context
 from repo import conn as rc
-from repo import techno as t1
-from repo.v2 import _keys
-from repo.v2 import techno as t2
+from _v1_frozen import techno as t1
+from repo import _keys
+from repo import techno as t2
 from repo.v2codec import render_ts_flagged
 from tools import repo_oracle as ro
 from v2dual import multiset
@@ -114,8 +114,10 @@ def hooks(monkeypatch):
 
     def log(**k):
         calls["log"].append({kk: vv for kk, vv in k.items() if kk != "conn"})
-    from repo import ops
-    monkeypatch.setattr(ops, "log_extraction", log)
+    from _v1_frozen import ops as ops1
+    from repo import ops as ops2
+    monkeypatch.setattr(ops1, "log_extraction", log)
+    monkeypatch.setattr(ops2, "log_extraction", log)
     return calls
 
 

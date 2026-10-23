@@ -64,8 +64,8 @@ from report_context import fold
 from repo import version as _ver
 from repo import conn as rc
 from repo.conn import row_dict as _row_dict
-from repo.v2 import _keys
-from repo.v2._mysqlsort import mysql_sort
+from repo import _keys
+from repo._mysqlsort import mysql_sort
 from repo.v2codec import PRODUCTION_SOURCES
 
 Measure = Literal["actual", "abp", "mou"]
@@ -1248,7 +1248,7 @@ def records_calendar_month_totals(cur, scope):
     """fetchall() of (item_name, mon_num, report_month, total), ordered by
     item, month number, total DESC. v1 grouped in its read order and then
     filesorted the groups, so groups with equal (item, mon_num, total)
-    come out in MySQL's std::sort order (repo.v2._mysqlsort)."""
+    come out in MySQL's std::sort order (repo._mysqlsort)."""
     where, params, shape = _scope_sql(cur, scope)
     rows = _fetchall(cur,
                      "SELECT item_name, plant_name, report_month, month_actual, "
@@ -1485,7 +1485,7 @@ def plant_item_sum_counts(cur, measure: Measure, plants, items, months):
 
     v1 read the PRIMARY KEY range (month, plant, item), filesorted it on
     (plant, item) and aggregated each run of equal keys: each group's SUM
-    adds its rows in MySQL's std::sort order (repo.v2._mysqlsort)."""
+    adds its rows in MySQL's std::sort order (repo._mysqlsort)."""
     rows = _fetchall(cur,
                      f"SELECT plant_name, item_name, report_month, month_actual, "
                      f"WEIGHT_STRING(plant_name) AS wp, WEIGHT_STRING(item_name) AS wi FROM {_src(measure)} "

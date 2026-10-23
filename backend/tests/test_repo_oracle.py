@@ -541,31 +541,14 @@ def test_write_functions_match_the_bump_tests_write_detection():
         assert set(ro.WRITE_FUNCTIONS.get(module, ())) == public, module
 
 
-def test_v2_modules_write_and_read_the_same_public_functions_as_v1():
-    """repo/v2/<module>.py (Task 7): the public writers found by the bump
-    scan (plus their same-module callers) are WRITE_FUNCTIONS[module], and
-    the public names are v1's."""
-    from test_repo_writes_bump import _called_names, _write_functions
-    direct = _write_functions()
-    v2_dir = Path(ro.BACKEND_DIR) / "repo" / "v2"
-    modules = [p.stem for p in sorted(v2_dir.glob("*.py")) if p.stem in ro.DOMAIN_MODULES]
-    assert "production" in modules and "capacity" in modules
-    for module in modules:
-        tree = ast.parse((v2_dir / f"{module}.py").read_text(encoding="utf-8"))
-        funcs = {n.name: n for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
-        writers = {n for n in funcs if (f"v2.{module}", n) in direct}
-        grew = True
-        while grew:
-            grew = False
-            for n, f in funcs.items():
-                if n not in writers and _called_names(f) & writers:
-                    writers.add(n)
-                    grew = True
-        assert set(ro.WRITE_FUNCTIONS.get(module, ())) == {n for n in writers if not n.startswith("_")}, module
-        v1 = importlib.import_module(f"repo.{module}")
-        v2 = importlib.import_module(f"repo.v2.{module}")
+def test_modules_keep_the_v1_public_functions_and_signatures():
+    """repo/<module>.py (v2 since Task 7g) has exactly the public names and
+    signatures of the frozen v1 module (tests/_v1_frozen/<module>.py)."""
+    import inspect
+    for module in ro.DOMAIN_MODULES:
+        v1 = importlib.import_module(f"_v1_frozen.{module}")
+        v2 = importlib.import_module(f"repo.{module}")
         assert set(ro.public_functions(v2)) == set(ro.public_functions(v1)), module
-        import inspect
         for name in ro.public_functions(v1):
             assert inspect.signature(getattr(v2, name)) == inspect.signature(getattr(v1, name)),                 f"{module}.{name}"
 

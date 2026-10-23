@@ -49,13 +49,23 @@ def update_goldens(request):
     return request.config.getoption("--update-goldens")
 
 
-# ── MySQL test database ─────────────────────────────────────────────────────
-# Opt-in: only tests that request `mysql_db` touch MySQL. A throwaway schema
-# `mis_reports_test_<pid>` is built from tests/fixtures/schema_v1.sql (an exact
-# --no-data dump of the live schema) with a dedicated user (MYSQL_TEST_USER /
-# MYSQL_TEST_PASSWORD in backend/.env) that is granted rights ONLY on
-# `mis_reports\_test\_%`. Nothing here ever connects to `mis_reports` or
-# `mis_reports_baseline`.
+# ── MySQL test databases ────────────────────────────────────────────────────
+# Opt-in: only tests that request a fixture below touch MySQL. Throwaway
+# schemas `mis_reports_test_*` are built with a dedicated user
+# (MYSQL_TEST_USER / MYSQL_TEST_PASSWORD in backend/.env) that is granted
+# rights ONLY on `mis_reports\_test\_%`. Nothing here ever connects to
+# `mis_reports`, `mis_reports_v2` or `mis_reports_baseline`.
+#
+#   mysql_db      the app's schema (v2: scripts/v2/schema_v2.sql +
+#                 seed_cal_month.sql), wired into dbengine / repo.conn,
+#                 data tables emptied, plant master seeded. What app tests use.
+#   mysql_v2_db   a raw autocommit connection to that same v2 schema
+#                 (schema tests, the migration / verify tools' target).
+#   mysql_v1_db   the pre-Task-7 v1 schema (tests/fixtures/schema_v1.sql +
+#                 data_version / perf-index migrations), wired into the DB
+#                 layer. ONLY for the v1 SOURCE of tools/migrate_v1_to_v2 /
+#                 verify_v2 and the frozen v1 oracle (tests/_v1_frozen) of
+#                 the dual-DB equivalence tests.
 
 import os
 
@@ -65,7 +75,7 @@ load_dotenv(BACKEND_DIR / ".env")
 
 _TEST_DB_PREFIX = "mis_reports_test_"
 _SCHEMA_V1 = Path(__file__).resolve().parent / "fixtures" / "schema_v1.sql"
-# Migrations applied on top of schema_v1 (the live schema dump), in order.
+# Migrations applied on top of schema_v1 (the v1 live schema dump), in order.
 V1_MIGRATION_DIR = BACKEND_DIR / "scripts"
 _V1_MIGRATIONS = (
     V1_MIGRATION_DIR / "migrate_add_data_version.sql",
@@ -107,8 +117,19 @@ def _assert_test_schema(name):
         f"refusing to touch database {name!r}: tests may only use {_TEST_DB_PREFIX}* schemas")
 
 
+def _wire_app(monkeypatch, cfg, name):
+    """Point dbengine (and so repo.conn) at schema `name` for one test; the
+    pool may hold connections opened against another database, so drop them."""
+    import dbengine
+    monkeypatch.setenv("MYSQL_DB", name)
+    for key, val in (("host", cfg["host"]), ("port", cfg["port"]), ("user", cfg["user"]),
+                     ("password", cfg["password"]), ("database", name)):
+        monkeypatch.setitem(dbengine._MYSQL_CFG, key, val)
+    dbengine._pool_clear()
+
+
 @pytest.fixture(scope="session")
-def _mysql_test_schema():
+def _mysql_v1_schema():
     cfg = _test_cfg()
     name = f"{_TEST_DB_PREFIX}{os.getpid()}"
     _assert_test_schema(name)
@@ -155,8 +176,8 @@ def mysql_v2_db():
     scripts/v2/schema_v2.sql + seed_cal_month.sql (the v2 DDL, slow to apply).
     Yields an autocommit pymysql connection to it; dropped at the end. Tests
     that write must isolate themselves (test_schema_v2's `tx` fixture rolls
-    every write back). Not wired into the app's DB layer (the app still runs
-    on v1 until Task 7)."""
+    every write back). The `mysql_db` fixture uses this same schema and
+    leaves it as built after each test."""
     cfg = _test_cfg()
     name = f"{_TEST_DB_PREFIX}v2_{os.getpid()}"
     _assert_test_schema(name)
@@ -175,24 +196,50 @@ def mysql_v2_db():
         conn.close()
 
 
+def _clear_caches():
+    import data_version
+    data_version.clear_caches()
+
+
 @pytest.fixture
-def mysql_db(_mysql_test_schema, monkeypatch):
-    """Empty v1 schema in a throwaway MySQL database, wired into the app's DB
-    layer (db.connect() / dbengine / repo.conn) for the duration of the test.
-    Returns the schema name."""
+def mysql_db(mysql_v2_db, monkeypatch):
+    """Empty v2 schema in a throwaway MySQL database (the session's
+    mysql_v2_db schema), wired into the app's DB layer (dbengine /
+    repo.conn) for the duration of the test. Data tables start empty; the
+    seeded calendar (cal_month), the plant master as mis_reports_v2 holds it
+    (tests/v2dual.PLANTS) and data_version (1, 1) are present. Returns the
+    schema name. Afterwards the schema is left as schema_v2.sql built it."""
+    from v2dual import reset_v2, restore_v2
+
+    with mysql_v2_db.cursor() as cur:
+        cur.execute("SELECT DATABASE()")
+        name = cur.fetchone()[0]
+        _assert_test_schema(name)
+        reset_v2(cur)
+    _wire_app(monkeypatch, _test_cfg(), name)
+    # the in-process caches keyed on data_version start empty, so no test
+    # can see another test's cached pages.
+    _clear_caches()
+
+    yield name
+    import dbengine
+    dbengine._pool_clear()
+    with mysql_v2_db.cursor() as cur:
+        restore_v2(cur)
+
+
+@pytest.fixture
+def mysql_v1_db(_mysql_v1_schema, monkeypatch):
+    """Empty v1 schema (tests/fixtures/schema_v1.sql) in a throwaway MySQL
+    database, wired into the app's DB layer for the duration of the test.
+    Only the frozen v1 oracle (tests/_v1_frozen) can read or write it; the
+    app's repo modules are v2. Returns the schema name."""
     import dbengine
 
-    name = _mysql_test_schema
+    name = _mysql_v1_schema
     cfg = _test_cfg()
     _assert_test_schema(name)
-
-    # dbengine reads these module-level values at connect time; the pool may
-    # hold connections opened against another database, so drop them.
-    monkeypatch.setenv("MYSQL_DB", name)
-    for key, val in (("host", cfg["host"]), ("port", cfg["port"]), ("user", cfg["user"]),
-                     ("password", cfg["password"]), ("database", name)):
-        monkeypatch.setitem(dbengine._MYSQL_CFG, key, val)
-    dbengine._pool_clear()
+    _wire_app(monkeypatch, cfg, name)
 
     conn = _admin_connect(cfg, database=name)
     try:
@@ -217,26 +264,30 @@ def mysql_db(_mysql_test_schema, monkeypatch):
             for t in sorted(dirty):
                 cur.execute(f"TRUNCATE TABLE `{t}`")
             cur.execute("SET FOREIGN_KEY_CHECKS = 1")
-            # data_version starts every test at its migrated state (one row,
-            # n = 1); the in-process caches keyed on it start empty, so no
-            # test can see another test's cached pages.
             if "data_version" in tables:
                 cur.execute("INSERT IGNORE INTO data_version (id, n) VALUES (1, 1)")
     finally:
         conn.close()
-    import data_version
-    data_version.clear_caches()
+    _clear_caches()
 
     yield name
     dbengine._pool_clear()
 
 
 @pytest.fixture
-def dual(mysql_db, mysql_v2_db):
-    """tests/v2dual.Dual: the v1 test schema (mysql_db, wired into the app's
-    DB layer) and the v2 test schema (mysql_v2_db), both emptied, for the
-    Task 7 v1-vs-v2 repository equivalence tests."""
+def dual(mysql_v1_db, mysql_v2_db):
+    """tests/v2dual.Dual: the v1 test schema (mysql_v1_db, the frozen v1
+    oracle's side) and the v2 test schema (mysql_v2_db, the app's side),
+    both emptied, for the v1-vs-v2 repository equivalence tests."""
     from v2dual import Dual
-    d = Dual(mysql_db, mysql_v2_db)
+    d = Dual(mysql_v1_db, mysql_v2_db)
     yield d
     d.restore()        # the v2 schema is session-wide: leave it as built
+
+
+@pytest.fixture
+def v2seed(mysql_db, mysql_v2_db):
+    """tests/v2dual.V2Seed on the app's (mysql_db) v2 schema: seed v1-shaped
+    rows as the migration would load them, for tests ported from v1 seeding."""
+    from v2dual import V2Seed
+    return V2Seed(mysql_v2_db)

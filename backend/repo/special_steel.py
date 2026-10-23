@@ -3,7 +3,7 @@ special_steel_orders), special_steel_abp (v1 special_steel_abp_table),
 special_steel_grade_club (v1 special_steel_grade_clubs) and the Special
 Steel Plants Physical Performance tables special_steel_phys_perf /
 special_steel_phys_meta / special_steel_ipt_requirement. The narrative
-special_steel_phys_note lives in report_text (repo.v2.text, scope
+special_steel_phys_note lives in report_text (repo.text, scope
 ss_phys_note).
 
 Same public names, signatures, return shapes, row types and exceptions as
@@ -40,7 +40,7 @@ from dbengine import Row, connect
 from repo import conn as rc
 from repo import version as _ver
 from repo.conn import row_dict as _row_dict
-from repo.v2 import _keys
+from repo import _keys
 from repo.v2codec import ISO_LOCAL, CodecError, parse_ts
 
 _ORDER_V1 = ("SELECT report_month, plant_code AS plant_name, product, quality_grade, section, sort_order, "
