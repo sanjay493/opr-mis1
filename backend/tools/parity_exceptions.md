@@ -122,3 +122,14 @@ repo.v2.text checks every write against the v1 column limits and raises v1's own
 - api_key_highlights' `_validate_month`, which splits on `-` and accepts `'2025-04 '` because `int('04 ')` is 4.
 
 Other routes pass months from the month picker and fixed block keys and plant lists, or validate the shape.
+
+### 2d. Keys of stock / ipt / special_steel / mines / rake / cost_trend v2 cannot hold (Task 7e1)
+
+The 7e1 modules check every write against v1's column limits and raise v1's own errors (1048 / 1406 with v1's column names, 1452 with v1's constraint text), so over-long input fails alike. These inputs fit a v1 column but not the v2 model; `OutOfModelError` (a ValueError) is raised before anything is written:
+
+| input | v1 | v2 | reachable? |
+|---|---|---|---|
+| a plant of 9..32 characters (stock_table, ipt_table from/to, special_steel_orders, special_steel_abp_table, special_steel_grade_clubs: VARCHAR(32)) or 9..16 (cost_trend_*: VARCHAR(16)) | stored | OutOfModelError (plant_code VARCHAR(8), FK to the plant master) | **Only through hand-crafted requests:** the plant of POST `/api/stock-entry` entries, `/api/special-steel-manual/save`, `/api/special-steel-abp` and the cost-trend saves is a free string. The UI and extractors send fixed plant lists (the longest plant in the v1 data has 4 characters). IPT routes go through `_check_ipt_plants`. |
+| a short non-month (`'2025-4'`) for stock, sail sales, ipt, cost_trend monthly, sail_mines, mines, rake monthly / summary, special_steel orders / abp | stored as text | OutOfModelError (cal_month FK) | As §2a: only routes that do not validate the month shape. An empty batch never checks the month, as in v1. |
+| a sail_stock_snapshot date that is not a canonical `'YYYY-MM-DD'` (`'2021-1-4'`) | stored (CHAR(10)) | OutOfModelError (DATE) | **Only through a hand-crafted request** to `/api/sail-1page/confirm`: the stock rows' `snapshot_date` comes from the extractor, which writes ISO dates. A read with such a string returns None, as v1's did (no stored v1 value is spelled that way). |
+| a grade-club `created_at` that is not a `datetime.now().isoformat()` string | stored (VARCHAR(40)) | OutOfModelError (DATETIME(6)) | No: the only caller (api_special_steel_clubs) passes `datetime.now().isoformat()`. |
