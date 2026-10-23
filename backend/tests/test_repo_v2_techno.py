@@ -7,9 +7,13 @@ equal: blobs as dicts in key order with each leaf's type (canonical form of
 tools/repo_oracle), the JSON TEXT the cursor helpers return byte for byte,
 source_file, created_at as the v1 string, the activity-log old/new and the
 extraction-log calls. The read functions the oracle never saw called (the
-7a zero-call list) are called on both sides here too. Reads whose v1 SQL has
-no ORDER BY are compared as multisets (their v1 order is techno_data's
-surrogate id, which v2 does not keep; see tools/repo_oracle COMPARE_MODE).
+7a zero-call list) are called on both sides here too. Reads v1 served in
+techno_data id order are compared strictly: v2's techno_upload.seq is that
+id (equal in the test schemas too, both counters start at 1 and advance on
+the same statements). The other reads whose v1 SQL has no ORDER BY are
+compared as multisets: on these tiny schemas v1's access path is not the
+one it takes on the real data, where tools/repo_oracle replay proves the
+order.
 """
 import datetime as dtmod
 import re
