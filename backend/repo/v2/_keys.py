@@ -168,26 +168,34 @@ def check_plant_model(plant, column, v1_limit):
 
 
 _FK_FAILS = 1452
+_FK_DETAIL_MAX = 191
 _FK_MSG = re.compile(r"\(`([^`]*)`\.`[^`]*`, CONSTRAINT `([^`]*)`")
 
 
 @contextmanager
-def v1_fk_errors(v1_fks):
+def v1_fk_errors(v1_fks, first_failing=None):
     """Re-raise a foreign-key failure (IntegrityError 1452) of a v2
     constraint in `v1_fks` with v1's message: v1_fks maps the v2 constraint
     name to (v1 table, v1 constraint, column, referenced v1 table,
     referenced column), for the FKs v1 itself declared (the database name
-    in the message is kept)."""
+    in the message is kept). InnoDB checks a row's constraints in name
+    order, which differs between v1's and v2's names: `first_failing()`,
+    when given, returns the v2 name of the constraint v1 would have
+    reported (the first failing one in v1's order)."""
     try:
         yield
     except pymysql.err.IntegrityError as e:
         m = _FK_MSG.search(str(e.args[1])) if e.args and e.args[0] == _FK_FAILS and len(e.args) > 1 else None
         if m is None or m.group(2) not in v1_fks:
             raise
-        table, name, col, ref, ref_col = v1_fks[m.group(2)]
-        raise pymysql.err.IntegrityError(
-            _FK_FAILS, f"Cannot add or update a child row: a foreign key constraint fails (`{m.group(1)}`.`{table}`, "
-                       f"CONSTRAINT `{name}` FOREIGN KEY (`{col}`) REFERENCES `{ref}` (`{ref_col}`))") from None
+        failing = first_failing() if first_failing else m.group(2)
+        table, name, col, ref, ref_col = v1_fks[failing or m.group(2)]
+        detail = (f"`{m.group(1)}`.`{table}`, CONSTRAINT `{name}` FOREIGN KEY (`{col}`) "
+                  f"REFERENCES `{ref}` (`{ref_col}`))")
+        # InnoDB writes the constraint detail into a 192-byte buffer: at most
+        # 191 characters, the closing parenthesis included (measured on v1)
+        msg = "Cannot add or update a child row: a foreign key constraint fails (" + detail[:_FK_DETAIL_MAX]
+        raise pymysql.err.IntegrityError(_FK_FAILS, msg) from None
 
 
 def exact_item_id(cur, name, *, lock=False):

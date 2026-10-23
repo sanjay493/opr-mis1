@@ -21,7 +21,14 @@ empty batch). The month is cut to CHAR(7) as MySQL cut it (_keys.fit_month)
 and created in cal_month when missing (_keys.ensure_month), checked only
 when a row is written (an empty batch never touched it in v1). The
 mine / material / end-use foreign keys were declared in v1 too: a missing
-master row raises v1's 1452 message (_keys.v1_fk_errors).
+master row raises v1's 1452 message (_keys.v1_fk_errors), naming the
+constraint v1 would have named first (_first_failing).
+
+Two reads cannot follow v1's plan by an ORDER BY alone:
+get_iron_ore_despatch_mix is summed in Python along the primary key (a
+PARITY SHIM, see there), and get_iron_ore_mines_series is compared as
+deep_unordered in tools/repo_oracle.py COMPARE_MODE (v1's join order was a
+per-call cost choice; parity_exceptions.md §1b).
 """
 from typing import Any, Dict, List
 
@@ -51,6 +58,26 @@ _V1_FKS = {
     "fk_mine_booked_plan_material": _fk("mines_booked_qty_plan_monthly", 2, "material_code",
                                         "mine_materials_master"),
 }
+
+
+def _fk_checks(prefix, mine_code, material_code, end_use_code=None):
+    """The row's FK checks in v1's constraint order (ibfk_1 mine, ibfk_2
+    material, ibfk_3 end use)."""
+    out = [(f"fk_mine_{prefix}_mine", "mine", "mine_code", mine_code),
+           (f"fk_mine_{prefix}_material", "mine_material", "material_code", material_code)]
+    if end_use_code is not None:
+        out.append((f"fk_mine_{prefix}_end_use", "mine_end_use", "end_use_code", end_use_code))
+    return out
+
+
+def _first_failing(cur, checks):
+    """InnoDB reports a row's first failing constraint in name order, and
+    v2's names order differently from v1's: the v2 name of the first master
+    missing in v1's order (after a failed INSERT, on the same transaction)."""
+    for name, table, col, value in checks:
+        if cur.execute(f"SELECT 1 FROM {table} WHERE {col} = %s", (value,)).fetchone() is None:
+            return name
+    return None
 
 
 def _month_for_write(cur, stored_month):
@@ -214,9 +241,11 @@ def save_mines_production_despatch_monthly(
         cur = conn.cursor()
         saved = 0
         _ver.bump(cur)
-        with _keys.v1_fk_errors(_V1_FKS):
+        current = []        # (v2 constraint, master table, column, value) of the row being written, v1's order
+        with _keys.v1_fk_errors(_V1_FKS, lambda: _first_failing(cur, current)):
             for e in production_entries:
                 row = (stored_month, mine_code, e["material_code"], e.get("actual"), e.get("plan"))
+                current[:] = _fk_checks("prod", mine_code, e["material_code"])
                 _month_for_write(cur, stored_month)
                 cur.execute("""
                     INSERT INTO mine_production_monthly (report_month, mine_code, material_code, qty_actual, qty_plan)
@@ -227,6 +256,7 @@ def save_mines_production_despatch_monthly(
             for e in despatch_entries:
                 row = (stored_month, mine_code, e["material_code"], e["transport_mode"], e["end_use_code"],
                        e.get("actual"))
+                current[:] = _fk_checks("desp_act", mine_code, e["material_code"], e["end_use_code"])
                 _month_for_write(cur, stored_month)
                 cur.execute("""
                     INSERT INTO mine_despatch_actual_monthly
@@ -237,6 +267,7 @@ def save_mines_production_despatch_monthly(
                 saved += 1
             for e in despatch_plan_entries:
                 row = (stored_month, mine_code, e["material_code"], e["end_use_code"], e.get("plan"))
+                current[:] = _fk_checks("desp_plan", mine_code, e["material_code"], e["end_use_code"])
                 _month_for_write(cur, stored_month)
                 cur.execute("""
                     INSERT INTO mine_despatch_plan_monthly
@@ -247,6 +278,7 @@ def save_mines_production_despatch_monthly(
                 saved += 1
             for e in booked_qty_entries:
                 row = (stored_month, mine_code, e["material_code"], e["transport_mode"], e.get("actual"))
+                current[:] = _fk_checks("booked_act", mine_code, e["material_code"])
                 _month_for_write(cur, stored_month)
                 cur.execute("""
                     INSERT INTO mine_booked_qty_actual_monthly
@@ -257,6 +289,7 @@ def save_mines_production_despatch_monthly(
                 saved += 1
             for e in booked_qty_plan_entries:
                 row = (stored_month, mine_code, e["material_code"], e.get("plan"))
+                current[:] = _fk_checks("booked_plan", mine_code, e["material_code"])
                 _month_for_write(cur, stored_month)
                 cur.execute("""
                     INSERT INTO mine_booked_qty_plan_monthly (report_month, mine_code, material_code, qty_plan)

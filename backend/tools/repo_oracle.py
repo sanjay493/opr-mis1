@@ -215,6 +215,21 @@ COMPARE_MODE = {
         "page_bf_large_annexure._coke_ash_and_sinter_fe (~L456), stores rows[(unit, month)] ((plant, unit, "
         "month) is unique) and reads it only with .get() in fixed all_units / period order. Row order never "
         "reaches output. --impl current re-run in a fresh process first (2026-10-22): 0 diffs, both passes."),
+    "mines.get_iron_ore_mines_series": (
+        "deep_unordered(depth=2)",
+        "{'production' | 'despatch' | 'despatch_plan': [row dict, ...]} from three joins with no ORDER BY. "
+        "Depth 2 = the dict and each list; the row dicts stay ordered. v1's row order is a cost-model "
+        "choice per call: a PRIMARY range scan ((month, mine, material, ...), which v2's ORDER BY "
+        "reproduces for every recorded call but one) or, for the FY 2026-27 despatch_plan (~710 rows; "
+        "EXPLAIN on the v1 data, Task 7e1), a nested loop driven from mines_master's group_code index, giving "
+        "(group, mine, month, material, end use). v2 cannot predict that choice without fitting today's "
+        "row counts. Caller audit (2026-10-23, Task 7e1): mines_group_wise.generate keys every row by "
+        "(mine, material[, end use]) and reads the cells in fixed master order (despatch_plan has one row "
+        "per key and month, so no sum depends on order); /api/iron-ore-mines/series hands the lists to "
+        "frontend reports/iron-ore-mines/View.js, which filters by scope and sums values per month: every "
+        "qty_plan in the v1 data is an integer below 2^53, so those sums are exact in any order. The one "
+        "visible difference is the JSON row order of that endpoint's despatch_plan list for fy_start=2026 "
+        "(listed in tools/parity_exceptions.md). --impl current re-run in a fresh process first: 0 diffs."),
     "capacity._capacity_load": (
         "deep_unordered(depth=2)",
         "{(fold(plant), fold(item)): [(effective_month, annual_capacity), ...]} from a SELECT with no "

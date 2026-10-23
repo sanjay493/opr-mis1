@@ -66,6 +66,12 @@ Rules for Task 7g:
 
 **Upkeep.** If the data or `--today` changes, regenerate this table before 7g compares parity.
 
+## 1b. /api/iron-ore-mines/series: row order of the FY 2026-27 despatch_plan list (Task 7e1, needs a ruling)
+
+- **What differs.** `GET /api/iron-ore-mines/series?fy_start=2026`: the `despatch_plan` list holds the same rows in another order. v1 returns them as (group, mine, month, material, end use); v2 returns (month, mine, material, end use), which is also v1's order for every other FY and for the other two lists.
+- **Why.** v1's statement has no ORDER BY. For this FY (about 710 plan rows) MySQL drove the join from `mines_master`'s group_code index; for the sparser FYs it used a range scan on the fact table. That is a cost-model choice per call, which v2 cannot predict without fitting today's row counts. `repo.mines.get_iron_ore_mines_series` is compared as `deep_unordered(depth=2)` in tools/repo_oracle.py COMPARE_MODE.
+- **User-visible effect: none.** The frontend (`reports/iron-ore-mines/View.js`) filters the rows by scope and sums them per month, and `mines_group_wise` keys them by (mine, material, end use). Every `qty_plan` in the v1 data is an integer, so every sum is exact in any order. Only the raw JSON list order differs, so 7g parity shows this one endpoint diff.
+
 ## 2. Invalid-input deviations (writes)
 
 These are writes that v1 stored and v2 refuses, because the v2 model cannot hold the value. None of them is produced by the app's UI, extractors or scripts, and none occurs in the v1 data. They are listed so that a refusal is recognised as known, not taken for a regression. The parity snapshot has no write calls, so none of them shows up in 7g's parity diff.

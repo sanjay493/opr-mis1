@@ -315,6 +315,25 @@ def outcome(fn):
         return (type(e).__name__, canon(list(e.args)))
 
 
+_FK_PREFIX = "a foreign key constraint fails ("
+
+
+def _fk_text(text, name, longest):
+    """An FK failure message names the database, and InnoDB cuts its detail
+    at 191 characters, so the cut depends on the name's length: the name is
+    replaced by <db> and the detail cut where the longer test schema name
+    would cut it, on both sides alike."""
+    text = text.replace(f"`{name}`", "`<db>`")
+    i = text.find(_FK_PREFIX)
+    if i < 0:
+        return text
+    head, detail = text[:i + len(_FK_PREFIX)], text[i + len(_FK_PREFIX):]
+    end = detail.find('"]')
+    tail = detail[end:] if end >= 0 else ""
+    detail = detail[:end] if end >= 0 else detail
+    return head + detail[:191 - longest + len("<db>")] + tail
+
+
 def record_activity(monkeypatch):
     """activity_context.record calls as a list of (unit, canon(old), canon(new))."""
     import activity_context
@@ -336,7 +355,7 @@ def run_step(dual, v1, v2, fn, *, reads, tables=(), activity=None, skip=()):
             activity.clear()
         with side():
             o = outcome(lambda: fn(mod))
-        o = (o[0], o[1].replace(f"`{name}`", "`<db>`"))      # FK messages name the database
+        o = (o[0], _fk_text(o[1], name, max(len(dual.v1_name), len(dual.v2_name))))
         got.append((o, list(activity or ())))
     assert got[0] == got[1], got
     assert_same_reads(dual, v1, v2, reads)
