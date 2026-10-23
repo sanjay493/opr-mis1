@@ -326,6 +326,55 @@ def test_recompute_standalone(seeded, hooks):
     assert m1[("2025-05", "BSP", "BF-4")][0] == "bf4.xlsx"
 
 
+def test_recompute_failure_leaves_the_main_write_intact(seeded, hooks, monkeypatch):
+    """A recompute that fails half-way (its leaves deleted, the new ones
+    not inserted: a NaN leaf MySQL refuses) rolls back to its SAVEPOINT and
+    is swallowed, as v1 swallowed it: the merged blob stays complete, on
+    the chain's own transaction and on a caller's. A deadlock / lock wait
+    timeout is re-raised and nothing is written."""
+    seed = next(b for m, p, u, b, *_ in SEED if (m, p, u) == ("2025-04", "BSP", "BF_Shop"))
+    new = {"month": {"coke_rate": 1.0}}
+    def norm(v):        # MySQL JSON's normalised key order (byte length, then bytes), all levels
+        if isinstance(v, dict):
+            return {k: norm(v[k]) for k in sorted(v, key=lambda k: (len(k.encode()), k.encode()))}
+        return [norm(x) for x in v] if isinstance(v, list) else v
+    want = canon(norm(t2._merged(seed, new, None)))
+    monkeypatch.setattr(t2, "_derived", lambda d: ({"month": {**d.get("month", {}), "bad": float("nan")},
+                                                    "till_month": {}}, True))
+    with seeded.v2():
+        t2.merge_upsert_techno_data("BSP", "2025-04", "BF_Shop", new, "x")
+        assert canon(t2.get_techno_data("BSP", "2025-04", "BF_Shop")["BF_Shop"]) == want
+        conn = dbengine.connect()
+        try:
+            t2.merge_upsert_techno_data("BSP", "2025-04", "BF_Shop", new, "y", conn=conn)
+            conn.commit()
+        finally:
+            conn.close()
+        assert canon(t2.get_techno_data("BSP", "2025-04", "BF_Shop")["BF_Shop"]) == want
+        assert seeded.sql(2, "SELECT source_file FROM techno_upload u JOIN plant_unit pu USING (unit_id) "
+                             "WHERE u.report_month = '2025-04' AND u.plant_code = 'BSP' "
+                             "AND pu.unit_code = 'BF_Shop'") == [("y",)]
+
+        def deadlock(unit):
+            def transform(stored):
+                raise pymysql.err.OperationalError(1213, "Deadlock found when trying to get lock")
+            return transform
+        monkeypatch.setattr(t2, "_recompute", deadlock)
+        before = _snapshot(t2)
+        for conn_given in (False, True):
+            conn = dbengine.connect() if conn_given else None
+            try:
+                with pytest.raises(pymysql.err.OperationalError) as e:
+                    t2.merge_upsert_techno_data("BSP", "2025-04", "BF_Shop", {"month": {"coke_rate": 2.0}}, "z",
+                                                conn=conn)
+                assert e.value.args[0] == 1213
+            finally:
+                if conn is not None:
+                    conn.rollback()
+                    conn.close()
+            assert _snapshot(t2) == before
+
+
 def test_months_plants_and_units_outside_the_masters(seeded, hooks):
     """Unknown plant / month / unit: created as v1 stored them. A unit over
     v1's VARCHAR(32): the same DataError 1406 on both sides. A short

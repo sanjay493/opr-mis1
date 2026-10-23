@@ -57,6 +57,7 @@ WRITES (every write bumps data_version first; none in a dry run)
 """
 import copy
 import functools
+import itertools
 import json
 from datetime import datetime
 from typing import Any, Dict, Iterable, List, Optional
@@ -536,14 +537,57 @@ def _maybe_recompute_derived_params(plant: str, report_month: str, unit: str, co
     an activity-log entry, as v1's _raw_upsert_techno_data). A plain read
     decides whether anything changes (no bump for a no-op); a change is a
     read-modify-write: bump, locking re-read, recompute, write.
-    `conn`: see merge_upsert_techno_data."""
+    `conn`: see merge_upsert_techno_data.
+
+    Failures: as v1, a failed recompute is printed and swallowed, and the
+    main write stands. On a caller's connection (the write chain's shared
+    transaction) the recompute runs inside a SAVEPOINT and a failure rolls
+    back to it, so no half-written blob (leaves deleted, new ones not yet
+    inserted) is ever committed. A deadlock (1213) or lock wait timeout
+    (1205) is re-raised: MySQL has rolled back (1213) or may roll back the
+    whole transaction, so the caller must see it fail."""
     try:
         data = get_techno_data(plant, report_month, unit, conn=conn).get(unit, {})
         if not data or not _derived(data)[1]:
             return
-        _owned(conn, lambda c: _raw_write(c, plant, report_month, unit, None, None, _recompute(unit)))
+
+        def write(c):
+            return _raw_write(c, plant, report_month, unit, None, None, _recompute(unit))
+        if conn is None:
+            _owned(None, write)                 # own transaction: a failure commits nothing
+        else:
+            _in_savepoint(conn, write)
     except Exception as e:
+        if _is_lock_error(e):
+            raise
         print(f"[db] tmi/fuel_rate recompute failed for {plant}/{report_month}/{unit}: {e}")
+
+
+_LOCK_ERRORS = (1205, 1213)       # ER_LOCK_WAIT_TIMEOUT, ER_LOCK_DEADLOCK
+_savepoint_ids = itertools.count(1)
+
+
+def _is_lock_error(e) -> bool:
+    args = getattr(e, "args", None)
+    return bool(args) and args[0] in _LOCK_ERRORS
+
+
+def _in_savepoint(conn, fn):
+    """fn(conn) inside a SAVEPOINT of conn's transaction: rolled back to it
+    when fn raises (the exception propagates), released otherwise."""
+    name = f"techno_recompute_{next(_savepoint_ids)}"
+    cur = conn.cursor()
+    cur.execute(f"SAVEPOINT {name}")
+    try:
+        out = fn(conn)
+    except BaseException:
+        try:
+            cur.execute(f"ROLLBACK TO SAVEPOINT {name}")
+        except Exception:  # noqa: BLE001 - e.g. a deadlock already rolled the transaction back
+            pass
+        raise
+    cur.execute(f"RELEASE SAVEPOINT {name}")
+    return out
 
 
 # unit names that feed the SAIL BF_Shop rollup (see repo/techno.py).
