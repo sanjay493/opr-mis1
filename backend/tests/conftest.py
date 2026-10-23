@@ -291,3 +291,42 @@ def v2seed(mysql_db, mysql_v2_db):
     rows as the migration would load them, for tests ported from v1 seeding."""
     from v2dual import V2Seed
     return V2Seed(mysql_v2_db)
+
+
+# ── tests that read the live database's data ────────────────────────────────
+# A few tests read real data (the rake detention Wagon Types registry and
+# history, the Sep'26 Secretary Review reference deck). The app's repo
+# modules are v2, so until the Task 8 cut-over -- while MYSQL_DB in
+# backend/.env still names the v1 live database -- they read the v2
+# rehearsal copy of the live data instead (MYSQL_LIVE_V2_DB to override).
+# Read-only use.
+
+def live_v2_db_name():
+    name = os.environ.get("MYSQL_DB", "")
+    if name.lower().startswith("mis_reports_v2"):
+        return name
+    return os.environ.get("MYSQL_LIVE_V2_DB", "mis_reports_v2_rehearsal")
+
+
+from contextlib import contextmanager  # noqa: E402
+
+
+@contextmanager
+def use_live_v2_db():
+    import dbengine
+    prev = dbengine._MYSQL_CFG["database"]
+    dbengine._pool_clear()
+    dbengine._MYSQL_CFG["database"] = live_v2_db_name()
+    try:
+        yield
+    finally:
+        dbengine._pool_clear()
+        dbengine._MYSQL_CFG["database"] = prev
+
+
+@pytest.fixture(scope="module")
+def live_db_module():
+    """Wire the DB layer to the live v2 data (see live_v2_db_name) for a
+    whole test module; request it autouse from the module."""
+    with use_live_v2_db():
+        yield live_v2_db_name()

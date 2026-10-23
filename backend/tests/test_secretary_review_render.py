@@ -15,6 +15,12 @@ from test_secretary_review_context import db_up, live
 
 REF = Path(__file__).parent / "fixtures" / "secretary_review_sep26_reference.pptx"
 
+
+@pytest.fixture(scope="module", autouse=True)
+def _live(live_db_module):
+    """Reads the live data (v2: conftest.live_v2_db_name)."""
+    return live_db_module
+
 # (slide, row, col) -> reason, for reference-deck cells the DB no longer reproduces.
 # Every entry needs a reason checked by hand.
 _FS_CONV = "user asked (2026-10-07): slide 2 SAIL Finished Steel includes Conversion, like slide 5's Total"

@@ -85,20 +85,18 @@ def test_other_plant_never_matches():
     assert bd_cr_link.suggest_cr({**row, "plant": "DSP"}, CRS) is None
 
 
-def test_api_rejects_link_to_another_plants_capital_repair():
-    # Live DB: a link is only valid to the same plant's capital repair.
+def test_api_rejects_link_to_another_plants_capital_repair(mysql_db):
+    # A link is only valid to the same plant's capital repair. (Before Task 7g
+    # this read the live database; it now seeds one CR in the test schema.)
     import pytest
     from fastapi import HTTPException
     import api_breakdown
-    import dbengine
-    conn = dbengine.connect()
-    try:
-        row = conn.execute("SELECT id, plant FROM capital_repair_table ORDER BY id LIMIT 1").fetchone()
-    finally:
-        conn.close()
-    if row is None:
-        pytest.skip("no capital repair rows")
-    cr_id, plant = row
+    from repo import breakdown as rbd
+    from repo import conn as rc
+    with rc.tx() as cur:
+        rbd.insert_cr_row(cur, ("BSP", "2026-27", "BF", "BF-4", "Reline", None, None, None, "BF", "BF-4", None))
+        cr_id = cur.lastrowid
+    plant = "BSP"
     api_breakdown._validate_cr_link(plant, cr_id)                    # same plant: fine
     api_breakdown._validate_cr_link(plant, None)                     # no link: fine
     other = next(p for p in ("BSP", "DSP", "RSP", "BSL", "ISP") if p != plant)

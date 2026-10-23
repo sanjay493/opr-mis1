@@ -19,6 +19,12 @@ import pytest
 
 from conftest import find_sample
 
+
+@pytest.fixture(scope="module", autouse=True)
+def _live(live_db_module):
+    """Reads the live data (v2: conftest.live_v2_db_name)."""
+    return live_db_module
+
 FOLDER = "Miscellaneous"
 SAMPLES = {
     "2026-02": "Average Plant Detention Report for the priod _(01-02-2026 to 28-02-2026).pdf",

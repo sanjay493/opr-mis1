@@ -3,15 +3,24 @@ import pytest
 import board_note_common as bnc
 import dbengine
 import page_secretary_review as psr
+from conftest import use_live_v2_db
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _live(live_db_module):
+    """The live data (v2: conftest.live_v2_db_name)."""
+    return live_db_module
 
 
 def _has_month(month):
     try:
-        c = dbengine.connect()
-        cur = c.cursor()
-        cur.execute("SELECT COUNT(*) FROM production_table WHERE report_month=%s AND item_name='Hot Metal'", (month,))
-        n = cur.fetchone()[0]
-        c.close()
+        with use_live_v2_db():
+            c = dbengine.connect()
+            cur = c.cursor()
+            cur.execute("SELECT COUNT(*) FROM production_monthly pm JOIN item i ON i.item_id = pm.item_id "
+                        "WHERE pm.report_month=%s AND i.item_name='Hot Metal' AND pm.has_actual = 1", (month,))
+            n = cur.fetchone()[0]
+            c.close()
         return n > 0
     except Exception:
         return False
@@ -19,7 +28,8 @@ def _has_month(month):
 
 def _db_up():
     try:
-        dbengine.connect().close()
+        with use_live_v2_db():
+            dbengine.connect().close()
         return True
     except Exception:
         return False

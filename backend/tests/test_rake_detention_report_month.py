@@ -12,6 +12,12 @@ import pytest
 from repo import rake as rrk
 import page_rake_detention as rd
 
+
+@pytest.fixture(scope="module", autouse=True)
+def _live(live_db_module):
+    """Reads the live data (v2: conftest.live_v2_db_name)."""
+    return live_db_module
+
 REPORT_MONTH = "2026-08"
 
 
