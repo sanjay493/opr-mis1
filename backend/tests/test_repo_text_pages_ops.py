@@ -94,6 +94,9 @@ class _CommitSpy:
                 return getattr(self._cur, name)
 
         class _Conn:
+            def _spy_raw(self):
+                return conn
+
             def cursor(self):
                 return _Cur(conn.cursor())
 
@@ -119,11 +122,24 @@ def _spy(monkeypatch, module, table):
     return spy
 
 
+def _spy_rc(monkeypatch, table):
+    """_CommitSpy for repo modules that write through repo.conn.tx() (v2
+    repo.text): wraps the raw connection repo.conn acquires; the pool gets
+    the real connection back on release."""
+    real_release = dbengine._pool_release
+    spy = _CommitSpy(rc._acquire, table)
+    monkeypatch.setattr(rc, "_acquire", spy)
+    monkeypatch.setattr(dbengine, "_pool_release",
+                        lambda raw, poolable: real_release(raw._spy_raw() if hasattr(raw, "_spy_raw") else raw,
+                                                           poolable))
+    return spy
+
+
 # ── repo.pages ────────────────────────────────────────────────────────────────
 
 def test_page_configs_save_load_round_trip_commit_once(mysql_db, monkeypatch):
     with pytest.MonkeyPatch.context() as mp:
-        spy = _spy(mp, rpg, "page_configs")
+        spy = _spy(mp, rpg, "page_config")
         rpg.save_page_config("2026-08", 5, {"page": 5, "title": "five"})
         assert (spy.connects, spy.commits, spy.visible_mid_call) == (1, 1, [0])
     rpg.save_page_config("2026-08", 2, {"page": 2, "title": "two"})
@@ -140,7 +156,7 @@ def test_page3_narrative_route_commit_once_and_missing_data(tc, monkeypatch):
     import page_missing_data
     assert rtx.page3_narrative_any_row("2026-08") is False
     with pytest.MonkeyPatch.context() as mp:
-        spy = _spy(mp, rtx, "page3_narrative")
+        spy = _spy_rc(mp, "report_text")
         r = tc.post("/api/page3-narrative", json={"month": "2026-08", "production_narrative": "Steady.",
                                                     "highlights": ["a", "b"]})
         assert r.status_code == 200, r.text
@@ -158,12 +174,12 @@ def test_page3_narrative_route_commit_once_and_missing_data(tc, monkeypatch):
 def test_do_letter_remarks_routes_commit_once(tc, monkeypatch):
     import page_do_letter
     with pytest.MonkeyPatch.context() as mp:
-        spy = _spy(mp, dbengine, "do_letter_remark_table")
+        spy = _spy(mp, dbengine, "report_text")
         r = tc.post("/api/do-letter/remarks", json={"report_month": "2026-08", "remarks": [
             {"item_name": "Crude Steel", "plant_name": "RSP", "remark": "BF-5 down"},
             {"item_name": "Finished Steel", "plant_name": "BSP", "remark": "mill reline"}]})
         assert r.json() == {"saved": 2}
-        assert (spy.connects, spy.commits, spy.visible_mid_call) == (1, 1, [0, 0])
+        assert (spy.connects, spy.commits, spy.visible_mid_call) == (1, 1, [0, 0, 0, 0])  # v2: item resolve-or-create + row, twice
     assert tc.get("/api/do-letter/remarks", params={"month": "2026-08"}).json() == {
         "Crude Steel": {"RSP": "BF-5 down"}, "Finished Steel": {"BSP": "mill reline"}}
     # an empty remark deletes the row
@@ -180,7 +196,7 @@ def test_do_letter_remarks_routes_commit_once(tc, monkeypatch):
 def test_sail_sales_note_confirm_route_and_one_page_read(tc, monkeypatch):
     import page_one_page_report
     with pytest.MonkeyPatch.context() as mp:
-        spy = _spy(mp, dbengine, "sail_sales_note_table")
+        spy = _spy(mp, dbengine, "report_text")
         r = tc.post("/api/sail-1page/confirm", json={"report_month": "2026-08", "sales_rows": [],
                                                        "stock_rows": [], "sales_note": "* incl. NSL"})
         assert r.status_code == 200, r.text
@@ -198,7 +214,7 @@ def test_board_note_and_secretary_review_text_commit_once(tc, monkeypatch):
     import secretary_review_text as srt
     assert bnm.get_manual_text is rtx.get_manual_text and srt.save_texts is rtx.save_texts
     with pytest.MonkeyPatch.context() as mp:
-        spy = _spy(mp, rtx, "board_note_manual_text")
+        spy = _spy_rc(mp, "report_text")
         r = tc.post("/api/board-note/manual-text", json={"report_fy": "2026-27", "quarter": 2, "entries": [
             {"plant": "BSP", "field": "why_narrative", "text": "shutdown"},
             {"plant": "DSP", "field": "additional_highlights", "text": "record"}]})
@@ -207,13 +223,13 @@ def test_board_note_and_secretary_review_text_commit_once(tc, monkeypatch):
     assert tc.get("/api/board-note/manual-text", params={"fy": "2026-27", "quarter": 2}).json() == {
         "BSP": {"why_narrative": "shutdown"}, "DSP": {"additional_highlights": "record"}}
     with pytest.MonkeyPatch.context() as mp:
-        spy = _spy(mp, rtx, "secretary_review_text")
+        spy = _spy_rc(mp, "report_text")
         r = tc.post("/api/secretary-review/texts", json={"month": "2026-09", "texts": {"hl_SAIL": "x", "hl_BSP": ""}})
         assert r.status_code == 200, r.text
-        assert (spy.connects, spy.commits, spy.visible_mid_call) == (1, 1, [0, 0])
+        assert (spy.connects, spy.commits, spy.visible_mid_call) == (1, 1, [2, 2])  # v2 report_text also holds the 2 committed board-note rows
     assert srt.get_texts("2026-09") == {"hl_SAIL": "x", "hl_BSP": ""}
     with pytest.MonkeyPatch.context() as mp:
-        spy = _spy(mp, rtx, "secretary_review_text")
+        spy = _spy_rc(mp, "report_text")
         assert srt.delete_texts("2026-09", ["hl_BSP"]) == 1
         assert (spy.connects, spy.commits) == (1, 1)
 
@@ -221,7 +237,7 @@ def test_board_note_and_secretary_review_text_commit_once(tc, monkeypatch):
 def test_phys_and_rail_notes_replace_commit_once(tc, monkeypatch):
     rtx.save_ss_phys_notes("2026-27", [{"sort_order": 1, "note_text": "old"}])
     with pytest.MonkeyPatch.context() as mp:
-        spy = _spy(mp, rtx, "special_steel_phys_note")
+        spy = _spy_rc(mp, "report_text")
         assert rtx.save_ss_phys_notes("2026-27", [{"sort_order": 2, "note_text": " b "},
                                                   {"sort_order": 1, "note_text": "a"},
                                                   {"sort_order": 3, "note_text": "  "}]) == 3
@@ -229,11 +245,11 @@ def test_phys_and_rail_notes_replace_commit_once(tc, monkeypatch):
         assert (spy.connects, spy.commits, spy.visible_mid_call) == (1, 1, [1, 1, 1])
     assert rtx.get_ss_phys_notes("2026-27") == [(1, "a"), (2, "b")]
     with pytest.MonkeyPatch.context() as mp:
-        spy = _spy(mp, rtx, "rail_prod_despatch_note")
+        spy = _spy_rc(mp, "report_text")
         r = tc.post("/api/rail-report/grid", json={"financial_year": "2026-27",
                                                    "notes": [{"sort_order": 1, "note_text": "n1"}]})
         assert r.json() == {"status": "ok"}
-        assert (spy.connects, spy.commits, spy.visible_mid_call) == (1, 1, [0, 0])
+        assert (spy.connects, spy.commits, spy.visible_mid_call) == (1, 1, [2, 2])  # v2 report_text also holds the 2 committed phys-note rows
     assert rtx.get_rail_report_notes() == [(1, "n1")]
 
 
@@ -298,9 +314,10 @@ def test_text_get_put_do_letter(mysql_db):
     assert rtx.get("do_letter", "2026-08", "remark", plant="RSP", item="Crude Steel") is None
     rtx.put("do_letter", "2026-08", "remark", "BF-5", "e@x", plant="RSP", item="Crude Steel")
     assert rtx.get("do_letter", "2026-08", "remark", plant="RSP", item="Crude Steel") == "BF-5"
-    assert _rows("SELECT item_name, plant_name, remark FROM do_letter_remark_table") == [("Crude Steel", "RSP", "BF-5")]
+    assert _rows("SELECT i.item_name, t.plant_code, t.text FROM report_text t JOIN item i ON i.item_id = t.item_id "
+                 "WHERE t.scope = 'do_letter'") == [("Crude Steel", "RSP", "BF-5")]
     rtx.put("do_letter", "2026-08", "remark", "", "e@x", plant="RSP", item="Crude Steel")
-    assert _rows("SELECT * FROM do_letter_remark_table") == []
+    assert _rows("SELECT * FROM report_text WHERE scope = 'do_letter'") == []
 
 
 def test_text_get_put_sail_sales_note(mysql_db):
@@ -348,8 +365,8 @@ def test_text_put_requires_plant_and_item(mysql_db):
         rtx.put("do_letter", "2026-08", "remark", "x", "e@x", item="Crude Steel")
     with pytest.raises(ValueError):
         rtx.put("do_letter", "2026-08", "remark", "x", "e@x", plant="RSP")
-    assert _rows("SELECT * FROM board_note_manual_text") == []
-    assert _rows("SELECT * FROM do_letter_remark_table") == []
+    assert _rows("SELECT * FROM report_text WHERE scope = 'board_note'") == []
+    assert _rows("SELECT * FROM report_text WHERE scope = 'do_letter'") == []
 
 
 def test_text_get_sail_sales_note_blank_is_none(mysql_db):
@@ -357,7 +374,7 @@ def test_text_get_sail_sales_note_blank_is_none(mysql_db):
     does."""
     import page_one_page_report as p1
     rtx.put("sail_sales_note", "2026-08", "note", "", "e@x")
-    assert _rows("SELECT report_month, note FROM sail_sales_note_table") == [("2026-08", "")]
+    assert _rows("SELECT period, text FROM report_text WHERE scope = 'sail_sales_note'") == [("2026-08", "")]
     assert rtx.get("sail_sales_note", "2026-08", "note") is None
     with rc.cursor() as cur:
         assert p1._sales_note(cur, "2026-08") is None
@@ -374,8 +391,8 @@ def test_text_block_keys_validated_for_secretary_review_and_board_note(mysql_db)
                  lambda: rtx.put("board_note", "2026-27:Q2", "nope", "x", "e@x", plant="BSP")):
         with pytest.raises(ValueError):
             call()
-    assert _rows("SELECT * FROM secretary_review_text") == []
-    assert _rows("SELECT * FROM board_note_manual_text") == []
+    assert _rows("SELECT * FROM report_text WHERE scope = 'secretary_review'") == []
+    assert _rows("SELECT * FROM report_text WHERE scope = 'board_note'") == []
 
 
 # ── repo.ops: auth flow through the gate ─────────────────────────────────────
@@ -387,10 +404,10 @@ def _cookie(resp):
 
 
 def _make_admin(email="admin@x.in"):
-    now = datetime.now(timezone.utc).isoformat()
-    _exec("INSERT INTO users (email, password_hash, name, role, profile_pic, created_at, updated_at) "
+    now = datetime.now(timezone.utc).replace(tzinfo=None)   # app_user.created_at: naive UTC DATETIME
+    _exec("INSERT INTO app_user (email, password_hash, name, role, profile_pic, created_at, updated_at) "
           "VALUES (%s, %s, 'Admin', 'admin', '', %s, %s)", (email, auth.hash_password("adminpass1"), now, now))
-    uid = _rows("SELECT id FROM users WHERE email=%s", (email,))[0][0]
+    uid = _rows("SELECT id FROM app_user WHERE email=%s", (email,))[0][0]
     return {auth.COOKIE_NAME: auth.create_session_token(uid, email, "admin")}
 
 
@@ -404,7 +421,7 @@ def test_auth_register_login_gated_write_activity_log(gated, monkeypatch):
     # not on the allow-list yet
     assert gated.post("/api/auth/register/request-otp", json={"email": email}).status_code == 403
     with pytest.MonkeyPatch.context() as mp:
-        spy = _spy(mp, dbengine, "allowed_emails")
+        spy = _spy(mp, dbengine, "allowed_email")
         r = gated.post("/api/admin/allowed-emails", json={"email": email}, cookies=admin)
         assert r.status_code == 200, r.text
         # the allow-list insert, then log_activity's own connection + commit
@@ -423,7 +440,7 @@ def test_auth_register_login_gated_write_activity_log(gated, monkeypatch):
     assert r.status_code == 200, r.text
     uid = r.json()["user"]["id"]
     assert r.json()["user"]["role"] is None
-    assert _rows("SELECT used FROM otp_codes WHERE email=%s", (email,)) == [(1,)]
+    assert _rows("SELECT used FROM otp_code WHERE email=%s", (email,)) == [(1,)]
     # the code can't be replayed
     assert not auth.verify_otp(email, "register", code)
 
@@ -443,7 +460,7 @@ def test_auth_register_login_gated_write_activity_log(gated, monkeypatch):
     r = gated.post("/api/auth/login/verify", json={"challenge": challenge, "code": code})
     assert r.status_code == 200, r.text
     me = _cookie(r)
-    assert _rows("SELECT kind, user_email FROM admin_notifications") == [("sign_in", email)]
+    assert _rows("SELECT kind, user_email FROM admin_notification") == [("sign_in", email)]
 
     # gated write: the narrative is saved and the middleware logs it
     before = _rows("SELECT COUNT(*) FROM activity_log")[0][0]
@@ -481,7 +498,7 @@ def test_auth_register_login_gated_write_activity_log(gated, monkeypatch):
 
     # barred: the session stops working for gated writes and /me
     assert gated.patch(f"/api/admin/allowed-emails/{email}/bar", json={"barred": True}, cookies=admin).status_code == 200
-    assert _rows("SELECT barred, barred_by FROM allowed_emails WHERE email=%s", (email,)) == [(1, "admin@x.in")]
+    assert _rows("SELECT barred, barred_by FROM allowed_email WHERE email=%s", (email,)) == [(1, "admin@x.in")]
     assert gated.post("/api/todo/add", json={"subject": "t", "due_date": "2026-10-30"}, cookies=me).status_code == 403
     assert gated.get("/api/auth/me", cookies=me).status_code == 403
     assert not auth.is_email_allowed(email)
@@ -497,31 +514,31 @@ def test_auth_register_login_gated_write_activity_log(gated, monkeypatch):
     assert gated.delete(f"/api/admin/users/{uid}", cookies=admin).status_code == 200
     assert auth.get_user_by_email(email) is None
     assert gated.delete(f"/api/admin/allowed-emails/{email}", cookies=admin).status_code == 200
-    assert _rows("SELECT * FROM allowed_emails") == []
+    assert _rows("SELECT * FROM allowed_email") == []
 
 
 def test_otp_expiry_burn_and_reset_password(gated, monkeypatch):
     sent = []
     monkeypatch.setattr(auth, "send_otp_email", lambda to, code, purpose: sent.append(code))
-    now = datetime.now(timezone.utc).isoformat()
-    _exec("INSERT INTO users (email, password_hash, name, role, profile_pic, created_at, updated_at) "
+    now = datetime.now(timezone.utc).replace(tzinfo=None)   # app_user.created_at: naive UTC DATETIME
+    _exec("INSERT INTO app_user (email, password_hash, name, role, profile_pic, created_at, updated_at) "
           "VALUES ('u@x.in', %s, 'U', NULL, '', %s, %s)", (auth.hash_password("oldpass12"), now, now))
     # an expired code (VARCHAR ISO timestamp in the past) is refused
     code = auth.generate_and_store_otp("u@x.in", "reset_password")
-    past = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
-    _exec("UPDATE otp_codes SET expires_at=%s", (past,))
+    past = (datetime.now(timezone.utc) - timedelta(minutes=1)).replace(tzinfo=None)   # naive UTC
+    _exec("UPDATE otp_code SET expires_at=%s", (past,))
     assert not auth.verify_otp("u@x.in", "reset_password", code)
     # a new code invalidates the earlier unused ones
     code1 = auth.generate_and_store_otp("u@x.in", "reset_password")
     code2 = auth.generate_and_store_otp("u@x.in", "reset_password")
-    assert _rows("SELECT used FROM otp_codes ORDER BY id") == [(1,), (1,), (0,)]
+    assert _rows("SELECT used FROM otp_code ORDER BY id") == [(1,), (1,), (0,)]
     assert auth.otp_resend_wait_seconds("u@x.in", "reset_password") > 0
     assert auth.otp_resend_wait_seconds("u@x.in", "login") == 0
     # OTP_MAX_ATTEMPTS wrong guesses burn the code
     wrong = "000000" if code2 != "000000" else "111111"
     for _ in range(auth.OTP_MAX_ATTEMPTS):
         assert not auth.verify_otp("u@x.in", "reset_password", wrong)
-    assert _rows("SELECT used FROM otp_codes ORDER BY id DESC LIMIT 1") == [(1,)]
+    assert _rows("SELECT used FROM otp_code ORDER BY id DESC LIMIT 1") == [(1,)]
     assert not auth.verify_otp("u@x.in", "reset_password", code2)
     assert code1  # (unused: it was invalidated by code2)
     # password reset through the routes
@@ -540,19 +557,19 @@ def test_otp_expiry_burn_and_reset_password(gated, monkeypatch):
 
 # ── repo.ops: per-request writes (visits / notifications) ────────────────────
 
-def test_log_visit_and_admin_notifications(gated, monkeypatch):
+def test_log_visit_and_admin_notification(gated, monkeypatch):
     with pytest.MonkeyPatch.context() as mp:
-        spy = _spy(mp, rop, "page_visits")
+        spy = _spy(mp, rop, "page_visit")
         r = gated.post("/api/log-visit", json={"path": "/report"}, headers={"x-forwarded-for": "10.0.0.9"})
         assert r.status_code == 200, r.text
         # one connection for the visit, one for the anon-visit notification
         assert (spy.connects, spy.commits) == (2, 2)
         assert spy.visible_mid_call == [0, 1]
     gated.post("/api/log-visit", json={"path": "/upload"}, headers={"x-forwarded-for": "10.0.0.9"})
-    assert _rows("SELECT ip_address, user_email, path FROM page_visits ORDER BY id") == [
+    assert _rows("SELECT ip_address, user_email, path FROM page_visit ORDER BY id") == [
         ("10.0.0.9", None, "/report"), ("10.0.0.9", None, "/upload")]
     # the second anonymous visit inside the window is not notified again
-    assert _rows("SELECT kind, ip_address, path FROM admin_notifications") == [("anon_visit", "10.0.0.9", "/report")]
+    assert _rows("SELECT kind, ip_address, path FROM admin_notification") == [("anon_visit", "10.0.0.9", "/report")]
     admin = _make_admin()
     notes = gated.get("/api/admin/notifications", cookies=admin).json()["notifications"]
     assert [(n["kind"], n["path"]) for n in notes] == [("anon_visit", "/report")]
@@ -591,14 +608,14 @@ def test_extraction_log_own_and_caller_connection(tc, monkeypatch):
 
 def test_todo_routes_commit_once(tc, monkeypatch):
     with pytest.MonkeyPatch.context() as mp:
-        spy = _spy(mp, dbengine, "todo_jobs")
+        spy = _spy(mp, dbengine, "todo_job")
         r = tc.post("/api/todo/add", json={"subject": " Send note ", "due_date": "2026-10-30", "priority": "high"})
         assert r.status_code == 200, r.text
         assert (spy.connects, spy.commits, spy.visible_mid_call) == (1, 1, [0])
     job = r.json()["id"]
     assert tc.post(f"/api/todo/{job}/update", json={"remark": "r1"}).status_code == 200
     with pytest.MonkeyPatch.context() as mp:
-        spy = _spy(mp, dbengine, "todo_jobs")
+        spy = _spy(mp, dbengine, "todo_job")
         assert tc.post(f"/api/todo/{job}/complete").status_code == 200
         assert (spy.connects, spy.commits) == (1, 1)
     jobs = tc.get("/api/todo/list", params={"status": "done"}).json()["jobs"]
@@ -610,7 +627,7 @@ def test_todo_routes_commit_once(tc, monkeypatch):
     assert tc.post("/api/todo/999/complete").status_code == 404
     assert tc.post(f"/api/todo/{job}/delete").status_code == 200
     assert tc.post(f"/api/todo/{job}/delete").status_code == 404
-    assert _rows("SELECT * FROM todo_jobs") == []
+    assert _rows("SELECT * FROM todo_job") == []
 
 
 def test_worklog_routes_commit_once(tc, monkeypatch):
