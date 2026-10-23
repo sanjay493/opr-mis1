@@ -55,6 +55,10 @@ EXEMPT = {
 }
 
 
+# the v2 implementation keeps v1's exemptions (Task 7f)
+EXEMPT.update({("v2." + m, f): why for (m, f), why in list(EXEMPT.items()) if m == "ops"})
+
+
 def _text(node):
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
         return node.value
