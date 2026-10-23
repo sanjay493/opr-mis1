@@ -270,6 +270,8 @@ class Dual:
                     elif isinstance(kind, str) and kind.startswith("unit:"):
                         if v is not None:
                             v = self._v2_unit(cur, r[kind[5:]], v)
+                    elif kind == "item":
+                        v = self._v2_item(cur, v)
                     elif kind not in (None, "month"):
                         raise NotImplementedError(kind)
                     if c2 in ("plant_code", "from_plant_code", "to_plant_code") and v is not None:
@@ -300,6 +302,8 @@ class Dual:
         def sel(c2, kind):
             if isinstance(kind, str) and kind.startswith("unit:"):
                 return f"(SELECT pu.unit_code FROM plant_unit pu WHERE pu.unit_id = t.{c2})"
+            if kind == "item":
+                return f"(SELECT i.item_name FROM item i WHERE i.item_id = t.{c2})"
             return f"t.{c2}"
         names = [c[0] for c in cols]
         r2 = self.sql(2, f"SELECT {', '.join(sel(c2, k) for c2, _, k in cols)} FROM {v2t} t")
