@@ -221,3 +221,47 @@ def exact_unit_id(cur, plant, unit, *, bump):
                     "ON DUPLICATE KEY UPDATE unit_code = plant_unit.unit_code", (plant, unit))
         row = cur.execute(sql, (plant, unit)).fetchone()
     return row[0]
+
+
+def iso_sql(col, fmt):
+    """SQL that renders a DATETIME(6) column back to the v1 string of
+    repo.v2codec format `fmt` (NULL stays NULL); the fraction is printed
+    only when non-zero, as isoformat() does. Used by cursor-level readers
+    so the rows keep the caller's own row type."""
+    from repo import v2codec as vc
+    if fmt == vc.SQL_SECONDS:
+        return f"DATE_FORMAT({col}, '%%Y-%%m-%%d %%H:%%i:%%s')"
+    base = f"DATE_FORMAT({col}, '%%Y-%%m-%%dT%%H:%%i:%%s')"
+    if fmt == vc.ISO_SECONDS:
+        return base
+    frac = f"IF(MICROSECOND({col}) = 0, '', CONCAT('.', LPAD(MICROSECOND({col}), 6, '0')))"
+    tail = ", '+00:00'" if fmt == vc.ISO_UTC else ""
+    return f"CONCAT({base}, {frac}{tail})"
+
+
+def stamp(fmt, value, column):
+    """The naive datetime to store for a v1 timestamp string in format `fmt`
+    (None for NULL); OutOfModelError when the string is not in the form v1
+    wrote and the v2 DATETIME renders back (parity_exceptions.md §2)."""
+    from repo import v2codec as vc
+    if value is None:
+        return None
+    try:
+        return vc.parse_ts(fmt, value)
+    except (vc.CodecError, TypeError):
+        raise OutOfModelError(f"{column} {value!r} is not in the form v1 wrote ({fmt}); "
+                              "the v2 DATETIME renders back only that form") from None
+
+
+def day(column, value, length=10):
+    """The DATE for a v1 VARCHAR/CHAR(length) date string (trailing spaces
+    cut as MySQL cut them); None for NULL; OutOfModelError when it is not a
+    canonical 'YYYY-MM-DD' (parity_exceptions.md §2)."""
+    from repo import v2codec as vc
+    if value is None:
+        return None
+    try:
+        return vc.parse_date(fit_char(value, length))
+    except (vc.CodecError, TypeError):
+        raise OutOfModelError(f"{column} {value!r}: v1 stored it as text, the v2 DATE holds only "
+                              "a 'YYYY-MM-DD' date") from None

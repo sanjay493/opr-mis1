@@ -59,29 +59,8 @@ from repo.v2codec import (CodecError, ISO_LOCAL, ISO_SECONDS, ISO_UTC, SQL_SECON
 _UC = "pu.unit_code COLLATE utf8mb4_0900_ai_ci"
 
 
-def _iso(col, fmt):
-    """SQL that renders a DATETIME(6) column back to the v1 string of `fmt`
-    (NULL stays NULL); the fraction is printed only when non-zero, as
-    isoformat() does."""
-    if fmt == SQL_SECONDS:
-        return f"DATE_FORMAT({col}, '%%Y-%%m-%%d %%H:%%i:%%s')"
-    base = f"DATE_FORMAT({col}, '%%Y-%%m-%%dT%%H:%%i:%%s')"
-    if fmt == ISO_SECONDS:
-        return base
-    frac = f"IF(MICROSECOND({col}) = 0, '', CONCAT('.', LPAD(MICROSECOND({col}), 6, '0')))"
-    return f"CONCAT({base}, {frac}{', ' + repr('+00:00') if fmt == ISO_UTC else ''})"
-
-
-def _stamp(fmt, value, column):
-    """The naive datetime to store for a v1 timestamp string, or None for
-    NULL; OutOfModelError when it is not in the column's canonical form."""
-    if value is None:
-        return None
-    try:
-        return parse_ts(fmt, value)
-    except (CodecError, TypeError):
-        raise _keys.OutOfModelError(f"{column} {value!r} is not in the form v1 wrote ({fmt}); "
-                                    "the v2 DATETIME renders back only that form") from None
+_iso = _keys.iso_sql
+_stamp = _keys.stamp
 
 
 def _stamp_flagged(column, value):
@@ -436,16 +415,7 @@ def _stored_unit_id(cur, table, plant, unit):
     return row[0] if row is not None else _keys.exact_unit_id(cur, plant, unit, bump=False)
 
 
-def _day(column, value):
-    """The DATE for a v1 VARCHAR(10) date string; OutOfModelError when it
-    is not a canonical 'YYYY-MM-DD' (parity_exceptions.md §2)."""
-    if value is None:
-        return None
-    try:
-        return parse_date(_keys.fit_char(value, 10))
-    except (CodecError, TypeError):
-        raise _keys.OutOfModelError(f"{column} {value!r}: v1 stored it as text, the v2 DATE holds only "
-                                    "a 'YYYY-MM-DD' date") from None
+_day = _keys.day
 
 
 def save_major_unit_daily_record(plant_code: str, unit_label: str, value: Optional[float],
