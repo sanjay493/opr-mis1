@@ -772,16 +772,24 @@ def update_external_bf_data(cur, param_json, updated_at, bf_id, fy):
 
 def insert_external_bf_data(cur, bf_id, fy, param_json, now):
     """Insert one FY entry on the caller's cursor; the caller commits.
-    api_bf_benchmark POST .../entry."""
+    api_bf_benchmark POST .../entry. A duplicate (bf, fy) raises v1's 1062
+    text (its key was named uq_bf_benchmark_ext)."""
     _keys.fits("report_month", fy, 7, nullable=False)
     _keys.fits("created_at", now, 40)
     stamp, plain = _stamp_flagged("data.created_at", now)
     _ver.bump(cur)
-    cur.execute(
-            "INSERT INTO bf_benchmark_external_data (external_bf_id, fy, param_json, created_at, updated_at, "
-            "created_at_plain, updated_at_plain) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-            (bf_id, _keys.fit_fy(fy), param_json, stamp, stamp, plain, plain),
-        )
+    try:
+        cur.execute(
+                "INSERT INTO bf_benchmark_external_data (external_bf_id, fy, param_json, created_at, updated_at, "
+                "created_at_plain, updated_at_plain) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                (bf_id, _keys.fit_fy(fy), param_json, stamp, stamp, plain, plain),
+            )
+    except pymysql.err.IntegrityError as e:
+        if e.args and e.args[0] == 1062:       # v1 named its unique key uq_bf_benchmark_ext
+            raise type(e)(e.args[0], str(e.args[1]).replace(
+                "bf_benchmark_external_data.uq_bf_external_data",
+                "bf_benchmark_external_data.uq_bf_benchmark_ext")) from None
+        raise
 
 
 # ── cover_photos / report_cover_settings (cover_store) ──────────────────────
@@ -855,10 +863,14 @@ def active_cover_photo_rows():
 
 
 def cover_photo_usage_rows():
-    """fetchall() of (photo_id, months using it). cover_store.list_photos."""
+    """fetchall() of (photo_id, months using it). cover_store.list_photos.
+
+    PARITY SHIM: v1's GROUP BY (temporary table, no ORDER BY) returned the
+    groups in first-appearance order along the primary-key scan
+    (report_month); ORDER BY MIN(report_month) reproduces it."""
     return _cover_query(
         "SELECT photo_id, COUNT(*) FROM report_cover_setting WHERE photo_id IS NOT NULL "
-        "GROUP BY photo_id ORDER BY photo_id")
+        "GROUP BY photo_id ORDER BY MIN(report_month), photo_id")
 
 
 def deactivate_cover_photo(photo_id):
