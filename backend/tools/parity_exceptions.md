@@ -99,3 +99,14 @@ These are writes that v1 stored and v2 refuses, because the v2 model cannot hold
 | a non-str key (`{1: 5}`), or a tuple leaf | stored (json.dumps makes them `"1"` / a list) | CodecError | No: pydantic and every builder give str keys and list / scalar values |
 
 **Why the long key is not supported.** `techno_value.param_key` is VARCHAR(190) inside the primary key. Widening it is a schema change, and the InnoDB key limit (3072 bytes) would still cap a key at about 700 characters, while v1's JSON keys could reach 64 KB. Full support would need a different key design, for example a hashed key plus a text column. That is not cheap, so the case is reported here instead (7c report, fix round 2).
+
+### 2c. Narrative text keys v2 cannot hold (Task 7d)
+
+repo.v2.text checks every write against the v1 column limits and raises v1's own error (DataError 1406 / 1264, IntegrityError 1048 / 1062 with v1's column and key names), so over-long input fails alike on both sides. Two inputs fit a v1 column but not report_text; `OutOfModelError` (a ValueError) is raised before anything is written:
+
+| input | v1 | v2 | reachable? |
+|---|---|---|---|
+| a board_note plant of 9..16 characters | stored (plant VARCHAR(16)) | OutOfModelError (plant_code VARCHAR(8), FK to the plant master) | **Only through a hand-crafted request:** the `plant` of POST `/api/board-note/manual-text` entries is a free string. The UI sends the fixed board-note plant list; the longest plant in the v1 data has 4 characters. |
+| a board_note period longer than 10 characters (`'<fy>:Q<n>'` with a 2+ digit or negative quarter) | stored (quarter TINYINT) | OutOfModelError (period VARCHAR(10)) | No: `_parse_board_note_period` allows quarters 1-4 only. |
+
+Not reproduced either: MySQL stores a CHAR / VARCHAR value whose excess over the column length is only trailing spaces by trimming them (no error even in strict mode), e.g. a month `'2025-04 '`. v2 raises v1's DataError 1406 for it instead. Every caller passes validated or fixed keys (months from the month picker, fixed block keys and plant lists), so this needs a hand-crafted request.
