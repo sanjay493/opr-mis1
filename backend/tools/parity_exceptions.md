@@ -133,3 +133,27 @@ The 7e1 modules check every write against v1's column limits and raise v1's own 
 | a short non-month (`'2025-4'`) for stock, sail sales, ipt, cost_trend monthly, sail_mines, mines, rake monthly / summary, special_steel orders / abp | stored as text | OutOfModelError (cal_month FK) | As §2a: only routes that do not validate the month shape. An empty batch never checks the month, as in v1. |
 | a sail_stock_snapshot date that is not a canonical `'YYYY-MM-DD'` (`'2021-1-4'`) | stored (CHAR(10)) | OutOfModelError (DATE) | **Only through a hand-crafted request** to `/api/sail-1page/confirm`: the stock rows' `snapshot_date` comes from the extractor, which writes ISO dates. A read with such a string returns None, as v1's did (no stored v1 value is spelled that way). |
 | a grade-club `created_at` that is not a `datetime.now().isoformat()` string | stored (VARCHAR(40)) | OutOfModelError (DATETIME(6)) | No: the only caller (api_special_steel_clubs) passes `datetime.now().isoformat()`. |
+
+### 2e. Keys of breakdown / capital_repair / misc / pages / ops v2 cannot hold (Task 7e2 / 7f)
+
+These modules also raise v1's own column errors (1048 / 1406 with v1's column names, v1's 1062 key names for users.email and uq_bf_benchmark_ext). These inputs fit a v1 column but not the v2 model; `OutOfModelError` (a ValueError) or an FK error is raised before anything is written:
+
+| input | v1 | v2 | reachable? |
+|---|---|---|---|
+| capital_repair `actual_start` / `actual_end` that is not a canonical `'YYYY-MM-DD'` (`'2026-6-1'`, `''`, free text) | stored (CHAR(10)) | OutOfModelError (DATE) | **Needs a ruling.** POST `/api/capital-repair-entry` maps empty to NULL but does not validate the shape; the form uses date inputs. |
+| capital_repair `fy` of 8 characters (`'2026-27 '`) | stored (VARCHAR(8)) | OutOfModelError (CHAR(7)) | No: `/api/capital-repair-row` requires `\d{4}-\d{2}`. |
+| major_unit_daily_record `record_date` that is not a canonical date (`'1 Oct'`, `'2026-4-1'`, `''`) | stored (VARCHAR(10)) | OutOfModelError (DATE) | **Needs a ruling.** The data-entry form (`entry/major-unit-daily/Form.js`) is a free-text input with the placeholder YYYY-MM-DD (blank becomes NULL). |
+| todo `due_date` / worklog `work_date` matching `\d{4}-\d{2}-\d{2}` but not a real date (`'2026-02-30'`) | stored | OutOfModelError (DATE) | Hand-crafted only. |
+| a plant of 9..32 characters (pdf_item_alias, power, bf_benchmark_sail_meta) | stored | OutOfModelError (plant_code VARCHAR(8)) | Hand-crafted only (as §2d). |
+| a short non-month for power / market / macro / page_config / cover setting | stored as text | OutOfModelError (cal_month FK) | As §2a. |
+| page_config `page_data` holding NaN / Infinity | stored (json.dumps text) | OutOfModelError (JSON_VALID check) | Hand-crafted only: JSON bodies from the UI never hold them. |
+| a timestamp string passed to bf_benchmark / cover_photo / steel_sector / users / otp / todo / worklog writers that is not in its column's v1 form | stored (VARCHAR) | OutOfModelError | No: every caller passes `datetime.now(...).isoformat()` / `strftime` in the column's form. |
+| report_cover_setting.photo_id of a photo that does not exist; bf_benchmark_external_data for a BF that does not exist | stored (no FK in v1) | FK error 1452 | No: cover_store / api_bf_benchmark check existence first. |
+| pdf_item_alias `convert_t` outside TINYINT (-128..127) | stored (INT) | DataError 1264 | No: callers pass 0 / 1. |
+| `work_date` / `from` / `to` filters of `/api/worklog/list` that are not real dates | string compare | MySQL date error | Hand-crafted only. |
+
+### 1c. Row order the optimizer picked per call (Task 7e2)
+
+`breakdown.open_breakdown_rows` is a COMPARE_MODE multiset: v1's order depends on a per-call cost choice (2 of 32 recorded calls used the `start_ts` index, the rest the `capital_repair_id IS NULL` scan); v2 returns id order. The only caller groups the events by (plant, unit_type, unit_name) and sorts the result, so it can only change which of two equal-hour events of one unit supplies the cause text.
+
+`ops` text ordering: v1 sorted its UTC ISO strings under ai_ci, where a value with a fraction sorts before the whole-second value of the same second; v2 reproduces that key, so the order is unchanged.
