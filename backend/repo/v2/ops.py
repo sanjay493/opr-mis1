@@ -67,9 +67,22 @@ def _naive_utc(dt: datetime) -> datetime:
     return dt.astimezone(timezone.utc).replace(tzinfo=None)
 
 
-def _since(value, column):
-    """The stored (UTC wall-clock) datetime of an ISO bound with '+00:00'."""
-    return _keys.stamp(ISO_UTC, value, column)
+def _key(col, direction="ASC"):
+    """ORDER BY terms reproducing how v1 sorted its UTC ISO text. Under
+    utf8mb4_0900_ai_ci '.' sorts before '+', so within one second a value
+    with a fraction ('...:05.250000+00:00') sorts BEFORE the whole-second
+    one ('...:05+00:00'), the reverse of datetime order; fractions then
+    compare numerically. Key = (second, no-fraction?, microsecond)."""
+    return (f"DATE_FORMAT({col}, '%%Y-%%m-%%d %%H:%%i:%%s') {direction}, "
+            f"IF(MICROSECOND({col}) = 0, 1, 0) {direction}, MICROSECOND({col}) {direction}")
+
+
+def _key_ge(col, value, column):
+    """(SQL, params) for v1's `col >= value` string comparison (same key)."""
+    dt = _keys.stamp(ISO_UTC, value, column)
+    return (f"(DATE_FORMAT({col}, '%%Y-%%m-%%d %%H:%%i:%%s'), IF(MICROSECOND({col}) = 0, 1, 0), "
+            f"MICROSECOND({col})) >= (%s, %s, %s)",
+            (dt.strftime("%Y-%m-%d %H:%M:%S"), 1 if dt.microsecond == 0 else 0, dt.microsecond))
 
 
 # ── Moved from db.py ─────────────────────────────────────────────────────────
@@ -118,11 +131,12 @@ def _add_admin_notification(kind, ip_address, user, path) -> None:
     conn = connect()
     try:
         if kind == "anon_visit":
-            since = _naive_utc(now - timedelta(minutes=ANON_VISIT_NOTIFY_WINDOW_MINUTES))
+            since = (now - timedelta(minutes=ANON_VISIT_NOTIFY_WINDOW_MINUTES)).isoformat()
+            cond, cparams = _key_ge("created_at", since, "since")
             row = conn.execute(
                 "SELECT 1 FROM admin_notification WHERE kind = 'anon_visit' AND ip_address = %s "
-                "AND created_at >= %s LIMIT 1",
-                (ip_address or None, since),
+                f"AND {cond} LIMIT 1",
+                (ip_address or None, *cparams),
             ).fetchone()
             if row:
                 return
@@ -426,7 +440,7 @@ def user_list_rows(cur):
     """fetchall() of the admin user list, newest first. api_admin list_users."""
     cur.execute(
         "SELECT id, email, name, role, profile_pic, allowed_pages, can_delete, " + _utc("created_at")
-        + ", " + _utc("updated_at") + " FROM app_user ORDER BY created_at DESC, id"
+        + ", " + _utc("updated_at") + " FROM app_user ORDER BY " + _key("created_at", "DESC") + ", id"
     )
     return cur.fetchall()
 
@@ -469,7 +483,7 @@ def delete_user(cur, user_id):
 
 def allowed_email_rows(cur):
     """fetchall() of SELECT * FROM allowed_emails, newest first."""
-    cur.execute(f"SELECT {_ALLOWED_COLS} FROM allowed_email ORDER BY created_at DESC, email")
+    cur.execute(f"SELECT {_ALLOWED_COLS} FROM allowed_email ORDER BY {_key('created_at', 'DESC')}, email")
     return cur.fetchall()
 
 
@@ -531,14 +545,14 @@ def activity_log_rows(cur, clause, params, limit, offset):
 
 def page_visit_rows_since(cur, since):
     """fetchall() of SELECT * FROM page_visits from `since` (ISO string)."""
-    cur.execute(f"SELECT {_VISIT_COLS} FROM page_visit WHERE created_at >= %s ORDER BY created_at ASC, id ASC",
-                (_since(since, "since"),))
+    cond, cparams = _key_ge("created_at", since, "since")
+    cur.execute(f"SELECT {_VISIT_COLS} FROM page_visit WHERE {cond} ORDER BY {_key('created_at')}, id ASC", cparams)
     return cur.fetchall()
 
 
 def page_visit_rows(cur):
     """fetchall() of SELECT * FROM page_visits."""
-    cur.execute(f"SELECT {_VISIT_COLS} FROM page_visit ORDER BY created_at ASC, id ASC")
+    cur.execute(f"SELECT {_VISIT_COLS} FROM page_visit ORDER BY {_key('created_at')}, id ASC")
     return cur.fetchall()
 
 
