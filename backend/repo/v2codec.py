@@ -137,7 +137,6 @@ DATE_COLUMNS: Dict[str, str] = {
     "sail_stock_snapshot.snapshot_date": "sail_stock_snapshot_table.snapshot_date",
     "todo_job.due_date":                "todo_jobs.due_date",
     "daily_work_log.work_date":         "daily_work_log.work_date",
-    "major_unit_daily_record.record_date": "major_unit_daily_record.record_date",
 }
 
 

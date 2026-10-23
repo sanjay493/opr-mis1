@@ -1035,13 +1035,14 @@ CREATE TABLE breakdown (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- v1 major_unit_daily_record. unit_label -> unit_id (the label is the
--- plant_unit.unit_code). record_date VARCHAR(10) -> DATE.
+-- plant_unit.unit_code). record_date stays VARCHAR(10) text: the data-entry form is a
+-- free-text input (any string up to 10 characters, e.g. 05/04/2026), so a DATE would refuse input v1 saved.
 CREATE TABLE major_unit_daily_record (
     plant_code      VARCHAR(8)   NOT NULL,
     unit_id         SMALLINT     NOT NULL,
     unit_of_measure VARCHAR(16)  NULL,
     value           DOUBLE       NULL,
-    record_date     DATE         NULL,
+    record_date     VARCHAR(10)  NULL,
     remarks         TEXT         NULL,
     sort_order      INT          NOT NULL DEFAULT 0,
     updated_by      VARCHAR(190) NULL,

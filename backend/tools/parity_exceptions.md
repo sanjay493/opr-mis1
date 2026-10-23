@@ -142,7 +142,6 @@ These modules also raise v1's own column errors (1048 / 1406 with v1's column na
 |---|---|---|---|
 | capital_repair `actual_start` / `actual_end` that is not a canonical `'YYYY-MM-DD'` (`'2026-6-1'`, `''`, free text) | stored (CHAR(10)) | OutOfModelError (DATE) | **Needs a ruling.** POST `/api/capital-repair-entry` maps empty to NULL but does not validate the shape; the form uses date inputs. |
 | capital_repair `fy` of 8 characters (`'2026-27 '`) | stored (VARCHAR(8)) | OutOfModelError (CHAR(7)) | No: `/api/capital-repair-row` requires `\d{4}-\d{2}`. |
-| major_unit_daily_record `record_date` that is not a canonical date (`'1 Oct'`, `'2026-4-1'`, `''`) | stored (VARCHAR(10)) | OutOfModelError (DATE) | **Needs a ruling.** The data-entry form (`entry/major-unit-daily/Form.js`) is a free-text input with the placeholder YYYY-MM-DD (blank becomes NULL). |
 | todo `due_date` / worklog `work_date` matching `\d{4}-\d{2}-\d{2}` but not a real date (`'2026-02-30'`) | stored | OutOfModelError (DATE) | Hand-crafted only. |
 | a plant of 9..32 characters (pdf_item_alias, power, bf_benchmark_sail_meta) | stored | OutOfModelError (plant_code VARCHAR(8)) | Hand-crafted only (as §2d). |
 | a short non-month for power / market / macro / page_config / cover setting | stored as text | OutOfModelError (cal_month FK) | As §2a. |

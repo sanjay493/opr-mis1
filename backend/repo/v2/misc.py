@@ -30,9 +30,8 @@ upsert onto a stored ai_ci twin updates that row and keeps its spelling
 (a locking lookup after the bump), otherwise the exact spelling is
 resolved or created (_keys.exact_unit_id).
 
-DATES. major_unit_daily_record.record_date was VARCHAR(10), now a DATE: a
-string that is not a canonical 'YYYY-MM-DD' is refused (OutOfModelError;
-the data-entry form takes free text, see parity_exceptions.md §2).
+DATES. major_unit_daily_record.record_date stays VARCHAR(10) text (the
+data-entry form is free text), stored and read back verbatim.
 
 ORDER. Reads v1 served without an ORDER BY from the primary key have an
 explicit ORDER BY reproducing it.
@@ -415,9 +414,6 @@ def _stored_unit_id(cur, table, plant, unit):
     return row[0] if row is not None else _keys.exact_unit_id(cur, plant, unit, bump=False)
 
 
-_day = _keys.day
-
-
 def save_major_unit_daily_record(plant_code: str, unit_label: str, value: Optional[float],
                                   unit_of_measure: Optional[str], record_date: Optional[str],
                                   remarks: Optional[str], sort_order: int, updated_by: str = "") -> None:
@@ -432,7 +428,6 @@ def save_major_unit_daily_record(plant_code: str, unit_label: str, value: Option
     _keys.fits("unit_of_measure", unit_of_measure, 16)
     _keys.fits("record_date", record_date, 10)
     _keys.fits("updated_by", updated_by, 128)
-    day = _day("record_date", record_date)
     conn = connect()
     try:
         cur = conn.cursor()
@@ -449,7 +444,7 @@ def save_major_unit_daily_record(plant_code: str, unit_label: str, value: Option
                 record_date = new.record_date, remarks = new.remarks,
                 sort_order = new.sort_order, updated_by = new.updated_by,
                 updated_at = new.updated_at
-        """, (plant_code, unit_id, unit_of_measure, value, day, remarks,
+        """, (plant_code, unit_id, unit_of_measure, value, record_date, remarks,
               sort_order, updated_by, updated_at))
         conn.commit()
     finally:

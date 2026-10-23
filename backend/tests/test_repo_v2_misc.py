@@ -248,6 +248,7 @@ def test_major_unit_daily(base, monkeypatch):
                save(unit_label="New Unit"), save(plant_code="NEWP", unit_label="Blast Furnace 1"),
                save(unit_label="Ünit"), save(updated_by=None), save(remarks=None, unit_of_measure=None),
                save(record_date="2026-10-01 "),                                                # cut
+               save(record_date="05/04/2026"), save(record_date=""), save(record_date="1 Oct"),   # free text, verbatim
                save(plant_code="P" * 9), save(plant_code=None), save(unit_label="U" * 65), save(unit_label=None),
                save(unit_of_measure="u" * 17), save(record_date="2026-10-011"), save(sort_order=None),
                save(updated_by="b" * 129),
@@ -260,18 +261,6 @@ def test_major_unit_daily(base, monkeypatch):
                _rename("X" * 65, "BSP", "Coke Oven 1"),
                _rename("Fresh Name", "bsp", "coke oven 1")):
         step(fn)
-
-
-def test_major_unit_record_date_v2_cannot_hold_is_refused(base):
-    base.seed_simple("major_unit_daily_record", MU)
-    with base.v2():
-        n = base.data_version(2)
-        before = {k: repr(v) for k, v in _mu_reads(m2).items()}
-        for d in ("", "2026-4-1", "1 Oct", "2026-02-30", "x"):
-            with pytest.raises(OutOfModelError):
-                m2.save_major_unit_daily_record("BSP", "Blast Furnace 1", 1.0, "t", d, None, 1, "u")
-        assert base.data_version(2) == n
-        assert {k: repr(v) for k, v in _mu_reads(m2).items()} == before
 
 
 # ── power ───────────────────────────────────────────────────────────────────

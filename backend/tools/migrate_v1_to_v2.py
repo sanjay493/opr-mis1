@@ -242,7 +242,7 @@ SIMPLE: List[Tuple[str, str, list]] = [
         "capital_repair_id", "created_by", ("created_at", "ts"), "updated_by", ("updated_at", "ts"))),
     ("major_unit_daily_record", "major_unit_daily_record", _cols(
         "plant_code", ("unit_id", "unit_label", "unit:plant_code"), "unit_of_measure", "value",
-        ("record_date", "date"), "remarks", "sort_order", "updated_by", ("updated_at", "ts"))),
+        "record_date", "remarks", "sort_order", "updated_by", ("updated_at", "ts"))),
     ("ready_reckoner_pages", "ready_reckoner_page", _cols(
         "plant_code", "plant_name", "plant_group", "process_flow_image_path", "sort_order", "updated_by",
         "updated_at", "capacity_rows", "product_mix_headers", "product_mix_rows", "product_mix_caption")),
