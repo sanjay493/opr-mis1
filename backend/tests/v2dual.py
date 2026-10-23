@@ -425,3 +425,26 @@ def multiset(rows):
     between the tiny test schemas and the real data (the oracle replay
     proves the order on the real data)."""
     return sorted((as_plain(r) for r in rows), key=repr)
+
+
+class FrozenNow:
+    """datetime.now() frozen at `.value` (a naive datetime; a tz-aware now(tz)
+    returns it labelled with that tz) for the v1 modules, which import
+    datetime inside the function, and for the v2 `modules`, which hold the
+    class as a module global. SQL NOW() is not affected."""
+
+    def __init__(self, monkeypatch, *modules, value):
+        import datetime as _d
+        self.value = value
+        real, me = _d.datetime, self
+
+        class Fixed(real):
+            @classmethod
+            def now(cls, tz=None):
+                v = me.value
+                return real(v.year, v.month, v.day, v.hour, v.minute, v.second, v.microsecond,
+                            tzinfo=tz)
+        monkeypatch.setattr(_d, "datetime", Fixed)
+        for m in modules:
+            if hasattr(m, "datetime"):
+                monkeypatch.setattr(m, "datetime", Fixed)

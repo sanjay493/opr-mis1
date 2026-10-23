@@ -207,11 +207,13 @@ def exact_item_id(cur, name, *, lock=False):
     return None if row is None else row[0]
 
 
-def exact_unit_id(cur, plant, unit):
+def exact_unit_id(cur, plant, unit, *, bump):
     """unit_id of the unit spelled EXACTLY `unit` (unit_code is binary) of
     `plant` (ai_ci), created when missing (unit_type NULL). Locking reads:
     call it after the writer's bump. Used where v1 stored the caller's
-    spelling per row (breakdown, capital_repair)."""
+    spelling per row (breakdown, capital_repair). `bump` as ensure_plant."""
+    if bump:
+        _ver.bump(cur)
     sql = "SELECT unit_id FROM plant_unit WHERE plant_code = %s AND unit_code = %s FOR SHARE"
     row = cur.execute(sql, (plant, unit)).fetchone()
     if row is None:

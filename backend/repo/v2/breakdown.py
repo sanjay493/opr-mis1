@@ -139,7 +139,7 @@ def save_breakdown_entry(plant: str, unit_type: str, unit_name: str, sms_subtag:
         _keys.check_plant_model(plant, "plant", 8)
         _ver.bump(cur)
         _keys.ensure_plant(cur, plant, bump=False)
-        unit_id = _keys.exact_unit_id(cur, plant, unit_name)
+        unit_id = _keys.exact_unit_id(cur, plant, unit_name, bump=False)
         cur.execute("""
             INSERT INTO breakdown
                 (plant_code, unit_type, unit_id, sms_subtag, start_ts, end_ts, is_ongoing,
@@ -198,7 +198,7 @@ def update_breakdown_entry(breakdown_id: int, updated_by: str, **fields) -> bool
             if "plant" in given:
                 _keys.ensure_plant(cur, plant, bump=False)
             sets.append("plant_code=%s"); args.append(plant)
-            sets.append("unit_id=%s"); args.append(_keys.exact_unit_id(cur, plant, unit))
+            sets.append("unit_id=%s"); args.append(_keys.exact_unit_id(cur, plant, unit, bump=False))
         sets.append("updated_by=%s"); args.append(updated_by)
         sets.append("updated_at=%s"); args.append(datetime.now())
         args.append(breakdown_id)
@@ -393,7 +393,7 @@ def update_cr_entry(cur, plan_sql, params):
     row = cur.execute("SELECT plant_code FROM capital_repair WHERE id=%s FOR UPDATE", (row_id,)).fetchone()
     unit_id = None
     if unit_name is not None and row is not None:
-        unit_id = _keys.exact_unit_id(cur, row[0], unit_name)
+        unit_id = _keys.exact_unit_id(cur, row[0], unit_name, bump=False)
     cur.execute(f"""
         UPDATE capital_repair
         SET unit_type=%s, unit_id=%s, sms_subtag=%s, actual_start=%s, actual_end=%s,
@@ -441,19 +441,18 @@ def insert_cr_row(cur, values):
                             ("unit_name", unit_name, 32), ("sms_subtag", sms_subtag, 16)):
         _keys.fits(col, val, limit)
     _keys.check_plant_model(plant, "plant", 8)
-    stored_fy = _keys.fit_fy(fy)
-    if len(stored_fy) > 7:
+    if len(fy) > 7:        # v1's VARCHAR(8) kept all of it (a trailing space too)
         raise _keys.OutOfModelError(f"fy {fy!r}: v1's capital_repair_table.fy held 8 characters, "
                                     "the v2 column holds 7")
     _ver.bump(cur)
     _keys.ensure_plant(cur, plant, bump=False)
-    unit_id = None if unit_name is None else _keys.exact_unit_id(cur, plant, unit_name)
+    unit_id = None if unit_name is None else _keys.exact_unit_id(cur, plant, unit_name, bump=False)
     cur.execute("""
         INSERT INTO capital_repair
             (plant_code, fy, shop, equipment, activity, schedule_days, period, actual,
              unit_type, unit_id, sms_subtag, actual_ongoing, sort_order)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 0, 0)
-    """, (plant, stored_fy, shop, equipment, activity, schedule_days, period, actual,
+    """, (plant, fy, shop, equipment, activity, schedule_days, period, actual,
           unit_type, unit_id, sms_subtag))
 
 
