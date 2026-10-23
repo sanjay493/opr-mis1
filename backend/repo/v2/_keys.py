@@ -156,12 +156,11 @@ def fits(column, value, limit, *, nullable=True):
         raise pymysql.err.DataError(1406, f"Data too long for column '{column}' at row 1")
 
 
-def check_plant(plant, column, v1_limit, *, nullable=False):
-    """A plant value for a v1 plant column of `v1_limit` characters: v1's
-    own error (fits), then OutOfModelError when it is longer than the v2
-    plant master's 8 characters (v1 stored it; see parity_exceptions.md
-    §2)."""
-    fits(column, plant, v1_limit, nullable=nullable)
+def check_plant_model(plant, column, v1_limit):
+    """OutOfModelError for a plant longer than the v2 plant master's 8
+    characters, which v1's `column` (`v1_limit` characters) stored (see
+    parity_exceptions.md §2). Writers call it after every v1 column check
+    (fits), so a value v1 refused still raises v1's error."""
     if isinstance(plant, str) and len(plant) > _PLANT_CODE_LEN:
         raise OutOfModelError(f"plant {plant!r}: v1's {column} held up to {v1_limit} characters, "
                               f"the v2 plant master holds {_PLANT_CODE_LEN}")

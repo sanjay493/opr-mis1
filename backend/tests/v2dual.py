@@ -237,6 +237,136 @@ class Dual:
                                 (scope, x["period"], x["block_key"], x["plant_code"], item_id, x["seq"],
                                  x["text"], x["updated_by"], x["updated_at"]))
 
+    def seed_simple(self, v1_table, rows):
+        """rows: v1 rows of one SIMPLE table of tools/migrate_v1_to_v2 as
+        {v1 column: value} (timestamps / dates as the v1 strings; omitted
+        columns take the table default on both sides). v1: inserted as
+        given; v2: the row the migration would load (renamed columns,
+        DATETIME / DATE parsed by repo.v2codec). Plants the v2 master lacks
+        are added ('external'), as a v2 write would add them."""
+        from repo import v2codec as vc
+        from tools.migrate_v1_to_v2 import SIMPLE
+        spec = {v1t: (v2t, cols) for v1t, v2t, cols in SIMPLE}[v1_table]
+        v2t, cols = spec
+        for r in rows:
+            c1 = list(r)
+            self.sql(1, f"INSERT INTO {v1_table} ({', '.join(c1)}) VALUES ({', '.join(['%s'] * len(c1))})",
+                     tuple(r[c] for c in c1))
+        with self.v2_conn.cursor() as cur:
+            for r in rows:
+                names, vals = [], []
+                for c2, c1, kind in cols:
+                    if c1 not in r:
+                        continue
+                    v = r[c1]
+                    if kind == "ts":
+                        v = vc.parse_ts(vc.TS_COLUMNS[f"{v2t}.{c2}"][1], v)
+                    elif kind == "date":
+                        v = vc.parse_date(v)
+                    elif kind not in (None, "month"):
+                        raise NotImplementedError(kind)
+                    if c2 in ("plant_code", "from_plant_code", "to_plant_code") and v is not None:
+                        cur.execute("INSERT IGNORE INTO plant (plant_code, plant_kind, sort_order) "
+                                    "VALUES (%s, 'external', 0)", (v,))
+                    if kind == "month" and v is not None:
+                        from repo.v2._keys import cal_month_row
+                        cur.execute("INSERT IGNORE INTO cal_month (report_month, month_start, fy, fy_month, "
+                                    "quarter, half) VALUES (%s, %s, %s, %s, %s, %s)", cal_month_row(v))
+                    names.append(c2)
+                    vals.append(v)
+                cur.execute(f"INSERT INTO {v2t} ({', '.join(names)}) VALUES ({', '.join(['%s'] * len(names))})",
+                            vals)
+
+    def stored(self, v1_table, skip=()):
+        """(v1 rows, v2 rows) of one SIMPLE table, each a sorted list of
+        tuples in v1 column order; v2 values rendered back to the v1 form
+        (DATETIME by repo.v2codec's column format, DATE as 'YYYY-MM-DD').
+        `skip`: v1 columns left out (e.g. NOW()-written timestamps)."""
+        from repo import v2codec as vc
+        from tools.migrate_v1_to_v2 import SIMPLE
+        v2t, cols = {v1t: (v2t, cols) for v1t, v2t, cols in SIMPLE}[v1_table]
+        cols = [c for c in cols if c[1] not in skip]
+        r1 = self.sql(1, f"SELECT {', '.join(c1 for _, c1, _ in cols)} FROM {v1_table}")
+        r2 = self.sql(2, f"SELECT {', '.join(c2 for c2, _, _ in cols)} FROM {v2t}")
+
+        def back(row):
+            out = []
+            for (c2, _, kind), v in zip(cols, row):
+                if kind == "ts":
+                    v = vc.render_ts(vc.TS_COLUMNS[f"{v2t}.{c2}"][1], v)
+                elif kind == "date":
+                    v = vc.render_date(v)
+                out.append(v)
+            return tuple(out)
+        return sorted((tuple(r) for r in r1), key=repr), sorted((back(r) for r in r2), key=repr)
+
+
+def canon(v):
+    """Order- and type-preserving text of a result (the oracle's canonical form)."""
+    from tools import repo_oracle as ro
+    return ro.dumps(ro.canonical(v))
+
+
+def outcome(fn):
+    """("ok", canon(result)) or (exception type name, canon(args))."""
+    try:
+        return ("ok", canon(fn()))
+    except Exception as e:      # noqa: BLE001
+        return (type(e).__name__, canon(list(e.args)))
+
+
+def record_activity(monkeypatch):
+    """activity_context.record calls as a list of (unit, canon(old), canon(new))."""
+    import activity_context
+    calls = []
+    monkeypatch.setattr(activity_context, "record",
+                        lambda unit, old, new: calls.append((unit, canon(old), canon(new))))
+    return calls
+
+
+def run_step(dual, v1, v2, fn, *, reads, tables=(), activity=None, skip=()):
+    """fn(module) on each side (v1 module on the v1 DB, v2 on v2): the same
+    outcome (result, or exception type and args) and the same activity
+    entries; then every read (reads(module) -> {key: value}, compared in
+    canonical form) and the stored rows of each v1 table in `tables` agree.
+    Returns the outcome."""
+    got = []
+    for side, mod in ((dual.v1, v1), (dual.v2, v2)):
+        if activity is not None:
+            activity.clear()
+        with side():
+            o = outcome(lambda: fn(mod))
+        got.append((o, list(activity or ())))
+    assert got[0] == got[1], got
+    assert_same_reads(dual, v1, v2, reads)
+    for t in tables:
+        a, b = dual.stored(t, skip=skip)
+        assert a == b, (t, a, b)
+    return got[0][0]
+
+
+def assert_same_reads(dual, v1, v2, reads):
+    r1, r2 = dual.both(lambda m: {k: canon(v) for k, v in reads(m).items()}, v1=v1, v2=v2)
+    assert set(r1) == set(r2)
+    diff = [k for k in r1 if r1[k] != r2[k]]
+    assert not diff, [(k, r1[k], r2[k]) for k in diff[:5]]
+    return r1
+
+
+def on_cursor(fn, row_factory=None, commit=False):
+    """fn(module, cur) on a fresh db.connect() cursor (committed if asked)."""
+    def run(mod):
+        conn = dbengine.connect()
+        conn.row_factory = row_factory
+        try:
+            out = fn(mod, conn.cursor())
+            if commit:
+                conn.commit()
+            return out
+        finally:
+            conn.close()
+    return run
+
 
 def as_plain(v):
     """Rows / Row objects / tuples -> plain comparable Python values."""
