@@ -100,7 +100,7 @@ def test_cursor_helper_bump_keeps_lastrowid(mysql_db):
     reads the write's own lastrowid."""
     from repo import misc as rmisc
     with rc.tx() as cur:
-        rmisc.insert_external_bf(cur, "BF-X", "Co", "Loc", "2026-10-19")
+        rmisc.insert_external_bf(cur, "BF-X", "Co", "Loc", "2026-10-19T00:00:00+00:00")  # api_bf_benchmark._now() form
         new_id = cur.lastrowid
     assert new_id and new_id > 0
     with rc.cursor() as cur:

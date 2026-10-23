@@ -4,15 +4,16 @@ import pytest
 
 import page4
 from repo.conn import tx
+from v2dual import put_production
 
 
 @pytest.fixture
 def p4(mysql_db, monkeypatch):
     with tx() as c:
-        c.execute("INSERT INTO production_table VALUES ('2026-08','BSP','Hot Metal',500)")
-        c.execute("INSERT INTO production_plan_table VALUES ('2026-08','BSP','Hot Metal',550)")
-        c.execute("INSERT INTO mou_plan_table VALUES ('2026-08','BSP','Hot Metal',570)")
-        c.execute("INSERT INTO production_plan_table VALUES ('2026-08','BSP','Total Sinter',900)")
+        put_production("production_table", [('2026-08','BSP','Hot Metal',500)])
+        put_production("production_plan_table", [('2026-08','BSP','Hot Metal',550)])
+        put_production("mou_plan_table", [('2026-08','BSP','Hot Metal',570)])
+        put_production("production_plan_table", [('2026-08','BSP','Total Sinter',900)])
     monkeypatch.setattr(page4.rcap, "get_effective_capacity", lambda *a, **k: None)
     return page4
 

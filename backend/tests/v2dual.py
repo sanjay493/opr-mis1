@@ -468,6 +468,20 @@ class FrozenNow:
                 monkeypatch.setattr(m, "datetime", Fixed)
 
 
+_V1_COLUMNS = {}
+
+
+def v1_columns(v1_table):
+    """Column names of a v1 table in order, from tests/fixtures/schema_v1.sql."""
+    import re
+    from pathlib import Path
+    if not _V1_COLUMNS:
+        text = (Path(__file__).resolve().parent / "fixtures" / "schema_v1.sql").read_text(encoding="utf-8")
+        for m in re.finditer(r"^CREATE TABLE `(\w+)` \((.*?)^\)", text, re.M | re.S):
+            _V1_COLUMNS[m.group(1)] = re.findall(r"^  `(\w+)` ", m.group(2), re.M)
+    return _V1_COLUMNS[v1_table]
+
+
 class V2Seed(Dual):
     """Dual's v1-shaped seeding API (seed_production / seed_techno /
     seed_simple / seed_text / ..., and stored_v2) for tests that run only
@@ -492,6 +506,12 @@ class V2Seed(Dual):
         if side == 1:
             return None
         return super().sql_many(side, sql, rows)
+
+    def seed_v1_rows(self, v1_table, rows):
+        """seed_simple for positional v1 rows (tuples in the v1 table's column
+        order, as `INSERT INTO <v1 table> VALUES (...)` took them)."""
+        cols = v1_columns(v1_table)
+        self.seed_simple(v1_table, [dict(zip(cols, r)) for r in rows])
 
     def stored_v2(self, v1_table, skip=()):
         """The v2 rows of one SIMPLE table rendered in the v1 column order and
@@ -533,4 +553,53 @@ def production_rows(table):
     with rc.cursor() as cur:
         cur.execute(f"SELECT pm.report_month, pm.plant_code, i.item_name, pm.{col} FROM production_monthly pm "
                     f"JOIN item i ON i.item_id = pm.item_id WHERE pm.{flag} = 1")
-        return sorted((tuple(r) for r in cur.fetchall()), key=repr)
+        return sorted((tuple(r) for r in cur.fetchall()), key=lambda r: (r[0], r[1], r[2]))
+
+
+def _unit_id(cur, plant, unit):
+    cur.execute("INSERT IGNORE INTO plant (plant_code, plant_kind, sort_order) VALUES (%s, 'external', 0)", (plant,))
+    cur.execute("INSERT IGNORE INTO plant_unit (plant_code, unit_code) VALUES (%s, %s)", (plant, unit))
+    cur.execute("SELECT unit_id FROM plant_unit WHERE plant_code = %s AND unit_code = %s", (plant, unit))
+    return cur.fetchone()[0]
+
+
+def put_techno(rows):
+    """rows: (report_month, plant, unit, blob (dict or JSON text),
+    source_file[, created_at as the v1 string, default the NOW() form now])
+    -> the techno_upload + techno_value rows the migration would load for
+    those v1 techno_data rows; no data_version bump."""
+    import datetime as _d
+    from repo import conn as rc
+    from repo.v2codec import encode_techno, parse_ts_flagged
+    with rc.tx() as cur:
+        for r in rows:
+            m, p, u, b, sf = r[:5]
+            at = r[5] if len(r) > 5 else _d.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            unit_id = _unit_id(cur, p, u)
+            has_m, has_t, leaves = encode_techno(b)
+            ts, iso = parse_ts_flagged("techno_upload.created_at", at)
+            cur.execute("INSERT INTO techno_upload (report_month, plant_code, unit_id, has_month, has_till_month, "
+                        "source_file, created_at, created_at_iso) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                        (m, p, unit_id, has_m, has_t, sf, ts, iso))
+            cur.executemany("INSERT INTO techno_value (report_month, plant_code, unit_id, period, param_key, "
+                            "num, is_int, raw) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                            [(m, p, unit_id) + tuple(leaf) for leaf in leaves])
+
+
+def techno_source_file(month, plant, unit):
+    """techno_upload.source_file of one (month, plant, unit), or None when
+    there is no such row."""
+    from repo import conn as rc
+    with rc.cursor() as cur:
+        cur.execute("SELECT tu.source_file FROM techno_upload tu JOIN plant_unit pu ON pu.unit_id = tu.unit_id "
+                    "WHERE tu.report_month = %s AND tu.plant_code = %s AND pu.unit_code = %s", (month, plant, unit))
+        r = cur.fetchone()
+        return None if r is None else (r[0],)
+
+
+def delete_techno(plant):
+    """Remove a plant's techno uploads (v1: DELETE FROM techno_data WHERE plant=...)."""
+    from repo import conn as rc
+    with rc.tx() as cur:
+        cur.execute("DELETE FROM techno_value WHERE plant_code = %s", (plant,))
+        cur.execute("DELETE FROM techno_upload WHERE plant_code = %s", (plant,))

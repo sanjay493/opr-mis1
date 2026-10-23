@@ -84,6 +84,7 @@ def test_items_for_plant_visl_is_saleable_and_finished_only():
 
 from repo.conn import tx
 import dbengine
+from v2dual import put_production
 
 
 def _seeded_cursor():
@@ -97,9 +98,9 @@ def _seeded_cursor():
                  ("2026-09", "BSP", "Hot Metal", 505.0)]
     with tx() as c:
         for m, p, i, v in rows_act:
-            c.execute("INSERT INTO production_table VALUES (%s,%s,%s,%s)", (m, p, i, v))
+            put_production("production_table", [(m, p, i, v)])
         for m, p, i, v in rows_plan:
-            c.execute("INSERT INTO production_plan_table VALUES (%s,%s,%s,%s)", (m, p, i, v))
+            put_production("production_plan_table", [(m, p, i, v)])
     return dbengine.connect().cursor()
 
 def test_period_sum_adds_three_months(mysql_db):
@@ -149,7 +150,7 @@ def _seeded_cursor_finished_steel_no_conversion():
     ]
     with tx() as c:
         for m, p, i, v in rows_act:
-            c.execute("INSERT INTO production_table VALUES (%s,%s,%s,%s)", (m, p, i, v))
+            put_production("production_table", [(m, p, i, v)])
     return dbengine.connect().cursor()
 
 def test_row_values_blanks_act_when_conversion_missing_for_sail_finished_steel(mysql_db):
@@ -174,7 +175,7 @@ def test_imp_phrase_returns_empty_for_none():
 
 def _mou_cursor(rows):
     with tx() as c:
-        c.executemany("INSERT INTO mou_plan_table VALUES (%s,%s,%s,%s)", rows)
+        put_production("mou_plan_table", rows)
     return dbengine.connect().cursor()
 
 def test_fs_mou_sums_plants_and_months(mysql_db):
@@ -191,24 +192,25 @@ def test_fs_mou_none_when_a_month_is_missing(mysql_db):
 
 @pytest.fixture
 def cursor_without_mou_table(mysql_db):
-    # The v1 table always exists; make it "missing" by dropping it, and put it
+    # The table always exists; make it "missing" by dropping it (v2: MoU lives
+    # in production_monthly), and put it
     # back (from its own SHOW CREATE TABLE) when the test is done. Drop and
     # restore sit in one try/finally so a failing test can't leave the table
     # missing for later tests.
     with tx() as ddl:
-        ddl.execute("SHOW CREATE TABLE mou_plan_table")
+        ddl.execute("SHOW CREATE TABLE production_monthly")
         create_sql = ddl.fetchone()[1]
     conn = None
     try:
         with tx() as ddl:
-            ddl.execute("DROP TABLE mou_plan_table")
+            ddl.execute("DROP TABLE production_monthly")
         conn = dbengine.connect()
         yield conn.cursor()
     finally:
         if conn is not None:
             conn.close()
         with tx() as ddl:
-            ddl.execute("SHOW TABLES LIKE 'mou_plan_table'")
+            ddl.execute("SHOW TABLES LIKE 'production_monthly'")
             if ddl.fetchone() is None:
                 ddl.execute(create_sql)
 

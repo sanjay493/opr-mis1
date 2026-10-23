@@ -7,7 +7,7 @@ import pytest
 
 import dbengine
 import page_jpc_report as jpc
-from repo.conn import tx
+from v2dual import put_production
 
 ACT = {("BSP", "Hot Metal"): 370.0, ("DSP", "Hot Metal"): 205.0, ("VISL", "Hot Metal"): 1.0,
        ("BSP", "Finished Steel"): 374.0, ("SSP", "Saleable Steel"): 13.9}
@@ -17,10 +17,8 @@ MOU = {("BSP", "Hot Metal"): 549.24, ("DSP", "Hot Metal"): 232.06, ("VISL", "Hot
 
 @pytest.fixture
 def cur(mysql_db):
-    with tx() as seed:
-        for t, data in (("production_table", ACT), ("mou_plan_table", MOU)):
-            seed.executemany(f"INSERT INTO {t} VALUES ('2026-09', %s, %s, %s)",
-                             [(p, i, v) for (p, i), v in data.items()])
+    for t, data in (("production_table", ACT), ("mou_plan_table", MOU)):
+        put_production(t, [("2026-09", p, i, v) for (p, i), v in data.items()])
     c = dbengine.connect()
     yield c.cursor()
     c.close()

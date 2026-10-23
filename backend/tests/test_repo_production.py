@@ -2,24 +2,22 @@
 actual / ABP / MoU production tables."""
 import pytest
 
-from repo import conn as rc
 from repo import production as rp
+from v2dual import production_rows, put_production
 
+# measure -> its v1 table (v2: one production_monthly row per key, a
+# value + has_* flag per measure; put_production / production_rows map them)
 _TABLES = {"actual": "production_table", "abp": "production_plan_table",
            "mou": "mou_plan_table"}
 MEASURES = list(_TABLES)
 
 
 def _insert(table, rows):
-    with rc.tx() as cur:
-        cur.executemany(f"INSERT INTO {table} (report_month, plant_name, item_name, month_actual) "
-                        "VALUES (%s, %s, %s, %s)", rows)
+    put_production(table, rows)
 
 
 def _all(table):
-    with rc.cursor() as cur:
-        cur.execute(f"SELECT report_month, plant_name, item_name, month_actual FROM {table}")
-        return {(r[0], r[1], r[2]): r[3] for r in cur.fetchall()}
+    return {(r[0], r[1], r[2]): r[3] for r in production_rows(table)}
 
 
 _SEED = [

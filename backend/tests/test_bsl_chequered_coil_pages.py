@@ -4,7 +4,7 @@ Total Flat still adds every displayed flat row (so splitting the coil out
 of HR Coils leaves the total unchanged)."""
 import pytest
 
-from repo.conn import tx
+from v2dual import put_production
 
 import page_catwise_saleable as pcs
 import page_segment_wise as psw
@@ -15,8 +15,7 @@ ACT = {"HSM HR Coil (Sale)": 160.0, "Checkered Coil": 24.0, "HSM HR Plate": 32.0
 
 @pytest.fixture
 def fake_db(mysql_db):
-    with tx() as cur:
-        cur.executemany("INSERT INTO production_table VALUES ('2026-09','BSL',%s,%s)", list(ACT.items()))
+    put_production("production_table", [("2026-09", "BSL", k, v) for k, v in ACT.items()])
 
 
 def _labels_after(rows, label, n=2):

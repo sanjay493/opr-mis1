@@ -21,6 +21,7 @@ from constants import ALL_PLANTS, FIVE_PLANTS
 from repo import capacity as rcap
 from repo import conn as rc
 from repo import production as rp
+from v2dual import put_techno
 
 MONTH = "2026-08"
 ITEMS = ["Oven Pushing (nos/day)", "Total Sinter", "Hot Metal", "Total Crude Steel",
@@ -70,10 +71,11 @@ def _seed(seed=7):
             for item, months in (("Hot Metal", ("2020-04", "2026-06")), ("Saleable Steel", ("2025-01",)),
                                  ("Finished Steel", ("2019-04", "2026-09"))):
                 for i, em in enumerate(months):
-                    cur.execute("INSERT INTO item_capacity_table (plant_name, item_name, effective_month, "
-                                "annual_capacity) VALUES (%s, %s, %s, %s)",
-                                (plant.lower() if plant == "ISP" else plant, item, em,
-                                 round(rnd.uniform(500, 9000), 2) + i))
+                    cur.execute("INSERT IGNORE INTO item (item_name) VALUES (%s)", (item,))
+                    cur.execute("INSERT INTO item_capacity (plant_code, item_id, effective_month, annual_capacity) "
+                                "SELECT %s, item_id, %s, %s FROM item WHERE item_name = %s",
+                                (plant.lower() if plant == "ISP" else plant, em,
+                                 round(rnd.uniform(500, 9000), 2) + i, item))
 
 
 def _plant_lists():
@@ -366,10 +368,8 @@ def _seed_techno(seed=11):
                                   "cdi": round(rnd.uniform(50, 200), 3)}}
                 if rnd.random() < 0.7:
                     body["till_month"] = {"coke_rate": rnd.randint(300, 500)}
-                rows.append((plant, month, unit, json.dumps(body)))
-    with rc.tx() as cur:
-        cur.executemany("INSERT INTO techno_data (plant, report_month, unit, techno_json) "
-                        "VALUES (%s, %s, %s, %s)", rows)
+                rows.append((month, plant, unit, json.dumps(body), ""))
+    put_techno(rows)
 
 
 def _techno_snapshot():

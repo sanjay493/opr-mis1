@@ -4,8 +4,8 @@ before the dead code paths were deleted (MySQL-only, Task 2)."""
 import pytest
 from fastapi.testclient import TestClient
 
-import dbengine
 import main
+from v2dual import production_rows
 
 
 @pytest.fixture
@@ -16,11 +16,7 @@ def tc(mysql_db, monkeypatch):
 
 
 def _prod_rows():
-    conn = dbengine.connect()
-    rows = conn.execute("SELECT report_month, plant_name, item_name, month_actual "
-                        "FROM production_table").fetchall()
-    conn.close()
-    return [tuple(r) for r in rows]
+    return production_rows("production_table")
 
 
 def test_techno_groups_is_500(tc):

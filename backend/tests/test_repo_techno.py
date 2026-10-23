@@ -1,25 +1,22 @@
-"""repo.techno primitives: blobs() / merge_upsert() over techno_data."""
-import json
-
+"""repo.techno primitives: blobs() / merge_upsert() over the techno blobs
+(v2: techno_upload + techno_value)."""
 from repo import conn as rc
 from repo import techno as rt
+from v2dual import delete_techno, put_techno, techno_source_file
 
 
 def _insert(rows):
-    """rows: (month, plant, unit, blob_or_raw_json_text, source_file)."""
-    with rc.tx() as cur:
-        cur.executemany(
-            "INSERT INTO techno_data (plant, report_month, unit, techno_json, source_file, created_at) "
-            "VALUES (%s, %s, %s, %s, %s, NOW())",
-            [(p, m, u, b if isinstance(b, str) else json.dumps(b), sf) for m, p, u, b, sf in rows])
+    """rows: (month, plant, unit, blob_or_raw_json_text, source_file), seeded
+    as the v1 -> v2 migration would load those techno_data rows."""
+    put_techno(rows)
 
 
 def _row(month, plant, unit):
-    with rc.cursor() as cur:
-        cur.execute("SELECT techno_json, source_file FROM techno_data "
-                    "WHERE report_month=%s AND plant=%s AND unit=%s", (month, plant, unit))
-        r = cur.fetchone()
-        return None if r is None else (json.loads(r[0]), r[1])
+    """(blob, source_file) of one stored (month, plant, unit), or None."""
+    src = techno_source_file(month, plant, unit)
+    if src is None:
+        return None
+    return rt.get_techno_data(plant, month, unit)[unit], src[0]
 
 
 _SEED = [
@@ -125,8 +122,7 @@ def test_merge_upsert_matches_db_merge(mysql_db):
     new = {"month": {"coke_rate": 1.5, "nut_coke_rate": None}, "till_month": {"x": 2}}
     rt.merge_upsert("2026-04", "DSP", "BF_Shop", new, "s1")
     via_repo = _row("2026-04", "DSP", "BF_Shop")
-    with rc.tx() as cur:
-        cur.execute("DELETE FROM techno_data WHERE plant='DSP'")
+    delete_techno("DSP")
     _insert([s for s in _SEED if s[1] == "DSP"])
     rt.merge_upsert_techno_data("DSP", "2026-04", "BF_Shop", new, "s1")
     assert _row("2026-04", "DSP", "BF_Shop") == via_repo
@@ -134,8 +130,9 @@ def test_merge_upsert_matches_db_merge(mysql_db):
 
 def test_merge_upsert_logs_extraction_and_recomputes(mysql_db):
     """The moved write chain still runs its post-save hooks: the tmi /
-    fuel_rate recompute and the extraction_log entry (db.log_extraction,
-    bound at call time from repo.techno)."""
+    fuel_rate recompute and the extraction_log entry: repo.ops.log_extraction,
+    bound at call time from repo.techno (Task 7g carry-over: before the swap
+    the v1 ops write failed on v2 and was caught)."""
     rt.merge_upsert("2026-08", "BSL", "BF_Shop",
                     {"month": {"coke_rate": 400, "cdi": 100}, "till_month": {}}, "bsl.xlsx")
     blob, _ = _row("2026-08", "BSL", "BF_Shop")
@@ -145,6 +142,36 @@ def test_merge_upsert_logs_extraction_and_recomputes(mysql_db):
                     "FROM extraction_log")
         rows = [tuple(r) for r in cur.fetchall()]
     assert rows == [("BSL", "2026-08", "bsl.xlsx", "BF_Shop", "Techno Data", 2)]
+
+
+def _extraction_rows():
+    with rc.cursor() as cur:
+        cur.execute("SELECT plant_name, report_month, file_name, sheet_name, source_type, items_extracted "
+                    "FROM extraction_log ORDER BY id")
+        return [tuple(r) for r in cur.fetchall()]
+
+
+def test_techno_saves_write_their_extraction_log_row(mysql_db, capsys):
+    """Task 7g carry-over: every techno save path writes its extraction_log
+    row through repo.ops (v2) -- upsert_techno_data on its own connection
+    and on a caller's connection (committed by the caller) -- and nothing is
+    caught and printed. save_techno_json never logged (v1 neither)."""
+    import dbengine
+    rt.save_techno_json("BSP", "2026-08", "General", {"month": {"sp_energy": 6.1}}, "g.xlsx")
+    rt.upsert_techno_data("DSP", "2026-08", "BF_Shop", {"month": {"coke_rate": 410}, "till_month": {"cdi": 1}},
+                          "d.xlsx")
+    conn = dbengine.connect()
+    try:
+        rt.upsert_techno_data("RSP", "2026-08", "SMS", {"month": {"x": 1}}, "", conn=conn)
+        conn.commit()
+    finally:
+        conn.close()
+    assert _extraction_rows() == [
+        ("DSP", "2026-08", "d.xlsx", "BF_Shop", "Techno Data", 2),
+        ("RSP", "2026-08", "(manual entry)", "SMS", "Techno Data", 1),
+    ]
+    assert "logging failed" not in capsys.readouterr().out
+    assert rt.get_techno_data("RSP", "2026-08", "SMS") == {"SMS": {"month": {"x": 1}}}
 
 
 def test_techno_plan_save_clears_cache_and_returns_copies(mysql_db):

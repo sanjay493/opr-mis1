@@ -106,8 +106,8 @@ def test_cost_trend_monthly_route_commits_once(tc):
     assert r.json() == {"status": "success", "saved": 3}
     assert (spy.connects, spy.commits) == (1, 1)
     assert spy.visible_mid_call == [0, 0, 0]
-    assert _rows("SELECT report_month, product, cost_type, plant, month_value, till_month_value "
-                 "FROM cost_trend_monthly ORDER BY plant, cost_type") == [
+    assert _rows("SELECT report_month, product, cost_type, plant_code, month_value, till_month_value "
+                 "FROM cost_trend_monthly ORDER BY plant_code, cost_type") == [
         ("2026-08", "HM", "FIXED", "BSP", None, 7.0),
         ("2026-08", "HM", "VARIABLE", "BSP", 101.5, 99.0),
         ("2026-08", "HM", "VARIABLE", "SAIL", 88.0, None)]
@@ -157,21 +157,21 @@ def test_cost_trend_extract_field_save_commits_once(mysql_db):
 
 def _seed_mine_masters():
     with rc.tx() as cur:
-        cur.execute("INSERT INTO mine_groups_master (group_code, group_name, sort_order) VALUES "
+        cur.execute("INSERT INTO mine_group (group_code, group_name, sort_order) VALUES "
                     "('JG','J Group',1), ('OG','O Group',2)")
-        cur.execute("INSERT INTO mines_master (mine_code, mine_name, group_code, is_active, sort_order) VALUES "
+        cur.execute("INSERT INTO mine (mine_code, mine_name, group_code, is_active, sort_order) VALUES "
                     "('A','Alpha','JG',1,1), ('B','Beta','OG',0,2)")
-        cur.execute("INSERT INTO mine_materials_master (material_code, material_name, material_category, "
+        cur.execute("INSERT INTO mine_material (material_code, material_name, material_category, "
                     "has_production, counts_in_total_production, sort_order) VALUES "
                     "('LUMP','Lump','FRESH',1,1,1), ('FINES','Fines','FRESH',1,1,2), "
                     "('PELLETS','Pellets','LEGACY',0,1,3)")
-        cur.execute("INSERT INTO mine_end_uses_master (end_use_code, end_use_name, sort_order, tracks_actual) "
+        cur.execute("INSERT INTO mine_end_use (end_use_code, end_use_name, sort_order, tracks_actual) "
                     "VALUES ('CAPTIVE','Captive',1,1), ('SALES','Sales',2,1), ('UNALLOCATED','Unalloc',3,0)")
 
 
 def test_mines_production_despatch_route_commits_once(tc):
     _seed_mine_masters()
-    spy = _CommitSpy(rmn.connect, "mines_production_monthly")
+    spy = _CommitSpy(rmn.connect, "mine_production_monthly")
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(rmn, "connect", spy)
         r = tc.post("/api/mines-production-despatch/monthly", json={
@@ -190,16 +190,16 @@ def test_mines_production_despatch_route_commits_once(tc):
     assert (spy.connects, spy.commits) == (1, 1)
     assert spy.visible_mid_call == [0] * 7
     assert _rows("SELECT report_month, mine_code, material_code, qty_actual, qty_plan "
-                 "FROM mines_production_monthly ORDER BY material_code") == [
+                 "FROM mine_production_monthly ORDER BY material_code") == [
         ("2026-08", "A", "FINES", 5.0, None), ("2026-08", "A", "LUMP", 10.0, 12.0)]
     assert _rows("SELECT material_code, transport_mode, end_use_code, qty_actual "
-                 "FROM mines_despatch_actual_monthly ORDER BY material_code") == [
+                 "FROM mine_despatch_actual_monthly ORDER BY material_code") == [
         ("LUMP", "RAIL", "CAPTIVE", 8.0), ("PELLETS", "ROAD", "SALES", 3.0)]
-    assert _rows("SELECT material_code, end_use_code, qty_plan FROM mines_despatch_plan_monthly") == [
+    assert _rows("SELECT material_code, end_use_code, qty_plan FROM mine_despatch_plan_monthly") == [
         ("LUMP", "CAPTIVE", 9.0)]
-    assert _rows("SELECT material_code, transport_mode, qty_actual FROM mines_booked_qty_actual_monthly") == [
+    assert _rows("SELECT material_code, transport_mode, qty_actual FROM mine_booked_qty_actual_monthly") == [
         ("FINES", "RAIL", 2.5)]
-    assert _rows("SELECT material_code, qty_plan FROM mines_booked_qty_plan_monthly") == [("FINES", 4.0)]
+    assert _rows("SELECT material_code, qty_plan FROM mine_booked_qty_plan_monthly") == [("FINES", 4.0)]
 
     got = tc.get("/api/mines-production-despatch/monthly",
                  params={"report_month": "2026-08", "mine_code": "A"}).json()
@@ -215,7 +215,7 @@ def test_mines_production_despatch_route_commits_once(tc):
     assert [x["material_code"] for x in m["materials"]] == ["LUMP", "FINES", "PELLETS"]
     assert m["end_uses"][2] == {"end_use_code": "UNALLOCATED", "end_use_name": "Unalloc", "tracks_actual": False}
 
-    # Group roll-ups (JOIN mines_master) and the flat series.
+    # Group roll-ups (JOIN mine) and the flat series.
     roll = rmn.get_iron_ore_group_rollup_monthly(["2026-08"])
     assert roll["2026-08"]["iron_ore_prod"] == {"JG": {"actual": 18.0, "plan": 12.0}}
     assert roll["2026-08"]["iron_ore_despatch"] == {"JG": {"actual": 11.0, "plan": 9.0}}
@@ -324,7 +324,7 @@ def test_rake_detention_master_and_grid_routes(tc):
 # ── repo.misc ─────────────────────────────────────────────────────────────────
 
 def test_market_intel_route_commits_once(tc):
-    spy = _CommitSpy(rmisc.connect, "market_price_trend_monthly")
+    spy = _CommitSpy(rmisc.connect, "market_price_monthly")
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(rmisc, "connect", spy)
         r = tc.post("/api/market-intel/grid", json={
@@ -339,5 +339,5 @@ def test_market_intel_route_commits_once(tc):
     assert rmisc.get_market_price_trend(["2026-08", "2026-07"]) == {
         "2026-08": {"HRC_CHINA": 512.5, "COKING_COAL": None}, "2026-07": {}}
     assert rmisc.get_macro_indicators(["2026-08"]) == {"2026-08": {"GDP": 7.1, "IIP": None}}
-    assert _rows("SELECT report_month, metric_code, value FROM macro_indicators_monthly ORDER BY metric_code") == [
+    assert _rows("SELECT report_month, metric_code, value FROM macro_indicator_monthly ORDER BY metric_code") == [
         ("2026-08", "GDP", 7.1), ("2026-08", "IIP", None)]

@@ -60,10 +60,9 @@ from decimal import Decimal
 
 import pytest
 
-from repo.conn import tx
-
-# Tables are the real v1 tables (mysql_db fixture). Insertion order matters:
-# the real schema has foreign keys, so masters come before the facts.
+# Rows of the v1 tables, seeded into the v2 schema as the v1 -> v2 migration
+# would load them (v2seed fixture). Insertion order matters: the schema has
+# foreign keys, so masters come before the facts.
 _ROWS = {
     # Added for the real schema: despatch rows have an FK to mine_end_uses_master.
     "mine_end_uses_master": [("CAPTIVE", "Captive", 1, 1), ("SALES", "Sales", 2, 1),
@@ -99,11 +98,10 @@ _ROWS = {
 
 
 @pytest.fixture
-def gen(mysql_db):
-    with tx() as c:
-        for table, rows in _ROWS.items():
-            for r in rows:
-                c.execute(f"INSERT INTO {table} VALUES ({','.join(['%s'] * len(r))})", r)
+def gen(mysql_db, v2seed):
+    for table, rows in _ROWS.items():
+        if rows:
+            v2seed.seed_v1_rows(table, rows)
     return mysql_db
 
 
@@ -222,9 +220,8 @@ _SAIL_ROWS = [
 
 
 @pytest.fixture
-def gen_sail(gen):
-    with tx() as c:
-        c.executemany("INSERT INTO sail_mines_monthly VALUES (%s,%s,%s,%s,%s)", _SAIL_ROWS)
+def gen_sail(gen, v2seed):
+    v2seed.seed_v1_rows("sail_mines_monthly", _SAIL_ROWS)
     return gen
 
 

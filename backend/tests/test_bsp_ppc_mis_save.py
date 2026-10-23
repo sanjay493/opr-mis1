@@ -57,11 +57,8 @@ def fake_ppc_mis(monkeypatch):
 
 
 def _rows():
-    from repo import conn as rc
-    with rc.cursor() as cur:
-        cur.execute("SELECT item_name, month_actual FROM production_table "
-                    "WHERE report_month=%s AND plant_name='BSP'", ("2026-08",))
-        return {r[0]: r[1] for r in cur.fetchall()}
+    from v2dual import production_rows
+    return {r[2]: r[3] for r in production_rows("production_table") if r[0] == "2026-08" and r[1] == "BSP"}
 
 
 def test_extract_and_save_excel_writes_production_rows(mysql_db, fake_ppc_mis):

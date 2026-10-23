@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import api_mou_plan
-import dbengine
+from v2dual import production_rows
 
 
 @pytest.fixture
@@ -25,10 +25,7 @@ def test_insert_then_conflict_then_replace(client):
     assert r.status_code == 409
     r = tc.post("/api/mou-plan/insert", json={"records": [dict(REC[0], value=600.0)], "confirm_replace": True})
     assert r.status_code == 200
-    conn = dbengine.connect()
-    rows = conn.execute("SELECT month_actual FROM mou_plan_table").fetchall()
-    conn.close()
-    assert rows == [(600.0,)]
+    assert production_rows("mou_plan_table") == [("2026-04", "BSP", "Hot Metal", 600.0)]
 
 
 def test_insert_without_records_is_400(client):

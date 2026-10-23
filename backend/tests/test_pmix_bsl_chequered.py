@@ -9,7 +9,7 @@ import pytest
 import dbengine
 import page_jpc_report as jpc
 import page_pmix_fy_report as pfy
-from repo.conn import tx
+from v2dual import put_production
 
 BSL = {"HSM HR Coil (Sale)": 160.138, "Checkered Coil": 24.179,
        "HSM HR Plate": 32.075, "Checkered plate": 2.801}
@@ -18,10 +18,8 @@ RSP = {"HSM-2 HR Coil (Sale)": 100.0, "HSM-2 HR Plate": 20.0}
 
 @pytest.fixture
 def cur(mysql_db):
-    with tx() as seed:
-        for plant, items in (("BSL", BSL), ("RSP", RSP)):
-            seed.executemany("INSERT INTO production_table VALUES ('2026-09', %s, %s, %s)",
-                             [(plant, k, v) for k, v in items.items()])
+    for plant, items in (("BSL", BSL), ("RSP", RSP)):
+        put_production("production_table", [("2026-09", plant, k, v) for k, v in items.items()])
     c = dbengine.connect()
     yield c.cursor()
     c.close()

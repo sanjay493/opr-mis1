@@ -8,13 +8,14 @@ from pptx.util import Inches
 import dbengine
 import page_secretary_review as psr
 from repo.conn import tx
+from v2dual import put_production
 
 _ITEMS = [db_item for _, db_item in psr.ITEMS]
 
 
 def _cursor(mou_rows):
     with tx() as seed:
-        seed.executemany("INSERT INTO mou_plan_table VALUES (%s,%s,%s,%s)", mou_rows)
+        put_production("mou_plan_table", mou_rows)
     return dbengine.connect().cursor()
 
 
@@ -34,11 +35,11 @@ def test_basis_app_when_mou_missing_an_item_or_month(mysql_db):
 
 def test_basis_app_when_table_missing(mysql_db):
     # Drop the (empty) table for this test only, then restore it from its own
-    # SHOW CREATE TABLE so later tests still see the v1 schema.
+    # SHOW CREATE TABLE so later tests still see the schema (v2: MoU lives in production_monthly).
     with tx() as ddl:
-        ddl.execute("SHOW CREATE TABLE mou_plan_table")
+        ddl.execute("SHOW CREATE TABLE production_monthly")
         create_sql = ddl.fetchone()[1]
-        ddl.execute("DROP TABLE mou_plan_table")
+        ddl.execute("DROP TABLE production_monthly")
     try:
         cur = dbengine.connect().cursor()
         assert psr.plan_basis(cur, "2026-08") == "app"
