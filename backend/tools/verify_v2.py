@@ -385,6 +385,15 @@ class _Verifier:
         if len(uploads) != len(up_rows):
             msgs.append(f"techno_upload: {len(up_rows) - len(uploads)} duplicate (plant, month, unit name) "
                         "key(s) collapsed")
+        # plant_unit.unit_code is binary, but v1's uq_techno (plant, report_month,
+        # unit) was ai_ci: one (month, plant) can never hold two ai_ci-equal units
+        self.d.execute("SELECT u.report_month, u.plant_code, "
+                       "GROUP_CONCAT(pu.unit_code ORDER BY pu.unit_code SEPARATOR ' | ') "
+                       "FROM techno_upload u JOIN plant_unit pu ON pu.unit_id = u.unit_id "
+                       "GROUP BY u.report_month, u.plant_code, pu.unit_code COLLATE utf8mb4_0900_ai_ci "
+                       "HAVING COUNT(*) > 1")
+        msgs += [f"techno_upload ({p!r}, {m!r}): ai_ci-duplicate units {units}"
+                 for m, p, units in self.d.fetchall()]
         id_key = {(r["report_month"], r["plant_code"], r["unit_id"]): k for k, r in uploads.items()}
 
         leaves = defaultdict(list)

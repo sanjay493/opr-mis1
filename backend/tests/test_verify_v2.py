@@ -147,6 +147,20 @@ def test_techno_seq_is_the_v1_id(dbs):
     assert _verify(dbs) == []
 
 
+def test_techno_ai_ci_duplicate_unit(dbs):
+    """plant_unit.unit_code is binary; v1's uq_techno was ai_ci, so a (month,
+    plant) holding 'BF-1' and 'bf-1' is reported."""
+    v1, v2 = dbs
+    with _corrupt(v2, ["INSERT INTO plant_unit (plant_code, unit_code) VALUES ('BSP', 'bf-1')",
+                       "INSERT INTO techno_upload (report_month, plant_code, unit_id) SELECT '2026-04', 'BSP', "
+                       "unit_id FROM plant_unit WHERE plant_code = 'BSP' AND unit_code = 'bf-1'"],
+                  ["DELETE u FROM techno_upload u JOIN plant_unit pu USING (unit_id) WHERE pu.unit_code = 'bf-1'",
+                   "DELETE FROM plant_unit WHERE unit_code = 'bf-1'"]):
+        problems = _verify(dbs)
+    _has(problems, r"techno_upload \('BSP', '2026-04'\): ai_ci-duplicate units BF-1 \| bf-1")
+    assert _verify(dbs) == []
+
+
 def test_techno_leaf_value_hidden_by_decode(dbs):
     """is_int=1 with a fractional num decodes as int(num), equal to v1's 450:
     the decode cannot see it, the canonical-form and SUM checks do. (A raw
