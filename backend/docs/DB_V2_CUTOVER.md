@@ -1,0 +1,310 @@
+# Cutover to the v2 database schema (`mis_reports` to `mis_reports_v2`)
+
+Runbook for moving the live MIS database from the old (v1) schema `mis_reports` to the
+normalised v2 schema `mis_reports_v2`. The application code on branch `db-model-v2` runs
+only on v2; there is no switch back to v1 inside the same code.
+
+**Do not run this until the user says go.** Everything here was written, not executed.
+The tools and the rehearsal behind it are tested; the live run itself is not.
+
+This runbook replaces `MYSQL_MIGRATION_PLAN.md` (the SQLite to MySQL move, now history).
+The v2 table design is in `scripts/v2/schema_v2.sql` (header map) and
+`docs/DATA_MODEL_AND_REPORT_PAGES.md` section 4.
+
+## Machine facts used below
+
+| Item | Value |
+|---|---|
+| MySQL binaries | `C:\mysql\mysql-9.7.2-winx64\bin\` (`mysql.exe`, `mysqldump.exe`) |
+| Port | 3307, host 127.0.0.1 |
+| Root option file | `C:\mysql\rmg_client.cnf` (user root; holds the password) |
+| App option file | `C:\mysql\backup.cnf` (user `mis_app`; holds the password) |
+| Python | `C:\opr-mis1\backend\venv\Scripts\python.exe`, always run as `python.exe -m <tool>` |
+| Repo / backend | `C:\opr-mis1` and `C:\opr-mis1\backend` (run the tools from `backend`) |
+| Backups | `C:\opr-mis1\Report_format\db_backup\` |
+
+Passwords live only in those two option files and in `backend\.env`. Never paste them into a
+command line or a document. `--defaults-extra-file` must be the first mysql / mysqldump argument.
+
+PowerShell setup used by the commands below (the `mysql` client reads files with `<`, which
+PowerShell does not support, so those lines go through `cmd /c`):
+
+```powershell
+$M    = 'C:\mysql\mysql-9.7.2-winx64\bin'
+$ROOT = '--defaults-extra-file=C:\mysql\rmg_client.cnf'
+$APP  = '--defaults-extra-file=C:\mysql\backup.cnf'
+$PY   = 'C:\opr-mis1\backend\venv\Scripts\python.exe'
+cd C:\opr-mis1\backend
+```
+
+## Before the day
+
+1. Rehearse on a copy at least once: the same steps against `mis_reports_v2_rehearsal`
+   (migrate from `mis_reports_baseline`, verify, parity) have passed with 0 problems.
+2. The branch code must be ready to deploy: merged or checked out in `C:\opr-mis1`, with
+   `backend\venv` unchanged (`requirements.txt` did not change in this work).
+3. Pick the cutover date. Every parity run below pins the app's "today" to it (`--today`).
+4. Check disk space: a v1 dump, the v2 database, a v2 copy and two snapshots.
+
+## Step 1. Freeze data entry
+
+Tell the users that data entry, uploads and the admin restore are frozen from now until the
+smoke test passes (about 2 to 4 hours, most of it the parity snapshots). Reads and report
+downloads can continue. Nothing may write to `mis_reports` after step 2.
+
+## Step 2. Back up v1
+
+`backend\.env` still says `MYSQL_DB=mis_reports`, so the backup script dumps v1:
+
+```powershell
+C:\opr-mis1\backend\scripts\backup_mysql.bat
+echo $LASTEXITCODE        # 0
+dir C:\opr-mis1\Report_format\db_backup\mis_reports_*.sql | sort LastWriteTime | select -Last 1
+```
+
+The file is `mis_reports_YYYY-MM-DD.sql` (the script names the file after the database, so a
+v2 backup of the same day will not overwrite it). Keep a second copy of it outside
+`Report_format`, for example `C:\mysql\archive\mis_reports_pre_v2_YYYY-MM-DD.sql`.
+
+If the machine runs a scheduled copy of the script from `C:\mysql\backup_mysql.bat`, refresh
+that copy from the repo (`copy backend\scripts\backup_mysql.bat C:\mysql\`): the new version
+reads `MYSQL_DB` from `.env`.
+
+**`C:\mysql\backup.cnf` needs no edit.** It holds only user, host and port, not a database
+name. What the daily backup needs after the cutover is the grant in step 3 (the
+`mis_app` privileges on `mis_reports_v2`), because `backup.cnf` logs in as `mis_app`.
+
+## Step 3. Create v2, apply the schema, grant
+
+```powershell
+& "$M\mysql.exe" $ROOT -e "CREATE DATABASE mis_reports_v2 CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci"
+
+cmd /c "`"$M\mysql.exe`" $ROOT --default-character-set=utf8mb4 mis_reports_v2 < C:\opr-mis1\backend\scripts\v2\schema_v2.sql"
+cmd /c "`"$M\mysql.exe`" $ROOT --default-character-set=utf8mb4 mis_reports_v2 < C:\opr-mis1\backend\scripts\v2\seed_cal_month.sql"
+
+& "$M\mysql.exe" $ROOT -e "SELECT COUNT(*) AS tables_in_v2 FROM information_schema.tables WHERE table_schema='mis_reports_v2'; SELECT COUNT(*) AS months, MIN(report_month), MAX(report_month) FROM mis_reports_v2.cal_month"
+```
+
+Expected: 62 tables (every `CREATE TABLE` in `schema_v2.sql`), 960 months from 1960-04 to 2040-03.
+If the table count differs from `grep -c "^CREATE TABLE" scripts/v2/schema_v2.sql`, stop.
+
+Grants for `mis_app` on v2 (both host forms exist on this machine, see `docs/SETUP.md`):
+
+```powershell
+& "$M\mysql.exe" $ROOT -e "GRANT ALL PRIVILEGES ON mis_reports_v2.* TO 'mis_app'@'localhost'; GRANT ALL PRIVILEGES ON mis_reports_v2.* TO 'mis_app'@'127.0.0.1'; FLUSH PRIVILEGES"
+& "$M\mysql.exe" $ROOT -e "SHOW GRANTS FOR 'mis_app'@'127.0.0.1'; SHOW GRANTS FOR 'mis_app'@'localhost'"
+```
+
+- `ALL PRIVILEGES` on the database already includes **CREATE TEMPORARY TABLES**, which
+  `/api/preview-plan` needs (it builds temp tables for its dry run). If you grant a narrower set
+  instead, it must include at least SELECT, INSERT, UPDATE, DELETE, CREATE TEMPORARY TABLES,
+  LOCK TABLES (mysqldump) and REFERENCES.
+- The global `RELOAD, PROCESS ON *.*` grant that `mysqldump` needs is already in place
+  (`SETUP.md` section 3) and applies to every database; check that it shows in `SHOW GRANTS`.
+- Do not touch the grants on `mis_reports` yet (step 8).
+
+## Step 4. Migrate and verify
+
+Both tools read v1 read-only and take their connection from the option file:
+
+```powershell
+& $PY -m tools.migrate_v1_to_v2 --src mis_reports --dst mis_reports_v2 --src-defaults-file C:/mysql/backup.cnf --dst-defaults-file C:/mysql/backup.cnf
+& $PY -m tools.verify_v2        --src mis_reports --dst mis_reports_v2 --src-defaults-file C:/mysql/backup.cnf --dst-defaults-file C:/mysql/backup.cnf
+```
+
+- `migrate_v1_to_v2` reads and converts all of v1 first and writes nothing if any value cannot
+  be carried exactly; it then empties the v2 tables (except `cal_month`) and loads everything in
+  one transaction. It is idempotent: after a failure fix the cause and run it again.
+- `verify_v2` must end with `verify mis_reports -> mis_reports_v2: 0 problem(s)` and exit 0.
+  Any problem line: stop and do not continue; v1 is untouched.
+- `--help` on both lists these flags (`--src`, `--dst`, `--src-defaults-file`, `--dst-defaults-file`).
+
+## Step 5. Parity
+
+Goal: the app on v2 shows what it showed on v1 for the same data. The snapshot tool refuses the
+live names (`mis_reports`, `mis_reports_v2`), and the branch code cannot read v1, so the two sides
+come from copies and from the frozen v1 code.
+
+### 5a. v2 side
+
+```powershell
+& "$M\mysql.exe" $ROOT -e "CREATE DATABASE mis_reports_v2_cutover CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci; GRANT ALL PRIVILEGES ON mis_reports_v2_cutover.* TO 'mis_app'@'localhost'; GRANT ALL PRIVILEGES ON mis_reports_v2_cutover.* TO 'mis_app'@'127.0.0.1'; FLUSH PRIVILEGES"
+cmd /c "`"$M\mysqldump.exe`" $ROOT --single-transaction --routines --triggers mis_reports_v2 | `"$M\mysql.exe`" $ROOT mis_reports_v2_cutover"
+```
+
+Snapshot it (the cutover date as `--today`; widen `--months` if v1 holds months after 2026-09).
+Run in 2-month chunks into the same `--out`, because Chromium can run out of memory in a long
+run; if a month crashes ("Target crashed"), re-run that month alone:
+
+```powershell
+$D = '2026-MM-DD'     # the cutover date
+$env:MYSQL_DB = 'mis_reports_v2_cutover'
+& $PY -m tools.parity_snapshot --db mis_reports_v2_cutover --out C:\mysql\archive\parity\cut_v2 --today $D --months "2024-04..2024-05,2016-03,2021-03"
+# ... then 2024-06..2024-07, and so on up to the latest month
+```
+
+`--pdf-months` defaults to `2026-08,2026-09`; add the newest month if it is later.
+
+### 5b. v1 side
+
+The frozen v1 code is commit `5574414` (the last commit before the v2 switch-over), extracted
+without git history:
+
+```powershell
+$V1 = 'C:\mysql\archive\parity\v1code'
+if (-not (Test-Path $V1)) { New-Item -ItemType Directory $V1 | Out-Null; cmd /c "git -C C:\opr-mis1 archive 5574414 | tar -x -C $V1" }
+copy C:\opr-mis1\backend\.env "$V1\backend\.env"
+```
+
+(`C:\mysql\archive\parity\v1code` already exists from the rehearsal; reuse it.) Restore the
+step-2 dump into a scratch database and snapshot that with the v1 code:
+
+```powershell
+& "$M\mysql.exe" $ROOT -e "CREATE DATABASE mis_reports_cutover_v1 CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci; GRANT ALL PRIVILEGES ON mis_reports_cutover_v1.* TO 'mis_app'@'localhost'; GRANT ALL PRIVILEGES ON mis_reports_cutover_v1.* TO 'mis_app'@'127.0.0.1'; FLUSH PRIVILEGES"
+cmd /c "`"$M\mysql.exe`" $ROOT --default-character-set=utf8mb4 mis_reports_cutover_v1 < C:\opr-mis1\Report_format\db_backup\mis_reports_YYYY-MM-DD.sql"
+cd $V1\backend
+$env:MYSQL_DB = 'mis_reports_cutover_v1'
+& $PY -m tools.parity_snapshot --db mis_reports_cutover_v1 --out C:\mysql\archive\parity\cut_v1 --today $D --months "2024-04..2024-05,2016-03,2021-03"
+# ... same chunks as 5a
+cd C:\opr-mis1\backend
+```
+
+Use exactly the same `--months`, `--pdf-months` and chunking on both sides, otherwise
+`parity_diff` reports harness-only "file only in B" lines. (`.env` in the v1 copy must keep
+`DB_ENGINE=mysql`, which the v1 code requires.)
+
+### 5c. Compare
+
+```powershell
+& $PY -m tools.parity_diff C:\mysql\archive\parity\cut_v1 C:\mysql\archive\parity\cut_v2
+```
+
+`0 differences` is the target. The **only accepted differences** are the ones in
+`backend/tools/parity_exceptions.md`:
+
+- section 1: `_global/api_production-records.json`. Second-place month labels among equal totals on
+  the /records single-plant tabs (33 labels, BSP, DSP, RSP, BSL), including the derived BSL
+  "New CR Sheet" `best_month`. Totals are identical; only a tied month label changes.
+- section 1b: `_global/api_iron-ore-mines__series--fy_start=2026.json`, `despatch_plan` rows in another
+  order (same rows).
+- section 1c: row order the optimizer picked per call (`breakdown.open_breakdown_rows`; groups and
+  sorts afterwards, so no visible change).
+
+`parity_diff` stops listing at 50 lines per file, so for those two files confirm that nothing
+else changed (compare the JSON with the tied label fields removed, or as a multiset for 1b).
+If the data has changed since the rehearsal, regenerate the section 1 table first, as the
+"Upkeep" note there says. Any other difference is a real regression: stop, do not switch.
+
+Drop the scratch databases when done:
+
+```powershell
+& "$M\mysql.exe" $ROOT -e "DROP DATABASE mis_reports_v2_cutover; DROP DATABASE mis_reports_cutover_v1"
+```
+
+## Step 6. Switch the application to v2
+
+1. Stop the backend and frontend (close the `start-development.bat` windows, or the
+   `start-production.bat` windows in production).
+2. Make sure `C:\opr-mis1` is on the branch code (merged or checked out). Check:
+   `git -C C:\opr-mis1 log -1 --oneline`.
+3. Edit `backend\.env`: set `MYSQL_DB=mis_reports_v2`. Leave the other lines as they are,
+   including `MYSQL_PORT=3307`. A leftover `DB_ENGINE=mysql` line is ignored by the v2 code and is
+   needed again if you roll back, so leave it.
+4. Start: `start-development.bat` (uvicorn reloads on its own) or `start-production.bat`
+   (rebuild the frontend first only if the frontend changed: `cd frontend && npm run build`).
+
+## Step 7. Smoke test
+
+```powershell
+curl.exe -s "http://127.0.0.1:8082/api/production-fys"
+curl.exe -s -o NUL -w "%{http_code} %{time_total}s\n" "http://127.0.0.1:8082/api/data?month=2026-09"
+```
+
+Then in the browser, as an admin:
+
+1. `/report` for 2026-09: all pages render; the page count matches the last v1 report.
+2. One upload preview (Uploads, pick any plant file, Preview only, do not insert): it must show rows.
+   (A preview that ends in a deadlock error is rare and harmless; retry. See Notes.)
+3. One data-entry save: a value you can undo, for example re-save an unchanged cell on a data-entry
+   page, or enter and then delete one `todo` item. Check it appears and that `/report` reflects it.
+4. A full PDF export of 2026-09 ("Download PDF"): it completes and looks like the previous month's.
+5. `dir C:\opr-mis1\Report_format\db_backup` after the next daily backup (or run
+   `backend\scripts\backup_mysql.bat` now): a new `mis_reports_v2_YYYY-MM-DD.sql` exists.
+
+Announce that data entry is open again.
+
+## Step 8. Make v1 read-only
+
+Only after the smoke test passes:
+
+```powershell
+& "$M\mysql.exe" $ROOT -e "REVOKE INSERT, UPDATE, DELETE ON mis_reports.* FROM 'mis_app'@'localhost'; REVOKE INSERT, UPDATE, DELETE ON mis_reports.* FROM 'mis_app'@'127.0.0.1'; FLUSH PRIVILEGES"
+& "$M\mysql.exe" $ROOT -e "SHOW GRANTS FOR 'mis_app'@'127.0.0.1'"
+```
+
+Keep `mis_reports` and the step-2 dump for at least one reporting cycle before dropping anything.
+(`REVOKE` errors with "no such grant" if only the `ALL PRIVILEGES` form was granted on
+`mis_reports`; then `REVOKE ALL PRIVILEGES ON mis_reports.* FROM ...` and
+`GRANT SELECT ON mis_reports.* TO ...` for each host form.)
+
+## Rollback
+
+The v2 code cannot run on v1, so a rollback is "old code + old database":
+
+1. Stop backend and frontend.
+2. Put the pre-cutover code back in `C:\opr-mis1` (the release that ran before the branch was merged,
+   for example by checking out that commit or tag).
+3. Edit `backend\.env`: `MYSQL_DB=mis_reports` and `DB_ENGINE=mysql` (the old code needs it).
+4. Restore v1 write access if step 8 was done:
+   ```powershell
+   & "$M\mysql.exe" $ROOT -e "GRANT INSERT, UPDATE, DELETE ON mis_reports.* TO 'mis_app'@'localhost'; GRANT INSERT, UPDATE, DELETE ON mis_reports.* TO 'mis_app'@'127.0.0.1'; FLUSH PRIVILEGES"
+   ```
+5. Start the app and run the smoke test of step 7 against v1.
+6. Data entered on v2 after the cutover is not in v1. Replay it from the v2 `activity_log`
+   (`SELECT * FROM mis_reports_v2.activity_log WHERE created_at >= '<cutover time>' ORDER BY id`) or
+   re-enter it by hand. If nothing was entered, there is nothing to replay.
+7. Leave `mis_reports_v2` in place for diagnosis; do not drop it.
+
+## Notes
+
+- **After a manual SQL edit** (any `UPDATE`/`INSERT`/`DELETE` or script run that bypasses the
+  app), run `UPDATE data_version SET n = n + 1` on `mis_reports_v2`, or restart the backend.
+  Otherwise stale cached pages are served: the page cache is keyed on `data_version.n`. An admin
+  restore from the app does this itself.
+- **Preview dry run deadlock.** `/api/preview-plan` and the other dry runs hold share locks without
+  bumping the version. Under concurrent saves MySQL can roll one side back with a deadlock error.
+  It is rare, the preview writes nothing anyway, and a retry works.
+- **`backend/scripts/` backfill scripts hold v1 SQL.** `backfill_*.py`, `migrate_*.sql` (outside
+  `scripts/v2/`), `mysql_schema.sql` and the one-off scripts there are historical. Do not run them
+  against v2. New writers must go through `backend/repo/`.
+- **Unknown plants and spellings.** A write for a plant that is not in the master creates a
+  `plant` row with `plant_kind = 'external'`, and a case-variant item or unit name creates one
+  more spelling (`CC Billet` next to `CC BILLET`). This is the v1 behaviour. Filter by
+  `plant_kind` (and fold case) when building display lists.
+- **Real-data tests.** Four tests read live data: the rake detention PDF and report-month tests and
+  the secretary-review context and render tests. Until the cutover they read
+  `mis_reports_v2_rehearsal` (override with the `MYSQL_LIVE_V2_DB` environment variable). After the
+  cutover `tests/conftest.py:live_v2_db_name()` uses `MYSQL_DB` whenever it starts with
+  `mis_reports_v2`, so with `.env` set as in step 6 they read the live v2 database, read-only,
+  and nothing needs to change. Set `MYSQL_LIVE_V2_DB` only to point them at a copy instead.
+- **Test database.** The pytest fixtures use a separate MySQL user, `MYSQL_TEST_USER` /
+  `MYSQL_TEST_PASSWORD` in `backend\.env`, with rights only on ``mis_reports_test_%`` schemas
+  (``GRANT ALL ON `mis\_reports\_test\_%`.* TO 'mis_test'@'127.0.0.1'``, created as root). The
+  tests never touch `mis_reports`, `mis_reports_v2` or `mis_reports_baseline`.
+- **Guard tests** that protect the model: `tests/test_repo_boundary.py` (no SQL outside
+  `backend/repo/`), `tests/test_repo_writes_bump.py` (every repo write bumps `data_version` first),
+  `tests/test_repo_oracle.py` (public functions of each repo module keep their frozen signatures),
+  `tests/test_no_unbound_local_imports.py` (the pyflakes F823 pattern). Keep them green.
+- **Running the tests.** The full suite takes about 75 minutes. Run it in parts, for example:
+  ```powershell
+  cd C:\opr-mis1\backend
+  # schema and migration
+  & $PY -m pytest tests/test_schema_v2.py tests/test_migrate_v1_to_v2.py tests/test_verify_v2.py -q
+  # repo layer and the guard tests
+  & $PY -m pytest tests/test_repo_*.py tests/test_data_version.py tests/test_report_context.py tests/test_no_unbound_local_imports.py -q
+  # everything else (app, extractors, board notes, pages)
+  & $PY -m pytest tests -q --ignore-glob="tests/test_repo_*" --ignore=tests/test_schema_v2.py --ignore=tests/test_migrate_v1_to_v2.py --ignore=tests/test_verify_v2.py --ignore=tests/test_data_version.py --ignore=tests/test_report_context.py --ignore=tests/test_no_unbound_local_imports.py
+  ```
+  Five tests fail on the untouched main as well (the known baseline set); a new failure outside
+  them is a regression.
+- **Colour, layout and PDF rules** are unaffected by this change; see `PDF_LAYOUT_GUARDRAILS.md`.

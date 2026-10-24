@@ -1,6 +1,6 @@
 @echo off
 setlocal enabledelayedexpansion
-rem Daily MySQL backup of mis_reports -> <repo root>\Report_format\db_backup
+rem Daily MySQL backup of the app database -> <repo root>\Report_format\db_backup
 rem
 rem Fully machine-portable: this file is git-tracked and shared across machines
 rem with different repo locations and MySQL installs. The repo root and backup
@@ -25,10 +25,18 @@ if not exist "%ENV_FILE%" (
   exit /b 1
 )
 
+rem DB_NAME = the database to dump. Read from MYSQL_DB in backend\.env (the
+rem same value the app uses), so it follows the cutover to mis_reports_v2 with
+rem no edit here. Falls back to mis_reports when .env has no MYSQL_DB. To force
+rem a database, set DB_NAME in the environment before running this script.
 set "MYSQL_BIN_DIR="
+set "ENV_DB="
 for /f "usebackq tokens=1,* delims==" %%A in ("%ENV_FILE%") do (
   if "%%A"=="MYSQL_BIN_DIR" set "MYSQL_BIN_DIR=%%B"
+  if "%%A"=="MYSQL_DB" set "ENV_DB=%%B"
 )
+if not defined DB_NAME set "DB_NAME=%ENV_DB%"
+if not defined DB_NAME set "DB_NAME=mis_reports"
 if not defined MYSQL_BIN_DIR (
   echo ERROR: MYSQL_BIN_DIR not set in %ENV_FILE%.
   exit /b 1
@@ -44,8 +52,9 @@ set LOG_FILE=%MYSQL_ROOT%\backup_error.log
 if not exist "%BACKUP_DIR%" mkdir "%BACKUP_DIR%"
 
 for /f %%i in ('powershell -NoProfile -Command "Get-Date -Format yyyy-MM-dd"') do set TODAY=%%i
-set FINAL_FILE=%BACKUP_DIR%\mis_reports_%TODAY%.sql
-set TMP_FILE=%BACKUP_DIR%\.mis_reports_%TODAY%.sql.tmp
+rem The file name carries the database name, so a v1 and a v2 backup of the same day do not overwrite each other.
+set FINAL_FILE=%BACKUP_DIR%\%DB_NAME%_%TODAY%.sql
+set TMP_FILE=%BACKUP_DIR%\.%DB_NAME%_%TODAY%.sql.tmp
 
 rem Refuse to run if the server isn't up - avoids dumping against a dead socket
 tasklist /FI "IMAGENAME eq mysqld.exe" | findstr /I "mysqld.exe" >nul
@@ -55,7 +64,7 @@ if errorlevel 1 (
 )
 
 "%MYSQL_BIN_DIR%\mysqldump.exe" --defaults-extra-file="%MYSQL_ROOT%\backup.cnf" ^
-  --single-transaction --no-tablespaces --routines --triggers mis_reports > "%TMP_FILE%" 2>>"%LOG_FILE%"
+  --single-transaction --no-tablespaces --routines --triggers %DB_NAME% > "%TMP_FILE%" 2>>"%LOG_FILE%"
 set DUMP_RC=%ERRORLEVEL%
 
 if not "%DUMP_RC%"=="0" (

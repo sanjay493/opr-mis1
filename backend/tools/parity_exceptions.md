@@ -62,6 +62,8 @@ Rules for Task 7g:
 | BSL | Semis Export | Nov | Nov'25 (0.0), Nov'24 (0.0) | Nov'22 (0.0), Nov'23 (0.0) |
 | BSL | Semis Export | Dec | Dec'25 (0.0), Dec'24 (0.0) | Dec'22 (0.0), Dec'24 (0.0) |
 
+**Derived best_month (BSL "New CR Sheet").** Wherever a month label is derived from the first tied row, it moves with the tie labels above. For BSL "New CR Sheet" every month totals 0.0, so all months tie and the derived `best_month` is the tied label v2 picks (the 12 "New CR Sheet" rows in the table), not the one v1 picked. The total (0.0) is the same. At cutover this shows up as `best_month` differences for that item in the records output, and they are accepted.
+
 **How the table was made.** Measured 2026-10-22 on mis_reports_rehearsal (the v1 oracle) against mis_reports_v2_rehearsal. The items are page_records' items for each plant tab: `distinct_items(actual, plant)` minus `LEGACY_ITEM_NAMES`. The data is the data as of the parity `--today 2026-10-19`.
 
 **Upkeep.** If the data or `--today` changes, regenerate this table before 7g compares parity.
