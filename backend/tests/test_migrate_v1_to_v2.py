@@ -300,7 +300,7 @@ def dbs(_mysql_v1_schema, mysql_v2_db):
         v2 = cur.fetchone()[0]
     assert v1.startswith("mis_reports_test_") and v2.startswith("mis_reports_test_v2_")
     _load_v1(v1)
-    mig.migrate(v1, v2, src_cfg=_cfg(), dst_cfg=_cfg())
+    mig.migrate(v1, v2, src_cfg=_cfg(), dst_cfg=_cfg(), replace=True)
     try:
         yield v1, v2
     finally:
@@ -587,7 +587,7 @@ def test_month_outside_cal_month_fails_loudly(dbs):
         with conn.cursor() as cur:
             cur.execute("INSERT INTO production_table VALUES ('2041-01', 'BSP', 'Crude Steel', 1)")
         with pytest.raises(mig.MigrationError) as e:
-            mig.migrate(v1, v2, src_cfg=_cfg(), dst_cfg=_cfg())
+            mig.migrate(v1, v2, src_cfg=_cfg(), dst_cfg=_cfg(), replace=True)
         assert "production_table" in str(e.value) and "2041-01" in str(e.value)
     finally:
         with conn.cursor() as cur:
@@ -662,3 +662,16 @@ def test_dst_guards_refuse(dbs):
     assert _rows(v1, "SELECT COUNT(*) AS n FROM production_table") == before
     assert before[0]["n"] == len(FIXTURE["production_table"][1])
     assert _rows(v1, "SELECT n FROM data_version") == [{"n": 7}]
+
+
+def test_non_empty_dst_needs_replace(dbs):
+    """A dst that already holds rows is refused without replace=True (and the
+    CLI flag), and is left untouched; a re-run with replace=True works."""
+    v1, v2 = dbs
+    before = _rows(v2, "SELECT COUNT(*) AS n FROM production_monthly")
+    assert before[0]["n"] > 0
+    with pytest.raises(mig.MigrationError, match="already holds data.*--replace"):
+        mig.migrate(v1, v2, src_cfg=_cfg(), dst_cfg=_cfg())
+    assert _rows(v2, "SELECT COUNT(*) AS n FROM production_monthly") == before
+    mig.migrate(v1, v2, src_cfg=_cfg(), dst_cfg=_cfg(), replace=True)
+    assert _rows(v2, "SELECT COUNT(*) AS n FROM production_monthly") == before

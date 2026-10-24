@@ -24,7 +24,7 @@ Checks:
     directions), and every column of every v2 table must be covered by the
     map, NON_SIMPLE_V2_COLUMNS or SYNTHESISED_V2_COLUMNS.
   * Canonical forms the decoders cannot see: production has_*=0 -> value
-    NULL; techno leaves with raw -> num NULL, is_int 0; is_int=1 -> integral.
+    NULL; (month, plant, ai_ci item name) unique among has_actual=1 rows; techno leaves with raw -> num NULL, is_int 0; is_int=1 -> integral.
   * Row counts per table, allowing for the documented merges / splits.
   * SUM (and count) of every numeric column per (month or fy, plant).
   * JSON_VALID on every JSON column and on page_config.page_data.
@@ -347,6 +347,16 @@ class _Verifier:
                     canon.append(f"production_monthly row {key!r}: {flag}=0 but {col}={r[col]!r}")
             if not flags:
                 canon.append(f"production_monthly row {key!r}: no has_* flag set")
+        # the item master keeps case variants apart (utf8mb4_0900_bin), but the
+        # tables read a name case-insensitively (ai_ci): one actual per
+        # (month, plant, item name) must remain.
+        self.d.execute(
+            "SELECT p.report_month, p.plant_code, MIN(i.item_name), COUNT(*) FROM production_monthly p "
+            "JOIN item i ON i.item_id = p.item_id WHERE p.has_actual = 1 "
+            "GROUP BY p.report_month, p.plant_code, i.item_name COLLATE utf8mb4_0900_ai_ci "
+            "HAVING COUNT(*) > 1")
+        canon += [f"production_monthly: {n} has_actual rows for ({m!r}, {p!r}, item {nm!r}) "
+                  f"that differ only in letter case or accents" for m, p, nm, n in self.d.fetchall()]
         self.add("production_monthly", canon)
         for t, (col, flag) in vc.PRODUCTION_SOURCES.items():
             self._coverage(t, {"report_month", "plant_name", "item_name", "month_actual"})

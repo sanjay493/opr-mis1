@@ -27,7 +27,7 @@ def dbs(_mysql_v1_schema, mysql_v2_db):
         v2 = cur.fetchone()[0]
     assert v1.startswith("mis_reports_test_") and v2.startswith("mis_reports_test_v2_")
     m6a._load_v1(v1)
-    mig.migrate(v1, v2, src_cfg=m6a._cfg(), dst_cfg=m6a._cfg())
+    mig.migrate(v1, v2, src_cfg=m6a._cfg(), dst_cfg=m6a._cfg(), replace=True)
     try:
         yield v1, v2
     finally:
@@ -94,6 +94,21 @@ def test_changed_value(dbs):
     _has(problems, r"production_table: row \('2026-04', 'BSP', 'Crude Steel'\) month_actual: "
                    r"v1 100\.5 != v2 100\.75")
     _has(problems, r"SUM production_monthly\.actual .*\('2026-04', 'BSP'\)")
+    assert _verify(dbs) == []
+
+
+def test_case_variant_actual_duplicate(dbs):
+    """Two has_actual=1 rows for one (month, plant) whose item names differ only
+    in case (two item ids) are reported."""
+    v1, v2 = dbs
+    where = "item_name = 'crude steel'"
+    key = "report_month = '2026-04' AND plant_code = 'BSP' AND item_id = (SELECT item_id FROM item WHERE item_name = 'crude steel')"
+    with _corrupt(v2, ["INSERT INTO item (item_name) VALUES ('crude steel')",
+                       "INSERT INTO production_monthly (report_month, plant_code, item_id, actual, has_actual) "
+                       "SELECT '2026-04', 'BSP', item_id, 1, 1 FROM item WHERE item_name = 'crude steel'"],
+                  [f"DELETE FROM production_monthly WHERE {key}", f"DELETE FROM item WHERE {where}"]):
+        problems = _verify(dbs)
+    _has(problems, r"production_monthly: 2 has_actual rows for \('2026-04', 'BSP', item 'Crude Steel'\)")
     assert _verify(dbs) == []
 
 

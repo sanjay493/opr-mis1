@@ -1,9 +1,11 @@
 """Migrate a v1 MySQL database into an empty-schema v2 database (Task 6).
 
     python -m tools.migrate_v1_to_v2 --src mis_reports_baseline --dst mis_reports_v2_rehearsal \\
-        [--src-defaults-file C:/mysql/backup.cnf] [--dst-defaults-file ...]
+        [--src-defaults-file C:/mysql/backup.cnf] [--dst-defaults-file ...] [--replace]
 
-migrate(src_db, dst_db) is idempotent: it reads and converts the whole v1
+migrate(src_db, dst_db) refuses a dst whose data tables already hold rows unless
+--replace is given (a first run needs no flag; a deliberate re-run on a
+non-live database uses --replace). It reads and converts the whole v1
 database first (nothing is written if any value cannot be carried exactly:
 a month outside cal_month, a timestamp that would not render back, an
 unknown plant or v1 table, ...), then empties every dst table except the
@@ -33,6 +35,7 @@ if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
 from repo import v2codec as vc  # noqa: E402
+from repo.schema import v2_problem  # noqa: E402
 
 PROTECTED_DBS = {"mis_reports", "mis_reports_baseline"}
 
@@ -556,25 +559,47 @@ def _assert_v2(cur, dst_db):
     v2 schema (techno_value present) and not a v1 one (techno_data absent)."""
     cur.execute("SELECT DATABASE()")
     _check_dst(cur.fetchone()[0], None)
-    cur.execute("SHOW TABLES LIKE 'techno_value'")
-    has_v2 = cur.fetchone() is not None
-    cur.execute("SHOW TABLES LIKE 'techno_data'")
-    has_v1 = cur.fetchone() is not None
-    if not has_v2 or has_v1:
-        raise MigrationError(f"refusing to write {dst_db!r}: not a v2 schema "
-                             f"(techno_value {'present' if has_v2 else 'missing'}, "
-                             f"techno_data {'present' if has_v1 else 'absent'})")
+    problem = v2_problem(cur)
+    if problem:
+        raise MigrationError(f"refusing to write {dst_db!r}: {problem}")
+
+
+def _tables_with_rows(cur) -> List[str]:
+    """dst data tables that hold at least one row (cal_month, the seeded
+    calendar, and data_version, the write counter, are not data)."""
+    cur.execute("SELECT table_name FROM information_schema.tables "
+                "WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE'")
+    out = []
+    for (t,) in cur.fetchall():
+        if t not in ("cal_month", "data_version"):
+            cur.execute(f"SELECT EXISTS(SELECT 1 FROM `{t}`)")
+            if cur.fetchone()[0]:
+                out.append(t)
+    return sorted(out)
+
+
+def _assert_empty_or_replace(cur, dst_db, replace):
+    if replace:
+        return
+    full = _tables_with_rows(cur)
+    if full:
+        raise MigrationError(
+            f"refusing to overwrite {dst_db!r}: it already holds data ({', '.join(full[:8])}"
+            f"{', ...' if len(full) > 8 else ''}). A first migration needs an empty v2 database; "
+            f"to deliberately replace the contents of a non-live database, pass --replace.")
 
 
 def migrate(src_db: str, dst_db: str, *, src_cfg: Optional[dict] = None,
-            dst_cfg: Optional[dict] = None) -> None:
-    """Load v1 `src_db` into v2 `dst_db` (see the module docstring)."""
+            dst_cfg: Optional[dict] = None, replace: bool = False) -> None:
+    """Load v1 `src_db` into v2 `dst_db` (see the module docstring). A dst
+    whose data tables already hold rows is refused unless `replace` is true."""
     _check_dst(dst_db, src_db)
     src = connect(src_db, src_cfg)
     dst = connect(dst_db, dst_cfg)
     try:
         with src.cursor() as s, dst.cursor() as d:
             _assert_v2(d, dst_db)
+            _assert_empty_or_replace(d, dst_db, replace)
             s.execute("SET SESSION TRANSACTION READ ONLY")
             s.execute("START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY")
             s.execute("SHOW TABLES LIKE 'techno_data'")
@@ -641,9 +666,12 @@ def main(argv=None):
     ap.add_argument("--dst", required=True, help="v2 database (emptied, then loaded)")
     ap.add_argument("--src-defaults-file", help="mysql option file for the source connection")
     ap.add_argument("--dst-defaults-file", help="mysql option file for the destination connection")
+    ap.add_argument("--replace", action="store_true",
+                    help="allow a destination that already holds data (it is emptied first); "
+                         "for a deliberate re-run on a non-live database only")
     a = ap.parse_args(argv)
     migrate(a.src, a.dst, src_cfg=_cfg_from_args(a.src_defaults_file),
-            dst_cfg=_cfg_from_args(a.dst_defaults_file))
+            dst_cfg=_cfg_from_args(a.dst_defaults_file), replace=a.replace)
     print(f"migrated {a.src} -> {a.dst}")
 
 
