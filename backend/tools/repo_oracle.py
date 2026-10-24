@@ -129,7 +129,7 @@ BIG_CHUNK = 256
 
 # repo modules with no domain reads of their own (connection plumbing, the
 # data_version counter, the v1<->v2 codec).
-SHARED_MODULES = ("conn", "version", "v2codec", "_keys", "_mysqlsort")
+SHARED_MODULES = ("conn", "version", "v2codec", "_keys", "_mysqlsort", "schema")
 DOMAIN_MODULES = ("breakdown", "capacity", "cost_trend", "ipt", "mines", "misc", "ops", "pages",
                   "production", "rake", "special_steel", "stock", "techno", "text")
 

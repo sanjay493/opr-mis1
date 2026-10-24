@@ -30,7 +30,9 @@ from fastapi import APIRouter, Depends, HTTPException
 import auth
 import data_version
 import dbengine
+from repo import conn as rc
 from repo import ops as rop
+from repo import schema as rsch
 
 router = APIRouter(prefix="/api/admin/backups", tags=["admin-backup"], dependencies=[Depends(auth.require_admin)])
 
@@ -52,10 +54,16 @@ _STRIP_RE = re.compile(r"^SET @@GLOBAL\.GTID_PURGED|SQL_LOG_BIN")
 _MYSQL_CFG = {
     "host": os.environ.get("MYSQL_HOST", "127.0.0.1"),
     "port": os.environ.get("MYSQL_PORT", "3306"),
-    "database": os.environ.get("MYSQL_DB", "mis_reports"),
+    "database": os.environ.get("MYSQL_DB", "mis_reports_v2"),
     "user": os.environ.get("MYSQL_USER", "mis_app"),
     "password": os.environ.get("MYSQL_PASSWORD", ""),
 }
+
+
+def _db_name() -> str:
+    """The database the app is connected to (MYSQL_DB); names the dumps and
+    is the one dumped and restored."""
+    return dbengine._MYSQL_CFG.get("database") or _MYSQL_CFG["database"]
 
 
 def _require_mysql():
@@ -163,7 +171,7 @@ def _run_dump(dest: Path) -> None:
                         f"--defaults-extra-file={ini_path}",
                         "--single-transaction", "--no-tablespaces", "--routines", "--triggers",
                         "--set-gtid-purged=OFF",
-                        _MYSQL_CFG["database"],
+                        _db_name(),
                     ],
                     stdout=out, stderr=subprocess.PIPE, timeout=180,
                 )
@@ -261,6 +269,31 @@ def _tables_at_risk(src: Path) -> list:
     return at_risk
 
 
+_V1_TABLE_MARK = b"CREATE TABLE `techno_data`"
+
+
+def _is_v1_dump(path: Path) -> bool:
+    """True if the dump file creates the v1 table `techno_data`. Read in 1 MB
+    chunks (with an overlap so a match across a chunk edge is found), never
+    the whole file at once."""
+    keep = len(_V1_TABLE_MARK) - 1
+    tail = b""
+    with _open_backup(path, "rb") as f:
+        while True:
+            chunk = f.read(1 << 20)
+            if not chunk:
+                return False
+            buf = tail + chunk
+            if _V1_TABLE_MARK in buf:
+                return True
+            tail = buf[-keep:]
+
+
+def _live_is_v2() -> bool:
+    with rc.cursor() as cur:
+        return rsch.schema_state(cur)[0]
+
+
 _LOCK_NAME = "mis_admin_backup_restore"
 
 
@@ -316,11 +349,11 @@ def create_backup(admin: dict = Depends(auth.require_admin)):
     lock = _acquire_admin_lock()
     try:
         stamp = datetime.now(IST).strftime("%Y-%m-%d_%H%M%S")
-        filename = f"mis_reports_admin_{stamp}.sql"
+        filename = f"{_db_name()}_admin_{stamp}.sql"
         _run_dump(BACKUP_DIR / filename)
     finally:
         _release_admin_lock(lock)
-    auth.log_activity(admin, "backup", "mis_reports", f"created {filename}")
+    auth.log_activity(admin, "backup", _db_name(), f"created {filename}")
     return {"status": "ok", "filename": filename}
 
 
@@ -330,6 +363,18 @@ def restore_backup(filename: str, confirm_data_loss: bool = False, admin: dict =
     src = _safe_path(filename)
     if not src.exists():
         raise HTTPException(status_code=404, detail="Backup file not found.")
+
+    # A v1 dump into a v2 database would put the old tables beside the new ones
+    # and break the app. Not overridable by confirm_data_loss.
+    if _live_is_v2() and _is_v1_dump(src):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"\"{filename}\" is a dump of the old (v1) schema (it creates the table techno_data), "
+                f"but the live database {_db_name()} is the v2 schema. Restoring it would break the app. "
+                "Choose a backup taken after the v2 cutover."
+            ),
+        )
 
     lock = _acquire_admin_lock()
     try:
@@ -354,7 +399,7 @@ def restore_backup(filename: str, confirm_data_loss: bool = False, admin: dict =
 
         # Safety net: snapshot current state before overwriting anything.
         prerestore_stamp = datetime.now(IST).strftime("%Y-%m-%d_%H%M%S")
-        prerestore_name = f"mis_reports_prerestore_{prerestore_stamp}.sql"
+        prerestore_name = f"{_db_name()}_prerestore_{prerestore_stamp}.sql"
         _run_dump(BACKUP_DIR / prerestore_name)
 
         bin_dir = _mysql_bin_dir()
@@ -364,7 +409,7 @@ def restore_backup(filename: str, confirm_data_loss: bool = False, admin: dict =
             with open(sanitized, "rb") as stdin_file:
                 try:
                     result = subprocess.run(
-                        [str(bin_dir / "mysql.exe"), f"--defaults-extra-file={ini_path}", _MYSQL_CFG["database"]],
+                        [str(bin_dir / "mysql.exe"), f"--defaults-extra-file={ini_path}", _db_name()],
                         stdin=stdin_file, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=180,
                     )
                 except subprocess.TimeoutExpired:
@@ -403,5 +448,5 @@ def restore_backup(filename: str, confirm_data_loss: bool = False, admin: dict =
     note = f"restored from {filename}; pre-restore snapshot saved as {prerestore_name}"
     if confirm_data_loss:
         note += " (confirmed despite data-loss warning)"
-    auth.log_activity(admin, "restore", "mis_reports", note)
+    auth.log_activity(admin, "restore", _db_name(), note)
     return {"status": "ok", "restored_from": filename, "prerestore_snapshot": prerestore_name}

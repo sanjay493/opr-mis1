@@ -25,7 +25,7 @@ load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 _MYSQL_CFG = {
     "host":     os.environ.get("MYSQL_HOST", "127.0.0.1"),
     "port":     int(os.environ.get("MYSQL_PORT", "3306")),
-    "database": os.environ.get("MYSQL_DB", "mis_reports"),
+    "database": os.environ.get("MYSQL_DB", "mis_reports_v2"),
     "user":     os.environ.get("MYSQL_USER", "mis_app"),
     "password": os.environ.get("MYSQL_PASSWORD", ""),
 }

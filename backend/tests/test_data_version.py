@@ -213,6 +213,7 @@ def test_restore_route_calls_after_restore(monkeypatch, tmp_path):
     monkeypatch.setattr(ab, "_acquire_admin_lock", lambda: lock)
     monkeypatch.setattr(ab, "_release_admin_lock", lambda c: events.append(("release", c)))
     monkeypatch.setattr(ab, "_tables_at_risk", lambda s: [])
+    monkeypatch.setattr(ab, "_live_is_v2", lambda: False)
     monkeypatch.setattr(ab, "_run_dump", lambda dest: None)
     monkeypatch.setattr(ab, "_mysql_bin_dir", lambda: tmp_path)
     monkeypatch.setattr(ab, "_client_ini", lambda: (ini.write_text(""), str(ini))[1])

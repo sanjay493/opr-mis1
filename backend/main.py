@@ -1,3 +1,4 @@
+import contextlib
 import os
 import json
 import copy
@@ -442,7 +443,7 @@ def _index_rows() -> list:
     """Page 2's (Index/Contents) row list, computed fresh on every request
     rather than read from the static per-month page_configs blob that
     main.py otherwise loads page 2 from. That blob is a full JSON snapshot
-    saved PER MONTH (db.save_page_config), so editing mis_data.json's page-2
+    saved PER MONTH (repo.pages.save_page_config), so editing mis_data.json's page-2
     rows would only affect months not yet saved — every already-generated
     month would keep showing stale page numbers forever. Recomputing here
     instead means the Index is always correct for any month, independent of
@@ -798,7 +799,16 @@ _INDEX_SECTION_ANCHORS = [
 assert len(_INDEX_SECTION_ANCHORS) == len(_INDEX_SECTIONS), \
     "_INDEX_SECTION_ANCHORS must have one entry per _INDEX_SECTIONS row, same order"
 
+@contextlib.asynccontextmanager
+async def _lifespan(_app):
+    # v2 code on a v1 database fails in odd places later; stop here instead.
+    from repo import schema as _schema
+    _schema.require_v2_at_startup()
+    yield
+
+
 app = FastAPI(
+    lifespan=_lifespan,
     title="SAIL OMI MIS Report Generator Backend",
     description="Python API backend to compile and export SAIL MIS reports using Playwright (headless Chromium).",
 )
