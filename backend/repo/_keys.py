@@ -1,4 +1,4 @@
-"""Shared v2 key rules: months, plants and item names (for every repo/v2 module).
+"""Shared v2 key rules: months, plants and item names (for every repo module).
 
 MONTHS. Every v2 fact table's report_month is a declared FK to cal_month
 (seeded 1960-04 .. 2040-03). v1 stored any string that fit its CHAR(7).

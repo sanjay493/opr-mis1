@@ -16,7 +16,7 @@ Monthly MIS report for SAIL: a FastAPI backend that ingests plant Excel/PDF file
 ## Database
 
 - Engine is chosen by `DB_ENGINE` in `backend/.env`; **this machine runs `mysql`** (`mis_reports` on 127.0.0.1:3306). `backend/mis_reports.db` (SQLite) is only the fallback/legacy engine — don't assume queries against it reflect live data.
-- All code goes through `db.connect()` → `dbengine.py`, which translates sqlite-dialect SQL (`?`, `ON CONFLICT`, `INSERT OR REPLACE`) to MySQL. Keep writing sqlite-dialect SQL in the backend.
+- All SQL lives in `backend/repo/<module>.py` (import `repo.<module>` directly; there is no `db.py` shim — month/FY helpers are in `month_utils.py`). Connections come from `dbengine.connect()` / `repo.conn`; `dbengine.py` translates sqlite-dialect SQL (`?`, `ON CONFLICT`, `INSERT OR REPLACE`) to MySQL. Keep writing sqlite-dialect SQL in the backend.
 - MySQL schema lives in `backend/scripts/mysql_schema.sql` plus `scripts/migrate_*.sql`; `init_db`'s CREATE TABLEs only run under SQLite. A new table/column needs both.
 - Data model and which table feeds which report page: `docs/DATA_MODEL_AND_REPORT_PAGES.md`.
 

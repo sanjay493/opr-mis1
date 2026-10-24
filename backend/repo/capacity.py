@@ -8,7 +8,7 @@ strings). v2 keeps the row id, plant_code -> plant_name, item_id -> the
 item's exact name, and DATETIME(6) timestamps rendered back to the v1 ISO
 strings (repo.v2codec, ISO_LOCAL).
 
-Item names (see repo/v2/_keys.py): v1's uq_capacity_plant_item_month was
+Item names (see repo/_keys.py): v1's uq_capacity_plant_item_month was
 unique under ai_ci, so 'hot metal' clashed with a stored 'Hot Metal' entry
 for the same plant and month. v2's unique key is on item_id (one id per
 exact spelling), so the clash is checked in code and raised as the same
@@ -16,7 +16,7 @@ IntegrityError (1062). A write stores the caller's exact spelling (the item
 is created when missing), as v1 stored it verbatim.
 
 Months / plants: a write creates the cal_month / plant master row it needs
-(repo/v2/_keys.py), as for production; only a month string that is not a
+(repo/_keys.py), as for production; only a month string that is not a
 'YYYY-MM' at all is refused (api_capacity already rejects those with 400).
 """
 from typing import Any, Dict, List, Optional

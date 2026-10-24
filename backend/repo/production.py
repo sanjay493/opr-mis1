@@ -32,7 +32,7 @@ READS
 WRITES (every write bumps data_version first; none in a dry run)
   - upsert of one measure: sets that measure's value and flag, never touches
     the other two measures of the row.
-  - Item names (see repo/v2/_keys.py): v1's unique key compared item_name
+  - Item names (see repo/_keys.py): v1's unique key compared item_name
     under ai_ci, so an upsert of 'CC Billet' onto a (month, plant) whose
     table already held 'CC BILLET' updated that row and kept 'CC BILLET'.
     v2 does the same: if a row of that (month, plant) has the measure's flag
@@ -48,7 +48,7 @@ WRITES (every write bumps data_version first; none in a dry run)
   - delete of one measure: clears its flag and sets its value to NULL;
     a row left with no flag is deleted (ck_production_source).
   - Months / plants: a write creates the cal_month / plant master row it
-    needs (repo/v2/_keys.py ensure_month / ensure_plant), so every month
+    needs (repo/_keys.py ensure_month / ensure_plant), so every month
     and plant v1 stored is stored; only a month string that is not a
     'YYYY-MM' at all is refused (_keys.check_month). Deletes resolve
     nothing (they match nothing, as in v1).

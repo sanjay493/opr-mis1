@@ -42,7 +42,7 @@ SECRETARY REVIEW. updated_at is datetime.now() truncated to the second (v1
 stored isoformat(timespec="seconds"); v2codec ISO_SECONDS renders it back).
 
 PLANTS / ITEMS. plant_code is ai_ci and an FK to the plant master: a write
-creates a missing plant (repo/v2/_keys.ensure_plant) and stores the
+creates a missing plant (repo/_keys.ensure_plant) and stores the
 caller's spelling; the unique key (plant_key ai_ci) makes a case variant
 update the stored row, keeping its spelling, as v1's ai_ci primary key did.
 do_letter items: a locking ai_ci lookup of the stored remark for

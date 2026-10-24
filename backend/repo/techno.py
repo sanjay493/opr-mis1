@@ -34,7 +34,7 @@ BY reproducing that index order.
 UNITS. plant_unit.unit_code is utf8mb4_0900_bin: each case variant is its
 own unit row with its exact text, as v1 kept the caller's spelling per row.
 Reads match `pu.unit_code COLLATE utf8mb4_0900_ai_ci` (_UC) or fold(), as
-v1's ai_ci column did. Writes follow the production rule (repo/v2/_keys.py):
+v1's ai_ci column did. Writes follow the production rule (repo/_keys.py):
 after the bump, a locking ai_ci lookup of the stored row of (month, plant,
 unit); when there is one, its unit (and plant spelling) is reused, as v1's
 ON DUPLICATE KEY UPDATE kept the stored key; otherwise the unit is resolved
@@ -53,7 +53,7 @@ WRITES (every write bumps data_version first; none in a dry run)
   - merge_upsert_techno_data is one transaction: bump, locking read of the
     stored blob, the v1 merge in Python, then the write chain (raw write,
     tmi / fuel_rate recompute, extraction log) on the same connection.
-  - Months / plants: repo/v2/_keys.py ensure_month / ensure_plant.
+  - Months / plants: repo/_keys.py ensure_month / ensure_plant.
 """
 import copy
 import functools
