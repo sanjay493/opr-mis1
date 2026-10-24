@@ -1248,13 +1248,28 @@ def records_calendar_month_totals(cur, scope):
     """fetchall() of (item_name, mon_num, report_month, total), ordered by
     item, month number, total DESC. v1 grouped in its read order and then
     filesorted the groups, so groups with equal (item, mon_num, total)
-    come out in MySQL's std::sort order (repo._mysqlsort)."""
-    where, params, shape = _scope_sql(cur, scope)
-    rows = _fetchall(cur,
-                     "SELECT item_name, plant_name, report_month, month_actual, "
-                     "WEIGHT_STRING(item_name) AS w "
-                     f"FROM {_SRC['actual']} WHERE {where}" + _calendar_order(shape),
-                     params)
+    come out in MySQL's std::sort order (repo._mysqlsort).
+
+    When this scope's read order is records_rows' (the same ORDER BY, a total
+    order: (month, plant, item) and (plant, item, month) are unique among the
+    actual rows), its rows are records_rows' rows (memoised per request) plus
+    each item's WEIGHT_STRING, looked up once per distinct name."""
+    shape = _scope_shape(scope)
+    if _calendar_order(shape) == _records_order(shape):
+        base = records_rows(cur, scope)
+        names = list(dict.fromkeys(r[0] for r in base))
+        weights = {r[0]: r[1] for r in _fetchall(
+            cur,
+            "SELECT item_name, WEIGHT_STRING(item_name COLLATE utf8mb4_0900_ai_ci) FROM item "
+            f"WHERE item_name IN ({_ph(names)})", names)} if names else {}
+        rows = [(r[0], r[1], r[2], r[3], weights[r[0]]) for r in base]
+    else:
+        where, params, shape = _scope_sql(cur, scope)
+        rows = _fetchall(cur,
+                         "SELECT item_name, plant_name, report_month, month_actual, "
+                         "WEIGHT_STRING(item_name) AS w "
+                         f"FROM {_SRC['actual']} WHERE {where}" + _calendar_order(shape),
+                         params)
     groups = _groups(rows, lambda r: (fold(r[0]), r[2]))
     totals = []
     for g in groups.values():
