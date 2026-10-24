@@ -574,7 +574,7 @@ async def get_plants():
     Get list of plants with available techno data.
     """
     try:
-        conn = db.connect()
+        conn = db_connect()
         cursor = conn.cursor()
         plants = [row[0] for row in rt.distinct_plants(cursor)]
         conn.close()

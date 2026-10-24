@@ -20,6 +20,7 @@ if _TP_DIR not in sys.path:
 from rsp_technopara_extractor import TechnoExtractor  # noqa: E402  (path set above)
 from repo.techno import upsert_techno_data, get_techno_data, get_techno_months
 from repo import techno as rt
+from dbengine import connect as db_connect
 
 router = APIRouter(prefix="/api/rsp-techno", tags=["rsp-techno"])
 
@@ -241,7 +242,7 @@ async def get_units(
     """Return list of unit names stored for a given plant and report month."""
     _validate_month(report_month)
     try:
-        conn = db.connect()
+        conn = db_connect()
         cursor = conn.cursor()
         units = [row[0] for row in rt.units_for_plant_month(cursor, plant, report_month)]
         conn.close()

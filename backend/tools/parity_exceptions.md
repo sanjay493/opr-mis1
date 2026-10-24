@@ -158,3 +158,11 @@ These modules also raise v1's own column errors (1048 / 1406 with v1's column na
 `breakdown.open_breakdown_rows` is a COMPARE_MODE multiset: v1's order depends on a per-call cost choice (2 of 32 recorded calls used the `start_ts` index, the rest the `capital_repair_id IS NULL` scan); v2 returns id order. The only caller groups the events by (plant, unit_type, unit_name) and sorts the result, so it can only change which of two equal-hour events of one unit supplies the cause text.
 
 `ops` text ordering: v1 sorted its UTC ISO strings under ai_ci, where a value with a fraction sorts before the whole-second value of the same second; v2 reproduces that key, so the order is unchanged.
+
+## 3. Intentional fixes (user-approved, 2026-10-24)
+
+Three endpoints that returned 500 "name 'db' is not defined" in v1 (a leftover `db.connect()` after the module was removed) now use `dbengine.connect` and return their lists. At cutover, parity shows these files as 500 in v1 and 200 in v2. This difference is expected:
+
+- `GET /api/techno/plants` (api_unified_techno.py)
+- `GET /api/isp-techno/units` (api_isp_techno.py)
+- `GET /api/rsp-techno/units` (api_rsp_techno.py)
