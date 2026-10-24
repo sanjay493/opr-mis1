@@ -12,9 +12,9 @@ Operation Monthly Informatics (OMI) Management Information System for Steel Auth
 |---|---|---|
 | Frontend | Next.js 16 + React 19 (`/frontend`) | Report preview, inline editing, data upload UI |
 | Backend | FastAPI + Python 3.11 (`/backend`) | REST API, extraction, Playwright/Chromium PDF generation |
-| Database | MySQL (default on this deployment) or SQLite fallback | Production actuals/plan, techno-economic params, page configs |
+| Database | MySQL 9.x, database `mis_reports_v2` | Production actuals/plan, techno-economic params, page configs |
 
-The database engine is chosen by `DB_ENGINE` in `backend/.env` (`mysql` or `sqlite`). Backend code writes SQLite-style SQL; `backend/dbengine.py` translates it for MySQL. The MySQL schema lives in `backend/scripts/mysql_schema.sql` plus `backend/scripts/migrate_*.sql`.
+MySQL is the only database engine (database `mis_reports_v2`, port 3307 on this machine). All SQL lives in `backend/repo/` as native MySQL. The schema is `backend/scripts/v2/schema_v2.sql` plus `backend/scripts/v2/migrate_*.sql`. Moving a live database from the old schema: [`backend/docs/DB_V2_CUTOVER.md`](backend/docs/DB_V2_CUTOVER.md).
 
 Related docs: [`docs/DATA_MODEL_AND_REPORT_PAGES.md`](docs/DATA_MODEL_AND_REPORT_PAGES.md) (which table feeds which page), [`backend/docs/TECHNO_EXTRACTION_GUIDE.md`](backend/docs/TECHNO_EXTRACTION_GUIDE.md), [`backend/docs/PDF_LAYOUT_GUARDRAILS.md`](backend/docs/PDF_LAYOUT_GUARDRAILS.md).
 
@@ -117,7 +117,7 @@ Populates `production_plan_table` for all 12 months in a single upload.
 |---|---|
 | Python | **3.11** (venv at `backend/venv`) |
 | Node.js | v20.9+ |
-| MySQL | 8.0.19+ (9.x in use), unless running with `DB_ENGINE=sqlite` |
+| MySQL | 8.0.19+ (9.7.x in use) |
 | Tesseract OCR | optional — only for ISP Special Steel image extraction |
 
 No GTK/WeasyPrint system libraries are needed — PDFs are rendered by Playwright's headless Chromium.

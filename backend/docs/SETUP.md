@@ -101,7 +101,8 @@ default-character-set=utf8mb4
 
 Two settings here are load-bearing — do not change them:
 - `collation-server=utf8mb4_0900_ai_ci` — the app's queries rely on
-  case-insensitive matching (same behaviour SQLite had).
+  case-insensitive matching (the v2 schema declares its own
+  per-column collations; see the header of `backend/scripts/v2/schema_v2.sql`).
 - `bind-address=127.0.0.1` — the DB is reached only by the backend on the
   same machine; LAN users go through the Next.js proxy, never the DB.
 
@@ -118,11 +119,12 @@ C:\mysql\mysql-9.7.2-winx64\bin\mysql.exe -u root --host=127.0.0.1 --port=3307
 ```
 ```sql
 ALTER USER 'root'@'localhost' IDENTIFIED BY '<your-root-password>';
-CREATE DATABASE mis_reports CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+CREATE DATABASE mis_reports_v2 CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 CREATE USER 'mis_app'@'localhost' IDENTIFIED BY '<your-app-password>';
 CREATE USER 'mis_app'@'127.0.0.1' IDENTIFIED BY '<your-app-password>';
-GRANT ALL PRIVILEGES ON mis_reports.* TO 'mis_app'@'localhost';
-GRANT ALL PRIVILEGES ON mis_reports.* TO 'mis_app'@'127.0.0.1';
+-- ALL on the database includes CREATE TEMPORARY TABLES, which /api/preview-plan needs.
+GRANT ALL PRIVILEGES ON mis_reports_v2.* TO 'mis_app'@'localhost';
+GRANT ALL PRIVILEGES ON mis_reports_v2.* TO 'mis_app'@'127.0.0.1';
 -- RELOAD + PROCESS are global privileges mysqldump needs for its FLUSH TABLES
 -- step (backup_mysql.bat fails with "Access denied ... RELOAD or FLUSH_TABLES"
 -- without these - the database-scoped GRANT ALL above does not cover them).
@@ -131,28 +133,40 @@ GRANT RELOAD, PROCESS ON *.* TO 'mis_app'@'127.0.0.1';
 FLUSH PRIVILEGES;
 ```
 
-## 4. Import data from a backup file
+## 4. Create the schema, then load data
 
-The backup files (daily `mis_reports_YYYY-MM-DD.sql` or an admin-triggered
-`mis_reports_admin_YYYY-MM-DD_HHMMSS.sql` from Admin > Backup & Restore)
-are complete (schema + all data + triggers), so a fresh database needs
-nothing except the newest one imported:
+The database is empty after step 3. Apply the v2 schema and the month calendar (root,
+from `C:\opr-mis1ackend`; the `mysql` client reads the files with `<`, so use `cmd`):
 
 ```powershell
-C:\mysql\mysql-9.7.2-winx64\bin\mysql.exe -u root --host=127.0.0.1 --port=3307 -p mis_reports < "path\to\mis_reports_admin_YYYY-MM-DD_HHMMSS.sql"
+$M = 'C:\mysql\mysql-9.7.2-winx64in'
+cmd /c "`"$M\mysql.exe`" -u root --host=127.0.0.1 --port=3307 -p --default-character-set=utf8mb4 mis_reports_v2 < scripts2\schema_v2.sql"
+cmd /c "`"$M\mysql.exe`" -u root --host=127.0.0.1 --port=3307 -p --default-character-set=utf8mb4 mis_reports_v2 < scripts2\seed_cal_month.sql"
 ```
 
-Verify the import:
+Check it: 62 tables and 960 months (1960-04 to 2040-03):
 
 ```powershell
-C:\mysql\mysql-9.7.2-winx64\bin\mysql.exe -u root --host=127.0.0.1 --port=3307 -p -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='mis_reports'; SELECT COUNT(*) FROM mis_reports.production_table;"
-# this machine restored: 54 tables; production_table = 23,303 rows; special_steel_orders = 10,758 rows
+& "$M\mysql.exe" -u root --host=127.0.0.1 --port=3307 -p -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='mis_reports_v2'; SELECT COUNT(*), MIN(report_month), MAX(report_month) FROM mis_reports_v2.cal_month"
 ```
 
-**If you have no backup file** (worst case): apply the empty schema with
-`mysql -u root -p mis_reports < backend\scripts\mysql_schema.sql`, and/or
-re-migrate from a SQLite file with
-`python backend\scripts\migrate_sqlite_to_mysql.py --copy`.
+**Restoring data from a backup.** The daily backup (`mis_reports_v2_YYYY-MM-DD.sql`, written by
+`backup_mysql.bat`) and the admin-triggered backup (Admin > Backup & Restore) are complete
+dumps (schema, data, triggers). To restore one into an empty database, skip the schema step above
+and import it directly:
+
+```powershell
+cmd /c "`"$M\mysql.exe`" -u root --host=127.0.0.1 --port=3307 -p mis_reports_v2 < path	o\mis_reports_v2_YYYY-MM-DD.sql"
+```
+
+A dump made before the v2 cutover (`mis_reports_YYYY-MM-DD.sql`) is a v1 dump: it cannot be
+imported as v2. Load it into a scratch database and migrate it with
+`python -m tools.migrate_v1_to_v2`, as described in `DB_V2_CUTOVER.md`.
+
+Restoring over a live database bypasses the app's write counter: afterwards run
+`UPDATE data_version SET n = n + 1` (or restart the backend), otherwise cached pages go stale.
+
+**Without any backup**, the app starts on the empty schema and fills as users upload and enter data.
 
 ## 5. Configure backend/.env
 
@@ -164,10 +178,9 @@ SMTP_APP_PASSWORD=<gmail app password>
 JWT_SECRET=<64-char random hex; generate: python -c "import secrets; print(secrets.token_hex(32))">
 FIRST_ADMIN_EMAIL=<admin's login email>
 
-DB_ENGINE=mysql
 MYSQL_HOST=127.0.0.1
 MYSQL_PORT=3307
-MYSQL_DB=mis_reports
+MYSQL_DB=mis_reports_v2
 MYSQL_USER=mis_app
 MYSQL_PASSWORD=<the password you set in step 3.4>
 # Folder holding mysqldump.exe/mysql.exe, for the admin Backup & Restore
@@ -182,9 +195,10 @@ Notes:
   again — passwords still work since hashes live in the DB). This machine's
   setup reused the prior `.env` verbatim except `MYSQL_BIN_DIR`'s version
   number, so logins and the MySQL app password carried over unchanged.
-- `DB_ENGINE=sqlite` switches the whole app back to
-  `backend/mis_reports.db` — rollback path, if that file exists — no
-  other change needed.
+- MySQL is the only engine; there is no `DB_ENGINE` or SQLite fallback. The backend reads
+  `MYSQL_*` from this file; `backup_mysql.bat` reads `MYSQL_DB` and `MYSQL_BIN_DIR` from it too.
+- The pytest suite needs a second MySQL user, `MYSQL_TEST_USER` / `MYSQL_TEST_PASSWORD`, with rights
+  only on the `mis_reports_test_%` schemas (see `DB_V2_CUTOVER.md`, Notes).
 
 ## 6. Ops scripts — MySQL auto-start and daily backup
 
@@ -216,7 +230,8 @@ schtasks /Create /F /SC DAILY /ST 13:00 /TN "MIS_MySQL_Daily_Backup" /TR "C:\mys
 > PowerShell window; they are intentionally NOT something an automated
 > setup script/agent should do unattended.
 
-Backups land in `C:\opr-mis1\Report_format\db_backup\mis_reports_YYYY-MM-DD.sql`,
+Backups land in `C:\opr-mis1\Report_format\db_backup\<database>_YYYY-MM-DD.sql`
+(`mis_reports_v2_YYYY-MM-DD.sql` for the v2 database; the name follows `MYSQL_DB`),
 14-day retention. Same-day runs overwrite, so overlapping triggers are fine.
 
 `backup_mysql.bat` fails loudly: it dumps to a temp file and only replaces
@@ -274,8 +289,8 @@ New-NetFirewallRule -DisplayName "SAIL MIS Frontend (3000)" -Direction Inbound -
 | API 500s with `Can't connect to MySQL server on '127.0.0.1'` | mysqld not running → run `C:\mysql\start_mysql.bat`; check `C:\mysql\data\mysql-error.log` |
 | mysqld won't start, stale `.pid` mentioned | delete `C:\mysql\data\*.pid`, start again (script does this automatically) |
 | Login broken / "Not logged in" on every action | `JWT_SECRET` missing or changed in `.env`; cookie sessions died — log in again |
-| Everything broken after a bad migration/experiment | set `DB_ENGINE=sqlite` in `.env`, restart backend → instantly on the pre-MySQL snapshot (only if `mis_reports.db` exists) |
-| Need yesterday's data | `mysql -u root -p mis_reports < db_backup\mis_reports_<date>.sql` (replaces ALL current data with that day's) |
+| Everything broken after a bad migration/experiment | restore the newest good dump into a fresh database (section 4), point `MYSQL_DB` at it and restart the backend |
+| Need yesterday's data | `mysql -u root -p mis_reports_v2 < db_backup\mis_reports_v2_<date>.sql` (replaces ALL current data with that day's) |
 | `venv\Scripts\pip install --upgrade pip` errors "please run ... -m pip install" | Harmless — Windows won't let pip replace its own running `pip.exe`; use `venv\Scripts\python.exe -m pip install --upgrade pip` instead, or just skip it |
 | `npm install` warns about `sharp`/`unrs-resolver` install scripts skipped | Harmless for `npm run dev`; run `npm install-scripts approve sharp` then reinstall if `next build` image optimization fails |
 | Notification balloon "MIS Backup Failed" appears, or Task Scheduler shows a non-zero `Last Result` for `MIS_MySQL_Daily_Backup` | check `C:\mysql\backup_error.log` for the reason (mysqld down, bad credentials in `backup.cnf`, truncated dump); today's `db_backup\*.sql` still holds the last known-good backup — nothing was overwritten |

@@ -1,5 +1,7 @@
 # MySQL Migration Plan — SAIL MIS Portal
 
+> **SUPERSEDED.** This is the history of the SQLite to MySQL move (v1 schema). The v1 to v2 schema change is described and run from [`DB_V2_CUTOVER.md`](DB_V2_CUTOVER.md).
+
 Status: **EXECUTED July 2026.** The app now runs on MySQL 8.4.8 (LTS), ZIP
 install at `D:\mysql` (no admin required), `DB_ENGINE=mysql` in backend/.env.
 SQLite remains the rollback path (`DB_ENGINE=sqlite` + restart; the .db file

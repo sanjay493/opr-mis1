@@ -15,9 +15,10 @@ Monthly MIS report for SAIL: a FastAPI backend that ingests plant Excel/PDF file
 
 ## Database
 
-- Engine is chosen by `DB_ENGINE` in `backend/.env`; **this machine runs `mysql`** (`mis_reports` on 127.0.0.1:3306). `backend/mis_reports.db` (SQLite) is only the fallback/legacy engine — don't assume queries against it reflect live data.
-- All SQL lives in `backend/repo/<module>.py` (import `repo.<module>` directly; there is no `db.py` shim — month/FY helpers are in `month_utils.py`). Connections come from `dbengine.connect()` / `repo.conn`; `dbengine.py` translates sqlite-dialect SQL (`?`, `ON CONFLICT`, `INSERT OR REPLACE`) to MySQL. Keep writing sqlite-dialect SQL in the backend.
-- MySQL schema lives in `backend/scripts/mysql_schema.sql` plus `scripts/migrate_*.sql`; `init_db`'s CREATE TABLEs only run under SQLite. A new table/column needs both.
+- MySQL only (no SQLite, no `DB_ENGINE`): database **`mis_reports_v2`** on 127.0.0.1, port **3307**, set by `MYSQL_*` in `backend/.env`. The old v1 database `mis_reports` is read-only history after the cutover; the move is `backend/docs/DB_V2_CUTOVER.md`.
+- All SQL lives only in `backend/repo/<module>.py` (import `repo.<module>` directly; month/FY helpers are in `month_utils.py`), written as **native MySQL with `%s` placeholders**. Connections come from `repo.conn` / `dbengine.connect()`. There is no dialect translation any more: do not write `?`, `ON CONFLICT` or `INSERT OR REPLACE`. No other file may contain SQL.
+- The schema is `backend/scripts/v2/schema_v2.sql` (header = conventions and v1-to-v2 table map) plus `scripts/v2/seed_cal_month.sql`. A new table/column goes into `schema_v2.sql` **and** a `scripts/v2/migrate_<what>.sql` for the live database. The older `scripts/*.sql`, `mysql_schema.sql` and `backfill_*.py` hold v1 SQL: historical, never run against v2.
+- Guard tests (keep green): `tests/test_repo_boundary.py` (no SQL outside `repo/`), `tests/test_repo_writes_bump.py` (every repo write bumps `data_version` first; after a manual SQL edit run `UPDATE data_version SET n=n+1` or restart, else stale cached pages), `tests/test_repo_oracle.py` (repo functions keep the frozen v1 signatures), `tests/test_no_unbound_local_imports.py` (pyflakes F823).
 - Data model and which table feeds which report page: `docs/DATA_MODEL_AND_REPORT_PAGES.md`.
 
 ## Layout
