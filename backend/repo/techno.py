@@ -71,7 +71,7 @@ from report_context import fold
 from repo import version as _ver
 from repo import conn as rc
 from repo import _keys
-from repo.production import _row_like
+from repo.production import _row_like, _rows_like
 from repo.v2codec import TECHNO_LEAF_ORDER_BY, decode_techno, encode_techno, render_ts_flagged
 
 _V1_UNIT_LEN = 32          # v1 techno_data.unit / techno_plan_fy.unit VARCHAR(32)
@@ -1005,12 +1005,83 @@ def month_rows(cur, report_month):
     return cur.fetchall()
 
 
-def rows_for_months(cur, months):
-    """fetchall() of (plant, report_month, unit, techno_json) for the months
-    (v1 had no ORDER BY and two plans; by month, then id order = seq)."""
+_RFM_KEYS = ["plant", "report_month", "unit", "techno_json"]
+
+
+def _rows_for_months_sql(cur, months):
     cur.execute(f"SELECT u.plant_code AS plant, u.report_month, pu.unit_code AS unit, {_TEXT} AS techno_json "
                 f"FROM {_TU} WHERE u.report_month IN ({_ph(months)}) ORDER BY u.report_month, u.seq", months)
     return cur.fetchall()
+
+
+def _seq_order_load(first, last):
+    """{report_month: [(plant, unit), ...] in seq order} for first <=
+    report_month <= last (no JSON built: the keys only)."""
+    out = {}
+    with rc.cursor() as cur:
+        cur.execute(f"SELECT u.report_month, u.plant_code, pu.unit_code FROM {_U} "
+                    "WHERE u.report_month BETWEEN %s AND %s ORDER BY u.report_month, u.seq",
+                    (first, last))
+        for r in cur.fetchall():
+            out.setdefault(r[0], []).append((r[1], r[2]))
+    return out
+
+
+def _rows_for_months_served(ctx, cur, months):
+    """rows_for_months' rows, the window's months from the context's techno
+    bulk load (the same _TEXT, so the same text) in seq order (the
+    _seq_order_load keys), the other months by SQL (memoised per request).
+    None when the two loads disagree (a write between them): use SQL."""
+    want = list(dict.fromkeys(months))
+    inside = {m for m in want if m in ctx.months}
+    rest = [m for m in want if m not in inside]
+    by_month = {}                 # stored report_month -> rows in seq order
+    if inside:
+        bulk = ctx.load("techno", _bulk_load)
+        order = ctx.load("techno_seq", _seq_order_load)
+        texts = {}
+        for (m, _fp), rows in bulk.items():
+            if m in inside:
+                for plant, unit, text in rows:
+                    texts[(m, plant, unit)] = text
+        n = 0
+        for m in inside:
+            keys = order.get(m, ())
+            n += len(keys)
+            rows = []
+            for plant, unit in keys:
+                text = texts.get((m, plant, unit), texts)
+                if text is texts:
+                    return None
+                rows.append((plant, m, unit, text))
+            if rows:
+                by_month[m] = rows
+        if n != len(texts):
+            return None
+    if rest:
+        rest_rows = ctx.memo(("techno.rows_for_months", tuple(rest)),
+                             lambda: [tuple(r) for r in _rows_for_months_sql(cur, rest)])
+        for r in rest_rows:
+            if r[1] not in inside:    # else the window part already gave it
+                by_month.setdefault(r[1], []).append(r)
+    # ORDER BY u.report_month (stored months are cal_month 'YYYY-MM', where
+    # Python string order is MySQL's), then seq within each month.
+    return [r for m in sorted(by_month) for r in by_month[m]]
+
+
+def rows_for_months(cur, months):
+    """fetchall() of (plant, report_month, unit, techno_json) for the months
+    (v1 had no ORDER BY and two plans; by month, then id order = seq).
+    Inside a report_context the window's months are served from its techno
+    bulk load (same text, same order) and the other months' SQL is memoised
+    per request."""
+    months = list(months)
+    ctx = report_context.current()
+    if ctx is not None and months:
+        rows = _rows_for_months_served(ctx, cur, months)
+        if rows is not None:
+            return _rows_like(cur, _RFM_KEYS, rows)
+    return _rows_for_months_sql(cur, months)
 
 
 def non_sail_rows(cur):
