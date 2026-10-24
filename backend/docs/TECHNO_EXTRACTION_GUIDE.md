@@ -203,7 +203,7 @@ print(next(r for r in recs if r["unit"] == "SP-1")["techno_json"]["month"])
 Then functionally check the report page itself:
 
 ```python
-import db; db.DB_PATH = "path/to/mis_reports.db"
+import os; os.environ["MYSQL_DB"] = "mis_reports_v2_rehearsal"   # a copy; set before the first import (dbengine reads it at import)
 import page_techno
 result = page_techno.generate_techno_from_db("2026-06", 29)
 # confirm "Slag Basicity" appears in result["sections"]

@@ -99,7 +99,7 @@ if not exist "%FINAL_FILE%" (
 )
 
 rem keep the last 14 days (only prune once we know today's backup is good)
-forfiles /p "%BACKUP_DIR%" /m mis_reports_*.sql /d -14 /c "cmd /c del @path" 2>nul
+forfiles /p "%BACKUP_DIR%" /m %DB_NAME%_????-??-??.sql /d -14 /c "cmd /c del @path" 2>nul
 
 exit /b 0
 

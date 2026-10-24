@@ -4,6 +4,13 @@ Runbook for moving the live MIS database from the old (v1) schema `mis_reports` 
 normalised v2 schema `mis_reports_v2`. The application code on branch `db-model-v2` runs
 only on v2; there is no switch back to v1 inside the same code.
 
+**Merging the branch to `main` in the live checkout `C:\opr-mis1` IS the cutover.** The v2
+code cannot run on `mis_reports`, and the dev server's `--reload` picks up changed files at
+once, so a merge or checkout there while the app is running breaks the live app (the new
+startup check then refuses to start it on a v1 database). Everything up to Step 5 is therefore
+run from the worktree (or an extract of the branch), never from `C:\opr-mis1`. The merge or
+checkout happens once, at Step 6, with the servers stopped.
+
 **Do not run this until the user says go.** Everything here was written, not executed.
 The tools and the rehearsal behind it are tested; the live run itself is not.
 
@@ -20,7 +27,8 @@ The v2 table design is in `scripts/v2/schema_v2.sql` (header map) and
 | Root option file | `C:\mysql\rmg_client.cnf` (user root; holds the password) |
 | App option file | `C:\mysql\backup.cnf` (user `mis_app`; holds the password) |
 | Python | `C:\opr-mis1\backend\venv\Scripts\python.exe`, always run as `python.exe -m <tool>` |
-| Repo / backend | `C:\opr-mis1` and `C:\opr-mis1\backend` (run the tools from `backend`) |
+| Live checkout | `C:\opr-mis1` (stays on the old code until Step 6; no merge or checkout there before) |
+| Branch code for Steps 2 to 5 | `C:\opr-mis1\.claude\worktrees\db-model-v2\backend` (the worktree), or a `git archive` extract of the branch; run the tools from there |
 | Backups | `C:\opr-mis1\Report_format\db_backup\` |
 
 Passwords live only in those two option files and in `backend\.env`. Never paste them into a
@@ -34,15 +42,28 @@ $M    = 'C:\mysql\mysql-9.7.2-winx64\bin'
 $ROOT = '--defaults-extra-file=C:\mysql\rmg_client.cnf'
 $APP  = '--defaults-extra-file=C:\mysql\backup.cnf'
 $PY   = 'C:\opr-mis1\backend\venv\Scripts\python.exe'
-cd C:\opr-mis1\backend
+# the branch code, NOT C:\opr-mis1\backend (the live checkout keeps the old code until Step 6)
+$BR   = 'C:\opr-mis1\.claude\worktrees\db-model-v2'
+cd $BR\backend
+```
+
+If the worktree is gone, extract the branch instead and point `$BR` at the extract (`.env` is
+copied in; `backend\venv` is reused through `$PY`):
+
+```powershell
+$BR = 'C:\mysql\archive\v2code'
+New-Item -ItemType Directory $BR | Out-Null
+cmd /c "git -C C:\opr-mis1 archive db-model-v2 | tar -x -C $BR"
+copy C:\opr-mis1\backend\.env "$BR\backend\.env"
 ```
 
 ## Before the day
 
 1. Rehearse on a copy at least once: the same steps against `mis_reports_v2_rehearsal`
    (migrate from `mis_reports_baseline`, verify, parity) have passed with 0 problems.
-2. The branch code must be ready to deploy: merged or checked out in `C:\opr-mis1`, with
-   `backend\venv` unchanged (`requirements.txt` did not change in this work).
+2. The branch code must be ready: the worktree `db-model-v2` (or an extract of the branch) is
+   what Steps 2 to 5 run. It is **not** merged or checked out in `C:\opr-mis1` yet; that is
+   Step 6. `backend\venv` is unchanged (`requirements.txt` did not change in this work).
 3. Pick the cutover date. Every parity run below pins the app's "today" to it (`--today`).
 4. Check disk space: a v1 dump, the v2 database, a v2 copy and two snapshots.
 
@@ -63,8 +84,10 @@ dir C:\opr-mis1\Report_format\db_backup\mis_reports_*.sql | sort LastWriteTime |
 ```
 
 The file is `mis_reports_YYYY-MM-DD.sql` (the script names the file after the database, so a
-v2 backup of the same day will not overwrite it). Keep a second copy of it outside
-`Report_format`, for example `C:\mysql\archive\mis_reports_pre_v2_YYYY-MM-DD.sql`.
+v2 backup of the same day will not overwrite it). Then make a second copy of it outside
+`Report_format`. This is mandatory, not optional:
+`copy C:\opr-mis1\Report_format\db_backup\mis_reports_YYYY-MM-DD.sql C:\mysql\archive\mis_reports_pre_v2_YYYY-MM-DD.sql`.
+The daily backup prunes `Report_format` after 14 days, and this dump is the rollback copy of v1.
 
 If the machine runs a scheduled copy of the script from `C:\mysql\backup_mysql.bat`, refresh
 that copy from the repo (`copy backend\scripts\backup_mysql.bat C:\mysql\`): the new version
@@ -79,8 +102,8 @@ name. What the daily backup needs after the cutover is the grant in step 3 (the
 ```powershell
 & "$M\mysql.exe" $ROOT -e "CREATE DATABASE mis_reports_v2 CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci"
 
-cmd /c "`"$M\mysql.exe`" $ROOT --default-character-set=utf8mb4 mis_reports_v2 < C:\opr-mis1\backend\scripts\v2\schema_v2.sql"
-cmd /c "`"$M\mysql.exe`" $ROOT --default-character-set=utf8mb4 mis_reports_v2 < C:\opr-mis1\backend\scripts\v2\seed_cal_month.sql"
+cmd /c "`"$M\mysql.exe`" $ROOT --default-character-set=utf8mb4 mis_reports_v2 < $BR\backend\scripts\v2\schema_v2.sql"
+cmd /c "`"$M\mysql.exe`" $ROOT --default-character-set=utf8mb4 mis_reports_v2 < $BR\backend\scripts\v2\seed_cal_month.sql"
 
 & "$M\mysql.exe" $ROOT -e "SELECT COUNT(*) AS tables_in_v2 FROM information_schema.tables WHERE table_schema='mis_reports_v2'; SELECT COUNT(*) AS months, MIN(report_month), MAX(report_month) FROM mis_reports_v2.cal_month"
 ```
@@ -105,7 +128,11 @@ Grants for `mis_app` on v2 (both host forms exist on this machine, see `docs/SET
 
 ## Step 4. Migrate and verify
 
-Both tools read v1 read-only and take their connection from the option file:
+Run from `$BR\backend` (the setup above). Both tools read v1 read-only and take their
+connection from the option file. A first run needs no flag: `migrate_v1_to_v2` refuses a
+destination whose data tables already hold rows. A deliberate re-run on a non-live database
+(a rehearsal copy) adds `--replace`; never use `--replace` on `mis_reports_v2` once the app has
+written to it.
 
 ```powershell
 & $PY -m tools.migrate_v1_to_v2 --src mis_reports --dst mis_reports_v2 --src-defaults-file C:/mysql/backup.cnf --dst-defaults-file C:/mysql/backup.cnf
@@ -114,14 +141,16 @@ Both tools read v1 read-only and take their connection from the option file:
 
 - `migrate_v1_to_v2` reads and converts all of v1 first and writes nothing if any value cannot
   be carried exactly; it then empties the v2 tables (except `cal_month`) and loads everything in
-  one transaction. It is idempotent: after a failure fix the cause and run it again.
+  one transaction. After a failure that wrote nothing, fix the cause and run it again without a
+  flag; a failure during the load ("has been emptied") leaves the tables empty, so that needs no
+  flag either. `--replace` is only for a destination that holds data.
 - `verify_v2` must end with `verify mis_reports -> mis_reports_v2: 0 problem(s)` and exit 0.
   Any problem line: stop and do not continue; v1 is untouched.
-- `--help` on both lists these flags (`--src`, `--dst`, `--src-defaults-file`, `--dst-defaults-file`).
+- `--help` lists the flags (`--src`, `--dst`, `--src-defaults-file`, `--dst-defaults-file`, and `--replace` on migrate).
 
 ## Step 5. Parity
 
-Goal: the app on v2 shows what it showed on v1 for the same data. The snapshot tool refuses the
+Goal: the app on v2 shows what it showed on v1 for the same data. Run from `$BR\backend`. The snapshot tool refuses the
 live names (`mis_reports`, `mis_reports_v2`), and the branch code cannot read v1, so the two sides
 come from copies and from the frozen v1 code.
 
@@ -148,7 +177,8 @@ $env:MYSQL_DB = 'mis_reports_v2_cutover'
 ### 5b. v1 side
 
 The frozen v1 code is commit `5574414` (the last commit before the v2 switch-over), extracted
-without git history:
+without git history. `5574414` is the branch's frozen v1-SQL code, not the pre-branch release,
+and task 7g2 tied it to the baseline, so it is the v1 reference for this parity run:
 
 ```powershell
 $V1 = 'C:\mysql\archive\parity\v1code'
@@ -166,12 +196,13 @@ cd $V1\backend
 $env:MYSQL_DB = 'mis_reports_cutover_v1'
 & $PY -m tools.parity_snapshot --db mis_reports_cutover_v1 --out C:\mysql\archive\parity\cut_v1 --today $D --months "2024-04..2024-05,2016-03,2021-03"
 # ... same chunks as 5a
-cd C:\opr-mis1\backend
+cd $BR\backend
 ```
 
 Use exactly the same `--months`, `--pdf-months` and chunking on both sides, otherwise
-`parity_diff` reports harness-only "file only in B" lines. (`.env` in the v1 copy must keep
-`DB_ENGINE=mysql`, which the v1 code requires.)
+`parity_diff` reports harness-only "file only in B" lines. (The v1 copy's `.env` is the live one; the `$env:MYSQL_DB` lines above override its database.
+Do not edit it for `DB_ENGINE`: the v1 code at 5574414 no longer reads that setting, it was
+removed in task 2b.)
 
 ### 5c. Compare
 
@@ -204,12 +235,14 @@ Drop the scratch databases when done:
 ## Step 6. Switch the application to v2
 
 1. Stop the backend and frontend (close the `start-development.bat` windows, or the
-   `start-production.bat` windows in production).
-2. Make sure `C:\opr-mis1` is on the branch code (merged or checked out). Check:
+   `start-production.bat` windows in production). Check that nothing listens on 8082.
+2. Only now put the branch code into `C:\opr-mis1`: merge `db-model-v2` into `main` there (or
+   check the branch out). This is the cutover itself. Check:
    `git -C C:\opr-mis1 log -1 --oneline`.
 3. Edit `backend\.env`: set `MYSQL_DB=mis_reports_v2`. Leave the other lines as they are,
    including `MYSQL_PORT=3307`. A leftover `DB_ENGINE=mysql` line is ignored by the v2 code and is
-   needed again if you roll back, so leave it.
+   needed again if you roll back, so leave it. (The v2 code defaults to `mis_reports_v2` when
+   `MYSQL_DB` is unset, and refuses to start on a database that still has the v1 tables.)
 4. Start: `start-development.bat` (uvicorn reloads on its own) or `start-production.bat`
    (rebuild the frontend first only if the frontend changed: `cd frontend && npm run build`).
 
@@ -254,7 +287,9 @@ The v2 code cannot run on v1, so a rollback is "old code + old database":
 1. Stop backend and frontend.
 2. Put the pre-cutover code back in `C:\opr-mis1` (the release that ran before the branch was merged,
    for example by checking out that commit or tag).
-3. Edit `backend\.env`: `MYSQL_DB=mis_reports` and `DB_ENGINE=mysql` (the old code needs it).
+3. Edit `backend\.env`: `MYSQL_DB=mis_reports` and keep `DB_ENGINE=mysql`. That is right for the
+   pre-branch release: its `dbengine.py` still reads `DB_ENGINE` and defaults to `sqlite`, so
+   without that line the old code would open the SQLite fallback instead of MySQL.
 4. Restore v1 write access if step 8 was done:
    ```powershell
    & "$M\mysql.exe" $ROOT -e "GRANT INSERT, UPDATE, DELETE ON mis_reports.* TO 'mis_app'@'localhost'; GRANT INSERT, UPDATE, DELETE ON mis_reports.* TO 'mis_app'@'127.0.0.1'; FLUSH PRIVILEGES"
@@ -271,6 +306,9 @@ The v2 code cannot run on v1, so a rollback is "old code + old database":
   app), run `UPDATE data_version SET n = n + 1` on `mis_reports_v2`, or restart the backend.
   Otherwise stale cached pages are served: the page cache is keyed on `data_version.n`. An admin
   restore from the app does this itself.
+- **Manual SQL edits must keep `production_monthly` unique** per (report_month, plant_code,
+  item name compared case-insensitively) among `has_actual = 1` rows; `tools.verify_v2` checks it.
+  Two item spellings that differ only in case, both holding an actual, would double count.
 - **Preview dry run deadlock.** `/api/preview-plan` and the other dry runs hold share locks without
   bumping the version. Under concurrent saves MySQL can roll one side back with a deadlock error.
   It is rare, the preview writes nothing anyway, and a retry works.
@@ -297,7 +335,7 @@ The v2 code cannot run on v1, so a rollback is "old code + old database":
   `tests/test_no_unbound_local_imports.py` (the pyflakes F823 pattern). Keep them green.
 - **Running the tests.** The full suite takes about 75 minutes. Run it in parts, for example:
   ```powershell
-  cd C:\opr-mis1\backend
+  cd $BR/backend
   # schema and migration
   & $PY -m pytest tests/test_schema_v2.py tests/test_migrate_v1_to_v2.py tests/test_verify_v2.py -q
   # repo layer and the guard tests
