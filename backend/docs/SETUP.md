@@ -202,11 +202,11 @@ Notes:
 
 ## 6. Ops scripts — MySQL auto-start and daily backup
 
-```powershell
-# copy the two ops scripts out of the repo to C:\mysql\
-copy C:\opr-mis1\backend\scripts\start_mysql.bat  C:\mysql\
-copy C:\opr-mis1\backend\scripts\backup_mysql.bat C:\mysql\
+Run both scripts **from the repo** (`C:\opr-mis1\backend\scripts\`); do not copy them
+elsewhere. Each one finds `backend\.env` relative to its own folder (`%~dp0..\.env`), so a copy
+in `C:\mysql\` or the Startup folder looks for `C:\.env`, fails, and no backup is written.
 
+```powershell
 # credentials file used by the backup (never on a command line):
 #   C:\mysql\backup.cnf
 ```
@@ -218,12 +218,17 @@ host=127.0.0.1
 port=3307
 ```
 ```powershell
-# start MySQL at every Windows logon (also refreshes that day's backup):
-Copy-Item 'C:\mysql\start_mysql.bat' ([Environment]::GetFolderPath('Startup') + '\start_mysql_mis.bat')
+# start MySQL at every Windows logon (also refreshes that day's backup).
+# The Startup entry is a one-line shim that calls the repo script:
+Set-Content -Encoding ascii ([Environment]::GetFolderPath('Startup') + '\start_mysql_mis.bat') '@call "C:\opr-mis1\backend\scripts\start_mysql.bat"'
 
 # daily 13:00 backup task:
-schtasks /Create /F /SC DAILY /ST 13:00 /TN "MIS_MySQL_Daily_Backup" /TR "C:\mysql\backup_mysql.bat"
+schtasks /Create /F /SC DAILY /ST 13:00 /TN "MIS_MySQL_Daily_Backup" /TR "C:\opr-mis1\backend\scripts\backup_mysql.bat"
 ```
+
+Check: `schtasks /Run /TN MIS_MySQL_Daily_Backup`, then a new
+`mis_reports_v2_YYYY-MM-DD.sql` in `Report_format\db_backup\` and nothing new in
+`C:\mysql\backup_error.log`.
 
 > These two steps register machine-persistent auto-run behaviour (Startup
 > folder + Task Scheduler) — run them yourself from an interactive

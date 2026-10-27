@@ -295,17 +295,19 @@ def v2seed(mysql_db, mysql_v2_db):
 
 # ── tests that read the live database's data ────────────────────────────────
 # A few tests read real data (the rake detention Wagon Types registry and
-# history, the Sep'26 Secretary Review reference deck). The app's repo
-# modules are v2, so until the Task 8 cut-over -- while MYSQL_DB in
-# backend/.env still names the v1 live database -- they read the v2
-# rehearsal copy of the live data instead (MYSQL_LIVE_V2_DB to override).
-# Read-only use.
+# history, the Sep'26 Secretary Review reference deck). They read
+# MYSQL_LIVE_V2_DB when set (a copy), else the live v2 database named by
+# MYSQL_DB, else mis_reports_v2. The rehearsal copy they used before the
+# cut-over was dropped on 2026-10-28. Read-only use.
 
 def live_v2_db_name():
+    override = os.environ.get("MYSQL_LIVE_V2_DB")
+    if override:
+        return override
     name = os.environ.get("MYSQL_DB", "")
     if name.lower().startswith("mis_reports_v2"):
         return name
-    return os.environ.get("MYSQL_LIVE_V2_DB", "mis_reports_v2_rehearsal")
+    return "mis_reports_v2"
 
 
 from contextlib import contextmanager  # noqa: E402

@@ -20,6 +20,7 @@ Monthly MIS report for SAIL: a FastAPI backend that ingests plant Excel/PDF file
 - The schema is `backend/scripts/v2/schema_v2.sql` (header = conventions and v1-to-v2 table map) plus `scripts/v2/seed_cal_month.sql`. A new table/column goes into `schema_v2.sql` **and** a `scripts/v2/migrate_<what>.sql` for the live database. The older `scripts/*.sql`, `mysql_schema.sql` and `backfill_*.py` hold v1 SQL: historical, never run against v2.
 - Guard tests (keep green): `tests/test_repo_boundary.py` (no SQL outside `repo/`), `tests/test_repo_writes_bump.py` (every repo write bumps `data_version` first; after a manual SQL edit run `UPDATE data_version SET n=n+1` or restart, else stale cached pages), `tests/test_repo_oracle.py` (repo functions keep the frozen v1 signatures), `tests/test_no_unbound_local_imports.py` (pyflakes F823).
 - Data model and which table feeds which report page: `docs/DATA_MODEL_AND_REPORT_PAGES.md`.
+- Changing a table, column or index, start to end (schema file, migration, repo, tests, live apply, other machines): `backend/docs/MYSQL_MODEL_CHANGES.md`.
 
 ## Layout
 

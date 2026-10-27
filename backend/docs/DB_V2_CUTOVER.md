@@ -11,8 +11,12 @@ startup check then refuses to start it on a v1 database). Everything up to Step 
 run from the worktree (or an extract of the branch), never from `C:\opr-mis1`. The merge or
 checkout happens once, at Step 6, with the servers stopped.
 
-**Do not run this until the user says go.** Everything here was written, not executed.
-The tools and the rehearsal behind it are tested; the live run itself is not.
+**Status (2026-10-28): done on the main machine.** The cutover ran on 2026-10-24, the smoke
+test passed, v1 is read-only, and the scratch databases (`mis_reports_baseline`,
+`mis_reports_rehearsal`, `mis_reports_v2_rehearsal`) and the `db-model-v2` worktree are gone.
+`mis_reports` and `C:\mysql\archive\mis_reports_pre_v2_2026-10-24.sql` stay until the end of
+the next reporting cycle. Another machine that still runs v1 follows "Other machines" at the end.
+Day-to-day schema changes from now on: `MYSQL_MODEL_CHANGES.md`.
 
 This runbook replaces `MYSQL_MIGRATION_PLAN.md` (the SQLite to MySQL move, now history).
 The v2 table design is in `scripts/v2/schema_v2.sql` (header map) and
@@ -320,11 +324,10 @@ The v2 code cannot run on v1, so a rollback is "old code + old database":
   more spelling (`CC Billet` next to `CC BILLET`). This is the v1 behaviour. Filter by
   `plant_kind` (and fold case) when building display lists.
 - **Real-data tests.** Four tests read live data: the rake detention PDF and report-month tests and
-  the secretary-review context and render tests. Until the cutover they read
-  `mis_reports_v2_rehearsal` (override with the `MYSQL_LIVE_V2_DB` environment variable). After the
-  cutover `tests/conftest.py:live_v2_db_name()` uses `MYSQL_DB` whenever it starts with
-  `mis_reports_v2`, so with `.env` set as in step 6 they read the live v2 database, read-only,
-  and nothing needs to change. Set `MYSQL_LIVE_V2_DB` only to point them at a copy instead.
+  the secretary-review context and render tests. `tests/conftest.py:live_v2_db_name()` picks
+  `MYSQL_LIVE_V2_DB` if set, else `MYSQL_DB` when it starts with `mis_reports_v2`, else
+  `mis_reports_v2`. They read it read-only. (Before the cutover they read the rehearsal copy,
+  dropped on 2026-10-28.)
 - **Test database.** The pytest fixtures use a separate MySQL user, `MYSQL_TEST_USER` /
   `MYSQL_TEST_PASSWORD` in `backend\.env`, with rights only on ``mis_reports_test_%`` schemas
   (``GRANT ALL ON `mis\_reports\_test\_%`.* TO 'mis_test'@'127.0.0.1'``, created as root). The
@@ -346,3 +349,58 @@ The v2 code cannot run on v1, so a rollback is "old code + old database":
   Five tests fail on the untouched main as well (the known baseline set); a new failure outside
   them is a regression.
 - **Colour, layout and PDF rules** are unaffected by this change; see `PDF_LAYOUT_GUARDRAILS.md`.
+
+## Other machines
+
+`main` now holds the v2 code, so on any other machine a `git pull` is the cutover: the backend
+then refuses to start on a v1 database. Stop the backend and frontend there **before** pulling,
+and pick one of the two paths. `$M` / `$ROOT` are that machine's MySQL bin folder and root
+option file (see "Machine facts"); the paths below assume the same layout as here.
+
+**A. It should hold the same data as the main machine (the usual case).** No migration: restore
+the newest v2 backup from the main machine.
+
+```powershell
+# 1. on the main machine: take a fresh backup and copy it across
+C:\opr-mis1\backend\scripts\backup_mysql.bat        # -> Report_format\db_backup\mis_reports_v2_YYYY-MM-DD.sql
+# 2. on the other machine: stop the app, then pull
+git -C C:\opr-mis1 pull
+# 3. create the empty v2 database, load the dump, grant
+& "$M\mysql.exe" $ROOT -e "CREATE DATABASE mis_reports_v2 CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci"
+cmd /c "`"$M\mysql.exe`" $ROOT mis_reports_v2 < C:\path\to\mis_reports_v2_YYYY-MM-DD.sql"
+& "$M\mysql.exe" $ROOT -e "GRANT ALL PRIVILEGES ON mis_reports_v2.* TO 'mis_app'@'localhost'; GRANT ALL PRIVILEGES ON mis_reports_v2.* TO 'mis_app'@'127.0.0.1'; FLUSH PRIVILEGES"
+```
+
+If the load stops at `SET @@GLOBAL.GTID_PURGED` (a server with its own GTID history), make a
+copy of the dump without that statement and load the copy:
+`cmd /c "findstr /V GTID_PURGED dump.sql > dump.nogtid.sql"` (`findstr` keeps the bytes as they
+are; PowerShell's `Set-Content` would add a BOM).
+
+Then set `MYSQL_DB=mis_reports_v2` in that machine's `backend\.env`, install the pinned
+requirements if they changed (CLAUDE.md, "Python"), start the app and run the Step 7 smoke test.
+
+**B. It holds its own v1 data that must be kept.** Run this runbook there from Step 2 (dump v1,
+keep a copy in `C:\mysql\archive\`), Step 3 (create v2), Step 4 (migrate with
+`python -m tools.migrate_v1_to_v2 --src mis_reports --dst mis_reports_v2`, then
+`python -m tools.verify_v2` with the same pair: 0 problems), then Steps 6 to 8. Because `main` is
+already v2, the tools run from `C:\opr-mis1\backend` itself after the pull; no worktree is needed.
+Keep the app stopped from the pull until Step 6.
+
+**Then, on either path, clean up** (only what exists on that machine):
+
+```powershell
+& "$M\mysql.exe" $ROOT -N -e "SHOW DATABASES LIKE 'mis\_reports\_%'"
+# drop scratch copies, one per statement (each DROP can take ~25 s):
+& "$M\mysql.exe" $ROOT -e "DROP DATABASE IF EXISTS mis_reports_baseline"
+& "$M\mysql.exe" $ROOT -e "DROP DATABASE IF EXISTS mis_reports_rehearsal"
+& "$M\mysql.exe" $ROOT -e "DROP DATABASE IF EXISTS mis_reports_v2_rehearsal"
+# and any mis_reports_test_* left by an interrupted pytest run (only while no tests run)
+# grants survive DROP DATABASE; remove them too (for both 'localhost' and '127.0.0.1'):
+& "$M\mysql.exe" $ROOT -e "REVOKE IF EXISTS ALL PRIVILEGES ON mis_reports_baseline.* FROM 'mis_app'@'127.0.0.1'"
+git -C C:\opr-mis1 worktree list        # remove a leftover db-model-v2 worktree:
+git -C C:\opr-mis1 worktree remove .claude\worktrees\db-model-v2
+git -C C:\opr-mis1 branch -d db-model-v2
+```
+
+Keep `mis_reports` (read-only, Step 8) and the Step 2 dump for one reporting cycle. Point the
+daily backup task at the repo script (`SETUP.md` section 6), not at a copy in `C:\mysql\`.
