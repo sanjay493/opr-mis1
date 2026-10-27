@@ -54,9 +54,11 @@ def test_production_matches_reference_deck():
     assert _r(prod["CS"]["BSP"]) == [5961, 530, 355, -21, 72, 3212, 2866, 1, 96]
     assert _r(prod["CS"]["SSPs"]) == [414, 31, 17, -9, 49, 179, 128, -10, 62]
     assert _r(prod["SS"]["SSPs"]) == [574, 45, 32, 16, 67, 262, 183, 1, 63]
-    assert _r(prod["FS"]["SAIL"]) == [17500, 1546, 1328, -2, 92, 9230, 8156, 1, 93]
+    # FS values are the final Sep'26 data (revised 8-17 Oct). The 7 Oct reference
+    # deck shows FS SAIL 1328 / 8156 and TOTAL_CONV 1375-1376 / 8388-8389.
+    assert _r(prod["FS"]["SAIL"]) == [17500, 1546, 1329, -2, 92, 9230, 8157, 1, 93]
     conv = _r(prod["FS"]["TOTAL_CONV"])
-    assert conv[2] in (1375, 1376) and conv[3] == -1 and conv[4] == 96 and conv[6] in (8388, 8389)
+    assert conv[2] == 1377 and conv[3] == -1 and conv[4] == 96 and conv[6] == 8390
 
 
 @live
@@ -64,9 +66,11 @@ def test_techno_matches_reference_deck():
     warnings = []
     t = psr.build_techno(psr.period_labels("2026-09"), warnings)
     coke = t["SAIL"]["coke"]
-    assert (coke["fy_m2"], coke["fy_m1"], round(coke["target"]), coke["month"], coke["ytd"]) == (421, 419, 400, 432, 424)
+    # Final Sep'26 data (revised 8-17 Oct); the 7 Oct reference deck shows
+    # coke rate 432 and BF productivity 1.91.
+    assert (coke["fy_m2"], coke["fy_m1"], round(coke["target"]), coke["month"], coke["ytd"]) == (421, 419, 400, 433, 424)
     assert [a for a, _ in coke["trend"]] == ["Apr", "May", "Jun", "Jul", "Aug", "Sep"]
-    assert t["SAIL"]["bfprod"]["month"] == 1.91
+    assert t["SAIL"]["bfprod"]["month"] == 1.92
     assert t["SAIL"]["energy"]["target"] == 6.03
     assert t["BSP"]["coke"]["target"] == 407
     co2 = t["SAIL"]["co2"]

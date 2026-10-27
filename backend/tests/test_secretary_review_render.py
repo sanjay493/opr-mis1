@@ -109,7 +109,7 @@ def test_sail_finished_steel_includes_conversion_on_slides_2_and_5(rendered):
     fs_total = [r for r in _perf_tables(out.slides[4])[0].rows if sp.norm(r.cells[0].text) == "total"][-1]
     assert sp.norm(s2[0]) == "finished steel"
     assert s2[1:] == [c.text for c in fs_total.cells][1:]
-    assert _num(s2[3]) in (1375, 1376)
+    assert _num(s2[3]) == 1377  # final Sep'26 data; the 7 Oct reference deck shows 1375-1376
 
 
 @live
@@ -118,7 +118,8 @@ def test_charts_filled(rendered):
     shapes = sp.named_shapes(out)
     ch = shapes["ch_SAIL_coke"].chart
     assert list(ch.plots[0].categories) == ["FY25", "FY26", "FY'27 Target", "Sep", "Apr-Sep"]
-    assert ch.plots[0].series[0].values == (421.0, 419.0, 400.0, 432.0, 424.0)
+    # final Sep'26 data; the 7 Oct reference deck shows Sep 432
+    assert ch.plots[0].series[0].values == (421.0, 419.0, 400.0, 433.0, 424.0)
     tr = shapes["trend_BSP_fuel"].chart
     assert list(tr.plots[0].categories)[:3] == ["FY25", "FY26", "FY'27 Target"]
     assert list(tr.plots[0].categories)[-1] == "Sep"
