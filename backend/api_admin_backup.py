@@ -219,7 +219,8 @@ def _sanitize_for_restore(src: Path) -> Path:
 # still isn't proof a given table survived in it — mysqldump simply omits
 # the INSERT entirely for a table with zero rows, and nothing before this
 # surfaced that difference to whoever clicked Restore. See docs/SETUP.md.
-_INSERT_LINE_RE = re.compile(r"^INSERT INTO `(\w+)` VALUES (.*);\s*$")
+# The column list is there for tables with generated columns (report_text).
+_INSERT_LINE_RE = re.compile(r"^INSERT INTO `(\w+)`(?: \([^)]*\))? VALUES (.*);\s*$")
 
 
 def _source_table_counts(path: Path) -> dict:

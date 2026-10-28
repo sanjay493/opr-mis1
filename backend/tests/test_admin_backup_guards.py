@@ -43,6 +43,17 @@ def test_v2_dump_is_not_refused(wired, monkeypatch):
         ab.restore_backup("ok.sql", admin={"email": "a"})
 
 
+def test_source_counts_include_inserts_with_a_column_list(tmp_path):
+    # mysqldump names the columns for a table with generated columns
+    # (report_text's plant_key / item_key); those rows must count too, or
+    # every restore flags report_text as data loss
+    (tmp_path / "d.sql").write_text(
+        "INSERT INTO `plant` VALUES ('BSP','Bhilai'),('DSP','Durgapur');\n"
+        "INSERT INTO `report_text` (`id`, `scope`, `text`) VALUES (1,'a','x'),(2,'b','y'),(3,'c','z');\n",
+        encoding="utf-8")
+    assert ab._source_table_counts(tmp_path / "d.sql") == {"plant": 2, "report_text": 3}
+
+
 def test_backups_are_named_after_the_database(wired, monkeypatch, mysql_db):
     dumps = []
     monkeypatch.setattr(ab, "_acquire_admin_lock", lambda: object())
