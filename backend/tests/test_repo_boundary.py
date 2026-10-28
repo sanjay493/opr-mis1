@@ -33,7 +33,7 @@ EXCLUDED_DIRS = {"repo", "tests", "scripts", "tools", "venv", "__pycache__"}
 # (path relative to backend/, text the matched string starts with) -> reason.
 # An entry excuses exactly that string, nothing else in the file. Keep minimal.
 ALLOW = {
-    ("api_admin_backup.py", r"INSERT INTO `(\w+)` VALUES (.*);"):
+    ("api_admin_backup.py", r"INSERT INTO `(\w+)`(?: \([^)]*\))? VALUES (.*);"):
         "a regex that counts rows in a mysqldump file (_INSERT_LINE_RE); "
         "it parses dump text and is never executed",
 }
