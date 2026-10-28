@@ -7,3 +7,29 @@ Traceback (most recent call last):
     all_months_bool = all_months.lower() == "true"
                       ^^^^^^^^^^^^^^^^
 AttributeError: 'Form' object has no attribute 'lower'
+
+============================================================
+2026-10-28 14:24:53.159598
+plant=RSP  month=2026-10
+Traceback (most recent call last):
+  File "C:\opr-mis1\backend\main.py", line 2896, in extract_preview_endpoint
+    result = await loop.run_in_executor(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\H000493\AppData\Local\Programs\Python\Python311\Lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\opr-mis1\backend\main.py", line 2898, in <lambda>
+    lambda: excel_extractor_rsp.extract_preview(tmp_path, month)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\opr-mis1\backend\excel_extractors\excel_extractor_rsp.py", line 1446, in extract_preview
+    wb = openpyxl.load_workbook(file_path, data_only=True)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\opr-mis1\backend\venv\Lib\site-packages\openpyxl\reader\excel.py", line 346, in load_workbook
+    reader = ExcelReader(filename, read_only, keep_vba,
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\opr-mis1\backend\venv\Lib\site-packages\openpyxl\reader\excel.py", line 123, in __init__
+    self.archive = _validate_archive(fn)
+                   ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\opr-mis1\backend\venv\Lib\site-packages\openpyxl\reader\excel.py", line 93, in _validate_archive
+    raise InvalidFileException(msg)
+openpyxl.utils.exceptions.InvalidFileException: openpyxl does not support the old .xls file format, please use xlrd to read this file, or convert it to the more recent .xlsx file format.
