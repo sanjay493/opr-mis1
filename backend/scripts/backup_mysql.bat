@@ -63,8 +63,12 @@ if errorlevel 1 (
   exit /b 1
 )
 
+rem --loose-skip-masking-policies: the app has no masking policies, and reading
+rem them needs a system-table grant mis_app lacks. loose- because 8.x lacks it.
+rem --set-gtid-purged=OFF: no GTID_PURGED line, so the dump loads on any server
+rem (same as the admin backup in api_admin_backup.py).
 "%MYSQL_BIN_DIR%\mysqldump.exe" --defaults-extra-file="%MYSQL_ROOT%\backup.cnf" ^
-  --single-transaction --no-tablespaces --routines --triggers %DB_NAME% > "%TMP_FILE%" 2>>"%LOG_FILE%"
+  --single-transaction --no-tablespaces --routines --triggers --set-gtid-purged=OFF --loose-skip-masking-policies %DB_NAME% > "%TMP_FILE%" 2>>"%LOG_FILE%"
 set DUMP_RC=%ERRORLEVEL%
 
 if not "%DUMP_RC%"=="0" (

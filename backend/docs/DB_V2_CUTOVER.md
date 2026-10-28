@@ -371,7 +371,8 @@ cmd /c "`"$M\mysql.exe`" $ROOT mis_reports_v2 < C:\path\to\mis_reports_v2_YYYY-M
 & "$M\mysql.exe" $ROOT -e "GRANT ALL PRIVILEGES ON mis_reports_v2.* TO 'mis_app'@'localhost'; GRANT ALL PRIVILEGES ON mis_reports_v2.* TO 'mis_app'@'127.0.0.1'; FLUSH PRIVILEGES"
 ```
 
-If the load stops at `SET @@GLOBAL.GTID_PURGED` (a server with its own GTID history), make a
+Daily backups from 2026-10-28 on, and all admin backups, carry no GTID line. An older daily
+dump can stop at `SET @@GLOBAL.GTID_PURGED` on a server with its own GTID history; then make a
 copy of the dump without that statement and load the copy:
 `cmd /c "findstr /V GTID_PURGED dump.sql > dump.nogtid.sql"` (`findstr` keeps the bytes as they
 are; PowerShell's `Set-Content` would add a BOM).

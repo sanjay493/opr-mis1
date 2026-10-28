@@ -171,6 +171,9 @@ def _run_dump(dest: Path) -> None:
                         f"--defaults-extra-file={ini_path}",
                         "--single-transaction", "--no-tablespaces", "--routines", "--triggers",
                         "--set-gtid-purged=OFF",
+                        # the app has no masking policies; reading them needs a
+                        # system-table grant mis_app lacks (loose-: 8.x lacks the option)
+                        "--loose-skip-masking-policies",
                         _db_name(),
                     ],
                     stdout=out, stderr=subprocess.PIPE, timeout=180,
