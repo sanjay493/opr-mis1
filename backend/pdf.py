@@ -1196,7 +1196,14 @@ def _check_trend_pieces(items: list, page_of: list) -> None:
 
 _MINES_PERF_MEASURE_JS = """() => {
     const t = document.querySelector('table.mpp-table');
+    const sh = document.querySelector('.mpp-sheet');
     return {top: t.getBoundingClientRect().top, thead: t.tHead.getBoundingClientRect().height,
+            // title band above the table, as repeated on every sheet
+            hd: t.getBoundingClientRect().top - sh.getBoundingClientRect().top,
+            // block notes printed below the table on the last sheet
+            notes: sh.getBoundingClientRect().bottom - t.getBoundingClientRect().bottom,
+            // the .page's bottom padding, printed after the last sheet only
+            pb: parseFloat(getComputedStyle(sh.closest('.page')).paddingBottom) || 0,
             rows: [...t.tBodies].map(tb => [...tb.rows].map(r => r.getBoundingClientRect().height)),
             // each block's full name as printed (vertical): the text's own
             // extent, not the div's, which can stretch to the cell -- same
@@ -1210,44 +1217,111 @@ _MINES_PERF_MEASURE_JS = """() => {
             })};
 }"""
 
+# Each sheet's top (first one: below the .page padding) and height, as laid
+# out for the check after the fill.
+_MINES_PERF_SHEETS_JS = """() => [...document.querySelectorAll('.mpp-sheet')].map(e => {
+    const r = e.getBoundingClientRect();
+    return [r.top, r.height];
+})"""
+
 _MINES_PERF_SPARE = 6  # px kept spare so a rounding difference never pushes a part to the next page
+
+# The page prints with content-layout's @page margins (main.html: 12mm top
+# and bottom, 10mm sides), so its sheet is 190 x 273mm, not the generic
+# _PRINTABLE_PORTRAIT_MM.
+_MINES_PERF_PRINTABLE_MM = (210 - 10 - 10, 297 - 12 - 12)
+
+# Ceiling on the extra top/bottom padding per row (px): a near-empty last
+# sheet is spread out, but not into rows several lines tall.
+_MINES_PERF_MAX_PAD = 12
 
 
 def _plan_mines_performance_layout(browser, page: dict, template, render_kwargs: dict) -> None:
-    """Decides where mine/group/SAIL blocks on the Mines Production
-    Performance page (MINES_PERF_PAGE_ID = 6.1, main.py) split across a
-    physical page. Same two-pass measure-then-paginate technique as the
-    standalone mines_performance_pdf.py (whose paginate()/choose_names()
-    are reused here as-is -- pure functions of row heights, no HTML/CSS
-    coupling, so none of the class-name clash risk that reusing its
-    HTML-building functions would carry): Chromium won't split a block's
-    tall rowspan'd name cell across a page break, so each block is first
-    measured as one unsplit piece, paginate() decides where to cut it, and
-    the page is re-rendered with each page-piece as its own <tbody> with
-    its own, correctly-sized name cell (page_templates/mines_performance.
-    html's loop over page["segments"], set here). Mutates `page` in place;
-    must run before main_html is rendered, same as _plan_trend_layout."""
+    """Splits the Mines Production Performance page (MINES_PERF_PAGE_ID =
+    6.1, main.py) into one sheet per physical page, each with its own title
+    and table header, and pads its rows so every sheet fills the page.
+
+    Mine/group/SAIL blocks are measured once unsplit and cut into page parts
+    by the standalone mines_performance_pdf.py's paginate()/choose_names()
+    (pure functions of row heights -- Chromium won't split a block's tall
+    rowspan'd name cell across a page, so each part gets its own
+    correctly-sized name cell). The fill: the largest uniform extra row
+    padding that still keeps the same page count, then each sheet's
+    leftover height shared out over its own rows, so the last sheet is
+    spread too. A last print checks each sheet still fits and trims any
+    that don't. Sets page["segments"] and page["sheets"]
+    (page_templates/mines_performance.html); must run before main_html is
+    rendered, same as _plan_trend_layout."""
     from mines_performance_pdf import paginate, choose_names
 
     blocks = page.get("blocks") or []
     if not blocks:
         return
 
-    def _unsegmented():
-        return [{"b": i, "start": 0, "end": len(b["rows"]), "new_page": False} for i, b in enumerate(blocks)]
-
+    page.pop("sheets", None)
+    page["segments"] = None
     pg = browser.new_page()
     try:
-        page["segments"] = _unsegmented()
-        html = template.render(pages=[page], **render_kwargs)
-        _load_for_print(pg, html, _PRINTABLE_PORTRAIT_MM)
+        _load_for_print(pg, template.render(pages=[page], **render_kwargs), _MINES_PERF_PRINTABLE_MM)
         m = pg.evaluate(_MINES_PERF_MEASURE_JS)
         kinds = [[r["kind"] for r in b["rows"]] for b in blocks]
-        page_h_px = _PRINTABLE_PORTRAIT_MM[1] * _PX_PER_MM
+        page_h_px = _MINES_PERF_PRINTABLE_MM[1] * _PX_PER_MM
         first_avail = page_h_px - m["top"] - m["thead"] - _MINES_PERF_SPARE
-        avail = page_h_px - m["thead"] - _MINES_PERF_SPARE
-        segments = paginate(m["rows"], kinds, first_avail, avail, set())
-        page["segments"] = choose_names(segments, m["rows"], m["names"])
+        avail = page_h_px - m["hd"] - m["thead"] - _MINES_PERF_SPARE
+        tail = max(m["notes"], 0) + m["pb"]   # below the last sheet's table
+
+        def _plan(pad):
+            heights = [[h + 2 * pad for h in hs] for hs in m["rows"]]
+            segs = paginate(heights, kinds, first_avail, avail, set())
+            sheets = []
+            for sg in segs:
+                if sg["new_page"] or not sheets:
+                    sheets.append([])
+                sheets[-1].append(sg)
+            used = [sum(sum(heights[sg["b"]][sg["start"]:sg["end"]]) for sg in sh) for sh in sheets]
+            room = [(first_avail if i == 0 else avail) - u for i, u in enumerate(used)]
+            room[-1] -= tail
+            return heights, segs, sheets, room
+
+        n_pages = len(_plan(0)[2])
+        lo, hi = 0.0, float(_MINES_PERF_MAX_PAD)
+        for _ in range(14):
+            mid = (lo + hi) / 2
+            _h, _s, sheets, room = _plan(mid)
+            if len(sheets) <= n_pages and room[-1] >= 0:
+                lo = mid
+            else:
+                hi = mid
+        heights, segs, sheets, room = _plan(lo)
+        segs = choose_names(segs, heights, m["names"])
+        page["segments"] = segs
+        k = 0
+        page["sheets"] = []
+        for sh, r in zip(sheets, room):
+            n_rows = sum(sg["end"] - sg["start"] for sg in sh)
+            pad = min(lo + max(r, 0) / (2 * n_rows), _MINES_PERF_MAX_PAD)
+            page["sheets"].append({"segs": segs[k:k + len(sh)], "pad": round(pad, 2)})
+            k += len(sh)
+
+        # Check: a sheet whose rows grew more than planned (e.g. a long
+        # vertical name stretching them) gives back the excess.
+        for _ in range(3):
+            _load_for_print(pg, template.render(pages=[page], **render_kwargs), _MINES_PERF_PRINTABLE_MM)
+            over = False
+            measured = pg.evaluate(_MINES_PERF_SHEETS_JS)
+            for i, (top, h) in enumerate(measured):
+                limit = page_h_px - (top if i == 0 else 0) - _MINES_PERF_SPARE / 2
+                if i == len(measured) - 1:
+                    limit -= m["pb"]
+                if h > limit:
+                    sh = page["sheets"][i]
+                    n_rows = sum(sg["end"] - sg["start"] for sg in sh["segs"])
+                    sh["pad"] = round(max(sh["pad"] - (h - limit) / (2 * n_rows) - 0.1, 0), 2)
+                    over = True
+            if not over:
+                break
+        else:
+            _layout_warn("mines performance: a sheet is still taller than its page after the fill")
     finally:
         pg.close()
 
