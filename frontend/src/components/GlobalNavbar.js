@@ -93,6 +93,7 @@ export default function GlobalNavbar() {
         { label: 'Production Reports', link: '/reports/production-analysis', icon: '📊' },
         { label: 'Special Steel, IPT & BF Benchmarking', link: '/reports/special-steel-ipt', icon: '🔩' },
         { label: 'Iron Ore Mines', link: '/reports/mines', icon: '⛏️' },
+        { label: 'Cost of Production', link: '/reports/cost-production', icon: '💰' },
         { label: 'Loss, Breakdown & Capital Repair', link: '/reports/loss-breakdown', icon: '🛠️' },
         { label: 'Techno Reports', link: '/reports/techno', icon: '⚙️' },
         { label: 'Excel Report', link: '/reports/excel', icon: '📗' },

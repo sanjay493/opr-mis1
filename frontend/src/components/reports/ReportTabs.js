@@ -22,6 +22,7 @@ const VIEWS = {
   'iron-ore-mines': dynamic(() => import('./iron-ore-mines/View'), { loading }),
   'mines-group-wise': dynamic(() => import('./mines-group-wise/View'), { loading }),
   'mines-performance': dynamic(() => import('./mines-performance/View'), { loading }),
+  'production-cost': dynamic(() => import('./production-cost/View'), { loading }),
   'bf-benchmark': dynamic(() => import('./bf-benchmark/View'), { loading }),
   'production-loss-analysis': dynamic(() => import('./production-loss-analysis/View'), { loading }),
   'breakdown-analysis': dynamic(() => import('./breakdown-analysis/View'), { loading }),
