@@ -47,6 +47,16 @@ export const REPORT_GROUPS = [
     ],
   },
   {
+    id: 'cost-production',
+    route: '/reports/cost-production',
+    title: 'Cost of Production',
+    description: 'BF Coke, Sinter, Hot Metal, Crude Steel and Saleable Steel cost of production, all plants, monthly or yearly.',
+    icon: '💰',
+    tabs: [
+      { id: 'production-cost', label: 'Cost of Production (Monthly / Yearly)', description: 'Rs/T Total, Variable and Fixed cost of BF Coke, Sinter, Hot Metal, Crude Steel and Saleable Steel for every plant; Excel and PDF download.' },
+    ],
+  },
+  {
     id: 'loss-breakdown',
     route: '/reports/loss-breakdown',
     title: 'Loss, Breakdown & Capital Repair',

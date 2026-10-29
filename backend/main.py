@@ -316,11 +316,6 @@ _INDEX_SECTIONS = [
     # footer page number that didn't match its own Index-declared position
     # (reported against IPT specifically, but the drift starts here).
     ("SAIL Large BFs - Performance Snapshot", 2),
-    # Cost Trend (Hot Metal / Crude Steel / Saleable Steel) — 3 separate
-    # physical pages (COST_TREND_HM/CS/SS_PAGE_ID = 3.61/3.62/3.63), always
-    # inserted right after Large BFs — see the "Cost Trend" comment above
-    # COST_TREND_HM_PAGE_ID's own definition.
-    ("Trend in Cost of Production (Hot Metal/Crude Steel/Saleable Steel)", 3),
     # Physical order is page 4 (Plant Wise Perf of Main Items) then the
     # SAIL_MINES_PAGE_ID = 4.5 sentinel — listed in that order here.
     ("Plant Wise Performance of Main Items (w.r.t. ABP)", 1),
@@ -466,6 +461,7 @@ from layout_loader import load_layout_config
 from api_rsp_techno import router as rsp_techno_router
 from api_plant_performance import router as plant_performance_router
 from api_mines_performance import router as mines_performance_router
+from api_cost_production import router as cost_production_router
 from api_mines_group_wise import router as mines_group_wise_router
 from api_rsp_bf_glance import router as rsp_bf_glance_router
 from api_bsp_techno import router as bsp_techno_router
@@ -634,7 +630,10 @@ BF_LARGE_ANNEXURE_PAGE_ID = 3.6
 # BF_LARGE_ANNEXURE_PAGE_ID above (numbered main flow, group-1 dept-badge);
 # kept as three separate ids (not one page carrying a list) so each page
 # gets its own @@PGSTART_N@@ marker/physical position, same as every other
-# multi-page section in this app.
+# multi-page section in this app. Dropped from the report (no longer
+# inserted, nor listed in the Index) per direct instruction, 2026-10-29;
+# the ids stay in the strip-tuples so a stale cached pages_config entry is
+# still cleaned out.
 COST_TREND_HM_PAGE_ID = 3.61
 COST_TREND_CS_PAGE_ID = 3.62
 COST_TREND_SS_PAGE_ID = 3.63
@@ -771,7 +770,6 @@ _INDEX_SECTION_ANCHORS = [
     BEST_CAL_MONTH_PAGE_ID,            # Production Highlights - Best Calendar Month
     KEY_PARAMS_PAGE_ID,                # Inter Plant Performance Comparison
     BF_LARGE_ANNEXURE_PAGE_ID,         # SAIL Large BFs - Performance Snapshot
-    COST_TREND_HM_PAGE_ID,             # Trend in Cost of Production (HM/CS/SS)
     4,                                 # Plant Wise Performance of Main Items (w.r.t. ABP)
     SAIL_MINES_PAGE_ID,                # SAIL Mines Production & Despatch Performance
     5,                                 # Plant Wise Item Wise Production & CS to HM Ratio
@@ -968,6 +966,7 @@ app.add_middleware(
 app.include_router(rsp_techno_router)
 app.include_router(plant_performance_router)
 app.include_router(mines_performance_router)
+app.include_router(cost_production_router)
 app.include_router(mines_group_wise_router)
 app.include_router(rsp_bf_glance_router)
 app.include_router(bsp_techno_router)
@@ -1287,9 +1286,6 @@ def _get_data(month: str, page_number: Optional[float]):
                 pages_config.insert(_idx3 + 3, {"page": BEST_CAL_MONTH_PAGE_ID})
                 pages_config.insert(_idx3 + 4, {"page": KEY_PARAMS_PAGE_ID})
                 pages_config.insert(_idx3 + 5, {"page": BF_LARGE_ANNEXURE_PAGE_ID})
-                pages_config.insert(_idx3 + 6, {"page": COST_TREND_HM_PAGE_ID})
-                pages_config.insert(_idx3 + 7, {"page": COST_TREND_CS_PAGE_ID})
-                pages_config.insert(_idx3 + 8, {"page": COST_TREND_SS_PAGE_ID})
             # "SAIL Mines Production & Despatch Performance" sentinel page:
             # always inserted right after fixed page 4, ahead of fixed page 5.
             _idx4 = next((i for i, p in enumerate(pages_config) if p.get("page") == 4), None)
@@ -1658,14 +1654,11 @@ def _enrich_pdf_pages_impl(request: PDFRequest) -> tuple[list, dict]:
         _idxkp = next((i for i, p in enumerate(_pages_list) if p.get("page") == KEY_PARAMS_PAGE_ID), None)
         if _idxkp is not None:
             _pages_list.insert(_idxkp + 1, {"page": BF_LARGE_ANNEXURE_PAGE_ID})
-    # "Cost Trend" sentinel pages: HM, CS, SS each on their own physical
-    # page, always inserted right after Large BFs, in that order.
-    if _is_full_export and not any(p.get("page") == COST_TREND_HM_PAGE_ID for p in _pages_list):
-        _idxbf = next((i for i, p in enumerate(_pages_list) if p.get("page") == BF_LARGE_ANNEXURE_PAGE_ID), None)
-        if _idxbf is not None:
-            _pages_list.insert(_idxbf + 1, {"page": COST_TREND_HM_PAGE_ID})
-            _pages_list.insert(_idxbf + 2, {"page": COST_TREND_CS_PAGE_ID})
-            _pages_list.insert(_idxbf + 3, {"page": COST_TREND_SS_PAGE_ID})
+    # "Cost Trend" pages (COST_TREND_*_PAGE_ID) are no longer part of the
+    # report, per direct instruction, 2026-10-29.
+    if _is_full_export:
+        _pages_list = [p for p in _pages_list
+                       if p.get("page") not in (COST_TREND_HM_PAGE_ID, COST_TREND_CS_PAGE_ID, COST_TREND_SS_PAGE_ID)]
     # "SAIL Mines Production & Despatch Performance" sentinel page: always
     # inserted right after fixed page 4.
     if _is_full_export and not any(p.get("page") == SAIL_MINES_PAGE_ID for p in _pages_list):

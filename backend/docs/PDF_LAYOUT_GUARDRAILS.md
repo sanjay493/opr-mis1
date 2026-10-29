@@ -5,10 +5,10 @@ changes have broken it before, in ways that only show up in a **full**
 export. This document lists what controls the layout, what goes wrong, how
 it's detected, and how to put it back.
 
-**Known-good layout:** git tag `pdf-layout-baseline-2026-10-18c`
-(full report for Aug 2026: 111 pages incl. Annexure-4, sequential
+**Known-good layout:** git tag `pdf-layout-baseline-2026-10-29b`
+(full report for Aug 2026: 109 pages incl. Annexure-4, no Cost Trend pages, sequential
 footers, trend section 12 pages, Mines Production Performance (page 6.1)
-6 pages, no layout warnings).
+7 pages, no layout warnings).
 
 ---
 
@@ -24,10 +24,10 @@ rem 1. What changed since the known-good layout?
 venv\Scripts\python.exe layout_guard.py
 
 rem 2. Restore one file to the known-good version (repeat per file listed)
-git checkout pdf-layout-baseline-2026-10-18c -- backend/page_templates/main.html
+git checkout pdf-layout-baseline-2026-10-29b -- backend/page_templates/main.html
 
 rem 3. ...or restore EVERY layout file at once
-git checkout pdf-layout-baseline-2026-10-18c -- backend/pdf.py backend/layout_config.json backend/chart_utils.py backend/page_at_a_glance.py backend/page_special_steel_donut.py backend/page_coal_consumption.py backend/page_templates
+git checkout pdf-layout-baseline-2026-10-29b -- backend/pdf.py backend/layout_config.json backend/chart_utils.py backend/page_at_a_glance.py backend/page_special_steel_donut.py backend/page_coal_consumption.py backend/page_templates
 
 rem 4. Verify with a real render (about 1-2 minutes)
 venv\Scripts\python.exe layout_guard.py --render 2026-08
@@ -98,7 +98,7 @@ sheet (unless the page has `data-vfit="off"`). Everything else prints at
 A fitted page's border widths are floored to whole px after the zoom (see
 section 4).
 
-**Vertical fill** (Index page 2, techno pages 27–30/29.5, Power Data 35.7): a table marked `data-vgrow`
+**Vertical fill** (Index page 2, Inter Plant Performance Comparison 3.5, techno pages 27–30/29.5, Power Data 35.7; Mines Production Performance 6.1 has its own fill in `_plan_mines_performance_layout`: one titled sheet per physical page, rows padded to fill each sheet): a table marked `data-vgrow`
 (with `data-vgrow-mm` / `data-vgrow-wmm`, its real usable height/width on
 paper) gets its body-cell padding bisected up until the page fills its
 sheet, laid out at that real width while measuring. `data-vgrow-step`

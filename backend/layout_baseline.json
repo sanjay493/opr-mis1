@@ -41,13 +41,13 @@
   "page_templates/index.html": "b88c5c1c380162624e1b77dd0b2f1897cb1eb037707293a2beb4b0a896633993",
   "page_templates/ipt_status.html": "4220f08dde60470bcd2173b041b66d1eff530556b90d1e578074492d7f066185",
   "page_templates/key_highlights.html": "1b6c33c6e34ee58b35a9388f07f9e3aed6d740064459ee4cbb562bdc4d79dc95",
-  "page_templates/key_parameters.html": "a441dd13b5403c323d380eaa15311c18885b1cae0815e75c65f3feef2ee440fc",
+  "page_templates/key_parameters.html": "35f98784d4a78fb2b42ef6ef753ceddcda84f2d839092649f2ecb32e2acb49c7",
   "page_templates/macro_indicators.html": "998a7b1793ec49028c28c95eb36525747bae6534b982132ca66b9302ce8f31ca",
   "page_templates/main.html": "0f5a77cc412376b1209e0ecc934e46ceed6c7417b0c28f61522391612f095bf1",
   "page_templates/major_unit_records_plant.html": "6b49bed68148ed3345a527288fe28c7de0d23cd28a0f3b73120fb19beee225cd",
   "page_templates/major_unit_records_separator.html": "4db377b8e3eee801a001f36680654547b457fde357afc197b5b2b26110ea429b",
   "page_templates/market_prices.html": "c04c059254fbb0667ed701c0b940dd292d4585192bc878711faf204046646539",
-  "page_templates/mines_performance.html": "845674266b6f240b6b3da3f8d63ceb043fe12961ac5dd0fc6e37ab5df6c26c2e",
+  "page_templates/mines_performance.html": "eaac51e8a74f1ee225b1ca227b9c95a1c90dc13cceaff183675f3743d9d257cf",
   "page_templates/opening_stock.html": "59433a55ffeda2f3a23880787a21c8d94af9af387e55c4f0dfcf4b87310871b7",
   "page_templates/page4_table.html": "66eef5d188aea782e9279cebc48dab36275a72df34d04e494907e84e6734be27",
   "page_templates/performance_summary_table.html": "32580bfab0749c87c8ab55256e53e2f70c7ffaf640e947a56c5e412aeb5ec4e9",
@@ -72,7 +72,7 @@
   "page_templates/summary.html": "a8923670bc21cb6c01d9e2759bb1efcc6c73c62010763addcefa898e12c30115",
   "page_templates/techno_params.html": "4bd1d5e9d3130ed582bd5b1fa002beb0f7a3aa78c0b06f13a831a73627adf59f",
   "page_templates/trend_section.html": "d2bc90a92888823a7eeb43dc36b6549928fca0a0d49eaeb5a041b28798450bad",
-  "pdf.py": "cf84c9b7fcf4544ab26ba6a5c615e8a1f2a939f40a00b12d35851a1e6033221c"
+  "pdf.py": "ac8c017b8664821e70e1b21d98706400b75fc80c51e55936d9eaeff838d51644"
  },
  "reference_render": {
   "month": "2026-08",
@@ -147,9 +147,6 @@
    "3.3": 1,
    "3.5": 1,
    "3.6": 1,
-   "3.61": 1,
-   "3.62": 1,
-   "3.63": 1,
    "30": 1,
    "31": 1,
    "32": 1,
@@ -169,9 +166,9 @@
    "40": 1,
    "5": 1,
    "6": 1,
-   "6.1": 6,
+   "6.1": 7,
    "7": 12
   },
-  "total_pages": 111
+  "total_pages": 109
  }
 }

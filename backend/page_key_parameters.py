@@ -12,8 +12,8 @@ stored "till_month" dict (the same cumulative the Techno Manual Entry form
 computes/saves), production items are summed (day-weighted average for
 Oven Pushings, a Nos./day rate) across the FY-to-date months.
 
-Rows grouped under three section-header bands — Production of Main Items /
-Efficiency Parameters / Cost of Production — matching
+Rows grouped under two section-header bands — Production of Main Items /
+Efficiency Parameters — matching
 Report_format/"Plant wise Comparative for Apr-Jul'26.pdf" (the sample's own
 Recovery of Process Gases COG/BFG/LDG band was dropped — those three keys
 were never wired to a real data source; see
@@ -34,19 +34,9 @@ tfe_in_sinter per Sinter Plant unit (SP-1/SP-2/SP-3) and is shown slash-joined
 across the three machines (see _SP_UNIT_MAP/_sinter_fe_val); other plants
 still read the single BF-unit-sourced figure.
 
-Cost of Production: Hot Metal / Crude Steel / Saleable Steel / BF Coke /
-Sinter Rs/T all come from cost_trend_monthly (FIXED + VARIABLE till_month —
-see _fetch_cop). HM/CS/SS carry a real Variable/Fixed split; BF Coke and
-Sinter currently carry the lump comparative figure under VARIABLE (the
-comparative sheet gives no split), entered via the Cost Trend Entry page or
-its Excel extractor. Per direct instruction, 2026-09-21: unlike the
-Efficiency Parameters section's max/min highlight (where higher isn't
-consistently better or worse), every Cost of Production row is unambiguously
-lower-is-better, so only the least-cost plant(s) per row get highlighted —
-a distinct green band plus a trophy icon, not the blue/yellow max/min
-scheme — see the in_cop_section block in generate_key_parameters and
-key_parameters.html's/KeyParametersTemplate.js's `least_cost_plants`
-handling. Special Steel in Finished Steel is live-computed (see
+The Cost of Production band (HM/CS/SS/BF Coke/Sinter Rs/T, least-cost
+plant highlighted) was dropped per direct instruction, 2026-10-29, along
+with the Cost Trend pages. Special Steel in Finished Steel is live-computed (see
 _ss_in_fs_qty_and_pct) as a qty+% row pair — Special Finished Steel
 Despatch (T), then that qty as a % of Finished Steel Despatch — both
 despatch-side, mirroring page_special_steel_donut's own Spl. FS "% of FS"
@@ -56,7 +46,6 @@ figure (a % only, no qty row) that had no DB source at all.
 import calendar as _calendar
 import json as _json
 
-from repo import cost_trend as rct
 from repo import rake as rrk
 import dbengine
 import month_utils
@@ -407,31 +396,6 @@ def _demurrage_by_plant(ytd_months: list) -> dict:
     return out
 
 
-# Cost of Production (Rs/T) — from cost_trend_monthly (FIXED + VARIABLE
-# till_month, the same figure page_cost_trend.py's "TOTAL" row shows). "cop"
-# rows pass the product code as spec. HM/CS/SS get their own report pages
-# (page_cost_trend.py) and a real Variable/Fixed split; COKE/SINTER don't —
-# they exist in cost_trend_monthly only to feed this page's "BF Coke" /
-# "Sinter" rows, and currently carry the lump comparative figure under
-# VARIABLE (no split available). FIXED is summed in too the moment one is
-# entered, so a later split just works.
-_COP_PRODUCTS = {"HM", "CS", "SS", "COKE", "SINTER"}
-
-
-def _fetch_cop(report_month: str) -> dict:
-    """{(plant, product): total_rs_per_t} — FIXED + VARIABLE till_month cost
-    of production per product at report_month (see _COP_PRODUCTS)."""
-    out = {}
-    for product in _COP_PRODUCTS:
-        data = rct.get_cost_trend_monthly(product, [report_month]).get(report_month, {})
-        for cost_type in ("FIXED", "VARIABLE"):
-            for plant, cell in data.get(cost_type, {}).items():
-                v = cell.get("till_month")
-                if v is not None:
-                    out[(plant, product)] = out.get((plant, product), 0.0) + v
-    return out
-
-
 # (label, unit, kind, spec, decimal_places, flags)
 #   flags:
 #     highlight       - light background on this data row
@@ -440,7 +404,6 @@ def _fetch_cop(report_month: str) -> dict:
 #                       row above (part of a label_rowspan group), so it
 #                       renders no parameter cell of its own
 _EFFICIENCY_SECTION = "Efficiency Parameters"
-_COP_SECTION = "Cost of Production"
 
 _ROWS = [
     ("Production of Main Items", "", _SECTION, None, 0, {}),
@@ -526,12 +489,6 @@ _ROWS = [
     (None,                      "Rs/TCS",   "demurrage_per_tcs", None, 2, {"continuation": True}),
     ("CAPEX",                  "Rs Cr",    "general", "capex", 0, {}),
 
-    (_COP_SECTION, "", _SECTION, None, 0, {}),
-    ("BF Coke",        "Rs/T", "cop", "COKE", 0, {}),
-    ("Sinter",         "Rs/T", "cop", "SINTER", 0, {}),
-    ("Hot Metal",      "Rs/T", "cop", "HM", 0, {}),
-    ("Crude Steel",    "Rs/T", "cop", "CS", 0, {}),
-    ("Saleable Steel", "Rs/T", "cop", "SS", 0, {}),
 ]
 
 
@@ -539,7 +496,6 @@ def generate_key_parameters(report_month: str) -> dict:
     ytd_months = month_utils.get_ytd_months(report_month)
     techno = _fetch_techno(report_month)
     production = _fetch_production(ytd_months)
-    cop = _fetch_cop(report_month)
     rake_ytd = rrk.get_rake_detention_summary(report_month).get("YTD_TY", {})
 
     import datetime as _dt
@@ -574,10 +530,6 @@ def generate_key_parameters(report_month: str) -> dict:
     # per direct instruction. Toggled on entering that section, off again
     # at the next section/spacer row.
     in_bf_section = False
-    # Rows in the "Cost of Production" section (always the last section —
-    # no spacer/section header ever follows it) get only their least-cost
-    # plant(s) highlighted, trophy icon included — see module docstring.
-    in_cop_section = False
 
     rows = []
     for label, unit, kind, spec, dp, flags in _ROWS:
@@ -585,12 +537,10 @@ def generate_key_parameters(report_month: str) -> dict:
             label = _DEMURRAGE_LABEL.format(period=dem_period)
         if kind == _SECTION:
             in_bf_section = (label == _EFFICIENCY_SECTION)
-            in_cop_section = (label == _COP_SECTION)
             rows.append({"type": "section", "label": label})
             continue
         if kind == _SPACER:
             in_bf_section = False
-            in_cop_section = False
             rows.append({"type": "spacer"})
             continue
 
@@ -695,8 +645,6 @@ def generate_key_parameters(report_month: str) -> dict:
             elif kind == "vap_pct":
                 _qty, pct = vap_by_plant.get(plant, (None, None))
                 v = _round(pct, dp) if pct is not None else None
-            elif kind == "cop":
-                v = _round(cop.get((plant, spec)), dp)
             elif kind == "ss_fs_qty":
                 qty, _pct = ss_fs_by_plant.get(plant, (None, None))
                 v = f"{qty:,.0f}" if qty is not None else None
@@ -747,21 +695,6 @@ def generate_key_parameters(report_month: str) -> dict:
                 vmax, vmin = max(distinct), min(distinct)
                 row["max_plants"] = [p for p, v in numeric.items() if v == vmax]
                 row["min_plants"] = [p for p, v in numeric.items() if v == vmin]
-        # Cost of Production: least-cost plant(s) only (lower Rs/T is
-        # always better here, unlike the mixed BF section above) — see
-        # module docstring. Ties (equal least-cost figures) all get
-        # highlighted; a row with fewer than 2 distinct values gets none.
-        if in_cop_section and kind == "cop":
-            numeric = {}
-            for plant, v in values.items():
-                try:
-                    numeric[plant] = float(v)
-                except (TypeError, ValueError):
-                    pass
-            distinct = set(numeric.values())
-            if len(distinct) > 1:
-                vmin = min(distinct)
-                row["least_cost_plants"] = [p for p, v in numeric.items() if v == vmin]
         if flags.get("label_rowspan"):
             row["label_rowspan"] = flags["label_rowspan"]
         if flags.get("continuation"):

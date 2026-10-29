@@ -1,6 +1,10 @@
         <div style="padding:2px;font-family:'Roboto',sans-serif;font-size:8.2pt;">
           <div style="text-align:center;font-weight:700;font-size:11pt;color:rgb(0,0,255);margin-bottom:3px;">{{ page.title }}</div>
-          <table style="width:100%;border-collapse:collapse;border:1px solid {{ colors.border_black }};font-size:8.2pt;">
+          {# data-vgrow: pdf.py grows the data rows' padding (not the spacer
+             rows') until the table fills the sheet, measured at the real
+             paper size: 190 x 273mm = A4 minus content-layout's 10/12mm
+             @page margins. #}
+          <table data-vgrow="1" data-vgrow-mm="273" data-vgrow-wmm="190" data-vgrow-cells="tbody tr:not(.kp-spacer) td:not([rowspan])" style="width:100%;border-collapse:collapse;border:1px solid {{ colors.border_black }};font-size:8.2pt;">
             <colgroup>
               <col style="width:30%"/><col style="width:10%"/>
               {% for p in page.plants %}<col/>{% endfor %}
@@ -21,7 +25,7 @@
                 <td colspan="{{ 2 + page.plants|length }}" style="padding:2px 6px;border:1px solid {{ colors.border_black }};text-align:left;font-weight:700;background:{{ colors.highlight_group_label_bg }};color:rgb(0,0,255);">{{ row.label }}</td>
               </tr>
               {% elif row.type == 'spacer' %}
-              <tr>
+              <tr class="kp-spacer">
                 <td colspan="{{ 2 + page.plants|length }}" style="padding:0;height:3px;line-height:3px;font-size:1px;border:1px solid {{ colors.border_black }};background:{{ colors.misc_white }};">&nbsp;</td>
               </tr>
               {% else %}
@@ -34,9 +38,8 @@
                 {% endif %}
                 <td style="padding:2px 6px;border:1px solid {{ colors.border_black }};text-align:center;font-style:italic;color:{{ colors.text_secondary }};">{{ row.unit }}</td>
                 {% for p in page.plants %}
-                {% set is_least_cost = row.least_cost_plants and p in row.least_cost_plants %}
-                {% set cell_bg = (colors.highlight_achieved_band_bg if is_least_cost else (colors.highlight_actual_bg if row.max_plants and p in row.max_plants else (colors.highlight_target_band_bg if row.min_plants and p in row.min_plants else ''))) %}
-                <td style="padding:2px 6px;border:1px solid {{ colors.border_black }};text-align:center;{% if cell_bg %}background:{{ cell_bg }};font-weight:700;{% endif %}">{% if is_least_cost %}🏆 {% endif %}{{ row.plant_values[p] if row.plant_values[p] is not none else '—' }}</td>
+                {% set cell_bg = (colors.highlight_actual_bg if row.max_plants and p in row.max_plants else (colors.highlight_target_band_bg if row.min_plants and p in row.min_plants else '')) %}
+                <td style="padding:2px 6px;border:1px solid {{ colors.border_black }};text-align:center;{% if cell_bg %}background:{{ cell_bg }};font-weight:700;{% endif %}">{{ row.plant_values[p] if row.plant_values[p] is not none else '—' }}</td>
                 {% endfor %}
               </tr>
               {% endif %}

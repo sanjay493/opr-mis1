@@ -34,7 +34,9 @@
     table.mpp-table th[colspan] { border-bottom: 1px solid {{ colors.border_medium|default('#94a3b8') }}; }
     table.mpp-table thead tr:last-child th,
     table.mpp-table thead tr:first-child th[rowspan] { border-bottom: 1px solid {{ colors.border_black|default('#000000') }}; }
-    table.mpp-table td { font-size: 8.5pt; padding: 1.8px 2px; text-align: right; border: none;
+    {# --mpp-xp: extra top/bottom padding per row, set per sheet by pdf.py's
+       _plan_mines_performance_layout so each physical page fills its sheet. #}
+    table.mpp-table td { font-size: 8.5pt; padding: calc(1.8px + var(--mpp-xp, 0px)) 2px; text-align: right; border: none;
         border-right: 1px solid {{ colors.border_light|default('#cbd5e1') }}; }
     table.mpp-table thead tr:first-child > :last-child,
     table.mpp-table tbody tr > :last-child { border-right: 1px solid {{ colors.border_black|default('#000000') }}; }
@@ -64,12 +66,23 @@
     table.mpp-table tbody.mpp-blk tr:first-child td { border-top: none; }
 </style>
 
-<div class="mpp-hd"><h2>{{ page["labels"]["title"] }}</h2><span class="mpp-unit">Unit: '000 T</span></div>
+{# One .mpp-sheet per physical page (pdf.py's _plan_mines_performance_layout
+   sets page["sheets"]), each with its own title and table header. Without a
+   plan (no print run) everything is one sheet. #}
+{% if page["blocks"] %}
+{% set _segs = page.get("segments") or [] %}
+{% if not _segs %}{% for b in page["blocks"] %}{% set _ = _segs.append({"b": loop.index0, "start": 0, "end": b["rows"]|length, "new_page": False, "short": False}) %}{% endfor %}{% endif %}
+{% set sheets = page.get("sheets") or [{"segs": _segs, "pad": 0}] %}
+{% endif %}
 
 {% if not page["blocks"] %}
+<div class="mpp-hd"><h2>{{ page["labels"]["title"] }}</h2><span class="mpp-unit">Unit: '000 T</span></div>
 <p class="mpp-empty">No mines data for {{ page["labels"]["month"] }}.</p>
 {% else %}
-<table class="mpp-table">
+{% for sheet in sheets %}
+<div class="mpp-sheet"{% if not loop.first %} style="break-before: page"{% endif %}>
+<div class="mpp-hd"><h2>{{ page["labels"]["title"] }}</h2><span class="mpp-unit">Unit: '000 T</span></div>
+<table class="mpp-table" style="--mpp-xp: {{ sheet['pad'] }}px">
     <colgroup>
         <col class="mpp-c-ent"><col class="mpp-c-lbl">
         {% for _ in range(11) %}<col class="mpp-c-num">{% endfor %}
@@ -91,11 +104,11 @@
             <th>Plan</th><th class="mpp-act">Actual</th><th>%Ful</th>
         </tr>
     </thead>
-    {% for seg in page["segments"] %}
+    {% for seg in sheet["segs"] %}
     {% set block = page["blocks"][seg["b"]] %}
     {% set seg_rows = block["rows"][seg["start"]:seg["end"]] %}
     {% set name = block["short"] if seg["short"] else block["name"] %}
-    <tbody class="mpp-blk{% if block['kind'] == 'sail' %} mpp-sail{% endif %}"{% if seg["new_page"] %} style="break-before: page"{% endif %}>
+    <tbody class="mpp-blk{% if block['kind'] == 'sail' %} mpp-sail{% endif %}">
         {% for row in seg_rows %}
         <tr class="mpp-{{ row['kind'] }}">
             {% if loop.first %}<td rowspan="{{ seg_rows|length }}" class="mpp-ent"><div>{{ name }}</div></td>{% endif %}
@@ -106,5 +119,7 @@
     </tbody>
     {% endfor %}
 </table>
-{% for block in page["blocks"] %}{% if block["note"] %}<p class="mpp-note">{{ block["note"] }}</p>{% endif %}{% endfor %}
+{% if loop.last %}{% for block in page["blocks"] %}{% if block["note"] %}<p class="mpp-note">{{ block["note"] }}</p>{% endif %}{% endfor %}{% endif %}
+</div>
+{% endfor %}
 {% endif %}
