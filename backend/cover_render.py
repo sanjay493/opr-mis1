@@ -2,7 +2,7 @@
 Standalone HTML for a photo cover design (cover_designs.PHOTO_DESIGN_IDS):
 the /report preview iframe (api_cover /api/cover/html), the per-design
 render tests and the picker thumbnails. The PDF renders the very same
-page_templates/cover_<design>.html inside main.html (via cover.html), so
+page_templates/covers/<design>.html inside main.html (via cover.html), so
 preview and export can't drift apart.
 """
 import functools
@@ -22,7 +22,7 @@ def _font_css() -> str:
 
 
 def render_cover_html(page: dict) -> str:
-    return pdf._jinja_env.get_template("cover_preview.html").render(page=page, font_css=_font_css())
+    return pdf._jinja_env.get_template("covers/preview.html").render(page=page, font_css=_font_css())
 
 
 def cover_document(month: str, design=None, photo_id=None):

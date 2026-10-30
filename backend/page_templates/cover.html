@@ -1,4 +1,4 @@
-{% if page.design and page.design != 'classic' %}{% include 'cover_' ~ page.design ~ '.html' %}{% else %}
+{% if page.design and page.design != 'classic' %}{% include 'covers/' ~ page.design ~ '.html' %}{% else %}
             <div class="page1-container">
 
                 {% if page.bg_data_uri %}

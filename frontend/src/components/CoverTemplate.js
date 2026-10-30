@@ -82,7 +82,7 @@ const HEX_POS = [
 ];
 
 export default function CoverTemplate({ data }) {
-  // Photo designs (cover_<design>.html) are rendered by the backend, the same
+  // Photo designs (page_templates/covers/<design>.html) are rendered by the backend, the same
   // template the PDF uses — shown here as the cover document itself.
   if (data?.design && data.design !== 'classic' && data.report_month) {
     return (

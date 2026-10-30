@@ -48,12 +48,17 @@ LAYOUT_FILES = {
     "page_templates/trend_section.html": "Production trend pages",
     "page_templates/css/production_trend.css": "Production trend pages",
 }
-TEMPLATE_GLOB = "page_templates/*.html"
+# Page templates, plus the photo cover designs kept in their own folder.
+TEMPLATE_GLOBS = ("page_templates/*.html", "page_templates/covers/*.html")
+
+
+def _template_paths() -> list:
+    return sorted(p for g in TEMPLATE_GLOBS for p in glob.glob(os.path.join(BACKEND, g)))
 
 
 def _layout_files() -> dict:
     files = dict(LAYOUT_FILES)
-    for path in sorted(glob.glob(os.path.join(BACKEND, TEMPLATE_GLOB))):
+    for path in _template_paths():
         rel = os.path.relpath(path, BACKEND).replace(os.sep, "/")
         files.setdefault(rel, "Page templates & per-page <style> blocks")
     return files
@@ -110,7 +115,7 @@ def css_class_clashes() -> list:
     render, so such a rule silently restyles the other page — but only in
     exports that include both pages (the Steel Sales .ssp-table leak)."""
     defs, uses = {}, {}
-    for path in glob.glob(os.path.join(BACKEND, TEMPLATE_GLOB)) + \
+    for path in _template_paths() + \
             glob.glob(os.path.join(BACKEND, "page_templates/css/*.css")):
         name = os.path.relpath(path, BACKEND).replace(os.sep, "/")
         with open(path, encoding="utf-8") as f:

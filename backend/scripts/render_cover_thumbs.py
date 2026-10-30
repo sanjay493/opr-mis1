@@ -1,7 +1,7 @@
 """Writes frontend/public/cover/designs/<id>.png, the design tiles in the
 /report Cover card: each photo design rendered with sample figures and the
 bundled photo, plus Classic from its artwork. Re-run after editing any
-page_templates/cover_<id>.html.
+page_templates/covers/<id>.html.
 
     venv\Scripts\python.exe -m scripts.render_cover_thumbs   (from backend/)
 """

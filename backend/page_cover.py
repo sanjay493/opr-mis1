@@ -28,7 +28,7 @@ watermark in its lower-left, where there's nothing else printed):
 
 Photo designs (cover_designs.PHOTO_DESIGN_IDS) are chosen per month in
 report_cover_settings (cover_store.py); they render
-page_templates/cover_<design>.html via cover.html, with the photo and the
+page_templates/covers/<design>.html via cover.html, with the photo and the
 SAIL logo embedded as data URIs for the same offline reason.
 """
 import base64
