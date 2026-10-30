@@ -1649,6 +1649,24 @@ def op_plan_plant_counts(month: str):
         conn.close()
 
 
+def op_plan_month_rows(months, plants):
+    """[(report_month, plant_code, item_name, op_plan)] of the OP over months
+    for the given plants."""
+    if not months or not plants:
+        return []
+    conn = connect()
+    try:
+        return [tuple(r) for r in _fetchall(
+            conn.cursor(),
+            "SELECT o.report_month, o.plant_code, i.item_name, o.op_plan "
+            "FROM production_op_monthly o JOIN item i ON i.item_id = o.item_id "
+            f"WHERE o.report_month IN ({_ph(months)}) AND o.plant_code IN ({_ph(plants)}) "
+            "ORDER BY o.report_month, o.plant_code, i.item_name",
+            list(months) + list(plants))]
+    finally:
+        conn.close()
+
+
 def save_op_plan(month: str, plant: str, entries, user: Optional[str]):
     """Set one plant's OP for the month in one transaction. entries =
     [(item_name, value)]; value None removes that item's OP. Returns

@@ -2,6 +2,7 @@ import contextlib
 import os
 import json
 import copy
+import calendar
 import re
 from repo.conn import Row, OperationalError
 import time
@@ -4135,6 +4136,222 @@ async def save_op_plan_entry(body: OpPlanSaveRequest, request: Request):
     saved, cleared = rp.save_op_plan(body.month, body.plant,
                                      [(e.item_name, e.op_plan) for e in body.entries], user)
     return {"status": "ok", "saved": saved, "cleared": cleared}
+
+
+# OP vs APP vs Actual (frontend/src/components/reports/op-comparison/View.js).
+# One plant: every production item it has an APP, OP or actual for. "SAIL":
+# the key items below for each plant plus their SAIL total. period "ytd" sums
+# April .. month; since the OP may be entered for only some of those months,
+# actual_on_op sums the actual over exactly the months that have an OP, and
+# Actual vs OP compares those two.
+OP_COMPARISON_SAIL_ITEMS = ["Total Sinter", "Hot Metal", "Total Crude Steel", "Finished Steel", "Saleable Steel"]
+
+
+def _op_cmp_is_rate(item):
+    """A per-day rate item (Oven Pushing (nos/day)): cumulated as a
+    day-weighted average, as page_key_parameters does, not summed."""
+    return "/day" in item
+
+
+def _op_cmp_total(item, by_month):
+    """Cumulate {month: value} over its months: sum, or day-weighted average
+    for a rate item. None when there are no values."""
+    if not by_month:
+        return None
+    if not _op_cmp_is_rate(item):
+        return sum(by_month.values())
+    days = {m: calendar.monthrange(int(m[:4]), int(m[5:7]))[1] for m in by_month}
+    return sum(v * days[m] for m, v in by_month.items()) / sum(days.values())
+
+
+def _op_cmp_cells(plants, months):
+    """{(plant, item): {app, op, actual, actual_on_op, op_months}} cumulated
+    over months (_op_cmp_total)."""
+    raw = {}
+
+    def put(plant, item, key, m, v):
+        if v is not None:
+            d = raw.setdefault((plant, item), {"app": {}, "op": {}, "actual": {}})[key]
+            d[m] = d.get(m, 0) + v
+
+    conn = dbengine.connect()
+    try:
+        cur = conn.cursor()
+        for plant in plants:
+            for m in months:
+                for name, v in rp.plant_month_plan_items(cur, plant, m):
+                    put(plant, normalize_item_name(name, plant), "app", m, v)
+            for m, name, v in rp.plant_rows_for_months(cur, plant, months):
+                put(plant, normalize_item_name(name, plant), "actual", m, v)
+    finally:
+        conn.close()
+    for m, plant, item, v in rp.op_plan_month_rows(months, plants):
+        put(plant, item, "op", m, v)
+
+    cells = {}
+    for (plant, item), d in raw.items():
+        op_months = set(d["op"])
+        cells[(plant, item)] = {
+            "app": _op_cmp_total(item, d["app"]),
+            "op": _op_cmp_total(item, d["op"]),
+            "actual": _op_cmp_total(item, d["actual"]),
+            "actual_on_op": _op_cmp_total(item, {m: v for m, v in d["actual"].items() if m in op_months}),
+            "op_months": op_months,
+        }
+    return cells
+
+
+def _op_cmp_row(label, c, n_months, plant=None):
+    pct = lambda a, b: round(a / b * 100, 1) if a is not None and b else None
+    op_n = len(c["op_months"])
+    return {
+        "item": label, "plant": plant,
+        "app": c["app"], "op": c["op"], "actual": c["actual"],
+        "op_months": op_n, "months": n_months,
+        "act_vs_app": pct(c["actual"], c["app"]),
+        "act_vs_op": pct(c["actual_on_op"], c["op"]),
+        "op_vs_app": pct(c["op"], c["app"]) if op_n == n_months else None,
+    }
+
+
+@app.get("/api/op-comparison")
+async def get_op_comparison(month: str, plant: str = "SAIL", period: str = "month"):
+    return _op_comparison(month, plant, period)
+
+
+def _op_comparison(month: str, plant: str, period: str) -> dict:
+    if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", month or ""):
+        raise HTTPException(400, "month must be YYYY-MM, e.g. '2026-11'")
+    if period not in ("month", "ytd"):
+        raise HTTPException(400, "period must be 'month' or 'ytd'")
+    if plant != "SAIL" and plant not in _FS_SAIL_8:
+        raise HTTPException(400, f"Unknown plant '{plant}'")
+    months = month_utils.get_ytd_months(month) if period == "ytd" else [month]
+    n = len(months)
+
+    if plant != "SAIL":
+        cells = _op_cmp_cells([plant], months)
+        rows = [_op_cmp_row(item, c, n) for (_, item), c in sorted(cells.items(), key=lambda kv: production_item_sort_key(kv[0][1]))]
+        return {"plant": plant, "month": month, "period": period, "months": months, "rows": rows}
+
+    cells = _op_cmp_cells(_FS_SAIL_8, months)
+    groups = []
+    for item in OP_COMPARISON_SAIL_ITEMS:
+        plant_rows, total = [], {"app": None, "op": None, "actual": None, "actual_on_op": None, "op_months": set()}
+        op_complete = True
+        for p in _FS_SAIL_8:
+            c = cells.get((p, item))
+            if c is None:
+                continue
+            plant_rows.append(_op_cmp_row(item, c, n, plant=p))
+            for k in ("app", "op", "actual", "actual_on_op"):
+                if c[k] is not None:
+                    total[k] = (total[k] or 0) + c[k]
+            # the SAIL OP is complete only when every plant with an APP has an OP for every month
+            if c["app"] is not None and len(c["op_months"]) < n:
+                op_complete = False
+            total["op_months"] |= c["op_months"]
+        if not plant_rows:
+            continue
+        sail = _op_cmp_row(item, total, n, plant="SAIL")
+        sail["op_complete"] = op_complete
+        if not op_complete:
+            sail["op_vs_app"] = None
+        groups.append({"item": item, "rows": plant_rows, "total": sail})
+    return {"plant": "SAIL", "month": month, "period": period, "months": months, "groups": groups}
+
+
+_OP_XLSX_HEAD = ["APP", "OP", "Actual", "Actual ÷ APP %", "Actual ÷ OP %", "OP ÷ APP %"]
+_OP_XLSX_ITEM_LABEL = {"Total Sinter": "Sinter", "Total Crude Steel": "Crude Steel"}
+
+
+def _op_xlsx_sheet(ws, title, first_head, lines, note):
+    """lines = [(label, row dict or None, style)], style in {'', 'group', 'total'}."""
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+
+    thin = Side(style="thin", color="D0D7DE")
+    head_fill = PatternFill("solid", fgColor="E8F0FE")
+    group_fill = PatternFill("solid", fgColor="F1F3F4")
+    ws["A1"] = title
+    ws["A1"].font = Font(bold=True, size=13)
+    ws["A2"] = note
+    ws["A2"].font = Font(italic=True, size=9, color="5F6368")
+    for c, h in enumerate([first_head] + _OP_XLSX_HEAD, start=1):
+        cell = ws.cell(4, c, h)
+        cell.font = Font(bold=True)
+        cell.fill = head_fill
+        cell.alignment = Alignment(horizontal="left" if c == 1 else "right", wrap_text=True)
+        cell.border = Border(bottom=thin)
+    r = 5
+    for label, row, style in lines:
+        ws.cell(r, 1, label)
+        if style == "group":
+            for c in range(1, 8):
+                ws.cell(r, c).fill = group_fill
+            ws.cell(r, 1).font = Font(bold=True)
+        else:
+            bold = style == "total"
+            ws.cell(r, 1).font = Font(bold=bold)
+            vals = [row["app"], row["op"], row["actual"], row["act_vs_app"], row["act_vs_op"], row["op_vs_app"]]
+            for c, v in enumerate(vals, start=2):
+                cell = ws.cell(r, c, v)
+                if c <= 4:
+                    cell.number_format = "#,##0.0"
+                    cell.font = Font(bold=bold)
+                else:
+                    cell.number_format = '0.0"%"'
+                    color = None if v is None else "188038" if v >= 100 else "C5221F"
+                    cell.font = Font(bold=bold, color=color)
+            if bold:
+                for c in range(1, 8):
+                    ws.cell(r, c).border = Border(top=thin)
+            if row["op"] is not None and row["op_months"] < row["months"]:
+                note_cell = ws.cell(r, 9, f"OP for {row['op_months']} of {row['months']} months")
+                note_cell.font = Font(italic=True, size=9, color="5F6368")
+        r += 1
+    ws.column_dimensions["A"].width = 30
+    for col in "BCDEFG":
+        ws.column_dimensions[col].width = 14
+    ws.column_dimensions["I"].width = 24
+    ws.freeze_panes = "B5"
+
+
+@app.get("/api/op-comparison/xlsx")
+def op_comparison_xlsx(month: str, period: str = "month"):
+    """The OP vs APP vs Actual report as .xlsx: a SAIL sheet (key items by
+    plant with the SAIL total) and one sheet per plant (every unit)."""
+    import io
+    from openpyxl import Workbook
+
+    sail = _op_comparison(month, "SAIL", period)
+    months = sail["months"]
+    mon = lambda m: _dt.date(int(m[:4]), int(m[5:7]), 1).strftime("%b %Y")
+    period_label = f"{mon(months[0])} to {mon(months[-1])} (till month)" if period == "ytd" else mon(month)
+    note = ("Values in '000 T (Oven Pushing in nos/day). Actual ÷ OP uses only the months with an OP; "
+            "OP ÷ APP is shown only when the OP covers every month.")
+
+    wb = Workbook()
+    lines = []
+    for g in sail["groups"]:
+        lines.append((_OP_XLSX_ITEM_LABEL.get(g["item"], g["item"]), None, "group"))
+        lines += [(f"   {r['plant']}", r, "") for r in g["rows"]]
+        lines.append(("   SAIL" + ("" if g["total"].get("op_complete", True) or g["total"]["op"] is None
+                                    else " (OP incomplete)"), g["total"], "total"))
+    _op_xlsx_sheet(wb.active, f"SAIL: OP vs APP vs Actual, {period_label}", "Item / plant", lines, note)
+    wb.active.title = "SAIL"
+    for p in _FS_SAIL_8:
+        data = _op_comparison(month, p, period)
+        _op_xlsx_sheet(wb.create_sheet(p), f"{p}: OP vs APP vs Actual, {period_label}", "Production unit / item",
+                       [(r["item"], r, "") for r in data["rows"]], note)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    fname = f"OP_vs_APP_vs_Actual_{month}{'_till_month' if period == 'ytd' else ''}.xlsx"
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"', "X-Content-Type-Options": "nosniff"},
+    )
 
 
 # ---------------------------------------------------------------------------

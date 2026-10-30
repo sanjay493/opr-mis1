@@ -16,6 +16,7 @@ const VIEWS = {
   'production-trend': dynamic(() => import('./production-trend/View'), { loading }),
   'production-query': dynamic(() => import('./production-query/View'), { loading }),
   'production-items': dynamic(() => import('./production-items/View'), { loading }),
+  'op-comparison': dynamic(() => import('./op-comparison/View'), { loading }),
   'special-steel-fy': dynamic(() => import('./special-steel-fy/View'), { loading }),
   'special-steel-physical': dynamic(() => import('./special-steel-physical/View'), { loading }),
   'ipt-fy': dynamic(() => import('./ipt-fy/View'), { loading }),

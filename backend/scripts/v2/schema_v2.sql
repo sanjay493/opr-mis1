@@ -311,7 +311,7 @@ CREATE TABLE production_op_monthly (
     op_plan      DOUBLE       NOT NULL,
     updated_by   VARCHAR(255) NULL,
     updated_at   DATETIME     NULL,
-    -- repo.production.op_plan_items, op_plan_plant_counts, save_op_plan
+    -- repo.production.op_plan_items, op_plan_month_rows, op_plan_plant_counts, save_op_plan
     PRIMARY KEY (report_month, plant_code, item_id),
     CONSTRAINT fk_production_op_month FOREIGN KEY (report_month) REFERENCES cal_month (report_month),
     CONSTRAINT fk_production_op_plant FOREIGN KEY (plant_code) REFERENCES plant (plant_code),

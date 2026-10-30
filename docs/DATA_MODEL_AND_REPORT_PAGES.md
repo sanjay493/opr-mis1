@@ -176,7 +176,7 @@ contain SQL (guard test `tests/test_repo_boundary.py`).
 
 | Repo module | Tables |
 |---|---|
-| `repo/production.py` | `production_monthly`, `production_op_monthly` (Operating Plan, entry tab `op-plan`; not yet on a report page), `item`, `plant`, `cal_month` (+ `data_version`) |
+| `repo/production.py` | `production_monthly`, `production_op_monthly` (Operating Plan, entry tab `op-plan`; report tab `op-comparison`, OP vs APP vs Actual, via `/api/op-comparison`), `item`, `plant`, `cal_month` (+ `data_version`) |
 | `repo/capacity.py` | `item_capacity`, `item`, `plant`, `cal_month` |
 | `repo/techno.py` | `techno_upload`, `techno_value`, `techno_plan_fy`, `plant_unit`, `extraction_log` |
 | `repo/text.py` | `report_text` (all narrative scopes) |
