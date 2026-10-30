@@ -4,6 +4,7 @@ import RequireEditor from '@/components/RequireEditor';
 
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import GlobalNavbar from '@/components/GlobalNavbar';
+import DateTimeText from '@/components/DateTimeText';
 
 const API = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -30,7 +31,8 @@ const S = {
         whiteSpace: 'nowrap' },
   TD: { padding: '7px 8px', borderBottom: '1px solid #f0f4f8', fontSize: 14, verticalAlign: 'middle' },
   SEL: { padding: '5px 6px', fontSize: 12.5, border: '1px solid #dadce0', borderRadius: 4, width: '100%' },
-  DATE: { padding: '5px 6px', fontSize: 12.5, border: '1px solid #dadce0', borderRadius: 4, width: 122 },
+  DATE: { padding: '5px 6px', fontSize: 12.5, border: '1px solid #dadce0', borderRadius: 4, width: 92 },
+  CAL: { padding: '2px 5px', fontSize: 12, border: '1px solid #dadce0', borderRadius: 4, background: '#fff' },
   TXT: { padding: '5px 6px', fontSize: 13, border: '1px solid #dadce0', borderRadius: 4, width: '100%',
          boxSizing: 'border-box' },
   ICON: { padding: '3px 8px', fontSize: 14, border: '1px solid #dadce0', borderRadius: 4,
@@ -192,11 +194,11 @@ function EntryRow({ row, units, onSaved, onAddBelow, onDelete, drag }) {
       <td style={{ ...S.TD, minWidth: 280 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <input type="date" style={S.DATE} value={actualStart}
-              onChange={e => setActualStart(e.target.value)} />
+            <DateTimeText inputStyle={S.DATE} buttonStyle={S.CAL} value={actualStart}
+              onChange={setActualStart} />
             <span style={{ color: '#9aa0a6' }}>–</span>
-            <input type="date" style={S.DATE} value={actualEnd} disabled={ongoing}
-              onChange={e => setActualEnd(e.target.value)} />
+            <DateTimeText inputStyle={S.DATE} buttonStyle={S.CAL} value={actualEnd} disabled={ongoing}
+              onChange={setActualEnd} />
           </div>
           <label style={{ fontSize: 12, color: '#5f6368', display: 'flex', alignItems: 'center', gap: 4 }}>
             <input type="checkbox" checked={ongoing}

@@ -5,6 +5,7 @@ import RequireEditor from '@/components/RequireEditor';
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import GlobalNavbar from '@/components/GlobalNavbar';
+import DateTimeText from '@/components/DateTimeText';
 
 const API = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -36,8 +37,6 @@ const SHOP_OPTION_LABEL = {
 
 // ---- timestamp / duration helpers -----------------------------------------
 
-// 'YYYY-MM-DD HH:MM' <-> the 'YYYY-MM-DDTHH:MM' shape <input type="datetime-local"> needs.
-const toInputTs = (ts) => (ts || '').replace(' ', 'T');
 const toApiTs = (v) => (v || '').replace('T', ' ');
 
 function parseTs(ts) {
@@ -380,15 +379,10 @@ function BreakdownForm({ plant, units, editRow, onDone, onCancel }) {
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'flex-start' }}>
             <Field label="Start">
               <div style={{ display: 'flex', gap: 6 }}>
-                {draft.date_only ? (
-                  <input type="date" style={{ ...S.input, width: 176, flexShrink: 0 }}
-                    value={(draft.start_ts || '').slice(0, 10)}
-                    onChange={e => set({ start_ts: e.target.value })} />
-                ) : (
-                  <input type="datetime-local" step="60" style={{ ...S.input, width: 232, flexShrink: 0 }}
-                    value={toInputTs(draft.start_ts)}
-                    onChange={e => set({ start_ts: toApiTs(e.target.value) })} />
-                )}
+                <DateTimeText key={draft.date_only ? 'd' : 'dt'} withTime={!draft.date_only}
+                  inputStyle={{ ...S.input, width: draft.date_only ? 130 : 180 }}
+                  buttonStyle={{ ...S.btnGhost, padding: '9px 10px' }} value={draft.start_ts}
+                  onChange={v => set({ start_ts: v })} />
                 <button type="button" style={S.btnGhost}
                   onClick={() => set({ start_ts: draft.date_only ? todayDateInput() : toApiTs(nowLocalInput()) })}>
                   {draft.date_only ? 'today' : 'now'}
@@ -398,18 +392,10 @@ function BreakdownForm({ plant, units, editRow, onDone, onCancel }) {
             <Field label="End"
               hint={draft.is_ongoing ? `Picking an end ${draft.date_only ? 'date' : 'time'} marks this resolved` : null}>
               <div style={{ display: 'flex', gap: 6 }}>
-                {draft.date_only ? (
-                  <input type="date" style={{ ...S.input, width: 176, flexShrink: 0 }}
-                    value={(draft.end_ts || '').slice(0, 10)}
-                    onChange={e => set({ end_ts: e.target.value, is_ongoing: e.target.value ? false : draft.is_ongoing })} />
-                ) : (
-                  <input type="datetime-local" step="60" style={{ ...S.input, width: 232, flexShrink: 0 }}
-                    value={toInputTs(draft.end_ts)}
-                    onChange={e => {
-                      const v = e.target.value;
-                      set({ end_ts: toApiTs(v), is_ongoing: v ? false : draft.is_ongoing });
-                    }} />
-                )}
+                <DateTimeText key={draft.date_only ? 'd' : 'dt'} withTime={!draft.date_only}
+                  inputStyle={{ ...S.input, width: draft.date_only ? 130 : 180 }}
+                  buttonStyle={{ ...S.btnGhost, padding: '9px 10px' }} value={draft.end_ts}
+                  onChange={v => set(d => ({ end_ts: v, is_ongoing: v ? false : d.is_ongoing }))} />
                 <button type="button" style={S.btnGhost}
                   onClick={() => set({
                     end_ts: draft.date_only ? todayDateInput() : toApiTs(nowLocalInput()),
