@@ -20,6 +20,21 @@ def _match_unit(furnace_str: str) -> Optional[str]:
     return _FURNACE_MAP.get(m.group(1).upper())
 
 
+_REPAIR_ROW_RE = re.compile(r'\*{20,}')
+
+
+def _is_repair_row(line: str) -> bool:
+    """A furnace under capital repair prints one banner row
+    ('| 5. |****…U N D E R  C A P I T A L  R E P A I R…****|').
+
+    Matched on a long unbroken asterisk run, not a total asterisk count:
+    the Shop row can carry several short overflow cells ('14.90/*****',
+    '8.0/****', '1.08/****' in the Oct'26 quality table while BF-5 was
+    under repair) and was being dropped whole by the old '> 10 asterisks'
+    test, losing Shop's coke/nut coke/CDI/fuel rates and FY cumulatives."""
+    return bool(_REPAIR_ROW_RE.search(line))
+
+
 def _extract_pair(value_str) -> Tuple[Optional[float], Optional[float]]:
     """Extract an 'x/y' value pair from a BSL MER cell.
 
@@ -125,7 +140,7 @@ class BslMerParser:
                 continue
             if any(keyword in line for keyword in ["PRODUCTION", "FCS", "No", "Tonnes", "Rate", "Temp"]):
                 continue
-            if line.count("*") > 10:
+            if _is_repair_row(line):
                 continue
 
             cells = [c.strip() for c in line.split("|")]
@@ -186,7 +201,7 @@ class BslMerParser:
                 continue
             if any(keyword in line for keyword in ["COKE", "CDI", "FUEL", "FCS", "No", "kg/THM", "N/C"]):
                 continue
-            if line.count("*") > 10:
+            if _is_repair_row(line):
                 continue
 
             cells = [c.strip() for c in line.split("|")]
@@ -260,7 +275,7 @@ class BslMerParser:
                 continue
             if any(keyword in line for keyword in ["O2", "SLAG", "CARBON", "DUST", "Ratio", "kg/", "CONSUMPTION"]):
                 continue
-            if line.count("*") > 10:
+            if _is_repair_row(line):
                 continue
 
             cells = [c.strip() for c in line.split("|")]
