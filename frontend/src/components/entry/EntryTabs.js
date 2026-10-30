@@ -16,6 +16,7 @@ const FORMS = {
   'production': dynamic(() => import('./production/Form'), { loading }),
   'production-range': dynamic(() => import('./production-range/Form'), { loading }),
   'op-plan': dynamic(() => import('./op-plan/Form'), { loading }),
+  'op-plan-upload': dynamic(() => import('./op-plan-upload/Form'), { loading }),
   'techno-manual': dynamic(() => import('./techno-manual/Form'), { loading }),
   'techno-correction': dynamic(() => import('./techno-correction/Form'), { loading }),
   'bf-large-snapshot': dynamic(() => import('./bf-large-snapshot/Form'), { loading }),

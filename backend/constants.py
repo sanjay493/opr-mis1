@@ -107,6 +107,7 @@ PAGE_MODULES = {
         "label": "Operating Plan (OP)",
         "routes": [
             ("POST", "/api/op-plan", False),
+            ("POST", "/api/op-plan/extract", False),
         ],
     },
     "unique_activities": {

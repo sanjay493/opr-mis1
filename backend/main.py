@@ -4214,6 +4214,47 @@ def _op_cmp_row(label, c, n_months, plant=None):
     }
 
 
+@app.post("/api/op-plan/extract")
+async def extract_op_plan_file(file: UploadFile = File(...), plant: Optional[str] = Form(None),
+                               month: Optional[str] = Form(None)):
+    """Read a plant's monthly plan file (Excel / text PDF) and propose OP
+    values per production item (op_plan_extract). Saves nothing: the upload
+    page shows the proposal and saves the confirmed rows via POST /api/op-plan.
+    plant / month default to what the file names."""
+    import op_plan_extract as _opx
+
+    data = await file.read()
+    try:
+        lines, text = await run_in_threadpool(_opx.read_lines, data, file.filename or "")
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:
+        raise HTTPException(400, f"Could not read '{file.filename}': {e}")
+    detected = _opx.detect(text, file.filename or "")
+    plant = plant or detected["plant"]
+    month = month or detected["month"]
+    if not plant or not month:
+        raise HTTPException(400, "Could not tell the plant or month from the file; choose them and extract again.")
+    _check_op_plant_month(plant, month)
+
+    conn = dbengine.connect()
+    try:
+        app_rows = {normalize_item_name(n, plant): v for n, v in rp.plant_month_plan_items(conn.cursor(), plant, month)}
+    finally:
+        conn.close()
+    current = {n: v for n, v, _, _ in rp.op_plan_items(plant, month)}
+    items = sorted(set(app_rows) | set(current), key=production_item_sort_key)
+    rows = _opx.map_lines(plant, lines, {i: app_rows.get(i) for i in items})
+    for r in rows:
+        r.pop("key", None)
+        r["current_op"] = current.get(r["item"]) if r["item"] else None
+    return {
+        "file": file.filename, "plant": plant, "month": month, "detected": detected,
+        "rows": rows,
+        "items": [{"item_name": i, "app_plan": app_rows.get(i), "op_plan": current.get(i)} for i in items],
+    }
+
+
 @app.get("/api/op-comparison")
 async def get_op_comparison(month: str, plant: str = "SAIL", period: str = "month"):
     return _op_comparison(month, plant, period)
