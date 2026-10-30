@@ -175,16 +175,18 @@ def _generate_cover(report_month: str, design: str | None = None, photo_id: int 
         "bg_data_uri": _bg_data_uri(),
         "month_display": f"{_MON_ABBR[m]}-{y}",
         "month_short": f"{_MON_ABBR[m]}'{y % 100:02d}",
-        # Honeycomb order = 3 columns of 2: left (Hot Metal / Crude Steel),
-        # middle (the two Iron Ore Mines figures), right (Finished / Saleable
-        # Steel). See .page1-hex-{0..5} in main.html.
+        # Display order of the six KPIs on every cover design. The Classic
+        # honeycomb fills 3 columns of 2 top-to-bottom (left: Iron Ore Prod /
+        # Hot Metal, middle: Crude / Finished Steel, right: Saleable Steel /
+        # Iron Ore Sales Despatch; .page1-hex-{0..5} in main.html); the photo
+        # designs' 3-wide grids fill row by row.
         "kpis": [
+            _mines_kpi_row(report_month, "IRON ORE PRODUCTION", "prod"),
             _kpi_row(report_month, "Hot Metal"),
             _kpi_row(report_month, "Crude Steel"),
-            _mines_kpi_row(report_month, "IRON ORE PRODUCTION", "prod"),
-            _mines_kpi_row(report_month, "IRON ORE SALES DESPATCH", "sales_despatch"),
             _kpi_row(report_month, "Finished Steel"),
             _kpi_row(report_month, "Saleable Steel"),
+            _mines_kpi_row(report_month, "IRON ORE SALES DESPATCH", "sales_despatch"),
         ],
     }
     setting = _saved_setting(report_month)

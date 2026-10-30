@@ -68,9 +68,9 @@ const KPI_ICONS = {
 };
 
 // Flat-top hexagon honeycomb: 3 columns x 2 rows, middle column dropped
-// half a cell. Order follows the kpis array — left: Hot Metal / Crude
-// Steel; middle: the two Iron Ore Mines figures; right: Finished /
-// Saleable Steel. Mirrors .page1-hex-{0..5} in main.html.
+// half a cell. Order follows the kpis array — left: Iron Ore Production /
+// Hot Metal; middle: Crude / Finished Steel; right: Saleable Steel / Iron
+// Ore Sales Despatch. Mirrors .page1-hex-{0..5} in main.html.
 const HEX_CLIP = 'polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%)';
 const HEX_POS = [
   { left: '0%', top: '0%' },

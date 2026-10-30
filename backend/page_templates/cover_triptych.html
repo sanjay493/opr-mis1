@@ -1,8 +1,9 @@
 {% from 'cover_macros.html' import kpi_cards, footer_strip %}
 {# "Triptych" cover (Canva DAHW9su2mKg): a navy header with a large title,
    then three full-height colour columns (orange / charcoal / slate), each
-   with a crop of the photo and two KPIs - steel left and right, iron ore in
-   the middle, in page.kpis order. 794 x 1121 px box. #}
+   with a crop of the photo and two KPIs - iron ore mines, iron making, steel
+   output - grouped by kind (each kind keeps its page.kpis order), so the
+   captions hold whatever order page_cover.py lists the KPIs in. 794 x 1121 px box. #}
 <style>
     .cover-triptych { position: relative; width: 210mm; height: 296.5mm; overflow: hidden; display: flex; flex-direction: column;
         background: #000c48; color: #ffffff; font-family: 'IBM Plex Sans', 'Roboto', Arial, sans-serif; font-size: 13px; line-height: 1.35; }
@@ -54,7 +55,9 @@
         </div>
     </div>
     <div class="cover-triptych-cols">
-        {% for cap, part in [('Iron making', page.kpis[0:2]), ('Iron ore mines', page.kpis[2:4]), ('Steel output', page.kpis[4:6])] %}
+        {% set ore = page.kpis | selectattr('kind', 'equalto', 'ore') | list %}
+        {% set steel = page.kpis | selectattr('kind', 'equalto', 'steel') | list %}
+        {% for cap, part in [('Iron ore mines', ore), ('Iron making', steel[0:2]), ('Steel output', steel[2:4])] %}
         <div class="cover-triptych-col">
             <div class="cover-triptych-photo"><img src="{{ page.photo_data_uri }}" alt=""/></div>
             <div class="cover-triptych-cap">{{ cap }}</div>
