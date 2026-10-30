@@ -34,6 +34,7 @@ const FORMS = {
   'ready-reckoner': dynamic(() => import('./ready-reckoner/Form'), { loading }),
   'major-unit-daily': dynamic(() => import('./major-unit-daily/Form'), { loading }),
   'cover-photos': dynamic(() => import('./cover-photos/Form'), { loading }),
+  'unique-activities': dynamic(() => import('./unique-activities/Form'), { loading }),
 };
 
 /**

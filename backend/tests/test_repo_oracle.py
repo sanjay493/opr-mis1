@@ -542,13 +542,15 @@ def test_write_functions_match_the_bump_tests_write_detection():
 
 
 def test_modules_keep_the_v1_public_functions_and_signatures():
-    """repo/<module>.py (v2 since Task 7g) has exactly the public names and
-    signatures of the frozen v1 module (tests/_v1_frozen/<module>.py)."""
+    """repo/<module>.py (v2 since Task 7g) keeps every public name and
+    signature of the frozen v1 module (tests/_v1_frozen/<module>.py). New
+    v2-only functions are allowed (misc gained the unique_activity ones);
+    the v1 ones stay frozen."""
     import inspect
     for module in ro.DOMAIN_MODULES:
         v1 = importlib.import_module(f"_v1_frozen.{module}")
         v2 = importlib.import_module(f"repo.{module}")
-        assert set(ro.public_functions(v2)) == set(ro.public_functions(v1)), module
+        assert set(ro.public_functions(v1)) <= set(ro.public_functions(v2)), module
         for name in ro.public_functions(v1):
             assert inspect.signature(getattr(v2, name)) == inspect.signature(getattr(v1, name)),                 f"{module}.{name}"
 

@@ -32,6 +32,7 @@ const VIEWS = {
   'major-production': dynamic(() => import('./major-production/View'), { loading }),
   'records-matrix': dynamic(() => import('./records-matrix/View'), { loading }),
   'techno-records': dynamic(() => import('./techno-records/View'), { loading }),
+  'unique-activities': dynamic(() => import('./unique-activities/View'), { loading }),
   'new-facilities': dynamic(() => import('./new-facilities/View'), { loading }),
   'do-letter': dynamic(() => import('./do-letter/View'), { loading }),
   'board-note': dynamic(() => import('./board-note/View'), { loading }),

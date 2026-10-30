@@ -103,6 +103,14 @@ PAGE_MODULES = {
             ("POST", "/api/todo/{job_id}/delete", True),
         ],
     },
+    "unique_activities": {
+        "label": "Unique Activities",
+        "routes": [
+            ("POST", "/api/unique-activities/add", False),
+            ("POST", "/api/unique-activities/{activity_id}/update", False),
+            ("POST", "/api/unique-activities/{activity_id}/delete", True),
+        ],
+    },
     "worklog": {
         "label": "Worklog",
         "routes": [

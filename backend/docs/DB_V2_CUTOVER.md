@@ -112,7 +112,7 @@ cmd /c "`"$M\mysql.exe`" $ROOT --default-character-set=utf8mb4 mis_reports_v2 < 
 & "$M\mysql.exe" $ROOT -e "SELECT COUNT(*) AS tables_in_v2 FROM information_schema.tables WHERE table_schema='mis_reports_v2'; SELECT COUNT(*) AS months, MIN(report_month), MAX(report_month) FROM mis_reports_v2.cal_month"
 ```
 
-Expected: 62 tables (every `CREATE TABLE` in `schema_v2.sql`), 960 months from 1960-04 to 2040-03.
+Expected: 64 tables (every `CREATE TABLE` in `schema_v2.sql`), 960 months from 1960-04 to 2040-03.
 If the table count differs from `grep -c "^CREATE TABLE" scripts/v2/schema_v2.sql`, stop.
 
 Grants for `mis_app` on v2 (both host forms exist on this machine, see `docs/SETUP.md`):

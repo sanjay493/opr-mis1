@@ -144,7 +144,7 @@ cmd /c "`"$M\mysql.exe`" -u root --host=127.0.0.1 --port=3307 -p --default-chara
 cmd /c "`"$M\mysql.exe`" -u root --host=127.0.0.1 --port=3307 -p --default-character-set=utf8mb4 mis_reports_v2 < scripts2\seed_cal_month.sql"
 ```
 
-Check it: 62 tables and 960 months (1960-04 to 2040-03):
+Check it: 64 tables and 960 months (1960-04 to 2040-03):
 
 ```powershell
 & "$M\mysql.exe" -u root --host=127.0.0.1 --port=3307 -p -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='mis_reports_v2'; SELECT COUNT(*), MIN(report_month), MAX(report_month) FROM mis_reports_v2.cal_month"

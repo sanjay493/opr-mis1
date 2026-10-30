@@ -187,7 +187,7 @@ contain SQL (guard test `tests/test_repo_boundary.py`).
 | `repo/rake.py` | `rake_detention_master`, `rake_detention_monthly`, `rake_detention_summary`, `rake_detention_annual` |
 | `repo/mines.py` | `mine_group`, `mine`, `mine_material`, `mine_end_use`, `mine_production_monthly`, `mine_despatch_actual_monthly`, `mine_despatch_plan_monthly`, `mine_booked_qty_actual_monthly`, `mine_booked_qty_plan_monthly`, `sail_mines_monthly` |
 | `repo/breakdown.py` | `breakdown`, `capital_repair`, `plant_unit` |
-| `repo/misc.py` | `power_monthly`, `pdf_item_alias`, `macro_indicator_monthly`, `market_price_monthly`, `steel_sector_performance`, `rail_prod_despatch`, `bf_benchmark_external_bf`, `bf_benchmark_external_data`, `bf_benchmark_sail_meta`, `major_unit_daily_record`, `ready_reckoner_page`, `cover_photo`, `report_cover_setting` |
+| `repo/misc.py` | `power_monthly`, `pdf_item_alias`, `macro_indicator_monthly`, `market_price_monthly`, `steel_sector_performance`, `rail_prod_despatch`, `bf_benchmark_external_bf`, `bf_benchmark_external_data`, `bf_benchmark_sail_meta`, `major_unit_daily_record`, `ready_reckoner_page`, `cover_photo`, `report_cover_setting`, `unique_activity`, `unique_activity_tag` |
 | `repo/pages.py` | `page_config` |
 | `repo/ops.py` | `app_user`, `allowed_email`, `otp_code`, `activity_log`, `page_visit`, `admin_notification`, `extraction_log`, `todo_job`, `daily_work_log`, `data_version` |
 | `repo/version.py`, `repo/conn.py`, `repo/_keys.py`, `repo/v2codec.py` | the write counter, connections, key resolution (`ensure_plant`, `check_month`), and the techno / timestamp codecs |
@@ -277,7 +277,7 @@ All free-text blocks share one table, `report_text`: unique key `(scope, period,
 | `do_letter` | `do_letter_remark_table` | `page_do_letter.py` |
 | `sail_sales_note`, `steel_sales`, `rail_note`, `ss_phys_note` | `sail_sales_note_table`, `steel_sales_highlights`, `rail_prod_despatch_note`, `special_steel_phys_note` | one-page report, steel sales highlights, rail report, special steel physical |
 
-Other page tables: `steel_sector_performance` (one PIB release per month, pages 2.1-2.3), `rail_prod_despatch` (rail report), `page_config` (below), `cover_photo` and `report_cover_setting` (cover), `ready_reckoner_page` (ready reckoner).
+Other page tables: `steel_sector_performance` (one PIB release per month, pages 2.1-2.3), `rail_prod_despatch` (rail report), `page_config` (below), `cover_photo` and `report_cover_setting` (cover), `ready_reckoner_page` (ready reckoner), `unique_activity` + `unique_activity_tag` (Unique Activities: entry tab under Reference & Records, view tab under Highlights & Records; not in the PDF).
 
 ### 4.9 Capital repair, breakdown, BF benchmarking, major units
 

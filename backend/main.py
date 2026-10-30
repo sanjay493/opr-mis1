@@ -494,6 +494,7 @@ from api_capacity import router as capacity_router
 from api_secretary_review import router as secretary_review_router
 from api_cost_trend_extract import router as cost_trend_extract_router
 from api_cover import router as cover_router
+from api_unique_activity import router as unique_activity_router
 
 
 # Special Steel trend/performance-analysis page (line + bar charts) has no
@@ -999,6 +1000,7 @@ app.include_router(capacity_router)
 app.include_router(secretary_review_router)
 app.include_router(cost_trend_extract_router)
 app.include_router(cover_router)
+app.include_router(unique_activity_router)
 
 _STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 os.makedirs(os.path.join(_STATIC_DIR, "profile_pics"), exist_ok=True)

@@ -866,3 +866,136 @@ def replace_cover_setting(report_month, design, photo_mode, photo_id, updated_by
         (month, design, photo_mode, photo_id, updated_by, stamp),
         prepare=lambda cur: _keys.ensure_month(cur, month, bump=False),
     )
+
+
+# ── unique_activity / unique_activity_tag (api_unique_activity) ─────────────
+# v2-only tables (no v1 counterpart). Each call opens its own connection;
+# a save or delete is one transaction.
+
+UNIQUE_ACTIVITY_COLS = ("id", "activity_date", "plant_code", "unit_name", "title", "description",
+                        "created_by", "created_at", "updated_by", "updated_at")
+_UA_SELECT = ("SELECT a.id, DATE_FORMAT(a.activity_date, '%%Y-%%m-%%d') AS activity_date, a.plant_code, "
+              "a.unit_name, a.title, a.description, a.created_by, "
+              "DATE_FORMAT(a.created_at, '%%Y-%%m-%%d %%H:%%i') AS created_at, a.updated_by, "
+              "DATE_FORMAT(a.updated_at, '%%Y-%%m-%%d %%H:%%i') AS updated_at FROM unique_activity a")
+
+
+def _ua_with_tags(cur, rows) -> List[Dict[str, Any]]:
+    out = [dict(zip(UNIQUE_ACTIVITY_COLS, r)) for r in rows]
+    if not out:
+        return out
+    by_id = {a["id"]: a for a in out}
+    for a in out:
+        a["tags"] = []
+    cur.execute("SELECT activity_id, tag FROM unique_activity_tag WHERE activity_id IN ("
+                + ", ".join(["%s"] * len(by_id)) + ") ORDER BY activity_id, tag", list(by_id))
+    for activity_id, tag in cur.fetchall():
+        by_id[activity_id]["tags"].append(tag)
+    return out
+
+
+def unique_activity_rows(q=None, tag=None, plant_code=None, date_from=None, date_to=None):
+    """Unique activities, newest first, each a dict of UNIQUE_ACTIVITY_COLS
+    plus `tags` (list). q matches title, description, unit or any tag
+    (case-insensitive substring); tag is an exact tag; dates are
+    'YYYY-MM-DD' bounds on activity_date. api_unique_activity.list_activities."""
+    where, args = [], []
+    if q:
+        like = f"%{q}%"
+        where.append("(a.title LIKE %s OR a.description LIKE %s OR a.unit_name LIKE %s OR EXISTS "
+                     "(SELECT 1 FROM unique_activity_tag t WHERE t.activity_id = a.id AND t.tag LIKE %s))")
+        args += [like, like, like, like]
+    if tag:
+        where.append("EXISTS (SELECT 1 FROM unique_activity_tag t WHERE t.activity_id = a.id AND t.tag = %s)")
+        args.append(tag)
+    if plant_code:
+        where.append("a.plant_code = %s")
+        args.append(plant_code)
+    if date_from:
+        where.append("a.activity_date >= %s")
+        args.append(date_from)
+    if date_to:
+        where.append("a.activity_date <= %s")
+        args.append(date_to)
+    sql = _UA_SELECT + (" WHERE " + " AND ".join(where) if where else "") + " ORDER BY a.activity_date DESC, a.id DESC"
+    conn = connect()
+    try:
+        cur = conn.cursor()
+        cur.execute(sql, args)
+        return _ua_with_tags(cur, cur.fetchall())
+    finally:
+        conn.close()
+
+
+def unique_activity_row(activity_id):
+    """One unique activity as unique_activity_rows' dict, or None."""
+    conn = connect()
+    try:
+        cur = conn.cursor()
+        cur.execute(_UA_SELECT + " WHERE a.id = %s", (activity_id,))
+        rows = _ua_with_tags(cur, cur.fetchall())
+        return rows[0] if rows else None
+    finally:
+        conn.close()
+
+
+def unique_activity_tag_counts():
+    """[(tag, number of activities)] for every tag in use, most used first."""
+    conn = connect()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT MIN(tag), COUNT(*) FROM unique_activity_tag GROUP BY tag ORDER BY COUNT(*) DESC, MIN(tag)",
+                    ())
+        return [(t, n) for t, n in cur.fetchall()]
+    finally:
+        conn.close()
+
+
+def save_unique_activity(activity_id, activity_date, plant_code, unit_name, title, description, tags, user):
+    """Insert (activity_id None) or update one unique activity and replace its
+    tags; returns the id, or None when activity_id names no row.
+    activity_date is 'YYYY-MM-DD'; plant_code None or a plant row's code."""
+    _keys.fits("plant_code", plant_code, 8)
+    _keys.fits("unit_name", unit_name, 64)
+    _keys.fits("title", title, 200, nullable=False)
+    _keys.fits("updated_by", user, 255)
+    for t in tags:
+        _keys.fits("tag", t, 48, nullable=False)
+    conn = connect()
+    try:
+        cur = conn.cursor()
+        _ver.bump(cur)
+        if activity_id is None:
+            cur.execute("INSERT INTO unique_activity (activity_date, plant_code, unit_name, title, description,"
+                        " created_by, created_at) VALUES (%s, %s, %s, %s, %s, %s, NOW())",
+                        (activity_date, plant_code, unit_name, title, description, user))
+            activity_id = cur.lastrowid
+        else:
+            cur.execute("UPDATE unique_activity SET activity_date = %s, plant_code = %s, unit_name = %s, title = %s,"
+                        " description = %s, updated_by = %s, updated_at = NOW() WHERE id = %s",
+                        (activity_date, plant_code, unit_name, title, description, user, activity_id))
+            cur.execute("SELECT 1 FROM unique_activity WHERE id = %s", (activity_id,))
+            if cur.fetchone() is None:
+                conn.rollback()
+                return None
+            cur.execute("DELETE FROM unique_activity_tag WHERE activity_id = %s", (activity_id,))
+        if tags:
+            cur.executemany("INSERT INTO unique_activity_tag (activity_id, tag) VALUES (%s, %s)",
+                            [(activity_id, t) for t in tags])
+        conn.commit()
+        return activity_id
+    finally:
+        conn.close()
+
+
+def delete_unique_activity(activity_id):
+    """Delete one unique activity (its tags go with it); True if it existed."""
+    conn = connect()
+    try:
+        cur = conn.cursor()
+        _ver.bump(cur)
+        cur.execute("DELETE FROM unique_activity WHERE id = %s", (activity_id,))
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        conn.close()
