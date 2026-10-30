@@ -18,6 +18,14 @@ const PRODUCTS = [
   { id: 'SS', label: 'Saleable Steel' },
 ];
 
+// Which cost blocks to show; Total is the default.
+const COST_TYPES = [
+  { id: 'TOTAL', label: 'Total Cost' },
+  { id: 'VARIABLE', label: 'Variable Cost' },
+  { id: 'FIXED', label: 'Fixed Cost' },
+  { id: 'ALL', label: 'All (Total, Variable, Fixed)' },
+];
+
 const LINE = '1px solid #dadce0';
 const TH = {
   padding: '6px 10px', background: '#dbeafe', borderBottom: LINE, borderRight: LINE,
@@ -31,10 +39,11 @@ function fmt(v) {
   return v == null ? '' : Math.round(v).toLocaleString('en-IN');
 }
 
-function query(view, fy, product) {
+function query(view, fy, product, costType) {
   const q = new URLSearchParams({ view });
   if (view === 'monthly' && fy) q.set('fy', fy);
   if (product !== 'ALL') q.set('products', product);
+  if (costType !== 'ALL') q.set('cost_types', costType);
   return q.toString();
 }
 
@@ -87,6 +96,7 @@ export default function ProductionCostView() {
   const [view, setView] = useState('monthly');
   const [fy, setFy] = useState(null); // null: the backend's default (running FY)
   const [product, setProduct] = useState('ALL');
+  const [costType, setCostType] = useState('TOTAL');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -94,20 +104,20 @@ export default function ProductionCostView() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`${API}/api/cost-production?${query(view, fy, product)}`)
+    fetch(`${API}/api/cost-production?${query(view, fy, product, costType)}`)
       .then((r) => (r.ok ? r.json() : r.json().then((b) => { throw new Error(b.detail || r.statusText); })))
       .then((d) => { if (!cancelled) { setData(d); setError(null); } })
       .catch((e) => { if (!cancelled) { setData(null); setError(e.message); } })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [view, fy, product]);
+  }, [view, fy, product, costType]);
 
   const change = (setter) => (v) => { setLoading(true); setter(v); };
 
   const download = async (kind) => {
     setDownloading(kind);
     try {
-      const res = await fetch(`${API}/api/cost-production/${kind}?${query(view, data?.fy ?? fy, product)}`);
+      const res = await fetch(`${API}/api/cost-production/${kind}?${query(view, data?.fy ?? fy, product, costType)}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
@@ -158,6 +168,12 @@ export default function ProductionCostView() {
           <select id="cop-product" className={es.control} style={{ minWidth: 150 }}
                   value={product} onChange={(e) => change(setProduct)(e.target.value)}>
             {PRODUCTS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+          </select>
+        </Field>
+        <Field label="Cost" htmlFor="cop-cost">
+          <select id="cop-cost" className={es.control} style={{ minWidth: 150 }}
+                  value={costType} onChange={(e) => change(setCostType)(e.target.value)}>
+            {COST_TYPES.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
           </select>
         </Field>
       </FilterBar>

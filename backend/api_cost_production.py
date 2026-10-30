@@ -3,7 +3,7 @@
 production of BF Coke, Sinter, Hot Metal, Crude Steel and Saleable Steel,
 all plants, monthly or yearly. Not part of the monthly PDF.
 
-  GET /api/cost-production?view=monthly|yearly&fy=YYYY-YY&products=HM,CS -> JSON
+  GET /api/cost-production?view=monthly|yearly&fy=YYYY-YY&products=HM,CS&cost_types=TOTAL -> JSON
   GET /api/cost-production/xlsx?...same...                             -> .xlsx
   GET /api/cost-production/pdf?...same...                              -> .pdf
 """
@@ -21,9 +21,10 @@ from colors_loader import load_colors_config
 router = APIRouter(prefix="/api/cost-production", tags=["cost-production"])
 
 _CODES = {code for code, _ in cost_production.PRODUCTS}
+_COST_TYPES = set(cost_production.COST_TYPE_LABEL)
 
 
-def _data(view: str, fy: Optional[str], products: Optional[str]) -> dict:
+def _data(view: str, fy: Optional[str], products: Optional[str], cost_types: Optional[str] = None) -> dict:
     if view not in ("monthly", "yearly"):
         raise HTTPException(status_code=400, detail="view must be monthly or yearly")
     if fy is not None and not re.fullmatch(r"\d{4}-\d{2}", fy):
@@ -31,7 +32,10 @@ def _data(view: str, fy: Optional[str], products: Optional[str]) -> dict:
     codes = [c for c in (products or "").split(",") if c]
     if any(c not in _CODES for c in codes):
         raise HTTPException(status_code=400, detail=f"products must be among {', '.join(sorted(_CODES))}")
-    return cost_production.generate(view, fy, codes or None)
+    types = [t for t in (cost_types or "").split(",") if t]
+    if any(t not in _COST_TYPES for t in types):
+        raise HTTPException(status_code=400, detail=f"cost_types must be among {', '.join(sorted(_COST_TYPES))}")
+    return cost_production.generate(view, fy, codes or None, cost_types=types or None)
 
 
 def _fname(data: dict, ext: str) -> str:
@@ -40,8 +44,8 @@ def _fname(data: dict, ext: str) -> str:
 
 @router.get("")
 def cost_production_json(view: str = Query("monthly"), fy: Optional[str] = Query(None),
-                         products: Optional[str] = Query(None)):
-    return _data(view, fy, products)
+                         products: Optional[str] = Query(None), cost_types: Optional[str] = Query(None)):
+    return _data(view, fy, products, cost_types)
 
 
 def write_sheet(ws, data: dict):
@@ -95,10 +99,10 @@ def write_sheet(ws, data: dict):
 
 @router.get("/xlsx")
 def cost_production_xlsx(view: str = Query("monthly"), fy: Optional[str] = Query(None),
-                         products: Optional[str] = Query(None)):
+                         products: Optional[str] = Query(None), cost_types: Optional[str] = Query(None)):
     from openpyxl import Workbook
 
-    data = _data(view, fy, products)
+    data = _data(view, fy, products, cost_types)
     wb = Workbook()
     ws = wb.active
     ws.title = "Cost of Production"
@@ -115,10 +119,10 @@ def cost_production_xlsx(view: str = Query("monthly"), fy: Optional[str] = Query
 
 @router.get("/pdf")
 def cost_production_pdf_download(view: str = Query("monthly"), fy: Optional[str] = Query(None),
-                                 products: Optional[str] = Query(None)):
+                                 products: Optional[str] = Query(None), cost_types: Optional[str] = Query(None)):
     # A plain def, so FastAPI runs it in its threadpool: the DB queries and
     # the synchronous Playwright render must not block the event loop.
-    data = _data(view, fy, products)
+    data = _data(view, fy, products, cost_types)
     content = cost_production_pdf.render_pdf(data, load_colors_config())
     return Response(content, media_type="application/pdf",
                     headers={"Content-Disposition": f'attachment; filename="{_fname(data, "pdf")}"'})

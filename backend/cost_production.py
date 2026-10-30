@@ -179,9 +179,11 @@ def yearly(today: _dt.date = None) -> dict:
     return {"periods": periods, "products": products}
 
 
-def generate(view: str, fy: str = None, products: list = None, today: _dt.date = None) -> dict:
+def generate(view: str, fy: str = None, products: list = None, today: _dt.date = None,
+             cost_types: list = None) -> dict:
     """view: "monthly" (needs fy, default the running FY) or "yearly";
-    products: product codes to keep (default all, in PRODUCTS order)."""
+    products: product codes to keep (default all, in PRODUCTS order);
+    cost_types: TOTAL/VARIABLE/FIXED blocks to keep (default all, in that order)."""
     options = fy_options(today)
     if view == "monthly":
         fy = fy or options[0]
@@ -193,4 +195,7 @@ def generate(view: str, fy: str = None, products: list = None, today: _dt.date =
         title = "Cost of Production - Year-wise"
     if products:
         out["products"] = [p for p in out["products"] if p["code"] in products]
+    if cost_types:
+        for p in out["products"]:
+            p["blocks"] = [b for b in p["blocks"] if b["cost_type"] in cost_types]
     return {"view": view, "fy": fy, "fy_options": options, "title": title, "unit": "Rs/T", **out}

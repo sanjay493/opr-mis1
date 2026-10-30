@@ -77,6 +77,13 @@ def test_product_filter_and_empty_fy():
     assert "No cost of production data" in cpp.build_html(d, {})
 
 
+def test_cost_type_filter():
+    d = cp.generate("monthly", "2026-27", today=TODAY, cost_types=["FIXED"])
+    assert all([b["cost_type"] for b in p["blocks"]] == ["FIXED"] for p in d["products"])
+    hm = next(p for p in d["products"] if p["code"] == "HM")
+    assert _row(hm, "FIXED") == [10.0, 20.0, 15.0]
+
+
 def test_pdf_html_has_one_sheet_per_product():
     html = cpp.build_html(cp.generate("monthly", "2026-27", today=TODAY), {})
     assert html.count('class="sheet"') == len(cp.PRODUCTS)
