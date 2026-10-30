@@ -156,7 +156,7 @@ WRITE_FUNCTIONS = {
             "set_user_role", "update_password", "update_todo_job", "update_user_fields",
             "update_worklog_entry", "upsert_allowed_email"),
     "pages": ("save_page_config",),
-    "production": ("delete", "save_production_actual", "save_production_plan", "upsert",
+    "production": ("save_op_plan", "delete", "save_production_actual", "save_production_plan", "upsert",
                    "upsert_bsl_furnace_production", "upsert_row"),
     "rake": ("deactivate_rake_detention_master_row", "save_rake_detention_annual",
              "save_rake_detention_master_row", "save_rake_detention_monthly", "save_rake_detention_summary"),

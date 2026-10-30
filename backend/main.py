@@ -8,7 +8,7 @@ import time
 import uuid
 import datetime as _dt   # module-level so tools.parity_snapshot --today can pin it
 import asyncio
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Query, Depends
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Query, Depends, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, Response
@@ -36,7 +36,7 @@ from repo import breakdown as rbd
 from repo import misc as rmisc
 from constants import ALL_PLANTS as _FS_SAIL_8
 from constants import PAGE_MODULES
-from models import PDFRequest, ProductionEntry, ProductionEntryRequest, ProductionRangeSaveRequest, SpecialSteelSaveRequest, SpecialSteelAbpSaveRequest, Page3NarrativeRequest, CostTrendAnnualSaveRequest, CostTrendMonthlySaveRequest, SailMinesSaveRequest, MinesProductionDespatchSaveRequest
+from models import PDFRequest, ProductionEntry, ProductionEntryRequest, ProductionRangeSaveRequest, SpecialSteelSaveRequest, SpecialSteelAbpSaveRequest, Page3NarrativeRequest, CostTrendAnnualSaveRequest, CostTrendMonthlySaveRequest, SailMinesSaveRequest, MinesProductionDespatchSaveRequest, OpPlanSaveRequest
 from report_utils import compute_item_row, build_production_narrative, assign_dept_badges, blank_out_page_data
 from page3_highlights import generate_page3_highlights
 from page4 import generate_page4_rows
@@ -4077,6 +4077,64 @@ async def save_production_entry(request: ProductionEntryRequest):
     # fallback wherever SAIL data is displayed instead (see page_techno.py).
 
     return {"status": "success", "saved": saved, "count": len(saved)}
+
+
+# ---------------------------------------------------------------------------
+# Operating Plan (OP): the month's production plan finalised before the month
+# starts, per plant and production item (production_op_monthly; repo.production
+# op_plan_* / save_op_plan). Same items, names and units as the APP above,
+# which is shown alongside for reference. Entry form:
+# frontend/src/components/entry/op-plan/Form.js. Writes gated by
+# constants.PAGE_MODULES["op_plan"].
+# ---------------------------------------------------------------------------
+
+def _check_op_plant_month(plant: str, month: str):
+    if plant not in _FS_SAIL_8:
+        raise HTTPException(400, f"Unknown plant '{plant}'")
+    if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", month or ""):
+        raise HTTPException(400, "month must be YYYY-MM, e.g. '2026-11'")
+
+
+@app.get("/api/op-plan")
+async def get_op_plan(plant: str, month: str):
+    """One plant's items for the month: the APP plan items plus any item that
+    already has an OP, in process order, with app_plan and op_plan; and how
+    many items each plant has an OP for that month."""
+    _check_op_plant_month(plant, month)
+    conn = dbengine.connect()
+    try:
+        app_rows = {normalize_item_name(n, plant): v for n, v in rp.plant_month_plan_items(conn.cursor(), plant, month)}
+    finally:
+        conn.close()
+    op_rows = {n: (v, by, at) for n, v, by, at in rp.op_plan_items(plant, month)}
+    names = sorted(set(app_rows) | set(op_rows), key=production_item_sort_key)
+    last = max((op_rows[n][2] or "" for n in op_rows), default="")
+    return {
+        "plant": plant,
+        "month": month,
+        "items": [{"item_name": n, "app_plan": app_rows.get(n),
+                   "op_plan": op_rows[n][0] if n in op_rows else None} for n in names],
+        "last_updated": next(({"at": at, "by": by} for _, by, at in op_rows.values() if at == last and last), None),
+        "plant_counts": {p: c for p, c in rp.op_plan_plant_counts(month)},
+        "plants": _FS_SAIL_8,
+    }
+
+
+@app.post("/api/op-plan")
+async def save_op_plan_entry(body: OpPlanSaveRequest, request: Request):
+    _check_op_plant_month(body.plant, body.month)
+    for e in body.entries:
+        if e.op_plan is not None and (e.op_plan != e.op_plan or e.op_plan < 0):
+            raise HTTPException(400, f"OP for '{e.item_name}' must be a number ≥ 0")
+    user = None
+    token = request.cookies.get(_auth.COOKIE_NAME)
+    payload = _auth.decode_session_token(token) if token else None
+    if payload:
+        u = _auth.get_user_by_id(int(payload["sub"]))
+        user = u["email"] if u else None
+    saved, cleared = rp.save_op_plan(body.month, body.plant,
+                                     [(e.item_name, e.op_plan) for e in body.entries], user)
+    return {"status": "ok", "saved": saved, "cleared": cleared}
 
 
 # ---------------------------------------------------------------------------

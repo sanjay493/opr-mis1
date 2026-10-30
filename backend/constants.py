@@ -103,6 +103,12 @@ PAGE_MODULES = {
             ("POST", "/api/todo/{job_id}/delete", True),
         ],
     },
+    "op_plan": {
+        "label": "Operating Plan (OP)",
+        "routes": [
+            ("POST", "/api/op-plan", False),
+        ],
+    },
     "unique_activities": {
         "label": "Unique Activities",
         "routes": [

@@ -22,7 +22,7 @@ SCHEMA_V1 = Path(__file__).resolve().parent / "fixtures" / "schema_v1.sql"
 PLANT_COLUMNS = ("plant_code", "from_plant_code", "to_plant_code")
 # v2 tables that are not the target of any v1 table: the new dimensions
 # seeded from v1 values (plant from every plant column) or generated.
-NEW_DIMENSIONS = {"plant", "cal_month", "unique_activity", "unique_activity_tag"}
+NEW_DIMENSIONS = {"plant", "cal_month", "unique_activity", "unique_activity_tag", "production_op_monthly"}
 JSON_ARCHIVES = {"production_data_json", "production_plan_json", "stock_data_json",
                  "ipt_data_json", "special_steel_json"}
 

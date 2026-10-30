@@ -91,6 +91,17 @@ class ProductionEntryRequest(BaseModel):
     entries: List[ProductionEntry]
 
 
+class OpPlanEntry(BaseModel):
+    item_name: str
+    op_plan: Optional[float] = None     # None clears the item's Operating Plan
+
+
+class OpPlanSaveRequest(BaseModel):
+    plant: str
+    month: str
+    entries: List[OpPlanEntry]
+
+
 class ProductionRangeEntry(BaseModel):
     report_month: str
     value: Optional[float] = None

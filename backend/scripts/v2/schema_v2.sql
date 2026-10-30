@@ -300,6 +300,24 @@ CREATE TABLE production_monthly (
     CONSTRAINT ck_production_source CHECK (has_actual + has_abp + has_mou > 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+-- v2-only. Operating Plan (OP): the month's production plan finalised before
+-- the month starts, per plant and production item, alongside (not replacing)
+-- the annual plan's abp_plan in production_monthly. Same item names and units
+-- as the APP. Entered at /data-entry/production-techno?tab=op-plan.
+CREATE TABLE production_op_monthly (
+    report_month CHAR(7)      NOT NULL,
+    plant_code   VARCHAR(8)   NOT NULL,
+    item_id      SMALLINT     NOT NULL,
+    op_plan      DOUBLE       NOT NULL,
+    updated_by   VARCHAR(255) NULL,
+    updated_at   DATETIME     NULL,
+    -- repo.production.op_plan_items, op_plan_plant_counts, save_op_plan
+    PRIMARY KEY (report_month, plant_code, item_id),
+    CONSTRAINT fk_production_op_month FOREIGN KEY (report_month) REFERENCES cal_month (report_month),
+    CONSTRAINT fk_production_op_plant FOREIGN KEY (plant_code) REFERENCES plant (plant_code),
+    CONSTRAINT fk_production_op_item  FOREIGN KEY (item_id) REFERENCES item (item_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 -- v1 item_capacity_table. plant_name -> plant_code, item_name -> item_id.
 CREATE TABLE item_capacity (
     id               BIGINT       NOT NULL AUTO_INCREMENT,

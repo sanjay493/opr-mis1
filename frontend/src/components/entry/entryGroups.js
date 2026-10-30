@@ -17,6 +17,7 @@ export const ENTRY_GROUPS = [
     tabs: [
       { id: 'production', label: 'Production Data Entry', description: 'Enter actual production values for each item; plan values come from the uploaded ABP.' },
       { id: 'production-range', label: 'Production — Month Range', description: 'Enter or correct one plant/unit\'s production across several months at once.' },
+      { id: 'op-plan', label: 'Operating Plan (OP)', description: 'The month\'s Operating Plan for every production unit of each plant, entered before the month starts (APP shown alongside).' },
       { id: 'techno-manual', label: 'Techno Manual Entry', description: 'Enter techno-economic parameters manually for each plant and unit.' },
       { id: 'techno-correction', label: 'Techno Data Correction', description: 'Find one techno parameter across a month range and correct it inline.' },
       { id: 'bf-large-snapshot', label: 'SAIL Large BFs', description: 'Month and Till Month figures for BSP BF-8, RSP BF-5 and ISP BF-5.' },

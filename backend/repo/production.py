@@ -1616,3 +1616,75 @@ def plant_all_rows(cur, measure: Measure, plant):
                      f"SELECT item_name, report_month, month_actual FROM {_src(measure)} WHERE plant_name=%s"
                      + order,
                      (plant,))
+
+
+# ── production_op_monthly: the month's Operating Plan (api_op_plan) ──────────
+# v2-only (no v1 counterpart). Items are matched by their exact name, the same
+# names production_monthly holds for the APP.
+
+def op_plan_items(plant: str, month: str):
+    """[(item_name, op_plan, updated_by, updated_at 'YYYY-MM-DD HH:MM')] of one
+    plant's OP for the month, by item name."""
+    conn = connect()
+    try:
+        return [tuple(r) for r in _fetchall(
+            conn.cursor(),
+            "SELECT i.item_name, o.op_plan, o.updated_by, DATE_FORMAT(o.updated_at, '%%Y-%%m-%%d %%H:%%i') "
+            "FROM production_op_monthly o JOIN item i ON i.item_id = o.item_id "
+            "WHERE o.plant_code = %s AND o.report_month = %s ORDER BY i.item_name",
+            (plant, month))]
+    finally:
+        conn.close()
+
+
+def op_plan_plant_counts(month: str):
+    """[(plant_code, number of items with an OP)] for the month."""
+    conn = connect()
+    try:
+        return [tuple(r) for r in _fetchall(
+            conn.cursor(),
+            "SELECT plant_code, COUNT(*) FROM production_op_monthly WHERE report_month = %s "
+            "GROUP BY plant_code ORDER BY plant_code", (month,))]
+    finally:
+        conn.close()
+
+
+def save_op_plan(month: str, plant: str, entries, user: Optional[str]):
+    """Set one plant's OP for the month in one transaction. entries =
+    [(item_name, value)]; value None removes that item's OP. Returns
+    (saved, cleared) counts."""
+    month = _keys.fit_month(month)
+    _keys.check_month(month)
+    _keys.fits("updated_by", user, 255)
+    entries = [(item.strip(), value) for item, value in entries if item and item.strip()]
+    for item, _ in entries:
+        _keys.fits("item_name", item, 64, nullable=False)
+    saved = cleared = 0
+    conn = connect()
+    try:
+        cur = conn.cursor()
+        _ver.bump(cur)
+        _keys.ensure_month(cur, month, bump=False)
+        _keys.ensure_plant(cur, plant, bump=False)
+        for item, value in entries:
+            if value is None:
+                item_id = _keys.exact_item_id(cur, item, lock=True)
+                if item_id is not None:
+                    cur.execute("DELETE FROM production_op_monthly "
+                                "WHERE report_month = %s AND plant_code = %s AND item_id = %s",
+                                (month, plant, item_id))
+                    cleared += cur.rowcount
+                continue
+            item_id = _item_id_for_write(cur, item, bump=False)
+            cur.execute("INSERT INTO production_op_monthly (report_month, plant_code, item_id, op_plan,"
+                        " updated_by, updated_at) VALUES (%s, %s, %s, %s, %s, NOW()) AS new"
+                        " ON DUPLICATE KEY UPDATE op_plan = new.op_plan, updated_by = new.updated_by,"
+                        " updated_at = new.updated_at",
+                        (month, plant, item_id, float(value), user))
+            saved += 1
+        conn.commit()
+    finally:
+        conn.close()
+    activity_context.record(f"production_op_monthly/{plant}/{month}", None,
+                            {item: value for item, value in entries})
+    return saved, cleared
