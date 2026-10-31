@@ -347,8 +347,8 @@ HIGHLIGHT_LABELS = {
 
 # "Major" production items for the Best-Period query (process order).
 MAJOR_ITEMS = [
-    'Total Sinter', 'Hot Metal', 'Pig Iron', 'Total Crude Steel',
-    'Finished Steel', 'Saleable Steel', 'Oven Pushing (nos/day)',
+    'Oven Pushing (nos/day)', 'Total Sinter', 'Hot Metal', 'Pig Iron',
+    'Total Crude Steel', 'Finished Steel', 'Saleable Steel',
 ]
 
 _BEST_PERIOD_SCOPES = {

@@ -1,7 +1,9 @@
 """
-Excel / PDF export for the "Month-wise Production" FY report
-(frontend: /reports/production-fy) — same data as GET /api/production-fy,
-one plant-grouped table: Item | Apr..Mar | Total.
+Excel / PDF export for the "Production" report (frontend: the Production
+tab of /reports/production-analysis), one plant-grouped table:
+- Monthly view, same data as GET /api/production-fy: Item | Apr..Mar | Total.
+- Annual view, same data as GET /api/production-annual: Item | one column
+  per FY (data["labels"]), no Total.
 """
 import io
 import re
@@ -48,13 +50,27 @@ _BORDER = Border(left=_THIN, right=_THIN, top=_THIN, bottom=_THIN)
 _ZEBRA_FILL = PatternFill("solid", fgColor="F8F9FA")
 
 
+def _annual(data: dict) -> bool:
+    return data.get("view") == "annual"
+
+
+def _col_label(data: dict, m: str) -> str:
+    return data["labels"][m] if _annual(data) else month_label(m)
+
+
+def _title(data: dict, mode: str) -> str:
+    view = "Annual" if _annual(data) else "Monthly"
+    return f"Production — {view} ({'Actual' if mode == 'actual' else 'Plan'})"
+
+
 def build_excel_bytes(data: dict, mode: str) -> bytes:
     months = data["months"]
+    show_total = not _annual(data)
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Actual" if mode == "actual" else "Plan"
 
-    title = f"Month-wise Production ({'Actual' if mode == 'actual' else 'Plan'}) — FY {data['fy_label']}"
+    title = f"{_title(data, mode)} — FY {data['fy_label']}"
     ws.cell(row=1, column=1, value=title).font = Font(bold=True, size=13)
     ws.cell(row=2, column=1, value="Unit: '000T unless stated").font = Font(italic=True, size=9)
 
@@ -62,15 +78,16 @@ def build_excel_bytes(data: dict, mode: str) -> bytes:
     ws.cell(row=header_row, column=1, value="Item").font = _HDR_FONT
     ws.cell(row=header_row, column=1).fill = _HDR_FILL
     for i, m in enumerate(months, start=2):
-        c = ws.cell(row=header_row, column=i, value=month_label(m))
+        c = ws.cell(row=header_row, column=i, value=_col_label(data, m))
         c.font = _HDR_FONT
         c.fill = _HDR_FILL
         c.alignment = Alignment(horizontal="center")
-    total_col = len(months) + 2
-    c = ws.cell(row=header_row, column=total_col, value="Total")
-    c.font = _HDR_FONT
-    c.fill = _HDR_FILL
-    c.alignment = Alignment(horizontal="center")
+    total_col = len(months) + 2 if show_total else len(months) + 1
+    if show_total:
+        c = ws.cell(row=header_row, column=total_col, value="Total")
+        c.font = _HDR_FONT
+        c.fill = _HDR_FILL
+        c.alignment = Alignment(horizontal="center")
 
     row = header_row + 1
     for plant in data["plants"]:
@@ -101,6 +118,9 @@ def build_excel_bytes(data: dict, mode: str) -> bytes:
                 vc.border = _BORDER
                 if fill:
                     vc.fill = fill
+            if not show_total:
+                row += 1
+                continue
             total = row_total(it["item_name"], values, months)
             tc = ws.cell(row=row, column=total_col)
             if total is not None:
@@ -115,7 +135,9 @@ def build_excel_bytes(data: dict, mode: str) -> bytes:
 
     ws.column_dimensions["A"].width = 30
     for i in range(2, total_col + 1):
-        ws.column_dimensions[get_column_letter(i)].width = 11
+        ws.column_dimensions[get_column_letter(i)].width = 11 if show_total else 16
+    if not show_total:
+        ws.cell(row=row + 1, column=1, value=_ANNUAL_NOTE).font = Font(italic=True, size=9)
     ws.freeze_panes = ws.cell(row=header_row + 1, column=2).coordinate
 
     buf = io.BytesIO()
@@ -131,11 +153,16 @@ def _fmt(v):
     return f"{v:,.3f}".rstrip("0").rstrip(".") if v != int(v) else f"{int(v):,}"
 
 
+_ANNUAL_NOTE = ("Each FY = sum of its months; daily-rate items (/day, COB#) = average of the months "
+                "weighted by the days in each month.")
+
+
 def build_pdf_html(data: dict, mode: str) -> str:
     months = data["months"]
-    mode_label = "Actual" if mode == "actual" else "Plan"
+    show_total = not _annual(data)
+    ncols = len(months) + (2 if show_total else 1)
 
-    col_headers = "".join(f"<th>{month_label(m)}</th>" for m in months)
+    col_headers = "".join(f"<th>{_col_label(data, m)}</th>" for m in months)
 
     body_rows = []
     for plant in data["plants"]:
@@ -143,17 +170,17 @@ def build_pdf_html(data: dict, mode: str) -> str:
         if not items:
             continue
         body_rows.append(
-            f'<tr class="plant-row"><td colspan="{len(months) + 2}">{plant["plant"]}</td></tr>'
+            f'<tr class="plant-row"><td colspan="{ncols}">{plant["plant"]}</td></tr>'
         )
         for it in items:
             values = it[mode]
             cells = "".join(f"<td>{_fmt(values.get(m))}</td>" for m in months)
-            total = row_total(it["item_name"], values, months)
-            avg_tag = " <span class='avg'>(avg)</span>" if total is not None and is_rate_item(it["item_name"]) else ""
-            body_rows.append(
-                f'<tr><td class="item">{it["item_name"]}</td>{cells}'
-                f'<td class="total">{_fmt(total)}{avg_tag}</td></tr>'
-            )
+            total_cell = ""
+            if show_total:
+                total = row_total(it["item_name"], values, months)
+                avg_tag = " <span class='avg'>(avg)</span>" if total is not None and is_rate_item(it["item_name"]) else ""
+                total_cell = f'<td class="total">{_fmt(total)}{avg_tag}</td>'
+            body_rows.append(f'<tr><td class="item">{it["item_name"]}</td>{cells}{total_cell}</tr>')
 
     return f"""<!doctype html>
 <html><head><meta charset="utf-8">
@@ -178,12 +205,13 @@ def build_pdf_html(data: dict, mode: str) -> str:
 </style>
 </head>
 <body>
-  <h1>Month-wise Production ({mode_label})</h1>
+  <h1>{_title(data, mode)}</h1>
   <p class="subtitle">All plants, all items — FY {data['fy_label']} · Unit: '000T unless stated</p>
   <table>
-    <thead><tr><th>Item</th>{col_headers}<th>Total</th></tr></thead>
+    <thead><tr><th>Item</th>{col_headers}{'<th>Total</th>' if show_total else ''}</tr></thead>
     <tbody>{''.join(body_rows)}</tbody>
   </table>
+  {'' if show_total else f'<p class="subtitle" style="margin-top:6px">{_ANNUAL_NOTE}</p>'}
 </body></html>"""
 
 

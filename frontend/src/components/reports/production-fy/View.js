@@ -54,8 +54,14 @@ function PctOfPlan({ actual, plan }) {
   return <span style={{ display: 'block', fontSize: '10px', fontWeight: 600, color }}>{p.toFixed(1)}%</span>;
 }
 
+// Monthly: the months of one FY. Annual: the 12 FYs ending at the selected
+// one (GET /api/production-annual: each FY is the sum of its months, a
+// daily-rate item the days-weighted average).
+const VIEWS = [{ id: 'monthly', label: 'Monthly' }, { id: 'annual', label: 'Annual' }];
+
 export default function ProductionFYPage() {
-  const [fySel, setFyStart] = useState(null);           // null = latest FY
+  const [view, setView] = useState('monthly');
+  const [fySel, setFyStart] = useState(null);           // null = latest FY (Annual: the last FY shown)
   const [mode, setMode] = useState('actual'); // 'actual' | 'plan'
   const [actionError, setError] = useState(null);       // download failures
   const [downloading, setDownloading] = useState(null); // 'excel' | 'pdf' | null
@@ -82,7 +88,8 @@ export default function ProductionFYPage() {
   const fysQ = useApi('/api/production-fys');
   const fys = fysQ.data?.fys || [];
   const fyStart = fySel ?? fys[0]?.fy_start ?? null;
-  const dataQ = useApi(fyStart != null && `/api/production-fy?fy_start=${fyStart}`);
+  const annual = view === 'annual';
+  const dataQ = useApi(fyStart != null && (annual ? `/api/production-annual?end_fy=${fyStart}` : `/api/production-fy?fy_start=${fyStart}`));
   const data = dataQ.data ?? null;
   const loading = dataQ.isFetching;
   const error = actionError
@@ -95,7 +102,9 @@ export default function ProductionFYPage() {
     setDownloading(kind);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/api/production-fy/${kind}?fy_start=${fyStart}&mode=${mode}`);
+      const res = await fetch(annual
+        ? `${API_BASE}/api/production-annual/${kind}?end_fy=${fyStart}&mode=${mode}`
+        : `${API_BASE}/api/production-fy/${kind}?fy_start=${fyStart}&mode=${mode}`);
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.detail || `HTTP ${res.status}`);
@@ -105,7 +114,7 @@ export default function ProductionFYPage() {
       const a = document.createElement('a');
       a.href = url;
       const fyLabel = fys.find((fy) => fy.fy_start === fyStart)?.label || String(fyStart);
-      a.download = `Production_${fyLabel}_${mode}.${kind === 'excel' ? 'xlsx' : 'pdf'}`;
+      a.download = `Production_${annual ? 'Annual_' : ''}${fyLabel}_${mode}.${kind === 'excel' ? 'xlsx' : 'pdf'}`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -117,10 +126,13 @@ export default function ProductionFYPage() {
     }
   };
 
-  const months = data?.months || [];
+  // The data of the other view lingers while the new one loads: show only a match.
+  const shown = data && (data.view === 'annual') === annual ? data : null;
+  const months = shown?.months || [];
+  const colLabel = (m) => (annual ? shown.labels[m] : monthLabel(m));
 
   // In Plan view, hide plants that have no plan rows at all for this FY
-  const visiblePlants = (data?.plants || [])
+  const visiblePlants = (shown?.plants || [])
     .map((p) => ({
       ...p,
       items: p.items.filter((it) =>
@@ -133,8 +145,10 @@ export default function ProductionFYPage() {
     <ReportPage
       fill
       maxWidth={1600}
-      title={`Month-wise Production ${mode === 'actual' ? '(Actual)' : '(Plan)'}`}
-      description={`All plants, all items — monthly ${mode} figures for the selected financial year ('000 T unless stated)`}
+      title={`Production — ${annual ? 'Annual' : 'Monthly'} ${mode === 'actual' ? '(Actual)' : '(Plan)'}`}
+      description={annual
+        ? `All plants, all items — ${mode} figures for the 12 financial years up to the selected one ('000 T unless stated)`
+        : `All plants, all items — monthly ${mode} figures for the selected financial year ('000 T unless stated)`}
     >
         <FilterBar actions={<>
           {loading && <span className={es.ctxNote}>Loading…</span>}
@@ -145,7 +159,12 @@ export default function ProductionFYPage() {
             {downloading === 'pdf' ? 'Generating…' : '⬇ PDF'}
           </button>
         </>}>
-          <Field label="Financial year" htmlFor="pfy-fy">
+          <Field label="View" htmlFor="pfy-view">
+            <select id="pfy-view" className={es.control} style={{ minWidth: 110 }} value={view} onChange={(e) => setView(e.target.value)}>
+              {VIEWS.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
+            </select>
+          </Field>
+          <Field label={annual ? 'Up to FY' : 'Financial year'} htmlFor="pfy-fy">
             <select id="pfy-fy" className={es.control} style={{ minWidth: 130 }} value={fyStart ?? ''} onChange={(e) => setFyStart(parseInt(e.target.value, 10))}>
               {fys.map((fy) => (
                 <option key={fy.fy_start} value={fy.fy_start}>{fy.label}</option>
@@ -166,12 +185,12 @@ export default function ProductionFYPage() {
 
         <Status status={error ? { type: 'error', text: error } : null} />
 
-        {!loading && !error && data && visiblePlants.length === 0 && (
-          <Empty>No {mode} data available for FY {data.fy_label}.</Empty>
+        {!loading && !error && shown && visiblePlants.length === 0 && (
+          <Empty>No {mode} data available for FY {shown.fy_label}.</Empty>
         )}
 
         {/* Table */}
-        {data && visiblePlants.length > 0 && (
+        {shown && visiblePlants.length > 0 && (
           <>
             <div className={pa.chips}>
               <span className={pa.chipsLabel}>Jump to</span>
@@ -191,9 +210,9 @@ export default function ProductionFYPage() {
                       Item
                     </th>
                     {months.map((m) => (
-                      <th key={m} style={{ ...cellBase, ...HEAD_CELL, minWidth: '76px' }}>{monthLabel(m)}</th>
+                      <th key={m} style={{ ...cellBase, ...HEAD_CELL, minWidth: annual ? '90px' : '76px' }}>{colLabel(m)}</th>
                     ))}
-                    <th style={{ ...cellBase, ...HEAD_CELL, minWidth: '90px', borderLeft: '1px solid #dadce0', color: '#174ea6' }}>Total</th>
+                    {!annual && <th style={{ ...cellBase, ...HEAD_CELL, minWidth: '90px', borderLeft: '1px solid #dadce0', color: '#174ea6' }}>Total</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -203,7 +222,7 @@ export default function ProductionFYPage() {
                       <React.Fragment key={plant.plant}>
                         {/* Plant section header — click to collapse / expand */}
                         <tr id={`pfy-${plant.plant}`}>
-                          <td colSpan={months.length + 2} style={{ ...cellBase, padding: 0, position: 'sticky', left: 0, backgroundColor: '#1a73e8' }}>
+                          <td colSpan={months.length + (annual ? 1 : 2)} style={{ ...cellBase, padding: 0, position: 'sticky', left: 0, backgroundColor: '#1a73e8' }}>
                             <button type="button" onClick={() => toggle(plant.plant)} aria-expanded={!isCollapsed}
                                     style={{
                                       display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '7px 12px',
@@ -232,13 +251,15 @@ export default function ProductionFYPage() {
                               {months.map((m) => (
                                 <td key={m} style={{ ...cellBase, textAlign: 'right', backgroundColor: zebra, color: values[m] == null ? '#bdc1c6' : '#202124', fontVariantNumeric: 'tabular-nums' }}>
                                   {fmt(values[m])}
-                                  {showPctRow && <PctOfPlan actual={values[m]} plan={item.plan?.[m]} />}
+                                  {showPctRow && <PctOfPlan actual={values[m]} plan={annual ? item.plan_cmp?.[m] : item.plan?.[m]} />}
                                 </td>
                               ))}
-                              <td style={{ ...cellBase, textAlign: 'right', backgroundColor: zebra, fontWeight: 700, color: total == null ? '#bdc1c6' : '#174ea6', fontVariantNumeric: 'tabular-nums', borderLeft: '1px solid #dadce0' }}>
-                                {fmt(total)}{total != null && isRateItem(item.item_name) ? ' (avg)' : ''}
-                                {showPctRow && <PctOfPlan actual={total} plan={planTotal} />}
-                              </td>
+                              {!annual && (
+                                <td style={{ ...cellBase, textAlign: 'right', backgroundColor: zebra, fontWeight: 700, color: total == null ? '#bdc1c6' : '#174ea6', fontVariantNumeric: 'tabular-nums', borderLeft: '1px solid #dadce0' }}>
+                                  {fmt(total)}{total != null && isRateItem(item.item_name) ? ' (avg)' : ''}
+                                  {showPctRow && <PctOfPlan actual={total} plan={planTotal} />}
+                                </td>
+                              )}
                             </tr>
                           );
                         })}
@@ -248,9 +269,17 @@ export default function ProductionFYPage() {
                 </tbody>
               </table>
             </div>
+            {annual && (
+              <div style={{ marginTop: 6, fontSize: 11.5, color: 'var(--ui-text-tertiary)' }}>
+                Each FY = sum of its months; daily-rate items (/day, COB#) = average of the months weighted by the days in each month.
+              </div>
+            )}
             {mode === 'actual' && showPct && (
               <div style={{ marginTop: 6, fontSize: 11.5, color: 'var(--ui-text-tertiary)' }}>
-                % of plan = actual ÷ AAP plan for that month (Total: over the months with an actual). Green ≥ 100%, amber 95–99%, red &lt; 95%.
+                {annual
+                  ? '% of plan = actual ÷ AAP plan for the FY, over the months with an actual.'
+                  : '% of plan = actual ÷ AAP plan for that month (Total: over the months with an actual).'}
+                {' '}Green ≥ 100%, amber 95–99%, red &lt; 95%.
               </div>
             )}
           </>

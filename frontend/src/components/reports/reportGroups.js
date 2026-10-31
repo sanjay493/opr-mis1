@@ -18,7 +18,7 @@ export const REPORT_GROUPS = [
     description: 'Month-wise production, trends, unit-wise queries and special steel plants performance.',
     icon: '📊',
     tabs: [
-      { id: 'production-fy', label: 'Month-wise Production', description: 'All plants, all items — monthly actual/plan figures for a financial year.' },
+      { id: 'production-fy', label: 'Production', description: 'All plants, all items — actual/plan figures month-wise for a financial year, or year-wise for the last 12 financial years.' },
       { id: 'production-trend', label: 'HM/CS/FS/Saleable Steel Trend', description: 'Year-wise trend of Hot Metal, Crude Steel, Finished Steel and Saleable Steel.' },
       { id: 'production-query', label: 'Unit-wise Production Query', description: 'Ad-hoc unit-wise production lookup across months.' },
       { id: 'production-items', label: 'Production Items (Month & Unit-wise)', description: 'Oven Pushing / Sinter / Hot Metal / Crude Steel / Pig Iron / Finished Steel / Saleable Steel.' },

@@ -970,7 +970,7 @@ export default function HighlightsPage() {
             are the sum of every member plant&apos;s window total; rate items (Oven Pushing, COB#*) are the sum of
             each plant&apos;s own day-weighted average over the window — i.e. the SAIL nos/day, not a per-plant
             mean. Scope aggregates the member plants; &ldquo;Plant-wise&rdquo; ranks each plant/unit on its own. &ldquo;Major&rdquo; =
-            Sinter, Hot Metal, Pig Iron, Crude Steel, Finished &amp; Saleable Steel, Oven Pushing; &ldquo;All&rdquo; =
+            Oven Pushing, Sinter, Hot Metal, Pig Iron, Crude Steel, Finished &amp; Saleable Steel; &ldquo;All&rdquo; =
             every item the scope reports. Values in &apos;000 tonnes (Tonnes view ×1000); Conversion not included.
           </div>
         </section>

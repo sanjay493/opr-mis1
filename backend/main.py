@@ -4878,9 +4878,101 @@ def _production_fy_data(fy_start: int) -> dict:
     }
 
 
+def _annual_value(item_name: str, values: dict, months: list):
+    """One FY's figure from its months: the sum, or for a daily-rate item
+    (page_production_fy_export.is_rate_item) the average weighted by the
+    days in each month. None when no month has a value."""
+    pts = [(m, values[m]) for m in months if values.get(m) is not None]
+    if not pts:
+        return None
+    if not page_production_fy_export.is_rate_item(item_name):
+        return sum(v for _, v in pts)
+    days = [calendar.monthrange(int(m[:4]), int(m[5:7]))[1] for m, _ in pts]
+    return sum(v * d for (_, v), d in zip(pts, days)) / sum(days)
+
+
+def _production_annual_data(end_fy: int, years: int = 12) -> dict:
+    """Year-wise production: the Month-wise Production data (all plants, all
+    items) of the `years` FYs ending at end_fy, each FY aggregated by
+    _annual_value. Same shape as _production_fy_data with FYs in place of
+    months ("months" holds the FY keys, "labels" their headings), plus
+    "plan_cmp": the plan over only the months that have an actual, for
+    % of plan. FYs with no data at all are left out; a part year is
+    labelled with its month range."""
+    periods, labels, rows = [], {}, {}
+    for fy in range(end_fy - years + 1, end_fy + 1):
+        d = _production_fy_data(fy)
+        if not d["plants"]:
+            continue
+        key = d["fy_label"]
+        reported = [m for m in d["months"]
+                    if any(it["actual"].get(m) is not None for p in d["plants"] for it in p["items"])]
+        label = key
+        if reported and len(reported) < 12:
+            ml = page_production_fy_export.month_label
+            label = f"{key} ({ml(reported[0])[:3]}–{ml(reported[-1])[:3]})"
+        periods.append(key)
+        labels[key] = label
+        for p in d["plants"]:
+            for it in p["items"]:
+                name, act, plan = it["item_name"], it["actual"], it["plan"]
+                e = rows.setdefault(p["plant"], {}).setdefault(name, {"actual": {}, "plan": {}, "plan_cmp": {}})
+                e["actual"][key] = _annual_value(name, act, d["months"])
+                e["plan"][key] = _annual_value(name, plan, d["months"])
+                e["plan_cmp"][key] = _annual_value(name, plan, [m for m in d["months"] if act.get(m) is not None])
+
+    def plant_key(p):
+        try:
+            return (PRODUCTION_FY_PLANT_ORDER.index(p), p)
+        except ValueError:
+            return (len(PRODUCTION_FY_PLANT_ORDER), p)
+
+    plants = [{"plant": plant, "items": [
+        {"item_name": item, **{k: {fy: e[k].get(fy) for fy in periods} for k in ("actual", "plan", "plan_cmp")}}
+        for item, e in sorted(rows[plant].items(), key=lambda kv: production_item_sort_key(kv[0]))
+    ]} for plant in sorted(rows, key=plant_key)]
+    first, last = (periods[0], periods[-1]) if periods else ("", "")
+    return {
+        "end_fy": end_fy,
+        "fy_label": f"{first} to {last}" if periods else "",
+        "months": periods,
+        "labels": labels,
+        "plants": plants,
+        "view": "annual",
+    }
+
+
 @app.get("/api/production-fy")
 async def get_production_fy(fy_start: int = Query(...)):
     return _production_fy_data(fy_start)
+
+
+@app.get("/api/production-annual")
+async def get_production_annual(end_fy: int = Query(...)):
+    return _production_annual_data(end_fy)
+
+
+@app.get("/api/production-annual/{kind}")
+async def production_annual_export(kind: str, end_fy: int = Query(...), mode: str = Query("actual")):
+    if kind not in ("excel", "pdf"):
+        raise HTTPException(status_code=404, detail="Not found")
+    if mode not in ("actual", "plan"):
+        raise HTTPException(status_code=400, detail="mode must be 'actual' or 'plan'")
+    data = _production_annual_data(end_fy)
+    fname = f"Production_Annual_{data['months'][-1] if data['months'] else end_fy}_{mode}"
+    if kind == "excel":
+        return Response(
+            content=page_production_fy_export.build_excel_bytes(data, mode),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f'attachment; filename="{fname}.xlsx"'},
+        )
+    import concurrent.futures
+    html = page_production_fy_export.build_pdf_html(data, mode)
+    loop = asyncio.get_event_loop()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        content = await loop.run_in_executor(pool, page_production_fy_export.render_pdf_bytes, html)
+    return Response(content=content, media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="{fname}.pdf"'})
 
 
 @app.get("/api/production-fy/excel")
