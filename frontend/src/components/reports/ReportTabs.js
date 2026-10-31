@@ -80,21 +80,81 @@ export default function ReportTabs({ groupId }) {
     router.replace(`${pathname}?tab=${id}`, { scroll: false });
   }, [router, pathname]);
 
-  // Arrow-key navigation between tabs (WAI-ARIA tabs pattern).
+  // The tab strip: one entry per report, except that tabs sharing a `menu`
+  // name collapse into a single dropdown entry.
+  const strip = [];
+  for (const t of group.tabs) {
+    if (!t.menu) { strip.push({ key: t.id, tab: t }); continue; }
+    const m = strip.find((x) => x.menu === t.menu);
+    if (m) m.tabs.push(t);
+    else strip.push({ key: `menu-${strip.length}`, menu: t.menu, tabs: [t] });
+  }
+  const stripKeyOf = (id) => strip.find((x) => (x.tab ? x.tab.id === id : x.tabs.some((t) => t.id === id))).key;
+  const activeKey = stripKeyOf(active);
   const tabRefs = useRef({});
+
+  // The open dropdown (its strip key). The strip scrolls horizontally, which
+  // would clip an absolutely positioned menu, so the menu is position: fixed
+  // under its button.
+  const [openMenu, setOpenMenu] = useState(null);
+  const [menuPos, setMenuPos] = useState(null);
+  const menuRef = useRef(null);
+  const openMenuAt = (key) => {
+    const r = tabRefs.current[key]?.getBoundingClientRect();
+    if (r) setMenuPos({ top: r.bottom, left: r.left });
+    setOpenMenu(key);
+  };
+  const closeMenu = (refocus) => {
+    if (refocus) tabRefs.current[openMenu]?.focus();
+    setOpenMenu(null);
+  };
+  useEffect(() => {
+    if (!openMenu) return undefined;
+    const onDown = (e) => {
+      if (menuRef.current?.contains(e.target) || tabRefs.current[openMenu]?.contains(e.target)) return;
+      setOpenMenu(null);
+    };
+    const onResize = () => setOpenMenu(null);
+    document.addEventListener('mousedown', onDown);
+    window.addEventListener('resize', onResize);
+    // Focus the current report's item, else the first.
+    const items = menuRef.current?.querySelectorAll('[role="menuitemradio"]') || [];
+    ([...items].find((el) => el.getAttribute('aria-checked') === 'true') || items[0])?.focus();
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      window.removeEventListener('resize', onResize);
+    };
+  }, [openMenu]);
+
+  // Arrow-key navigation between strip entries (WAI-ARIA tabs pattern).
+  // Moving onto a dropdown shows its first report; ArrowDown / Enter opens it.
   const onKeyDown = (e) => {
-    const ids = group.tabs.map((t) => t.id);
-    const i = ids.indexOf(active);
+    if (openMenu) return;
+    const keys = strip.map((x) => x.key);
+    const i = keys.indexOf(activeKey);
     let next = null;
-    if (e.key === 'ArrowRight') next = ids[(i + 1) % ids.length];
-    else if (e.key === 'ArrowLeft') next = ids[(i - 1 + ids.length) % ids.length];
-    else if (e.key === 'Home') next = ids[0];
-    else if (e.key === 'End') next = ids[ids.length - 1];
+    if (e.key === 'ArrowRight') next = keys[(i + 1) % keys.length];
+    else if (e.key === 'ArrowLeft') next = keys[(i - 1 + keys.length) % keys.length];
+    else if (e.key === 'Home') next = keys[0];
+    else if (e.key === 'End') next = keys[keys.length - 1];
     if (next) {
       e.preventDefault();
-      select(next);
+      const entry = strip.find((x) => x.key === next);
+      select(entry.tab ? entry.tab.id : entry.tabs[0].id);
       tabRefs.current[next]?.focus();
     }
+  };
+
+  const onMenuKeyDown = (e) => {
+    const items = [...(menuRef.current?.querySelectorAll('[role="menuitemradio"]') || [])];
+    const i = items.indexOf(document.activeElement);
+    let to = null;
+    if (e.key === 'Escape' || e.key === 'Tab') { e.preventDefault(); closeMenu(true); return; }
+    if (e.key === 'ArrowDown') to = items[(i + 1) % items.length];
+    else if (e.key === 'ArrowUp') to = items[(i - 1 + items.length) % items.length];
+    else if (e.key === 'Home') to = items[0];
+    else if (e.key === 'End') to = items[items.length - 1];
+    if (to) { e.preventDefault(); to.focus(); }
   };
 
   const mounted = opened.includes(active) ? opened : [...opened, active];
@@ -109,25 +169,86 @@ export default function ReportTabs({ groupId }) {
           <p className={s.lead}>{group.description}</p>
         </div>
         <div className={s.tabs} role="tablist" aria-label={group.title} onKeyDown={onKeyDown}>
-          {group.tabs.map((t) => (
+          {strip.map((x) => {
+            if (x.tab) {
+              const t = x.tab;
+              return (
+                <button
+                  key={x.key}
+                  ref={(el) => { tabRefs.current[x.key] = el; }}
+                  type="button"
+                  role="tab"
+                  id={`tab-${t.id}`}
+                  aria-selected={t.id === active}
+                  aria-controls={`panel-${t.id}`}
+                  tabIndex={t.id === active ? 0 : -1}
+                  title={t.description}
+                  className={s.tab}
+                  onClick={() => select(t.id)}
+                >
+                  {t.label}
+                </button>
+              );
+            }
+            const current = x.tabs.find((t) => t.id === active);
+            const isOpen = openMenu === x.key;
+            return (
+              <button
+                key={x.key}
+                ref={(el) => { tabRefs.current[x.key] = el; }}
+                type="button"
+                role="tab"
+                id={`tab-${x.key}`}
+                aria-selected={x.key === activeKey}
+                aria-controls={current ? `panel-${current.id}` : undefined}
+                aria-haspopup="menu"
+                aria-expanded={isOpen}
+                tabIndex={x.key === activeKey ? 0 : -1}
+                title={x.tabs.map((t) => t.label).join(' · ')}
+                className={s.tab}
+                onClick={() => (isOpen ? closeMenu(false) : openMenuAt(x.key))}
+                onKeyDown={(e) => {
+                  if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    openMenuAt(x.key);
+                  }
+                }}
+              >
+                {x.menu}
+                {current && <span className={s.menuCurrent}>: {current.label}</span>}
+                <span className={s.caret} aria-hidden="true">▾</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {openMenu && menuPos && (
+        <div
+          ref={menuRef}
+          role="menu"
+          aria-labelledby={`tab-${openMenu}`}
+          className={s.menu}
+          style={{ top: menuPos.top, left: menuPos.left }}
+          onKeyDown={onMenuKeyDown}
+        >
+          {strip.find((x) => x.key === openMenu).tabs.map((t) => (
             <button
               key={t.id}
-              ref={(el) => { tabRefs.current[t.id] = el; }}
               type="button"
-              role="tab"
-              id={`tab-${t.id}`}
-              aria-selected={t.id === active}
-              aria-controls={`panel-${t.id}`}
-              tabIndex={t.id === active ? 0 : -1}
+              role="menuitemradio"
+              aria-checked={t.id === active}
+              tabIndex={-1}
               title={t.description}
-              className={s.tab}
-              onClick={() => select(t.id)}
+              className={s.menuItem}
+              onClick={() => { select(t.id); closeMenu(true); }}
             >
               {t.label}
             </button>
           ))}
         </div>
-      </div>
+      )}
 
       <div className={s.panels}>
         <EmbeddedContext.Provider value={true}>
@@ -138,7 +259,7 @@ export default function ReportTabs({ groupId }) {
                 key={t.id}
                 id={`panel-${t.id}`}
                 role="tabpanel"
-                aria-labelledby={`tab-${t.id}`}
+                aria-labelledby={`tab-${t.menu ? stripKeyOf(t.id) : t.id}`}
                 hidden={t.id !== active}
                 className={s.panel}
               >

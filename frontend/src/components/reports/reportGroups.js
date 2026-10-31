@@ -4,6 +4,9 @@
 // and bookmarks keep working. The reports themselves live in
 // components/reports/<id>/View.js (loaded by ReportTabs).
 //
+// Tabs that share a `menu` name are shown in the tab strip as one dropdown
+// (at the position of the first of them) instead of one tab each.
+//
 // Plain data module (no 'use client') so the server-side redirect pages can
 // import it too.
 
@@ -104,14 +107,14 @@ export const REPORT_GROUPS = [
     icon: '📮',
     tabs: [
       { id: 'new-facilities', label: 'New Facilities (Annexure-III)', description: 'New facilities annexure.' },
-      { id: 'do-letter', label: 'Monthly DO Letter', description: 'Monthly DO letter with Annexure remarks.' },
+      { id: 'steel-bulletin', menu: 'Monthly Reports', label: 'Inputs for Steel Bulletin', description: 'Inputs feeding the Steel Bulletin.' },
+      { id: 'cmd-monthly-report', menu: 'Monthly Reports', label: 'CMD Monthly Activity Report', description: 'SAIL: Monthly Activity Report for the CMD Office (.docx) for any month, with editable significant events and areas of concern.' },
+      { id: 'one-page-report', menu: 'Monthly Reports', label: '1-Page Report', description: 'Single-page summary report.' },
+      { id: 'do-letter', menu: 'Monthly Reports', label: 'Monthly DO Letter', description: 'Monthly DO letter with Annexure remarks.' },
+      { id: 'jpc-report', menu: 'Monthly Reports', label: 'JPC Monthly Report', description: 'JPC monthly report export.' },
       { id: 'board-note', label: 'Quarterly Board Note', description: 'Quarterly Board Note (production performance) for any FY and quarter, with editable narrative.' },
       { id: 'secretary-review', label: 'Secretary Review (PPTX)', description: 'Monthly Secretary Review operations deck (.pptx) with editable narrative.' },
-      { id: 'jpc-report', label: 'JPC Monthly Report', description: 'JPC monthly report export.' },
-      { id: 'one-page-report', label: '1-Page Report', description: 'Single-page summary report.' },
       { id: 'sefi', label: 'SEFI Report', description: 'SEFI report.' },
-      { id: 'steel-bulletin', label: 'Inputs for Steel Bulletin', description: 'Inputs feeding the Steel Bulletin.' },
-      { id: 'cmd-monthly-report', label: 'CMD Monthly Activity Report', description: 'SAIL: Monthly Activity Report for the CMD Office (.docx) for any month, with editable significant events and areas of concern.' },
     ],
   },
 ];

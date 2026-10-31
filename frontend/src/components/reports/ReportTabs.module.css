@@ -68,6 +68,41 @@
 
 .tab:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: -2px; border-radius: 4px; }
 
+/* A dropdown entry in the strip (tabs sharing a `menu` in reportGroups.js). */
+.menuCurrent { font-weight: 600; }
+.caret { margin-left: 6px; font-size: 11px; }
+
+.menu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 240px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+}
+
+.menuItem {
+  padding: 8px 12px;
+  font-family: inherit;
+  font-size: 14px;
+  text-align: left;
+  white-space: nowrap;
+  color: var(--ui-text);
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.menuItem:hover,
+.menuItem:focus-visible { background: var(--ui-bg); outline: none; }
+
+.menuItem[aria-checked='true'] { font-weight: 600; color: var(--ui-primary); }
+
 .panels { flex: 1; min-height: 0; position: relative; }
 
 .panel { height: 100%; }
