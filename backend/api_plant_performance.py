@@ -60,6 +60,7 @@ def _rows(month: str, basis: str = "app") -> list:
             "values": r["values"],
             "is_conversion": bool(r.get("is_conversion")),
             "is_sail_incl_conv": bool(r.get("is_sail_incl_conv")),
+            "is_fs_pct_ss": bool(r.get("is_fs_pct_ss")),
         })
     return out
 
@@ -153,12 +154,17 @@ def _write_sheet(ws, month: str, basis: str, decimals: int):
         # conversion rows, which span the Items/Plant columns themselves)
         j = i
         while (j + 1 < len(rows) and rows[j + 1]["item"] == rows[i]["item"]
-               and not rows[i]["is_conversion"] and not rows[i]["is_sail_incl_conv"]):
+               and not rows[i]["is_conversion"] and not rows[i]["is_sail_incl_conv"]
+               and not rows[i].get("is_fs_pct_ss")):
             j += 1
         for k in range(i, j + 1):
             row = rows[k]
             rr = r + (k - i)
-            if row["is_conversion"]:
+            if row.get("is_fs_pct_ss"):
+                # SAIL FS as % of SS: label over Items..monthly plan, the four actual columns only
+                ws.cell(rr, 1, "SAIL FS% of SS")
+                ws.merge_cells(start_row=rr, start_column=1, end_row=rr, end_column=5)
+            elif row["is_conversion"]:
                 ws.cell(rr, 1, "Conversion")
                 ws.merge_cells(start_row=rr, start_column=1, end_row=rr, end_column=3)
             elif row["is_sail_incl_conv"]:
@@ -171,9 +177,14 @@ def _write_sheet(ws, month: str, basis: str, decimals: int):
             if not row["is_conversion"] and row["capacity"] is not None:
                 ws.cell(rr, 3, row["capacity"]).number_format = qty_fmt
             for vi, v in enumerate(row["values"]):
+                if row.get("is_fs_pct_ss"):
+                    if vi >= 2:
+                        ws.cell(rr, 4 + vi, None if v is None else round(v, 1)).number_format = "0.0"
+                    continue
                 c = ws.cell(rr, 4 + vi, None if v is None else round(v, 3))
                 c.number_format = pct_fmt if vi in PCT_IDX else qty_fmt
-            is_sail = row["plant"] in ("SAIL", "5 Plants") or row["is_sail_incl_conv"] or row["is_conversion"]
+            is_sail = (row["plant"] in ("SAIL", "5 Plants") or row["is_sail_incl_conv"] or row["is_conversion"]
+                       or row.get("is_fs_pct_ss"))
             for c in range(1, ncols + 1):
                 cell = ws.cell(rr, c)
                 cell.border = border

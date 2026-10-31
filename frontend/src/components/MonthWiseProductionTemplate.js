@@ -119,7 +119,7 @@ export default function MonthWiseProductionTemplate({ data, onCellChange, select
     const visible = [];
     for (let g = 0; g < groupSize; g++) {
       const r = rows[i + g];
-      if (!isNilRow(r) || r.is_conversion || r.is_sail_incl_conv) visible.push({ row: r, rIdx: i + g });
+      if (!isNilRow(r) || r.is_conversion || r.is_sail_incl_conv || r.is_fs_pct_ss) visible.push({ row: r, rIdx: i + g });
     }
     visible.forEach(({ row, rIdx }, g) => {
       groupedRows.push({
@@ -198,7 +198,25 @@ export default function MonthWiseProductionTemplate({ data, onCellChange, select
         </thead>
 
         <tbody>
-          {groupedRows.map(({ row, rIdx, isFirstInGroup, groupSize, item, plant }) => (
+          {groupedRows.map(({ row, rIdx, isFirstInGroup, groupSize, item, plant }) => row.is_fs_pct_ss ? (
+            // SAIL FS as % of SS: label over Items..monthly APP, the four actual columns only
+            <tr key={rIdx} style={{ backgroundColor: '#dcfce7', fontWeight: 700 }}>
+              <td colSpan={5} style={{ ...TD_STYLE, fontWeight: '700', textAlign: 'left', paddingLeft: '4px', verticalAlign: 'middle' }}>
+                SAIL FS% of SS
+              </td>
+              {row.values.slice(2).map((val, k) => (
+                <td key={k + 2} style={{ ...TD_STYLE, overflow: 'hidden' }}>
+                  <input
+                    type="text"
+                    className="editor-input"
+                    style={{ ...INPUT_STYLE, fontSize: '6.5pt' }}
+                    value={val}
+                    onChange={(e) => handleValueChange(rIdx, k + 2, e.target.value)}
+                  />
+                </td>
+              ))}
+            </tr>
+          ) : (
             <tr key={rIdx} style={
               row.is_sail_incl_conv ? { backgroundColor: '#dcfce7', fontWeight: 700 } :
               row.is_conversion     ? { backgroundColor: '#fef9c3' } :

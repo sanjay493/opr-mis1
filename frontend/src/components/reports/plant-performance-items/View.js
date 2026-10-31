@@ -73,7 +73,7 @@ function PerfTable({ section, decimals }) {
 
   // rowspan for each item group (conversion rows stand alone)
   const spans = rows.map((r, i) => {
-    if (r.is_conversion || r.is_sail_incl_conv) return 0;
+    if (r.is_conversion || r.is_sail_incl_conv || r.is_fs_pct_ss) return 0;
     if (i > 0 && rows[i - 1].item === r.item && !rows[i - 1].is_conversion) return -1;
     let n = 1;
     while (i + n < rows.length && rows[i + n].item === r.item) n += 1;
@@ -120,13 +120,26 @@ function PerfTable({ section, decimals }) {
           </thead>
           <tbody>
             {rows.map((r, i) => {
-              const isSail = r.plant === 'SAIL' || r.plant === '5 Plants' || r.is_conversion || r.is_sail_incl_conv;
+              const isSail = r.plant === 'SAIL' || r.plant === '5 Plants' || r.is_conversion || r.is_sail_incl_conv || r.is_fs_pct_ss;
               const rowStyle = isSail ? { background: '#fef3c7', fontWeight: 700 } : {};
               // Black rule above each item group and each total row, as in
               // the PDF; none on the first row (the header's rule is there).
               const top = i > 0 && (spans[i] > 0 || isSail) ? { borderTop: RULE } : {};
               const cell = { ...TD, ...top };
               const label = { ...cell, textAlign: 'left', fontFamily: NARROW, fontSize: '8pt', fontWeight: 700 };
+              if (r.is_fs_pct_ss) {
+                // SAIL FS as % of SS: label over Items..monthly plan, the four actual columns only
+                return (
+                  <tr key={i} style={rowStyle}>
+                    <td colSpan={5} style={label}>SAIL FS% of SS</td>
+                    {r.values.slice(2).map((v, k) => (
+                      <td key={k} style={{ ...cell, ...(k + 2 === LAST_COL ? { borderRight: 'none' } : {}) }}>
+                        {v == null ? '' : v.toFixed(1)}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              }
               return (
                 <tr key={i} style={rowStyle}>
                   {r.is_conversion && <td colSpan={3} style={label}>Conversion</td>}

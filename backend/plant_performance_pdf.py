@@ -52,16 +52,27 @@ def _sheet(sec, d):
     while i < len(rows):
         r = rows[i]
         j = i
-        if not (r["is_conversion"] or r["is_sail_incl_conv"]):
+        if not (r["is_conversion"] or r["is_sail_incl_conv"] or r.get("is_fs_pct_ss")):
             while (j + 1 < len(rows) and rows[j + 1]["item"] == r["item"]
-                   and not rows[j + 1]["is_conversion"] and not rows[j + 1]["is_sail_incl_conv"]):
+                   and not rows[j + 1]["is_conversion"] and not rows[j + 1]["is_sail_incl_conv"]
+                   and not rows[j + 1].get("is_fs_pct_ss")):
                 j += 1
         for k in range(i, j + 1):
             row = rows[k]
             cls = ["group-first"] if k == i else []
-            if row["plant"] in ("SAIL", "5 Plants") or row["is_conversion"] or row["is_sail_incl_conv"]:
+            if (row["plant"] in ("SAIL", "5 Plants") or row["is_conversion"] or row["is_sail_incl_conv"]
+                    or row.get("is_fs_pct_ss")):
                 cls.append("tot")
             cells = []
+            if row.get("is_fs_pct_ss"):
+                # SAIL FS as % of SS: label over Items..monthly plan, the four actual columns only
+                cells.append('<td colspan="5" class="lbl">SAIL FS% of SS</td>')
+                for vi, v in enumerate(row["values"][2:], start=2):
+                    c = _VAL_CLASS.get(vi)
+                    attr = f' class="{c}"' if c else ""
+                    cells.append(f'<td{attr}>{"" if v is None else f"{v:.1f}"}</td>')
+                body.append(f'<tr class="{" ".join(cls)}">{"".join(cells)}</tr>')
+                continue
             if row["is_conversion"]:
                 cells.append('<td colspan="3" class="lbl">Conversion</td>')
             elif row["is_sail_incl_conv"]:

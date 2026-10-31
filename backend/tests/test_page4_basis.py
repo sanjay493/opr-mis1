@@ -24,7 +24,8 @@ def _row(rows, display, plant):
 
 def test_mou_uses_mou_table_and_mou_items(p4):
     rows = p4.generate_page4_rows("2026-08", raw=True, basis="mou")
-    displays = {r["display_name"] for r in rows if not r.get("is_conversion") and not r.get("is_sail_incl_conv")}
+    displays = {r["display_name"] for r in rows
+                if not r.get("is_conversion") and not r.get("is_sail_incl_conv") and not r.get("is_fs_pct_ss")}
     assert displays == {"HOT METAL", "CRUDE STEEL", "SALEABLE STEEL", "PIG IRON", "FINISHED STEEL"}
     hm = _row(rows, "HOT METAL", "BSP")["values"]
     assert hm[1] == 570 and hm[2] == 500
