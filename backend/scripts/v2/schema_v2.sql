@@ -1194,15 +1194,13 @@ CREATE TABLE rmt_month (
 
 -- One row of the RMT report's plan tables: section HM / CS / SS (page 1),
 -- COKE / SINTER / PIG (page 2); row_label a plant code or a total ('SAIL',
--- '5 ISPs'), so not an FK. remarks may hold **bold** and line breaks. The coal
--- requirement (T/day) is entered for the COKE rows only.
+-- '5 ISPs'), so not an FK. remarks may hold **bold** and line breaks. (The
+-- coal requirement is calculated from the FY dry coal charge, rmt_plan.py.)
 CREATE TABLE rmt_plan_note (
     report_month CHAR(7)      NOT NULL,
     section      VARCHAR(8)   NOT NULL,
     row_label    VARCHAR(16)  NOT NULL,
     remarks      TEXT         NULL,
-    coal_req_app DOUBLE       NULL,
-    coal_req_op  DOUBLE       NULL,
     -- repo.misc.rmt_plan_manual, save_rmt_plan_manual
     PRIMARY KEY (report_month, section, row_label),
     CONSTRAINT fk_rmt_note_month FOREIGN KEY (report_month) REFERENCES cal_month (report_month)

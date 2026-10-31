@@ -4,7 +4,7 @@ RMT "Production Plan for <month>" report (rmt_plan.py).
   GET  /api/rmt-plan?month=YYYY-MM        -> the report as JSON
   GET  /api/rmt-plan/form?month=YYYY-MM   -> the manual rows for the entry form
   POST /api/rmt-plan                      -> save the month's manual rows (editor)
-  GET  /api/rmt-plan/xlsx?month=YYYY-MM   -> .xlsx (three sheets, as the PDF)
+  GET  /api/rmt-plan/xlsx?month=YYYY-MM   -> .xlsx (the PDF's pages plus the coal requirement sheet)
   GET  /api/rmt-plan/pdf?month=YYYY-MM    -> .pdf (A4 landscape, three pages)
 
 The POST is gated by EditorAdminGateMiddleware via
@@ -37,8 +37,6 @@ class RmtNote(BaseModel):
     section: str
     row_label: str
     remarks: Optional[str] = None
-    coal_req_app: Optional[float] = None
-    coal_req_op: Optional[float] = None
 
 
 class RmtIptRow(BaseModel):
@@ -91,8 +89,7 @@ def rmt_plan_json(month: str = Query(...)):
 def rmt_plan_form(month: str = Query(...)):
     _check_month(month)
     return {**rmt_plan.manual_form(month),
-            "sections": [{"key": k, "label": label, "rows": rows, "coal": coal}
-                         for k, label, rows, coal in rmt_plan.form_rows()]}
+            "sections": [{"key": k, "label": label, "rows": rows} for k, label, rows in rmt_plan.form_rows()]}
 
 
 @router.post("")
@@ -104,18 +101,14 @@ def rmt_plan_save(body: RmtSaveRequest, request: Request):
             date.fromisoformat(stock_as_on)
         except ValueError:
             raise HTTPException(400, "stock_as_on must be a date, YYYY-MM-DD")
-    allowed = {(k, r) for k, _, rows, _ in rmt_plan.form_rows() for r in rows}
+    allowed = {(k, r) for k, _, rows in rmt_plan.form_rows() for r in rows}
     notes = []
     for n in body.notes:
         if (n.section, n.row_label) not in allowed:
             raise HTTPException(400, f"Unknown row {n.section} / {n.row_label}")
-        for v in (n.coal_req_app, n.coal_req_op):
-            if v is not None and (v != v or v < 0):
-                raise HTTPException(400, f"Coal requirement for {n.row_label} must be a number ≥ 0")
-        d = {"section": n.section, "row_label": n.row_label, "remarks": _clean(n.remarks),
-             "coal_req_app": n.coal_req_app, "coal_req_op": n.coal_req_op}
-        if d["remarks"] or d["coal_req_app"] is not None or d["coal_req_op"] is not None:
-            notes.append(d)
+        remarks = _clean(n.remarks)
+        if remarks:
+            notes.append({"section": n.section, "row_label": n.row_label, "remarks": remarks})
     ipt = []
     for r in body.ipt:
         d = {k: _clean(getattr(r, k)) for k in ("item", "from_plant", "to_plant", "availability", "requirement",
@@ -144,6 +137,11 @@ def _xl_num(v):
     if v is None:
         return None
     return round(v, 1) if abs(v) < 100 and round(v, 1) != round(v) else round(v)
+
+
+def _sum_or_none(vals):
+    """The sum, or None when any value is missing."""
+    return None if any(v is None for v in vals) else sum(vals)
 
 
 def _plain(text):
@@ -255,7 +253,39 @@ def _workbook(data: dict) -> bytes:
     for c, w in enumerate([8, 9, 12, 16, 12, 16, 90], start=1):
         ws.column_dimensions[get_column_letter(c)].width = w
 
-    # Sheet 3 -- IPT and stock
+    # Sheet 3 -- the coal requirement's basis
+    ws = wb.create_sheet("Coal Requirement")
+    cb = data["coal_basis"]
+    ws.cell(1, 1, f"Coal Requirement for {L['month']} (OP pushing plan)").font = Font(bold=True, size=13)
+    ws.cell(2, 1, rmt_plan_pdf.coal_formula(cb) + ".").font = Font(italic=True, size=9)
+    heads = ["Plant", "Dry coal charge norm(s) (t/oven)", "Considered (t/oven)", "Coal per pushing (T)",
+             "OP pushing (nos/day)", "Coal required (T/day)", f"Coal required, {L['month']} (T)"]
+    head(ws, 4, 4, len(heads), [(4, c, t, 1, 1, op_fill if c >= 5 else None) for c, t in enumerate(heads, start=1)])
+    r = 5
+    for b in cb["plants"]:
+        day = b["coal_req_op"]
+        vals = [b["plant"], rmt_plan_pdf.norms_text(b), round(b["dcc"], 2), round(b["per_pushing"], 3),
+                b["op_pushing"], day, None if day is None else day * data["days"]]
+        for c, v in enumerate(vals, start=1):
+            cell = ws.cell(r, c, v)
+            cell.alignment = Alignment(horizontal="left" if c <= 2 else "center", wrap_text=True)
+            if c >= 6:
+                cell.number_format = "#,##0"
+        ws.cell(r, 1).font = bold
+        frame(ws, r, r, 1, len(heads))
+        r += 1
+    if cb["plants"]:
+        ws.cell(r, 1, "5 ISPs").font = bold
+        total = _sum_or_none([b["coal_req_op"] for b in cb["plants"]])
+        for c, v in ((5, _sum_or_none([b["op_pushing"] for b in cb["plants"]])), (6, total),
+                     (7, None if total is None else total * data["days"])):
+            cell = ws.cell(r, c, v)
+            cell.font, cell.alignment, cell.number_format = bold, Alignment(horizontal="center"), "#,##0"
+        frame(ws, r, r, 1, len(heads))
+    for c, w in enumerate([10, 34, 14, 16, 16, 18, 20], start=1):
+        ws.column_dimensions[get_column_letter(c)].width = w
+
+    # Sheet 4 -- IPT and stock
     ws = wb.create_sheet("IPT-Stock")
     ws.cell(1, 1, f"IPT Requirement / Availability Plant wise for {L['month']}").font = Font(bold=True, size=13)
     ws.cell(2, 6, "Unit: T").alignment = Alignment(horizontal="right")

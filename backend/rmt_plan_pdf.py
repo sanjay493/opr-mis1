@@ -95,8 +95,37 @@ def _page2(data) -> str:
         cols = ('<colgroup><col style="width:4.5%"><col style="width:6%">' + '<col style="width:10%">' * 4
                 + '<col></colgroup>')
         out.append(f'<table class="t2">{cols}{head}<tbody>{"".join(trs)}</tbody></table>')
+        if sec["rate"]:
+            out.append(_coal_basis(data))
     return (f'<section class="sheet"><div class="hd"><h1>Production Plan for {L["month"]}</h1>'
             f'<span class="unit">{L["month_col"]} · Unit: \'000T</span></div>{"".join(out)}</section>')
+
+
+def coal_formula(cb) -> str:
+    """The coal requirement's basis in one line (also the Excel note)."""
+    return (f"Coal requirement = dry coal charge per oven (FY {cb['fy']} target; the smaller norm where a plant "
+            f"has two) ÷ (1 − {cb['handling_loss'] * 100:g}% handling loss) ÷ (1 − {cb['moisture_loss'] * 100:g}% "
+            "moisture loss) × pushings per day")
+
+
+def norms_text(b) -> str:
+    return ", ".join(f"{n['unit']} {n['value']:g}" for n in b["norms"])
+
+
+def _coal_basis(data) -> str:
+    cb = data["coal_basis"]
+    if not cb["plants"]:
+        return f'<p class="cb-note">No dry coal charge target for FY {escape(cb["fy"])}: no coal requirement.</p>'
+    trs = "".join(
+        f'<tr><td class="pl">{escape(b["plant"])}</td><td class="rm">{escape(norms_text(b))}</td>'
+        f'<td class="n">{b["dcc"]:.2f}</td><td class="n">{b["per_pushing"]:.2f}</td>'
+        f'<td class="n op">{num(b["op_pushing"])}</td><td class="n op">{num(b["coal_req_op"])}</td></tr>'
+        for b in cb["plants"])
+    return ('<table class="cb"><colgroup><col style="width:8%"><col style="width:32%"><col><col><col><col>'
+            '</colgroup><thead><tr><th>Plant</th><th>Dry coal charge norm(s) (t/oven)</th>'
+            '<th>Considered (t/oven)</th><th>Coal per pushing (T)</th><th class="op">OP pushing (nos/day)</th>'
+            '<th class="op">Coal required (T/day)</th></tr></thead>'
+            f'<tbody>{trs}</tbody></table><p class="cb-note">{escape(coal_formula(cb))}.</p>')
 
 
 def _ipt_groups(rows):
@@ -175,6 +204,9 @@ def build_html(data: dict, colors: dict) -> str:
   td.ent div {{ writing-mode: vertical-rl; transform: rotate(180deg); margin: 0 auto; font-weight: 700; font-size: 8.5pt; }}
   table.t2 td {{ font-size: 10pt; padding: 3px 4px; }}
   table.t2 td.rm {{ font-size: 8.5pt; }}
+  table.cb {{ width: 70%; margin: -6px 0 2px; }}
+  table.cb th, table.cb td {{ font-size: 7.6pt; padding: 1px 4px; }}
+  .cb-note {{ font-size: 7.6pt; font-style: italic; margin: 0 0 10px; }}
   table.t3 td, table.t4 td {{ font-size: 8.5pt; padding: 2px 4px; }}
   td.ipt-item {{ font-weight: 700; text-align: center; vertical-align: middle; }}
   table.t3 tr.grp td {{ border-top: 2px solid {blk}; }}

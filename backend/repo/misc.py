@@ -1007,8 +1007,7 @@ def delete_unique_activity(activity_id):
 
 def rmt_plan_manual(month):
     """The month's manual RMT data: {"stock_as_on": 'YYYY-MM-DD' or None,
-    "note", "updated_by", "updated_at", "notes": [{section, row_label, remarks,
-    coal_req_app, coal_req_op}], "ipt": [{item, from_plant, to_plant,
+    "note", "updated_by", "updated_at", "notes": [{section, row_label, remarks}], "ipt": [{item, from_plant, to_plant,
     availability, requirement, remarks}], "stock": [{plant, bf_coke, slab,
     bloom}]} (rows in printed order); None when nothing is saved."""
     conn = connect()
@@ -1020,9 +1019,9 @@ def rmt_plan_manual(month):
         head = cur.fetchone()
         if head is None:
             return None
-        cur.execute("SELECT section, row_label, remarks, coal_req_app, coal_req_op FROM rmt_plan_note "
+        cur.execute("SELECT section, row_label, remarks FROM rmt_plan_note "
                     "WHERE report_month = %s ORDER BY section, row_label", (month,))
-        notes = [dict(zip(("section", "row_label", "remarks", "coal_req_app", "coal_req_op"), r))
+        notes = [dict(zip(("section", "row_label", "remarks"), r))
                  for r in cur.fetchall()]
         cur.execute("SELECT item, from_plant, to_plant, availability, requirement, remarks FROM rmt_ipt_row "
                     "WHERE report_month = %s ORDER BY seq", (month,))
@@ -1070,10 +1069,9 @@ def save_rmt_plan_manual(month, stock_as_on, note, notes, ipt, stock, user):
         for table in ("rmt_plan_note", "rmt_ipt_row", "rmt_stock_row"):
             cur.execute(f"DELETE FROM {table} WHERE report_month = %s", (month,))
         if notes:
-            cur.executemany("INSERT INTO rmt_plan_note (report_month, section, row_label, remarks, coal_req_app,"
-                            " coal_req_op) VALUES (%s, %s, %s, %s, %s, %s)",
-                            [(month, n["section"], n["row_label"], n.get("remarks"), n.get("coal_req_app"),
-                              n.get("coal_req_op")) for n in notes])
+            cur.executemany("INSERT INTO rmt_plan_note (report_month, section, row_label, remarks)"
+                            " VALUES (%s, %s, %s, %s)",
+                            [(month, n["section"], n["row_label"], n.get("remarks")) for n in notes])
         if ipt:
             cur.executemany("INSERT INTO rmt_ipt_row (report_month, seq, item, from_plant, to_plant, availability,"
                             " requirement, remarks) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",

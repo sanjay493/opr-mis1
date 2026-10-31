@@ -20,13 +20,12 @@ function nextMonth() {
 }
 
 const txt = (v) => (v == null ? '' : String(v));
-const toNum = (t) => (String(t).trim() === '' ? null : Number(t));
 
 // The form state from GET /api/rmt-plan/form: every value as typed text.
 function toState(body) {
   const notes = {};
   body.notes.forEach((n) => {
-    notes[`${n.section}|${n.row_label}`] = { remarks: txt(n.remarks), coal_req_app: txt(n.coal_req_app), coal_req_op: txt(n.coal_req_op) };
+    notes[`${n.section}|${n.row_label}`] = { remarks: txt(n.remarks) };
   });
   return {
     notes,
@@ -98,7 +97,7 @@ function RmtPlanInner() {
     fn(...args);
   };
 
-  const note = (section, row) => form.notes[`${section}|${row}`] ?? { remarks: '', coal_req_app: '', coal_req_op: '' };
+  const note = (section, row) => form.notes[`${section}|${row}`] ?? { remarks: '' };
   const setNote = (section, row, field, value) => setForm((f) => ({
     ...f, notes: { ...f.notes, [`${section}|${row}`]: { ...note(section, row), [field]: value } },
   }));
@@ -106,17 +105,10 @@ function RmtPlanInner() {
   const setCell = (key, i, field, value) => setList(key, (l) => l.map((r, k) => (k === i ? { ...r, [field]: value } : r)));
 
   const save = async () => {
-    const notes = [];
-    for (const [k, v] of Object.entries(form.notes)) {
+    const notes = Object.entries(form.notes).map(([k, v]) => {
       const [section, row_label] = k.split('|');
-      const app = toNum(v.coal_req_app);
-      const op = toNum(v.coal_req_op);
-      if ([app, op].some((x) => x != null && (Number.isNaN(x) || x < 0))) {
-        setStatus({ type: 'error', text: `Coal requirement for ${row_label} must be a number ≥ 0.` });
-        return;
-      }
-      notes.push({ section, row_label, remarks: v.remarks, coal_req_app: app, coal_req_op: op });
-    }
+      return { section, row_label, remarks: v.remarks };
+    });
     setSaving(true);
     setStatus(null);
     try {
@@ -139,7 +131,7 @@ function RmtPlanInner() {
   return (
     <EntryPage
       title="RMT Production Plan — remarks, IPT & stock"
-      description="The manual parts of the RMT 'Production Plan for <month>' report: shutdown remarks per plant, the coal requirement per day, the IPT requirement / availability and the stock table. APP, OP and actuals come from the database."
+      description="The manual parts of the RMT 'Production Plan for <month>' report: shutdown remarks per plant, the IPT requirement / availability and the stock table. APP, OP and actuals come from the database; the coal requirement is calculated from the FY dry coal charge target and the pushing plan."
     >
       <ContextBar actions={(
         <>
@@ -173,31 +165,18 @@ function RmtPlanInner() {
               <thead>
                 <tr>
                   <th style={{ width: 90 }}>Plant</th>
-                  <th className={e.r} style={{ width: 130 }}>Coal req. APP (T/day)</th>
-                  <th className={e.r} style={{ width: 130 }}>Coal req. OP (T/day)</th>
                   <th>Remarks</th>
                 </tr>
               </thead>
               <tbody>
                 {data.sections.map((s) => (
                   <Fragment key={s.key}>
-                    <tr className={e.subRow}><td colSpan={4}>{s.label}</td></tr>
+                    <tr className={e.subRow}><td colSpan={2}>{s.label}</td></tr>
                     {s.rows.map((r) => {
                       const n = note(s.key, r);
-                      const coal = s.coal && !['5 ISPs', 'SAIL'].includes(r);
                       return (
                         <tr key={r}>
                           <td className={e.itemCell}>{r}</td>
-                          {['coal_req_app', 'coal_req_op'].map((f) => (
-                            <td key={f} className={e.r}>
-                              {coal ? (
-                                <input type="number" inputMode="decimal" min="0" step="any" value={n[f]}
-                                       aria-label={`${f === 'coal_req_app' ? 'APP' : 'OP'} coal requirement for ${r}`}
-                                       className={cellClass({ filled: n[f] !== '' })}
-                                       onChange={(ev) => setNote(s.key, r, f, ev.target.value)} />
-                              ) : <span className={wb.muted}>{s.coal ? 'sum' : ''}</span>}
-                            </td>
-                          ))}
                           <td>
                             <textarea className={e.textarea} rows={n.remarks.includes('\n') || n.remarks.length > 90 ? 3 : 1}
                                       value={n.remarks} aria-label={`${s.label} remarks for ${r}`}

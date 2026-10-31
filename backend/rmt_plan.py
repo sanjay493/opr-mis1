@@ -8,12 +8,12 @@ Three pages, as the RMT meeting's sample (Nov'26):
      (TPD); remarks.
   2. Oven Pushing (nos/day, with the coal requirement per day), Sinter and
      Pig Iron: the report month's APP and OP, totals and per day; remarks.
+     The coal requirement is calculated (coal_basis), not entered.
   3. IPT requirement / availability and the stock table.
 
 APP, OP and actuals come from production_monthly / production_op_monthly
 through main._op_cmp_cells (the OP vs APP vs Actual report's reader), so
-the two reports agree. Remarks, coal requirement, IPT rows and stock are
-manual (repo.misc.rmt_plan_manual), entered at
+the two reports agree. Remarks, IPT rows and stock are manual (repo.misc.rmt_plan_manual), entered at
 /data-entry/production-techno?tab=rmt-plan."""
 import calendar
 import datetime as _dt
@@ -21,6 +21,7 @@ import datetime as _dt
 import month_utils
 from constants import ALL_PLANTS
 from repo import misc as rmisc
+from repo import techno as rtech
 
 FIVE_ISPS = ["BSP", "DSP", "RSP", "BSL", "ISP"]
 SPECIAL = ["ASP", "SSP", "VISL"]
@@ -39,6 +40,13 @@ PAGE2 = [
     ("PIG", "Pig Iron ('000T)", "Pig Iron", False),
 ]
 SECTIONS = {s[0] for s in PAGE1} | {s[0] for s in PAGE2}
+
+# Coal requirement per pushing: the FY target's dry coal charge per oven
+# (techno_plan_fy keys dry_coal_charge*, t/oven; a plant with two norms -- two
+# batteries -- uses the smaller), grossed up so that what is left after the
+# handling loss and then the moisture loss is still that dry charge.
+HANDLING_LOSS = 0.02
+MOISTURE_LOSS = 0.10
 PAGE2_ROWS = FIVE_ISPS + ["5 ISPs"]
 TOTALS = {"5 ISPs": FIVE_ISPS, "SAIL": ALL_PLANTS}
 
@@ -90,6 +98,29 @@ def _cells(months):
     return {m: main._op_cmp_cells(ALL_PLANTS, [m]) for m in months}
 
 
+def coal_basis(month: str) -> dict:
+    """{plant: {"norms": [(unit, t/oven)], "dcc": smaller norm, "per_pushing":
+    coal (T) per pushing}} for the five ISPs, from the report month's FY
+    targets; a plant with no dry coal charge target is left out."""
+    fy = month_utils.get_fy_for_month(month)
+    out = {}
+    for plant in FIVE_ISPS:
+        norms = []
+        for unit, entry in rtech.get_techno_plan(plant, fy).items():
+            for key, v in (entry.get("data") or {}).items():
+                value = v.get("value") if isinstance(v, dict) else v
+                if key.startswith("dry_coal_charge") and isinstance(value, (int, float)) and value > 0:
+                    # dry_coal_charge_batt_1_8 -> "Batt 1-8"; dry_coal_charge_oven -> the unit
+                    suffix = key[len("dry_coal_charge"):].strip("_")
+                    label = suffix.replace("batt_", "Batt ").replace("_", "-") if suffix.startswith("batt_") else unit
+                    norms.append((label, float(value)))
+        if norms:
+            dcc = min(v for _, v in norms)
+            out[plant] = {"norms": norms, "dcc": dcc,
+                          "per_pushing": dcc / ((1 - HANDLING_LOSS) * (1 - MOISTURE_LOSS))}
+    return out
+
+
 def generate(month: str) -> dict:
     prev = month_utils.shift_month(month, -1)
     ly = month_utils.shift_month(month, -12)
@@ -120,24 +151,35 @@ def generate(month: str) -> dict:
             })
         page1.append({"key": key, "label": label, "rows": out})
 
+    basis = coal_basis(month)
+
+    def coal(row, pushing_key):
+        """Coal requirement (T/day) = coal per pushing x pushings/day; a total
+        is blank while a plant with pushings has no figure."""
+        plants = TOTALS.get(row, [row])
+        vals = []
+        for p in plants:
+            n = _value(cells[month], p, "Oven Pushing (nos/day)", pushing_key)
+            if n is None:
+                continue
+            if p not in basis:
+                return None
+            vals.append(basis[p]["per_pushing"] * n)
+        return round(sum(vals)) if vals else None
+
     page2 = []
     for key, label, item, rate in PAGE2:
         out = []
         for r in PAGE2_ROWS:
             app = _value(cells[month], r, item, "app")
             op = _value(cells[month], r, item, "op")
-            if r in TOTALS:
-                coal_app = _sum([note(key, p).get("coal_req_app") for p in TOTALS[r]])
-                coal_op = _sum([note(key, p).get("coal_req_op") for p in TOTALS[r]])
-            else:
-                coal_app, coal_op = note(key, r).get("coal_req_app"), note(key, r).get("coal_req_op")
+            coal_app, coal_op = (coal(r, "app"), coal(r, "op")) if rate else (None, None)
             out.append({
                 "row": r, "total": r in TOTALS, "app": app, "op": op,
                 # Oven Pushing: the coal requirement per day; Sinter / Pig Iron: TPD
                 "app_day": coal_app if rate else _tpd(app, days),
                 "op_day": coal_op if rate else _tpd(op, days),
-                "coal_req_app": coal_app if rate else None,
-                "coal_req_op": coal_op if rate else None,
+                "coal_req_app": coal_app, "coal_req_op": coal_op,
                 "remarks": note(key, r).get("remarks"),
             })
         page2.append({"key": key, "label": label, "rate": rate, "rows": out})
@@ -147,6 +189,14 @@ def generate(month: str) -> dict:
         "labels": {"month": mon_label(month), "month_col": col_label(month),
                    "prev_col": col_label(prev), "ly_col": col_label(ly)},
         "page1": page1, "page2": page2,
+        "coal_basis": {
+            "fy": month_utils.get_fy_for_month(month),
+            "handling_loss": HANDLING_LOSS, "moisture_loss": MOISTURE_LOSS,
+            "plants": [{"plant": p, **b, "norms": [{"unit": u, "value": v} for u, v in b["norms"]],
+                        "op_pushing": _value(cells[month], p, "Oven Pushing (nos/day)", "op"),
+                        "coal_req_op": coal(p, "op")}
+                       for p, b in basis.items()],
+        },
         "ipt": manual.get("ipt", []), "stock": manual.get("stock", []),
         "stock_as_on": manual.get("stock_as_on"),
         "note": manual.get("note"),
@@ -169,7 +219,6 @@ def manual_form(month: str) -> dict:
 
 
 def form_rows():
-    """The rows the entry form offers remarks for: [(section, label, rows,
-    has_coal)]."""
-    return ([(k, label, rows, False) for k, label, _, rows in PAGE1]
-            + [(k, label, PAGE2_ROWS, rate) for k, label, _, rate in PAGE2])
+    """The rows the entry form offers remarks for: [(section, label, rows)]."""
+    return ([(k, label, rows) for k, label, _, rows in PAGE1]
+            + [(k, label, PAGE2_ROWS) for k, label, _, _ in PAGE2])
