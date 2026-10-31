@@ -88,48 +88,15 @@ function Page1({ data }) {
   );
 }
 
-// How the coal requirement is calculated, plant by plant (rmt_plan.coal_basis).
+// How the coal requirement is calculated (rmt_plan.coal_basis), as a note under Oven Pushing.
 function CoalBasis({ data }) {
   const cb = data.coal_basis;
   if (!cb.plants.length) return <Empty>No dry coal charge target for FY {cb.fy}, so no coal requirement.</Empty>;
-  const fmt = (v, d = 0) => (v == null ? '' : v.toLocaleString('en-IN', { minimumFractionDigits: d, maximumFractionDigits: d }));
-  const total = (k) => (cb.plants.some((b) => b[k] == null) ? null : cb.plants.reduce((a, b) => a + b[k], 0));
-  const day = total('coal_req_op');
   return (
-    <div style={{ margin: '-4px 0 16px' }}>
-      <table style={{ ...T, maxWidth: 1080, tableLayout: 'auto' }}>
-        <thead>
-          <tr>
-            <th style={th}>Plant</th><th style={th}>Dry coal charge norm(s) (t/oven)</th><th style={th}>Considered (t/oven)</th>
-            <th style={th}>Coal per pushing (T)</th><th style={{ ...th, background: OP }}>OP pushing (nos/day)</th>
-            <th style={{ ...th, background: OP }}>Coal required (T/day)</th><th style={{ ...th, background: OP }}>Coal required, {data.labels.month} (T)</th>
-          </tr>
-        </thead>
-        <tbody>
-          {cb.plants.map((b) => (
-            <tr key={b.plant}>
-              <td style={{ ...td, textAlign: 'left', fontWeight: 600 }}>{b.plant}</td>
-              <td style={{ ...td, textAlign: 'left', whiteSpace: 'normal' }}>{b.norms.map((n) => `${n.unit} ${n.value}`).join(', ')}</td>
-              <td style={td}>{fmt(b.dcc, 2)}</td>
-              <td style={td}>{fmt(b.per_pushing, 2)}</td>
-              <td style={{ ...td, background: OP }}>{fmt(b.op_pushing, 2).replace(/.00$/, '')}</td>
-              <td style={{ ...td, background: OP }}>{fmt(b.coal_req_op)}</td>
-              <td style={{ ...td, background: OP }}>{b.coal_req_op == null ? '' : fmt(b.coal_req_op * data.days)}</td>
-            </tr>
-          ))}
-          <tr style={{ fontWeight: 700 }}>
-            <td style={{ ...td, textAlign: 'left' }}>5 ISPs</td><td style={td} /><td style={td} /><td style={td} />
-            <td style={{ ...td, background: OP }}>{fmt(total('op_pushing'), 2).replace(/.00$/, '')}</td>
-            <td style={{ ...td, background: OP }}>{fmt(day)}</td>
-            <td style={{ ...td, background: OP }}>{day == null ? '' : fmt(day * data.days)}</td>
-          </tr>
-        </tbody>
-      </table>
-      <p style={{ fontSize: 12, fontStyle: 'italic', margin: '4px 0 0' }}>
-        Coal requirement = dry coal charge per oven (FY {cb.fy} target; the smaller norm where a plant has two)
-        ÷ (1 − {cb.handling_loss * 100}% handling loss) ÷ (1 − {cb.moisture_loss * 100}% moisture loss) × pushings per day.
-      </p>
-    </div>
+    <p style={{ fontSize: 12, fontStyle: 'italic', margin: '-8px 0 16px' }}>
+      Coal requirement = dry coal charge per oven (FY {cb.fy} target; the smaller norm where a plant has two)
+      ÷ (1 − {cb.handling_loss * 100}% handling loss) ÷ (1 − {cb.moisture_loss * 100}% moisture loss) × pushings per day.
+    </p>
   );
 }
 
@@ -255,7 +222,7 @@ export default function RmtPlanView() {
       actions={(
         <>
           <a href={`${API}/api/rmt-plan/pdf?${qs}`} className={`${wb.btn} ${wb.btnSm} ${wb.btnPrimary}`} download title="A4 landscape, three pages">⬇ Download PDF</a>
-          <a href={`${API}/api/rmt-plan/xlsx?${qs}`} className={`${wb.btn} ${wb.btnSm}`} download title="The PDF's pages plus the coal requirement sheet">⬇ Download Excel</a>
+          <a href={`${API}/api/rmt-plan/xlsx?${qs}`} className={`${wb.btn} ${wb.btnSm}`} download title="The PDF's pages, one sheet each">⬇ Download Excel</a>
           <Link href="/data-entry/production-techno?tab=rmt-plan" className={`${wb.btn} ${wb.btnSm}`}>Enter remarks / IPT</Link>
           <Link href="/data-entry/production-techno?tab=op-plan" className={`${wb.btn} ${wb.btnSm}`}>Enter OP</Link>
         </>
