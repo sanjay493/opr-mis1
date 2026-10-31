@@ -214,6 +214,56 @@ export default function SteelBulletinPage() {
     URL.revokeObjectURL(url);
   };
 
+  const [docxBusy, setDocxBusy] = useState(false);
+  const handleDownloadDocx = async () => {
+    setDocxBusy(true);
+    setError(null);
+    try {
+      const header = [
+        'Item', mAbbr(cplyMonth), mAbbr(prevMonth), mAbbr(reportMonth),
+        `Change over\n${mAbbr(cplyMonth)} (%)`, `Change over\n${mAbbr(prevMonth)} (%)`,
+        `FY ${fyLabel(prevFy)}\n(till ${mAbbr(cplyMonth)})`,
+        `FY ${fyLabel(currentFy)}\n(till ${mAbbr(reportMonth)})`,
+        'Change over\nCPLY (%)',
+      ];
+      const pct = (v) => (v == null ? '—' : v.toFixed(2));
+      const body = rows.map(r => [
+        r.label.replace('\n', ' '),
+        fmt(r.cply), fmt(r.prev), fmt(r.current),
+        pct(r.chgCply), pct(r.chgPrev),
+        fmt(r.cumPrev), fmt(r.cumCurr),
+        pct(r.chgCumCply),
+      ]);
+      const res = await fetch(`${API}/api/steel-bulletin/docx`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          month: reportMonth,
+          title: `Inputs for Steel Bulletin — ${reportLabel}`,
+          heading: '3. Steel Authority of India Limited (SAIL) — 3.1 Performance',
+          intro: `As of ${reportLabel}, performance of SAIL is summarized below:`,
+          unit: 'Unit : Lakh Tonne',
+          header,
+          rows: body,
+        }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Steel_Bulletin_SAIL_${reportMonth}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(`Word download failed: ${e.message}`);
+    } finally {
+      setDocxBusy(false);
+    }
+  };
+
   const selectStyle = { padding: '7px 10px', fontSize: 14, border: '1px solid #d1d5db', borderRadius: 4 };
   const labelStyle  = { fontSize: 13, fontWeight: 600, color: '#374151' };
 
@@ -261,6 +311,12 @@ export default function SteelBulletinPage() {
             border: '1px solid #188038', cursor: !loading && hasAnyData ? 'pointer' : 'not-allowed',
             background: '#e6f4ea', color: '#188038', opacity: !loading && hasAnyData ? 1 : 0.5,
           }}>⬇ Download Excel</button>
+
+          <button onClick={handleDownloadDocx} disabled={loading || !hasAnyData || docxBusy} style={{
+            padding: '7px 16px', fontSize: 13, fontWeight: 600, borderRadius: 6,
+            border: '1px solid #1a56db', cursor: !loading && hasAnyData && !docxBusy ? 'pointer' : 'not-allowed',
+            background: '#e8f0fe', color: '#1a56db', opacity: !loading && hasAnyData && !docxBusy ? 1 : 0.5,
+          }}>{docxBusy ? 'Generating…' : '⬇ Download Word (.docx)'}</button>
 
           <span style={{ marginLeft: 'auto', fontSize: 13, color: '#5f6368' }}>
             {loading && '⟳ loading…'}

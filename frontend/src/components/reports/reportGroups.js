@@ -111,6 +111,7 @@ export const REPORT_GROUPS = [
       { id: 'one-page-report', label: '1-Page Report', description: 'Single-page summary report.' },
       { id: 'sefi', label: 'SEFI Report', description: 'SEFI report.' },
       { id: 'steel-bulletin', label: 'Inputs for Steel Bulletin', description: 'Inputs feeding the Steel Bulletin.' },
+      { id: 'cmd-monthly-report', label: 'CMD Monthly Activity Report', description: 'SAIL: Monthly Activity Report for the CMD Office (.docx) for any month, with editable significant events and areas of concern.' },
     ],
   },
 ];

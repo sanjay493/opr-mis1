@@ -115,6 +115,8 @@ from page_finished_steel_report import (
     resolve_item as resolve_finished_steel_item,
 )
 from page_do_letter import build_do_letter_docx_bytes, build_do_annexure_xlsx_bytes
+from steel_bulletin_docx import build_steel_bulletin_docx_bytes
+from page_cmd_monthly_report import generate_cmd_report_data, build_cmd_report_docx_bytes
 from page_board_note import generate_board_note_docx_bytes
 import board_note_manual_text
 import board_note_annexures
@@ -5542,6 +5544,55 @@ async def get_do_letter_remarks(month: str = Query(...)):
         return out
     finally:
         conn.close()
+
+
+@app.post("/api/steel-bulletin/docx")
+async def steel_bulletin_docx(payload: dict):
+    """Inputs for Steel Bulletin (3.1 Performance) as .docx. The page posts
+    the table it shows: {month, title, heading, intro, unit, header, rows}."""
+    month = payload.get("month", "")
+    if not re.fullmatch(r"\d{4}-\d{2}", month):
+        raise HTTPException(status_code=400, detail="month must be YYYY-MM")
+    if not payload.get("header") or not isinstance(payload.get("rows"), list):
+        raise HTTPException(status_code=400, detail="header and rows are required")
+    try:
+        content = build_steel_bulletin_docx_bytes(payload)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Steel Bulletin generation failed: {e}")
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f'attachment; filename="Steel_Bulletin_SAIL_{month}.docx"'},
+    )
+
+
+@app.get("/api/cmd-monthly-report/data")
+async def cmd_monthly_report_data(month: str = Query(...)):
+    """CMD Office "SAIL: Monthly Activity Report" — production paragraphs and
+    the DB-backed best-ever-<month> suggestions. See page_cmd_monthly_report.py."""
+    if not re.fullmatch(r"\d{4}-\d{2}", month):
+        raise HTTPException(status_code=400, detail="month must be YYYY-MM")
+    return await run_in_threadpool(generate_cmd_report_data, month)
+
+
+@app.post("/api/cmd-monthly-report/docx")
+async def cmd_monthly_report_docx(payload: dict):
+    """Body: {month, best_ever: [str] | null, events: [str], concerns: str}.
+    best_ever null = the DB suggestions."""
+    month = payload.get("month", "")
+    if not re.fullmatch(r"\d{4}-\d{2}", month):
+        raise HTTPException(status_code=400, detail="month must be YYYY-MM")
+    try:
+        content = await run_in_threadpool(
+            build_cmd_report_docx_bytes, month,
+            payload.get("best_ever"), payload.get("events"), payload.get("concerns"))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Monthly Activity Report generation failed: {e}")
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f'attachment; filename="SAIL_Monthly_Activity_Report_{month}.docx"'},
+    )
 
 
 @app.post("/api/do-letter/remarks")

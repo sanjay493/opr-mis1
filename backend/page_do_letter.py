@@ -170,7 +170,7 @@ def _quarter_crude_steel_cu(cur, fy: int, q: int):
             return None
         act_total += act
         cap_total += cap * page4._days_in_month(m) / page4._p4_days_in_fy(m)
-    return round(act_total / cap_total * 100) if cap_total else None
+    return round(act_total / cap_total * 100, 2) if cap_total else None
 
 
 def _fetch_remarks(cur, report_month: str, item_name: str) -> dict:
@@ -622,9 +622,8 @@ def build_do_annexure_xlsx_bytes(report_month: str) -> bytes:
     ws.cell(row=14, column=3, value=f" Quarter ({qc['prev_label']})")
     ws.cell(row=14, column=4, value=f" Quarter ({qc['cur_label']})")
     ws.cell(row=14, column=5, value=f" Quarter Previous FY ({qc['cply_label']})")
-    ws.cell(row=15, column=3, value=qc["crude_steel_cu_prev"])
-    ws.cell(row=15, column=4, value=qc["crude_steel_cu_cur"])
-    ws.cell(row=15, column=5, value=qc["crude_steel_cu_cply"])
+    for col, key in ((3, "crude_steel_cu_prev"), (4, "crude_steel_cu_cur"), (5, "crude_steel_cu_cply")):
+        ws.cell(row=15, column=col, value=qc[key]).number_format = "0.00"
 
     buf = io.BytesIO()
     wb.save(buf)

@@ -45,6 +45,7 @@ const VIEWS = {
   'pmix-fy': dynamic(() => import('./pmix-fy/View'), { loading }),
   'sefi': dynamic(() => import('./sefi/View'), { loading }),
   'steel-bulletin': dynamic(() => import('./steel-bulletin/View'), { loading }),
+  'cmd-monthly-report': dynamic(() => import('./cmd-monthly-report/View'), { loading }),
 };
 
 /**

@@ -83,6 +83,65 @@ def _ph(lst):
     return ','.join(['%s'] * len(lst))
 
 
+def _monthly_totals(cur, month: str) -> dict:
+    """{item_name: {report_month: SAIL total}} for every month up to `month`
+    — ALL_PLANTS null-skipped sum, Finished Steel plus Conversion."""
+    monthly = {n: {} for n, _ in _ITEMS}
+    for item, rm, total in rp.item_month_totals_upto(cur, list(monthly), ALL_PLANTS, month):
+        if total is None or item not in monthly:
+            continue
+        monthly[item][rm] = monthly[item].get(rm, 0.0) + total
+
+    # Finished Steel also includes the SAIL-level "Conversion" figure —
+    # see db.get_sail_production_actual / _sail_conversion_actual.
+    for rm, total in rp.sail_conversion_totals_upto(cur, month):
+        if total is None:
+            continue
+        monthly['Finished Steel'][rm] = monthly['Finished Steel'].get(rm, 0.0) + total
+    return monthly
+
+
+def _month_records(monthly: dict, month: str) -> list:
+    """Items whose `month` total is the best for its calendar month name —
+    [{item, display, ever, line}], ever = also the best month of all time
+    (then "Previous best" is the all-time runner-up, else the same-month one)."""
+    mon_num = int(month[5:7])
+    out = []
+    for item, display in _ITEMS:
+        rows = [{'period': _mon_label(rm), 'month': rm, 'total': t}
+                for rm, t in monthly[item].items()]
+        this_row = next((r for r in rows if r['month'] == month), None)
+        if this_row is None:
+            continue
+        same_name = sorted((r for r in rows if int(r['month'][5:7]) == mon_num),
+                            key=lambda r: r['total'], reverse=True)
+        if not (same_name and same_name[0]['month'] == month):
+            continue
+        global_rank = sorted(rows, key=lambda r: r['total'], reverse=True)
+        is_global_best = bool(global_rank) and global_rank[0]['month'] == month
+        prev = (global_rank[1] if is_global_best and len(global_rank) > 1
+                else (same_name[1] if len(same_name) > 1 else None))
+        if prev is None:
+            continue
+        out.append({
+            'item': item, 'display': display, 'ever': is_global_best,
+            'line': f"{display} :: {_fmt_mt(this_row['total'])} MT "
+                    f"(Previous best {_fmt_mt(prev['total'])} MT in {prev['period']})",
+        })
+    return out
+
+
+def best_month_records(month: str) -> list:
+    """Page 3's monthly-record lines for `month`, for other reports (CMD
+    Monthly Activity Report) that must show the same highlights."""
+    conn = dbengine.connect()
+    cur = conn.cursor()
+    try:
+        return _month_records(_monthly_totals(cur, month), month)
+    finally:
+        conn.close()
+
+
 def generate_page3_highlights(month: str) -> list:
     dt = _dt.datetime.strptime(month, "%Y-%m")
     mon_num  = dt.month
@@ -99,48 +158,18 @@ def generate_page3_highlights(month: str) -> list:
     conn = dbengine.connect()
     cur = conn.cursor()
     try:
-        monthly = {n: {} for n in item_names}
-        for item, rm, total in rp.item_month_totals_upto(cur, item_names, ALL_PLANTS, month):
-            if total is None or item not in monthly:
-                continue
-            monthly[item][rm] = monthly[item].get(rm, 0.0) + total
-
-        # Finished Steel also includes the SAIL-level "Conversion" figure —
-        # see db.get_sail_production_actual / _sail_conversion_actual.
-        for rm, total in rp.sail_conversion_totals_upto(cur, month):
-            if total is None:
-                continue
-            monthly['Finished Steel'][rm] = monthly['Finished Steel'].get(rm, 0.0) + total
+        monthly = _monthly_totals(cur, month)
 
         # candidates: list of {tier, headline, line}, one per item/period record.
         candidates = []
 
         # ── Monthly record check ────────────────────────────────────────────
-        for item in item_names:
-            rows = [{'period': _mon_label(rm), 'month': rm, 'total': t}
-                    for rm, t in monthly[item].items()]
-            this_row = next((r for r in rows if r['month'] == month), None)
-            if this_row is None:
-                continue
-            same_name = sorted((r for r in rows if int(r['month'][5:7]) == mon_num),
-                                key=lambda r: r['total'], reverse=True)
-            if not (same_name and same_name[0]['month'] == month):
-                continue
-            global_rank = sorted(rows, key=lambda r: r['total'], reverse=True)
-            is_global_best = global_rank and global_rank[0]['month'] == month
-            prev = (global_rank[1] if is_global_best and len(global_rank) > 1
-                    else (same_name[1] if len(same_name) > 1 else None))
-            if prev is None:
-                continue
-            if is_global_best:
+        for r in _month_records(monthly, month):
+            if r['ever']:
                 tier, headline = _TIER_MONTH_EVER, "SAIL achieved best ever month production for following"
             else:
                 tier, headline = _TIER_MONTH_SAME, f"SAIL achieved best {_MON_FULL[mon_num]} production for following"
-            candidates.append({
-                'tier': tier, 'headline': headline,
-                'line': f"{display_of[item]} :: {_fmt_mt(this_row['total'])} MT "
-                        f"(Previous best {_fmt_mt(prev['total'])} MT in {prev['period']})",
-            })
+            candidates.append({'tier': tier, 'headline': headline, 'line': r['line']})
 
         def period_totals(n_months_required, key_fn):
             """Groups monthly[item] into buckets keyed by key_fn(report_month)
