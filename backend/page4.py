@@ -392,25 +392,27 @@ def _safe_cu(act_s, capacity):
 
 
 def _fs_pct_ss_row(cur, month: str, raw: bool) -> dict:
-    """The last row: SAIL Finished Steel (excl. conversion) as a % of SAIL
-    Saleable Steel, for the four actual columns only (month, CPLY month,
-    Apr-month, CPLY Apr-month); its label spans the columns up to the
-    monthly plan. raw=True: floats (None when missing), else "92.3" strings."""
+    """The last row: SAIL Finished Steel incl. conversion (the "SAIL incl.
+    conversion" row's actual) as a % of SAIL Saleable Steel, for the four
+    actual columns only (month, CPLY month, Apr-month, CPLY Apr-month); its
+    label spans the columns up to the monthly plan. raw=True: floats (None
+    when missing), else "92.3" strings."""
     sail_set = _5P + ["ASP", "SSP", "VISL"]
     prev_m = month_utils.get_cply_month(month)
     ytd_ms, ytd_prevs = month_utils.get_ytd_months(month), month_utils.get_ytd_months(prev_m)
+    conv = dict(zip((2, 5, 9, 12), _p4_conv_actuals(cur, month)))
 
-    def ratio(fs, ss):
-        return fs * 100 / ss if fs is not None and ss else None
-
-    def pair(get):
-        return ratio(get("Finished Steel"), get("Saleable Steel"))
+    def ratio(col, get):
+        fs, ss, cv = get("Finished Steel"), get("Saleable Steel"), conv[col]
+        if fs is None and cv is None or not ss:
+            return None
+        return ((fs or 0.0) + (cv or 0.0)) * 100 / ss
 
     vals = [None] * 15
-    vals[2] = pair(lambda it: _p4_get(cur, "act", month, "SAIL", it, _5P, sail_set))
-    vals[5] = pair(lambda it: _p4_get(cur, "act", prev_m, "SAIL", it, _5P, sail_set))
-    vals[9] = pair(lambda it: _p4_ytd_sum(cur, "act", ytd_ms, "SAIL", it, _5P, sail_set))
-    vals[12] = pair(lambda it: _p4_ytd_sum(cur, "act", ytd_prevs, "SAIL", it, _5P, sail_set))
+    vals[2] = ratio(2, lambda it: _p4_get(cur, "act", month, "SAIL", it, _5P, sail_set))
+    vals[5] = ratio(5, lambda it: _p4_get(cur, "act", prev_m, "SAIL", it, _5P, sail_set))
+    vals[9] = ratio(9, lambda it: _p4_ytd_sum(cur, "act", ytd_ms, "SAIL", it, _5P, sail_set))
+    vals[12] = ratio(12, lambda it: _p4_ytd_sum(cur, "act", ytd_prevs, "SAIL", it, _5P, sail_set))
     if not raw:
         vals = ["" if v is None else f"{v:.1f}" for v in vals]
     return {
