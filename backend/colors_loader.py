@@ -42,6 +42,9 @@ _DEFAULTS: Dict[str, str] = {
     "mines_perf_total_bg": "#FEF3C7",
     "rmt_op_bg": "#DDEBF7",
     "rmt_header_bg": "#E2E8F0",
+    "rmt_remark_blue":  "#0070C0",
+    "rmt_remark_red":   "#FF0000",
+    "rmt_remark_brown": "#B7410E",
 
     "techno_cat_fuel_bg":          "#fde2c8",
     "techno_cat_energy_bg":        "#fff3c4",

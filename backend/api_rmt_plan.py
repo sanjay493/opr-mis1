@@ -139,8 +139,18 @@ def _xl_num(v):
     return round(v, 1) if abs(v) < 100 and round(v, 1) != round(v) else round(v)
 
 
-def _plain(text):
-    return re.sub(r"\*\*(.+?)\*\*", r"\1", text, flags=re.S) if text else text
+def _xl_rich(text, colors: dict):
+    """A remark for an Excel cell: rich text when it has bold / colour marks."""
+    from openpyxl.cell.rich_text import CellRichText, TextBlock
+    from openpyxl.cell.text import InlineFont
+
+    parts = rmt_plan_pdf.runs(text)
+    if not any(bold or color for _, bold, color in parts):
+        return rmt_plan_pdf.plain(text)
+    rgb = {k: colors.get(f"rmt_remark_{k}", d).lstrip("#")[:6] for k, d in
+           (("blue", "#0070C0"), ("red", "#FF0000"), ("brown", "#B7410E"))}
+    return CellRichText(*[TextBlock(InlineFont(b=bold or None, color=rgb[color] if color else None), t)
+                          for t, bold, color in parts])
 
 
 def _workbook(data: dict) -> bytes:
@@ -188,10 +198,11 @@ def _workbook(data: dict) -> bytes:
                     cell.fill = f
                 if row["total"]:
                     cell.font = bold
-            rm = ws.cell(r, remarks_col, _plain(row["remarks"]))
+            rm = ws.cell(r, remarks_col, _xl_rich(row["remarks"], colors))
             rm.alignment = wrap
             if row["remarks"]:
-                ws.row_dimensions[r].height = max(15, 13 * (len(row["remarks"]) // 95 + row["remarks"].count("\n") + 1))
+                txt = rmt_plan_pdf.plain(row["remarks"])
+                ws.row_dimensions[r].height = max(15, 13 * (len(txt) // 95 + txt.count("\n") + 1))
             r += 1
         ws.cell(start, 1, label)
         ws.merge_cells(start_row=start, start_column=1, end_row=r - 1, end_column=1)
@@ -263,7 +274,7 @@ def _workbook(data: dict) -> bytes:
         for row in rows:
             for c, k in enumerate(["from_plant", "to_plant", "availability", "requirement"], start=2):
                 ws.cell(r, c, row[k]).alignment = center
-            ws.cell(r, 6, _plain(row["remarks"])).alignment = wrap
+            ws.cell(r, 6, _xl_rich(row["remarks"], colors)).alignment = wrap
             r += 1
         ws.cell(start, 1, item).font = bold
         ws.cell(start, 1).alignment = center

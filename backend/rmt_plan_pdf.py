@@ -26,13 +26,56 @@ def num(v) -> str:
     return "0" if s == "-0" else s
 
 
+# Remarks markup (as the entry form writes it): **bold**, [blue]…[/blue],
+# [red]…[/red], [brown]…[/brown] (rust brown), nestable. An opening mark with
+# no closing one stays literal text. Same rules as the frontend's
+# components/reports/rmt-plan/rich.js.
+_TOKEN = re.compile(r"\*\*|\[(/?)(blue|red|brown)\]")
+
+
+def runs(text) -> list:
+    """[(text, bold, colour or None)] for one remark."""
+    out, bold, colors, last = [], False, [], 0
+    text = (text or "").replace("\r\n", "\n")
+    for m in _TOKEN.finditer(text):
+        tok, close, name = m.group(0), m.group(1), m.group(2)
+        rest = text[m.end():]
+        if tok == "**":
+            ok = bold or "**" in rest
+        elif close:
+            ok = bool(colors) and colors[-1] == name
+        else:
+            ok = f"[/{name}]" in rest
+        if not ok:
+            continue  # literal: stays in the text
+        if m.start() > last:
+            out.append((text[last:m.start()], bold, colors[-1] if colors else None))
+        if tok == "**":
+            bold = not bold
+        elif close:
+            colors.pop()
+        else:
+            colors.append(name)
+        last = m.end()
+    if last < len(text):
+        out.append((text[last:], bold, colors[-1] if colors else None))
+    return out
+
+
+def plain(text):
+    """The remark with every mark removed."""
+    return "".join(t for t, _, _ in runs(text)) if text else text
+
+
 def rich(text) -> str:
-    """Remarks: escaped, **bold** and line breaks kept."""
-    if not text:
-        return ""
-    s = escape(text, quote=False)
-    s = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", s, flags=re.S)
-    return s.replace("\r\n", "\n").replace("\n", "<br>")
+    """Remarks as HTML: escaped, bold / colour marks and line breaks kept."""
+    html = []
+    for t, bold, color in runs(text):
+        s = escape(t, quote=False).replace("\n", "<br>")
+        if color:
+            s = f'<span class="rk-{color}">{s}</span>'
+        html.append(f"<b>{s}</b>" if bold else s)
+    return "".join(html)
 
 
 def _page1(data) -> str:
@@ -186,6 +229,9 @@ def build_html(data: dict, colors: dict) -> str:
   th.op, td.op {{ background: {c("rmt_op_bg", "#DDEBF7")}; }}
   th.act, td.act {{ background: {c("perf_act_bg", "#C6EFCE")}; }}
   td.rm {{ font-size: 7.6pt; text-align: left; }}
+  .rk-blue {{ color: {c("rmt_remark_blue", "#0070C0")}; }}
+  .rk-red {{ color: {c("rmt_remark_red", "#FF0000")}; }}
+  .rk-brown {{ color: {c("rmt_remark_brown", "#B7410E")}; }}
   tr.tot td {{ font-weight: 700; }}
   td.ent {{ text-align: center; vertical-align: middle; padding: 2px 0; }}
   td.ent div {{ writing-mode: vertical-rl; transform: rotate(180deg); margin: 0 auto; font-weight: 700; font-size: 8.5pt; }}

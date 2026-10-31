@@ -1,9 +1,10 @@
 'use client';
 
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import RequireEditor from '@/components/RequireEditor';
 import { EntryPage, ContextBar, Field, Section, Status, Loading, SaveButton, cellClass, entryStyles as e, wb } from '../EntryUI';
+import { REMARK_COLORS, Rich, plain, wrapSelection, clearSelection } from '../../reports/rmt-plan/rich';
 
 const API = process.env.NEXT_PUBLIC_API_URL || '';
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -55,6 +56,44 @@ function RowButtons({ i, n, onMove, onDelete }) {
   );
 }
 
+// Bold / colour buttons for the remark textarea last focused (`targetRef`:
+// a ref to { el, set }). onMouseDown keeps the textarea's selection.
+function MarkTools({ targetRef }) {
+  const apply = (fn) => {
+    const t = targetRef.current;
+    if (t?.el.isConnected) fn(t.el, t.set);
+  };
+  const keep = (ev) => ev.preventDefault();
+  return (
+    <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+      <span className={wb.muted} style={{ fontSize: 12 }}>Selected text:</span>
+      <button type="button" className={`${wb.btn} ${wb.btnSm}`} title="Bold (**…**)" onMouseDown={keep}
+              onClick={() => apply((el, set) => wrapSelection(el, '**', '**', set))}><b>B</b></button>
+      {Object.entries(REMARK_COLORS).map(([k, c]) => (
+        <button key={k} type="button" className={`${wb.btn} ${wb.btnSm}`} title={`${c.label} ([${k}]…[/${k}])`} onMouseDown={keep}
+                style={{ color: c.hex, fontWeight: 600 }}
+                onClick={() => apply((el, set) => wrapSelection(el, `[${k}]`, `[/${k}]`, set))}>{c.label}</button>
+      ))}
+      <button type="button" className={`${wb.btn} ${wb.btnSm}`} title="Remove bold / colour from the selection (or the whole remark)" onMouseDown={keep}
+              onClick={() => apply(clearSelection)}>Clear</button>
+    </div>
+  );
+}
+
+// A remark textarea, with a preview of how it prints once it has marks.
+function RemarkBox({ value, rows, label, set, targetRef }) {
+  return (
+    <>
+      <textarea className={e.textarea} rows={rows} value={value} aria-label={label}
+                onFocus={(ev) => { targetRef.current = { el: ev.target, set }; }}
+                onChange={(ev) => set(ev.target.value)} />
+      {value !== plain(value) && (
+        <div style={{ fontSize: 12, padding: '2px 4px', lineHeight: 1.4 }}><Rich text={value} /></div>
+      )}
+    </>
+  );
+}
+
 function RmtPlanInner() {
   const start = nextMonth();
   const [month, setMonth] = useState(start.month);
@@ -65,6 +104,7 @@ function RmtPlanInner() {
   const [loadError, setLoadError] = useState(null);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState(null);
+  const markTarget = useRef(null); // the remark textarea MarkTools acts on
 
   const reportMonth = `${year}-${month}`;
   const monthLabel = `${MONTHS[Number(month) - 1]} ${year}`;
@@ -135,7 +175,7 @@ function RmtPlanInner() {
     >
       <ContextBar actions={(
         <>
-          <Link href="/reports/production-analysis?tab=rmt-plan" className={wb.btn}>View report</Link>
+          <Link href="/reports/external?tab=rmt-plan" className={wb.btn}>View report</Link>
           <SaveButton dirty={dirty} saving={saving} onClick={save}>Save</SaveButton>
         </>
       )}>
@@ -160,7 +200,7 @@ function RmtPlanInner() {
 
       {loading ? (!error && <Loading />) : (
         <>
-          <Section title="Remarks (pages 1 & 2)" sub="Shutdown / capital repair plan, requirements, … per plant. Wrap text in **double stars** to print it bold; line breaks are kept.">
+          <Section title="Remarks (pages 1 & 2)" sub="Shutdown / capital repair plan, requirements, … per plant. Select part of a remark and click Bold or a colour (stored as **…**, [blue]…[/blue], [red]…[/red], [brown]…[/brown]); line breaks are kept." actions={<MarkTools targetRef={markTarget} />}>
             <table className={e.table}>
               <thead>
                 <tr>
@@ -178,9 +218,9 @@ function RmtPlanInner() {
                         <tr key={r}>
                           <td className={e.itemCell}>{r}</td>
                           <td>
-                            <textarea className={e.textarea} rows={n.remarks.includes('\n') || n.remarks.length > 90 ? 3 : 1}
-                                      value={n.remarks} aria-label={`${s.label} remarks for ${r}`}
-                                      onChange={(ev) => setNote(s.key, r, 'remarks', ev.target.value)} />
+                            <RemarkBox value={n.remarks} rows={n.remarks.includes('\n') || n.remarks.length > 90 ? 3 : 1}
+                                       label={`${s.label} remarks for ${r}`} targetRef={markTarget}
+                                       set={(v) => setNote(s.key, r, 'remarks', v)} />
                           </td>
                         </tr>
                       );
@@ -194,7 +234,12 @@ function RmtPlanInner() {
           <Section
             title="IPT Requirement / Availability (page 3)"
             sub="Unit: T, or rakes as text ('8 Rakes'). Consecutive rows with the same item print as one group."
-            actions={<button type="button" className={`${wb.btn} ${wb.btnSm}`} onClick={() => setList('ipt', (l) => [...l, { ...EMPTY_IPT }])}>+ Add row</button>}
+            actions={(
+              <>
+                <MarkTools targetRef={markTarget} />
+                <button type="button" className={`${wb.btn} ${wb.btnSm}`} onClick={() => setList('ipt', (l) => [...l, { ...EMPTY_IPT }])}>+ Add row</button>
+              </>
+            )}
           >
             <datalist id="rmt-ipt-items">{IPT_ITEMS.map((x) => <option key={x} value={x} />)}</datalist>
             <datalist id="rmt-plants">{PLANTS.map((x) => <option key={x} value={x} />)}</datalist>
@@ -214,7 +259,7 @@ function RmtPlanInner() {
                       <td><input className={cellClass({ text: true, filled: r.to_plant !== '' })} list="rmt-plants" value={r.to_plant} aria-label="To plant" onChange={(ev) => setCell('ipt', i, 'to_plant', ev.target.value)} /></td>
                       <td><input className={cellClass({ text: true, filled: r.availability !== '' })} value={r.availability} aria-label="Availability" onChange={(ev) => setCell('ipt', i, 'availability', ev.target.value)} /></td>
                       <td><input className={cellClass({ text: true, filled: r.requirement !== '' })} value={r.requirement} aria-label="Requirement" onChange={(ev) => setCell('ipt', i, 'requirement', ev.target.value)} /></td>
-                      <td><textarea className={e.textarea} rows={r.remarks.includes('\n') ? 3 : 1} value={r.remarks} aria-label="Remarks" onChange={(ev) => setCell('ipt', i, 'remarks', ev.target.value)} /></td>
+                      <td><RemarkBox value={r.remarks} rows={r.remarks.includes('\n') ? 3 : 1} label="Remarks" targetRef={markTarget} set={(v) => setCell('ipt', i, 'remarks', v)} /></td>
                       <td><RowButtons i={i} n={form.ipt.length} onMove={(k, d) => setList('ipt', (l) => move(l, k, d))} onDelete={(k) => setList('ipt', (l) => l.filter((_, j) => j !== k))} /></td>
                     </tr>
                   ))}

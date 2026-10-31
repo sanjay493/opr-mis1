@@ -40,6 +40,10 @@
   "mines_perf_total_bg": "#FEF3C7",
   "rmt_op_bg": "#DDEBF7",
   "rmt_header_bg": "#E2E8F0",
+  "_doc_rmt_remark": "RMT Production Plan remarks: text the user marks [blue]…[/blue], [red]…[/red] or [brown]…[/brown] (rust brown) in the entry form. The browser view keeps its own copy in frontend/src/components/reports/rmt-plan/rich.js.",
+  "rmt_remark_blue":  "#0070C0",
+  "rmt_remark_red":   "#FF0000",
+  "rmt_remark_brown": "#B7410E",
 
   "_doc_plant_colors": "Pages 7-13 (10 Years Month Wise Production Trend): one fixed background per individual plant's stacked-letter label column, kept the same everywhere that plant appears across every trend page (SAIL/'5 Plants' aggregates keep their own highlight_agg_* colors above instead).",
 

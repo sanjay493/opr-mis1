@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ReportPage, FilterBar, Field, Status, Section, Loading, Empty, wb } from '../ReportUI';
+import { Rich } from './rich';
 
 const API = process.env.NEXT_PUBLIC_API_URL || '';
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -19,17 +20,6 @@ function num(v) {
   if (v == null) return '';
   if (Math.abs(v) < 100 && Math.round(v * 10) / 10 !== Math.round(v)) return v.toFixed(1);
   return String(Math.round(v));
-}
-
-// Remarks: **bold** (which may span lines) and line breaks, without injecting HTML.
-function Rich({ text }) {
-  if (!text) return null;
-  const lines = (part) => part.split('\n').map((line, i) => (
-    <Fragment key={i}>{i > 0 && <br />}{line}</Fragment>
-  ));
-  return text.split(/\*\*([\s\S]+?)\*\*/g).map((part, j) => (
-    j % 2 ? <b key={j}>{lines(part)}</b> : <Fragment key={j}>{lines(part)}</Fragment>
-  ));
 }
 
 const T = { width: '100%', borderCollapse: 'collapse', fontSize: 12.5, tableLayout: 'fixed' };

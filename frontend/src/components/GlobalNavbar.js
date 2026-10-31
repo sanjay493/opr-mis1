@@ -91,7 +91,7 @@ export default function GlobalNavbar() {
       submenu: [
         { label: 'OMI Generate', link: '/report', icon: '📈' },
         { label: 'Production Reports', link: '/reports/production-analysis', icon: '📊' },
-        { label: 'RMT Production Plan', link: '/reports/production-analysis?tab=rmt-plan', icon: '🗓️' },
+        { label: 'RMT Production Plan', link: '/reports/external?tab=rmt-plan', icon: '🗓️' },
         { label: 'Special Steel, IPT & BF Benchmarking', link: '/reports/special-steel-ipt', icon: '🔩' },
         { label: 'Iron Ore Mines', link: '/reports/mines', icon: '⛏️' },
         { label: 'Cost of Production', link: '/reports/cost-production', icon: '💰' },
