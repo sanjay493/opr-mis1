@@ -110,6 +110,12 @@ PAGE_MODULES = {
             ("POST", "/api/op-plan/extract", False),
         ],
     },
+    "rmt_plan": {
+        "label": "RMT Production Plan (remarks, IPT, stock)",
+        "routes": [
+            ("POST", "/api/rmt-plan", False),
+        ],
+    },
     "unique_activities": {
         "label": "Unique Activities",
         "routes": [

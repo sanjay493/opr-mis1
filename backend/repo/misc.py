@@ -999,3 +999,93 @@ def delete_unique_activity(activity_id):
         return cur.rowcount > 0
     finally:
         conn.close()
+
+
+# ── rmt_month / rmt_plan_note / rmt_ipt_row / rmt_stock_row (api_rmt_plan) ──
+# v2-only: the manual parts of the RMT "Production Plan" report. A save
+# replaces the month's rows in all four tables in one transaction.
+
+def rmt_plan_manual(month):
+    """The month's manual RMT data: {"stock_as_on": 'YYYY-MM-DD' or None,
+    "note", "updated_by", "updated_at", "notes": [{section, row_label, remarks,
+    coal_req_app, coal_req_op}], "ipt": [{item, from_plant, to_plant,
+    availability, requirement, remarks}], "stock": [{plant, bf_coke, slab,
+    bloom}]} (rows in printed order); None when nothing is saved."""
+    conn = connect()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT DATE_FORMAT(stock_as_on, '%%Y-%%m-%%d'), note, updated_by, "
+                    "DATE_FORMAT(updated_at, '%%Y-%%m-%%d %%H:%%i') FROM rmt_month WHERE report_month = %s",
+                    (month,))
+        head = cur.fetchone()
+        if head is None:
+            return None
+        cur.execute("SELECT section, row_label, remarks, coal_req_app, coal_req_op FROM rmt_plan_note "
+                    "WHERE report_month = %s ORDER BY section, row_label", (month,))
+        notes = [dict(zip(("section", "row_label", "remarks", "coal_req_app", "coal_req_op"), r))
+                 for r in cur.fetchall()]
+        cur.execute("SELECT item, from_plant, to_plant, availability, requirement, remarks FROM rmt_ipt_row "
+                    "WHERE report_month = %s ORDER BY seq", (month,))
+        ipt = [dict(zip(("item", "from_plant", "to_plant", "availability", "requirement", "remarks"), r))
+               for r in cur.fetchall()]
+        cur.execute("SELECT plant, bf_coke, slab, bloom FROM rmt_stock_row WHERE report_month = %s ORDER BY seq",
+                    (month,))
+        stock = [dict(zip(("plant", "bf_coke", "slab", "bloom"), r)) for r in cur.fetchall()]
+        return {"stock_as_on": head[0], "note": head[1], "updated_by": head[2], "updated_at": head[3],
+                "notes": notes, "ipt": ipt, "stock": stock}
+    finally:
+        conn.close()
+
+
+def save_rmt_plan_manual(month, stock_as_on, note, notes, ipt, stock, user):
+    """Replace the month's manual RMT data (rmt_plan_manual's shape; notes /
+    ipt / stock as lists of those dicts, in printed order). stock_as_on is
+    'YYYY-MM-DD' or None."""
+    month = _keys.fit_month(month)
+    _keys.check_month(month)
+    _keys.fits("note", note, 255)
+    _keys.fits("updated_by", user, 255)
+    for n in notes:
+        _keys.fits("section", n["section"], 8, nullable=False)
+        _keys.fits("row_label", n["row_label"], 16, nullable=False)
+    for r in ipt:
+        _keys.fits("item", r["item"], 64, nullable=False)
+        for k in ("from_plant", "to_plant"):
+            _keys.fits(k, r.get(k), 16)
+        for k in ("availability", "requirement"):
+            _keys.fits(k, r.get(k), 40)
+    for r in stock:
+        _keys.fits("plant", r["plant"], 16, nullable=False)
+        for k in ("bf_coke", "slab", "bloom"):
+            _keys.fits(k, r.get(k), 80)
+    conn = connect()
+    try:
+        cur = conn.cursor()
+        _ver.bump(cur)
+        _keys.ensure_month(cur, month, bump=False)
+        cur.execute("INSERT INTO rmt_month (report_month, stock_as_on, note, updated_by, updated_at)"
+                    " VALUES (%s, %s, %s, %s, NOW()) AS new ON DUPLICATE KEY UPDATE stock_as_on = new.stock_as_on,"
+                    " note = new.note, updated_by = new.updated_by, updated_at = new.updated_at",
+                    (month, stock_as_on, note, user))
+        for table in ("rmt_plan_note", "rmt_ipt_row", "rmt_stock_row"):
+            cur.execute(f"DELETE FROM {table} WHERE report_month = %s", (month,))
+        if notes:
+            cur.executemany("INSERT INTO rmt_plan_note (report_month, section, row_label, remarks, coal_req_app,"
+                            " coal_req_op) VALUES (%s, %s, %s, %s, %s, %s)",
+                            [(month, n["section"], n["row_label"], n.get("remarks"), n.get("coal_req_app"),
+                              n.get("coal_req_op")) for n in notes])
+        if ipt:
+            cur.executemany("INSERT INTO rmt_ipt_row (report_month, seq, item, from_plant, to_plant, availability,"
+                            " requirement, remarks) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                            [(month, i, r["item"], r.get("from_plant"), r.get("to_plant"), r.get("availability"),
+                              r.get("requirement"), r.get("remarks")) for i, r in enumerate(ipt, start=1)])
+        if stock:
+            cur.executemany("INSERT INTO rmt_stock_row (report_month, seq, plant, bf_coke, slab, bloom)"
+                            " VALUES (%s, %s, %s, %s, %s, %s)",
+                            [(month, i, r["plant"], r.get("bf_coke"), r.get("slab"), r.get("bloom"))
+                             for i, r in enumerate(stock, start=1)])
+        conn.commit()
+    finally:
+        conn.close()
+    activity_context.record(f"rmt_plan/{month}", None,
+                            {"notes": len(notes), "ipt": len(ipt), "stock": len(stock)})

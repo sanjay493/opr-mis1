@@ -80,7 +80,7 @@ A **new table** must also be known to the table-map test: `tests/test_schema_v2.
 `NEW_DIMENSIONS` in that file (the set of v2-only tables). Do not touch the `V1-TABLE-MAP` block;
 it records the v1 migration.
 
-The table count quoted in `SETUP.md` section 4 and `DB_V2_CUTOVER.md` Step 3 ("65 tables")
+The table count quoted in `SETUP.md` section 4 and `DB_V2_CUTOVER.md` Step 3 ("69 tables")
 changes too; update both numbers.
 
 ## Step 4. Write the migration for the live database

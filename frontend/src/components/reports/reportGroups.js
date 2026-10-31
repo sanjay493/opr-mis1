@@ -20,6 +20,7 @@ export const REPORT_GROUPS = [
       { id: 'production-query', label: 'Unit-wise Production Query', description: 'Ad-hoc unit-wise production lookup across months.' },
       { id: 'production-items', label: 'Production Items (Month & Unit-wise)', description: 'Oven Pushing / Sinter / Hot Metal / Crude Steel / Pig Iron / Finished Steel / Saleable Steel.' },
       { id: 'op-comparison', label: 'OP vs APP vs Actual', description: 'Production against the monthly Operating Plan and the Annual Plan, month and till month, plant-wise and SAIL.' },
+      { id: 'rmt-plan', label: 'RMT Production Plan', description: 'The RMT meeting monthly production plan: HM / Crude / Saleable Steel APP and OP against last month and last year, Oven Pushing, Sinter, Pig Iron, IPT requirement / availability and stock; PDF and Excel download.' },
       { id: 'special-steel-physical', label: 'Special Steel Plants Physical Performance', description: 'Multi-year history for ASP / SSP / VISP.' },
     ],
   },

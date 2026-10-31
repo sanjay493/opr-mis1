@@ -148,7 +148,7 @@ WRITE_FUNCTIONS = {
              "save_major_unit_daily_record", "save_market_price_trend", "save_pdf_item_alias",
              "save_rail_report_data", "save_ready_reckoner_content", "save_ready_reckoner_image",
              "update_external_bf", "update_external_bf_data", "upsert_bf_sail_meta", "upsert_power_value",
-             "save_unique_activity", "upsert_ready_reckoner_master", "upsert_steel_sector_performance"),
+             "save_rmt_plan_manual", "save_unique_activity", "upsert_ready_reckoner_master", "upsert_steel_sector_performance"),
     "ops": ("add_admin_notification", "complete_todo_job", "delete_allowed_email", "delete_todo_job",
             "delete_user", "delete_worklog_entry", "insert_todo_job", "insert_user", "insert_worklog_entry",
             "log_activity", "log_extraction", "log_page_visit", "otp_insert", "otp_invalidate_unused",
