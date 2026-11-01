@@ -1440,6 +1440,19 @@ def _extract_morning_stock(ws, db_report_month: str) -> list:
     ]
 
 
+def _find_morning_sheet(wb):
+    """Daily Morning Report sheet: named 'RSP Morning Report Data for-…', or (from
+    Oct 2026, e.g. 'RSPMR_CO_REPORT_311026') any sheet whose A1 title is
+    'RSP Daily Morning Report'."""
+    for s in wb.sheetnames:
+        if s.strip().lower().startswith("rsp morning report data for-"):
+            return s
+    for s in wb.sheetnames:
+        if "rsp daily morning report" in str(wb[s]["A1"].value or "").lower():
+            return s
+    return None
+
+
 def extract_preview(file_path: str, report_month: str) -> dict:
     """Unified RSP preview: production + techno_table + mill/sinter techno params.
     Auto-detects file type. No database writes."""
@@ -1511,9 +1524,7 @@ def extract_preview(file_path: str, report_month: str) -> dict:
                     f"RSP page-1-8 techno: could not locate month '{month_num}'/Cum "
                     f"header columns on sheet {ws_p18.title!r} — skipping techno_rows.")
     else:
-        morning_sheet = next(
-            (s for s in sheet_names
-             if s.strip().lower().startswith("rsp morning report data for-")), None)
+        morning_sheet = _find_morning_sheet(wb)
         if morning_sheet:
             source_type = "Daily Morning Report"
             sheets_used = morning_sheet
@@ -1590,9 +1601,7 @@ def extract_and_save_excel(file_path: str, report_month: str,
             return _extract_monthly_report(wb, report_month, source_file_name,
                                            p9_sheet, p18_sheet)
 
-        morning_sheet = next(
-            (s for s in sheet_names
-             if s.strip().lower().startswith("rsp morning report data for-")), None)
+        morning_sheet = _find_morning_sheet(wb)
         if morning_sheet:
             return _extract_morning_report(wb, morning_sheet, source_file_name)
 
