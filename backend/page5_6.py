@@ -386,8 +386,12 @@ def _pct(a, p):
 
 
 def _growth(curr, prev):
-    if curr is None or prev is None or prev == 0:
+    """%Gr. over last year; "-" when last year is 0 (e.g. a unit commissioned
+    since), blank when either figure is missing."""
+    if curr is None or prev is None:
         return ""
+    if prev == 0:
+        return "-"
     try:
         return str(int(_math.floor((float(curr) - float(prev)) / abs(float(prev)) * 100 + 0.5)))
     except Exception:
