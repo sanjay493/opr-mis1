@@ -76,7 +76,7 @@ load_dotenv(BACKEND_DIR / ".env")
 _TEST_DB_PREFIX = "mis_reports_test_"
 _SCHEMA_V1 = Path(__file__).resolve().parent / "fixtures" / "schema_v1.sql"
 # Migrations applied on top of schema_v1 (the v1 live schema dump), in order.
-V1_MIGRATION_DIR = BACKEND_DIR / "scripts"
+V1_MIGRATION_DIR = BACKEND_DIR / "legacy" / "v1_sql"
 _V1_MIGRATIONS = (
     V1_MIGRATION_DIR / "migrate_add_data_version.sql",
     V1_MIGRATION_DIR / "migrate_add_perf_indexes.sql",

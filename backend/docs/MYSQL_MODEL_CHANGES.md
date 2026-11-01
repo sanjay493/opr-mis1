@@ -20,8 +20,8 @@ The cutover from v1 is history (`DB_V2_CUTOVER.md`). Which table feeds which rep
 3. **Every repo write bumps `data_version` first**, on the same cursor and before the first
    write: `_ver.bump(cur)` (`from repo import version as _ver`). The page cache is keyed on it
    (`tests/test_repo_writes_bump.py`).
-4. **Do not use the v1 files.** `backend/scripts/*.sql` outside `v2/`, `mysql_schema.sql` and
-   `backfill_*.py` are v1 history. Never run them against `mis_reports_v2`.
+4. **Do not use the v1 files.** `backend/legacy/v1_sql/` (old `migrate_*.sql`, `mysql_schema.sql`)
+   and `scripts/backfill_*.py` are v1 history. Never run them against `mis_reports_v2`.
 5. **Back up before touching the live database**, and never paste a password into a command.
    Use the option files `C:\mysql\rmg_client.cnf` (root) and `C:\mysql\backup.cnf` (`mis_app`).
 

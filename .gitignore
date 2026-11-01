@@ -41,3 +41,5 @@ frontend/.stitch/
 
 # graphify knowledge graph output (local, regenerable)
 graphify-out/
+
+.claude/settings.local.json

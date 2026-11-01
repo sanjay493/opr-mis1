@@ -316,8 +316,8 @@ The v2 code cannot run on v1, so a rollback is "old code + old database":
 - **Preview dry run deadlock.** `/api/preview-plan` and the other dry runs hold share locks without
   bumping the version. Under concurrent saves MySQL can roll one side back with a deadlock error.
   It is rare, the preview writes nothing anyway, and a retry works.
-- **`backend/scripts/` backfill scripts hold v1 SQL.** `backfill_*.py`, `migrate_*.sql` (outside
-  `scripts/v2/`), `mysql_schema.sql` and the one-off scripts there are historical. Do not run them
+- **`backend/scripts/` backfill scripts hold v1 SQL.** `backfill_*.py`, the one-off scripts there
+  and the v1 `migrate_*.sql` / `mysql_schema.sql` (now in `backend/legacy/v1_sql/`) are historical. Do not run them
   against v2. New writers must go through `backend/repo/`.
 - **Unknown plants and spellings.** A write for a plant that is not in the master creates a
   `plant` row with `plant_kind = 'external'`, and a case-variant item or unit name creates one
