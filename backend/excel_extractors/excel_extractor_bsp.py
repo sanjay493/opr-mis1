@@ -173,6 +173,17 @@ def _report_day_of(y, m, d):
     return int(d), calendar.monthrange(int(y), int(m))[1]
 
 
+def _check_month(report: str, file_month: str, report_month) -> None:
+    """Refuse a file dated in another month than the one selected, rather than
+    silently saving under the file's month (a month the user never picked)."""
+    if report_month and file_month != report_month:
+        raise ValueError(
+            f"Month mismatch: this {report} is for {file_month}, but you selected "
+            f"{report_month}. Please select {file_month} in the month picker, "
+            f"or upload the {report} for {report_month}."
+        )
+
+
 def _is_mid_month(report_day, days_in_month) -> bool:
     return bool(report_day and days_in_month and 0 < report_day < days_in_month)
 
@@ -607,6 +618,7 @@ def extract_and_save_excel(file_path: str, report_month: str = None,
         if date_serial is not None:
             y, m, d, *_ = xlrd.xldate_as_tuple(date_serial, wb.datemode)
             db_report_month = f"{y}-{m:02d}"
+            _check_month("BSP PPC MIS report", db_report_month, report_month)
             report_day, days_in_month = _report_day_of(y, m, d)
             logger.info(f"BSP PPC MIS: month auto-detected → {db_report_month}")
         elif report_month:
@@ -1301,16 +1313,9 @@ def _extract_ppc_mis_preview(file_path: str, report_month: str) -> dict:
 
         ws_for_resolve = _CellValueAdapter(_cv)
 
-    month_mismatch = bool(
-        report_month and db_month not in ("unknown", report_month)
-    )
-    if month_mismatch:
-        logger.warning(
-            "BSP PPC MIS: file month %s ≠ selected month %s — file month will be used",
-            db_month, report_month,
-        )
-    else:
-        logger.info("BSP PPC MIS preview: month → %s", db_month)
+    if db_month != "unknown":
+        _check_month("BSP PPC MIS report", db_month, report_month)
+    logger.info("BSP PPC MIS preview: month → %s", db_month)
 
     mid_month = _is_mid_month(report_day, days_in_month)
     if mid_month:
@@ -1425,7 +1430,7 @@ def _extract_ppc_mis_preview(file_path: str, report_month: str) -> dict:
         "month":              db_month,
         "plant":              "BSP",
         "workbook_sheets":    wb_sheets,
-        "month_mismatch":     month_mismatch,
+        "month_mismatch":     False,
         "selected_month":     report_month or "",
         "production_rows":    production_rows,
         "techno_rows":        [],
@@ -1528,12 +1533,7 @@ def _extract_mis2_furnace_preview(wb, report_month: str) -> dict:
     db_month = f"{y}-{m:02d}"
     report_day, days_in_month = _report_day_of(y, m, d)
     mid_month = _is_mid_month(report_day, days_in_month)
-    month_mismatch = bool(report_month and db_month != report_month)
-    if month_mismatch:
-        logger.warning(
-            "BSP MIS-2: file month %s != selected month %s — file month will be used",
-            db_month, report_month,
-        )
+    _check_month("BSP MIS-2 report", db_month, report_month)
     if mid_month:
         logger.warning(
             "BSP MIS-2: report dated day %s of %s — column-D CUM tonnages projected "
@@ -1706,7 +1706,7 @@ def _extract_mis2_furnace_preview(wb, report_month: str) -> dict:
         "month":              db_month,
         "plant":              "BSP",
         "workbook_sheets":    wb.sheetnames,
-        "month_mismatch":     month_mismatch,
+        "month_mismatch":     False,
         "selected_month":     report_month or "",
         "production_rows":    production_rows,
         "techno_rows":        [],

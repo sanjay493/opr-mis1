@@ -67,3 +67,9 @@ def test_extract_and_save_excel_writes_production_rows(mysql_db, fake_ppc_mis):
     # Only SP-2 is resolvable on this sheet (every other item is found by its
     # own label or guarded by an anchor label that isn't there).
     assert rows == {"SP-2": pytest.approx(150.0)}
+
+
+def test_extract_and_save_excel_refuses_wrong_month(mysql_db, fake_ppc_mis):
+    with pytest.raises(ValueError, match="select 2026-08"):
+        bsp.extract_and_save_excel("ppc_mis.xls", "2026-07", source_file_name="ppc_mis.xls")
+    assert _rows() == {}
