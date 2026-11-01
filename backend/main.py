@@ -5937,6 +5937,28 @@ def get_techno_records():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/techno-best-periods")
+def get_techno_best_periods():
+    """Top 3 months ever and top 3 financial years (March cumulative) per
+    techno parameter, plant-wise + SAIL - same rows as /api/techno-records."""
+    import page_techno_records
+    try:
+        return page_techno_records.generate_techno_best_periods()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/techno-best-plants")
+def get_techno_best_plants():
+    """Per techno parameter, the 3 best plants / shops / furnaces by their own
+    best month and best year (March cumulative)."""
+    import page_techno_records
+    try:
+        return page_techno_records.generate_techno_best_plants()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/best-period-records")
 async def get_best_period_records(
     start_mon: int = Query(..., ge=1, le=12),

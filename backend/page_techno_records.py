@@ -8,8 +8,9 @@ Two sections per plant (SAIL gets the first only):
     Consumption). Values come from page_techno.generate_major_techno_from_db,
     run once per financial year, so plant / SMS-shop / SAIL figures are
     exactly what page 27 prints (SAIL weighted averages included).
-  * Iron Making, BF-wise — the pages 29/29.5 parameters per blast furnace,
-    straight from techno_data's monthly values.
+  * Iron Making, BF-wise — the pages 29/29.5 parameters (plus nut coke and
+    sinter in burden) per blast furnace and for the BF shop total, straight
+    from techno_data's monthly values.
 
 "Best" depends on the parameter: consumption rates (coke, nut coke, fuel,
 coal to HM, hot metal / TMI per t of steel, slag, energy) are best when
@@ -47,18 +48,22 @@ MAJOR_PARAMS = [
 # (label, techno_data key, unit, better) - pages 29 / 29.5, in page order.
 BF_PARAMS = [
     ("Coke Rate", "coke_rate", "kg/thm", "low"),
+    ("Nut Coke Rate", "nut_coke_rate", "kg/thm", "high"),
     ("CDI Rate", "cdi", "kg/thm", "high"),
     ("Fuel Rate", "fuel_rate", "kg/thm", "low"),
     ("Hot Blast Temp", "hot_blast_temp", "°C", "high"),
     ("BF Productivity", "bf_productivity", "t/m³/day", "high"),
     ("Oxygen Enrichment", "o2_enrichment", "%", "high"),
+    ("Sinter in Burden", "sinter_in_burden", "%", "high"),
     ("Pellet in Burden", "pellet_in_burden", "%", "high"),
     ("Slag Rate", "slag_rate", "kg/thm", "low"),
 ]
-BF_UNITS = ["BF-1", "BF-2", "BF-3", "BF-4", "BF-5", "BF-6", "BF-7", "BF-8"]
+# BF_Shop = the plant's shop-total row on pages 29/29.5 (ISP has none: one BF).
+BF_UNITS = ["BF-1", "BF-2", "BF-3", "BF-4", "BF-5", "BF-6", "BF-7", "BF-8", "BF_Shop"]
+BF_UNIT_LABEL = {"BF_Shop": "BF Shop"}
 
 _cache_lock = threading.Lock()
-_fy_cache: dict = {}   # fy start year -> (signature, {(row_label, param): {month: value}})
+_fy_cache: dict = {}   # fy start year -> (signature, monthly, last month, yearly) - see _major_for_fy
 
 
 def _num(v):
@@ -86,19 +91,26 @@ def _signature(fy: int):
     return tuple(t) + (p[0], round(float(p[1] or 0), 3))
 
 
-def _major_for_fy(fy: int, last_month: str) -> dict:
-    """{(row_label, param): {'YYYY-MM': value}} for one FY, via page 27."""
+def _fy_label(fy: int) -> str:
+    return f"{fy}-{(fy + 1) % 100:02d}"
+
+
+def _major_for_fy(fy: int, last_month: str) -> tuple:
+    """({(row_label, param): {'YYYY-MM': value}}, {(row_label, param): year_value})
+    for one FY, via page 27. The year value is the March cumulative, so only a
+    completed FY has one."""
     months = [m for m in _fy_months(fy) if m <= last_month]
     if not months:
-        return {}
+        return {}, {}
     sig = _signature(fy)
     with _cache_lock:
         hit = _fy_cache.get(fy)
         if hit and hit[0] == sig and hit[2] == months[-1]:
-            return hit[1]
+            return hit[1], hit[3]
     data = pt.generate_major_techno_from_db(months[-1])
     wanted = {p for p, _u, _b in MAJOR_PARAMS}
     out: dict = {}
+    year: dict = {}
     for sec in data.get("sections", []):
         if sec.get("label") not in wanted:
             continue
@@ -108,13 +120,17 @@ def _major_for_fy(fy: int, last_month: str) -> dict:
                 f = _num(v)
                 if f is not None:
                     out.setdefault((row["label"], sec["label"]), {})[m] = f
+            f = _num(row.get("cum")) if months[-1].endswith("-03") else None
+            if f is not None:
+                year[(row["label"], sec["label"])] = f
     with _cache_lock:
-        _fy_cache[fy] = (sig, out, months[-1])
-    return out
+        _fy_cache[fy] = (sig, out, months[-1], year)
+    return out, year
 
 
-def _bf_values() -> dict:
-    """{(plant, BF, param): {'YYYY-MM': value}} from techno_data month values."""
+def _bf_values() -> tuple:
+    """({(plant, BF, param): {'YYYY-MM': value}}, {(plant, BF, param): {'YYYY-YY': value}})
+    from techno_data: month values, and March till_month values as the FY figure."""
     keys = {k for _l, k, _u, _b in BF_PARAMS}
     aliases = {k: [k] + pt.KEY_ALIASES.get(k, []) for k in keys}
     conn = dbengine.connect()
@@ -122,17 +138,27 @@ def _bf_values() -> dict:
         rows = rt.five_plant_unit_rows(conn.cursor(), BF_UNITS)
     finally:
         conn.close()
+
+    def pick(d, key):
+        v = next((d.get(a) for a in aliases[key] if d.get(a) is not None), None)
+        if v is None and key == "fuel_rate" and d.get("coke_rate") is not None and d.get("cdi") is not None:
+            v = d["coke_rate"] + (d.get("nut_coke_rate") or 0) + d["cdi"]
+        return _num(v)
+
     out: dict = {}
+    year: dict = {}
     for plant, rm, unit, tj in rows:
-        md = (json.loads(tj) if isinstance(tj, str) else tj or {}).get("month") or {}
+        js = (json.loads(tj) if isinstance(tj, str) else tj) or {}
+        md = js.get("month") or {}
+        td = (js.get("till_month") or {}) if rm.endswith("-03") else {}
         for label, key, _u, _b in BF_PARAMS:
-            v = next((md.get(a) for a in aliases[key] if md.get(a) is not None), None)
-            if v is None and key == "fuel_rate" and md.get("coke_rate") is not None and md.get("cdi") is not None:
-                v = md["coke_rate"] + (md.get("nut_coke_rate") or 0) + md["cdi"]
-            f = _num(v)
+            f = pick(md, key)
             if f is not None:
                 out.setdefault((plant, unit, label), {})[rm] = f
-    return out
+            f = pick(td, key)
+            if f is not None:
+                year.setdefault((plant, unit, label), {})[_fy_label(int(rm[:4]) - 1)] = f
+    return out, year
 
 
 def _row(label: str, unit: str, better: str, series: dict) -> dict:
@@ -148,7 +174,30 @@ def _row(label: str, unit: str, better: str, series: dict) -> dict:
             "best": best, "years": len({m[:4] for m in series})}
 
 
+def _top(series: dict, better: str, n: int = 3) -> list:
+    """Best `n` periods of a {period: value} series (lowest first when better='low')."""
+    ranked = sorted(series.items(), key=lambda kv: kv[1], reverse=better == "high")
+    return [{"period": p, "value": round(v, 4)} for p, v in ranked[:n]]
+
+
+def _period_row(label: str, unit: str, better: str, monthly: dict, yearly: dict) -> dict:
+    return {"label": label, "unit": unit, "better": better,
+            "months": _top(monthly, better), "years": _top(yearly or {}, better)}
+
+
 def generate_techno_records() -> dict:
+    """Best / 2nd-best per calendar month (Best Techno Matrix)."""
+    return _build(lambda label, unit, better, monthly, _yearly: _row(label, unit, better, monthly))
+
+
+def generate_techno_best_periods() -> dict:
+    """Top 3 months ever and top 3 financial years (March cumulative) per row."""
+    return _build(_period_row)
+
+
+def _collect():
+    """(major, major_y, bf, bf_y) series - see _major_for_fy / _bf_values - or
+    None when there is no techno data at all."""
     today = date.today()
     last_month = f"{today.year:04d}-{today.month:02d}"
     conn = dbengine.connect()
@@ -157,15 +206,19 @@ def generate_techno_records() -> dict:
     finally:
         conn.close()
     if not first:
-        return {g: {"sections": []} for g in PLANTS + ["SAIL"]}
+        return None
     y, m = int(first[:4]), int(first[5:7])
     first_fy = y if m >= 4 else y - 1
     last_fy = today.year if today.month >= 4 else today.year - 1
 
     major: dict = {}
+    major_y: dict = {}
     for fy in range(first_fy, last_fy + 1):
-        for key, series in _major_for_fy(fy, last_month).items():
+        monthly, yearly = _major_for_fy(fy, last_month)
+        for key, series in monthly.items():
             major.setdefault(key, {}).update(series)
+        for key, v in yearly.items():
+            major_y.setdefault(key, {})[_fy_label(fy)] = v
 
     # SAIL only counts from the month all five plants have techno data - before
     # that (BSL from Nov'20, RSP from Apr'21) page 27's "SAIL" is really just
@@ -179,8 +232,75 @@ def generate_techno_records() -> dict:
     for param, _u, _b in MAJOR_PARAMS:
         if ("SAIL", param) in major:
             major[("SAIL", param)] = {m: v for m, v in major[("SAIL", param)].items() if m >= sail_from}
+        if ("SAIL", param) in major_y:  # FY "2021-22" counts only if its April >= sail_from
+            major_y[("SAIL", param)] = {f: v for f, v in major_y[("SAIL", param)].items()
+                                        if f"{f[:4]}-04" >= sail_from}
 
-    bf = _bf_values()
+    bf, bf_y = _bf_values()
+    return major, major_y, bf, bf_y
+
+
+def _rank_plants(cands: dict, better: str, n: int = 3) -> list:
+    """Each candidate's (plant / shop / furnace) own best figure, then the best
+    `n` candidates: [{'name', 'period', 'value'}]."""
+    per = [{"name": name, **_top(s, better, 1)[0]} for name, s in cands.items() if s]
+    return sorted(per, key=lambda r: r["value"], reverse=better == "high")[:n]
+
+
+def _plant_row(label, level, unit, better, cands_m, cands_y) -> dict:
+    return {"label": label, "level": level, "unit": unit, "better": better,
+            "months": _rank_plants(cands_m, better), "years": _rank_plants(cands_y, better)}
+
+
+def generate_techno_best_plants() -> dict:
+    """Per techno parameter, the 3 best plants (or SMS shops) by their own best
+    month and best year (March cumulative). Blast-furnace parameters get two
+    rows: best furnaces (plant + BF) and best plant BF shops."""
+    data = _collect()
+    if data is None:
+        return {"rows": []}
+    major, major_y, bf, bf_y = data
+    bf_params = {label: key for label, key, _u, _b in BF_PARAMS}
+    furnaces = [u for u in BF_UNITS if u != "BF_Shop"]
+
+    def furnace_cands(src, label):
+        return {f"{p} {u}": src.get((p, u, label)) for p in PLANTS for u in furnaces}
+
+    def shop_cands(src, label):
+        out = {}
+        for p in PLANTS:
+            s = src.get((p, "BF_Shop", label))
+            if not s:  # a one-furnace plant (ISP) reports no shop total: its BF is the shop
+                own = [src[(p, u, label)] for u in furnaces if src.get((p, u, label))]
+                s = own[0] if len(own) == 1 else None
+            out[p] = s
+        return out
+
+    rows = []
+    for param, unit, better in MAJOR_PARAMS:
+        lbls = [lbl for (lbl, p) in major if p == param and lbl != "SAIL"]
+        if param in bf_params:
+            rows.append(_plant_row(param, "Furnace", unit, better,
+                                   furnace_cands(bf, param), furnace_cands(bf_y, param)))
+        level = "BF Shop" if param in bf_params else ("Shop" if any(" " in lbl for lbl in lbls) else "Plant")
+        rows.append(_plant_row(param, level, unit, better,
+                               {lbl: major[(lbl, param)] for lbl in lbls},
+                               {lbl: major_y.get((lbl, param)) for lbl in lbls}))
+    # BF parameters page 27 doesn't carry (hot blast, O2, slag): shop from techno_data.
+    major_names = {p for p, _u, _b in MAJOR_PARAMS}
+    for label, _key, unit, better in BF_PARAMS:
+        if label in major_names:
+            continue
+        rows.append(_plant_row(label, "Furnace", unit, better, furnace_cands(bf, label), furnace_cands(bf_y, label)))
+        rows.append(_plant_row(label, "BF Shop", unit, better, shop_cands(bf, label), shop_cands(bf_y, label)))
+    return {"rows": rows}
+
+
+def _build(make_row) -> dict:
+    data = _collect()
+    if data is None:
+        return {g: {"sections": []} for g in PLANTS + ["SAIL"]}
+    major, major_y, bf, bf_y = data
     result = {}
     for group in PLANTS + ["SAIL"]:
         major_rows = []
@@ -191,7 +311,8 @@ def generate_techno_records() -> dict:
                              and (lbl == group or lbl.startswith(group + " "))})
             for lbl in labels:
                 shop = lbl[len(group):].strip()
-                major_rows.append(_row(f"{param} ({shop})" if shop else param, unit, better, major[(lbl, param)]))
+                major_rows.append(make_row(f"{param} ({shop})" if shop else param, unit, better,
+                                           major[(lbl, param)], major_y.get((lbl, param))))
         sections = [{"title": "Major 12 Parameters", "rows": major_rows}]
         if group != "SAIL":
             bf_rows = []
@@ -199,7 +320,8 @@ def generate_techno_records() -> dict:
                 for u in BF_UNITS:
                     series = bf.get((group, u, label))
                     if series:
-                        bf_rows.append(_row(f"{label} — {u}", unit, better, series))
+                        bf_rows.append(make_row(f"{label} — {BF_UNIT_LABEL.get(u, u)}", unit, better, series,
+                                                bf_y.get((group, u, label))))
             sections.append({"title": "Iron Making — BF-wise", "rows": bf_rows})
         result[group] = {"sections": sections}
     return result

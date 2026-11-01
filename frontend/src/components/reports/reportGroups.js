@@ -84,6 +84,8 @@ export const REPORT_GROUPS = [
       { id: 'major-production', label: 'Major Production (Month & Till Month)', description: 'Major items, month and till-month figures.' },
       { id: 'records-matrix', label: 'Monthly Records Matrix', description: 'Month-wise best-ever record matrix across items.' },
       { id: 'techno-records', label: 'Best Techno Matrix', description: 'Month-wise best-ever Major 12 and BF-wise Iron Making techno parameters (lower is best for consumption rates).' },
+      { id: 'techno-best-periods', label: 'Best Techno Month & Year', description: 'Top 3 months ever and top 3 financial years (March cumulative) for the Major 12 and BF-wise Iron Making techno parameters, plant-wise and SAIL.' },
+      { id: 'techno-best-plants', label: 'Best Techno Plant', description: 'Per techno parameter, the 3 best plants / SMS shops with their best month or best year (March cumulative); BF parameters show the best furnaces and the best BF shops.' },
       { id: 'unique-activities', label: 'Unique Activities', description: 'New unit start-ups, revivals after prolonged capital repair and other one-off milestones, searchable by text and tag.' },
     ],
   },
