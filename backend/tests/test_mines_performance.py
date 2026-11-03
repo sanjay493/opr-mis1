@@ -214,8 +214,8 @@ _SAIL_ROWS = [
     ("2026-09", "washery", "Input Raw Coal", 200, 250), ("2026-09", "washery", "Clean Coal", 90, 100),
     ("2025-09", "washery", "Input Raw Coal", 100, None), ("2025-09", "washery", "Clean Coal", 40, None),
     ("2026-09", "coal_despatch", "Clean Coal", 80, 85), ("2026-09", "coal_despatch", "Thermal", 30, 35),
-    ("2026-09", "flux_prod", "Limestone", 60, 70), ("2026-09", "flux_prod", "Dolomite", 25, 30),
-    ("2026-09", "flux_despatch", "Limestone", 55, 65), ("2026-09", "flux_despatch", "Dolomite", 0, 0),
+    ("2026-09", "flux_prod", "KTR Limestone", 60, 70), ("2026-09", "flux_prod", "Hirri Dolomite", 25, 30),
+    ("2026-09", "flux_despatch", "KTR Limestone", 55, 65), ("2026-09", "flux_despatch", "Hirri Dolomite", 0, 0),
 ]
 
 
@@ -237,8 +237,8 @@ def test_coal_flux_structure(gen_sail):
         ("heading", "COAL MINES PRODUCTION"), ("item", "Raw Coking Coal"), ("item", "Thermal Coal"), ("total", "Total"),
         ("heading", "WASHERY"), ("item", "Input Raw Coal"), ("item", "Clean Coal"), ("item", "Yield (%)"),
         ("heading", "COAL DESPATCH"), ("item", "Clean Coal"), ("item", "Thermal"), ("total", "Total"),
-        ("heading", "FLUX PRODUCTION"), ("item", "Limestone"), ("item", "Dolomite"), ("total", "Total"),
-        ("heading", "FLUX DESPATCH"), ("item", "Limestone"),           # zero Dolomite hidden, no total
+        ("heading", "FLUX PRODUCTION"), ("item", "KTR Limestone"), ("item", "Hirri Dolomite"), ("total", "Total"),
+        ("heading", "FLUX DESPATCH"), ("item", "KTR Limestone"),       # zero Dolomite, no-data Nandani hidden; no total
     ]
     assert all(r["values"] == [None] * 11 for r in tail if r["kind"] == "heading")
 
