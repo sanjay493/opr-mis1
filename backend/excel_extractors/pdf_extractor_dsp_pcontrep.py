@@ -84,13 +84,15 @@ def looks_like_pcontrep(file_path: str) -> bool:
     """Cheap format sniff so excel_extractor_dsp.py's PDF dispatch can tell
     this apart from the DSP monthly OMI PDF (pdf_extractor_dsp.py) — that
     one has a 'PRODUCTION MONTHWISE' page; this one is a single page with
-    these column headers instead."""
+    these column headers instead. The Asking column header reads 'Rate-MP'
+    in some exports and plain 'Rate' in others (e.g. the 'SAIL/DSP/PPCD'
+    re-issue), so it is not part of the check."""
     try:
         import pdfplumber
         with pdfplumber.open(file_path) as pdf:
             text = (pdf.pages[0].extract_text() or "") if pdf.pages else ""
         text_low = text.lower()
-        return "rate-mp" in text_low and "shop / items" in text_low
+        return "shop / items" in text_low and "asking" in text_low and "monthly" in text_low
     except Exception:
         return False
 

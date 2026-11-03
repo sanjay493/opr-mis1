@@ -45,7 +45,8 @@ def extract_and_save_excel(file_path: str, report_month: str = "", source_file_n
                 "Please upload the MCR-I report (tab-separated .xls file)."
             )
 
-        return _extract_mcr_report(file_path, source_file_name, column_shift=column_shift)
+        return _extract_mcr_report(file_path, source_file_name, column_shift=column_shift,
+                                   report_month=report_month)
 
     except ValueError as ve:
         logger.error(f"DSP validation error: {ve}")
@@ -96,7 +97,8 @@ def _mcr_despatch_specs(lines, col_e: int) -> list:
     return specs
 
 
-def _extract_mcr_report(file_path: str, source_file_name: str, column_shift: int = 0) -> bool:
+def _extract_mcr_report(file_path: str, source_file_name: str, column_shift: int = 0,
+                        report_month: str = "") -> bool:
     """
     Extracts cumulative production data from DSP MCR-I report (tab-separated text).
 
@@ -170,6 +172,8 @@ def _extract_mcr_report(file_path: str, source_file_name: str, column_shift: int
         )
     _d, m_num, year = date_match.groups()
     db_report_month = f"{year}-{m_num}"
+    from excel_extractor_bsp import _check_month
+    _check_month("DSP MCR-I report", db_report_month, report_month)
     logger.info(f"DSP MCR: month auto-detected → {db_report_month}")
 
     COL_D = 3 + column_shift  # Actual To Date (cumulative)
@@ -494,14 +498,30 @@ def extract_preview(file_path: str, report_month: str, aliases: dict = None,
         column_shift: Column offset for data extraction (-1 for Sep'25 left-shifted layout)
     """
     import os as _os
+    from excel_extractor_bsp import _check_month
     suffix = _os.path.splitext(file_path)[1].lower()
 
+    # Single-date reports (pcontrep, Flash, MCR, MCR-I) must match the selected
+    # month; the OMI PDF holds every FY month, so any selected month is valid there.
     if suffix == '.pdf':
         import pdf_extractor_dsp_pcontrep
-        if pdf_extractor_dsp_pcontrep.looks_like_pcontrep(file_path):
-            return pdf_extractor_dsp_pcontrep.extract_preview(
-                file_path, report_month, aliases=aliases, block=block)
         import pdf_extractor_dsp
+        if pdf_extractor_dsp_pcontrep.looks_like_pcontrep(file_path):
+            res = pdf_extractor_dsp_pcontrep.extract_preview(
+                file_path, report_month, aliases=aliases, block=block)
+            _check_month("DSP Plant Control report (pcontrep.pdf)", res["month"], report_month)
+            return res
+        is_flash = pdf_extractor_dsp._is_flash_pdf(file_path)
+        if is_flash and block != 'stock':
+            raise ValueError(
+                "This is the DSP Flash report: only its closing stock is extracted. "
+                "Use '3. Extract Stock (Flash.pdf)'. For production upload mcr1_*.xls or pcontrep*.pdf."
+            )
+        if block == 'stock':
+            res = pdf_extractor_dsp.extract_preview_flash(file_path, report_month)
+            if res.get("detected_month"):
+                _check_month("DSP Flash report", res["detected_month"], report_month)
+            return res
         return pdf_extractor_dsp.extract_preview(
             file_path, report_month, aliases=aliases, block=block)
 
@@ -516,7 +536,11 @@ def extract_preview(file_path: str, report_month: str, aliases: dict = None,
     with open(file_path, encoding='utf-8', errors='replace') as f:
         lines = [line.rstrip('\r\n').split('\t') for line in f.readlines()]
     if _looks_like_mcr_furnace_report(lines):
-        return _mcr_furnace_preview(file_path)
+        res = _mcr_furnace_preview(file_path)
+        _check_month("DSP MCR report", res["month"], report_month)
+        return res
 
-    return _mcr_preview(file_path, report_month, column_shift=column_shift)
+    res = _mcr_preview(file_path, report_month, column_shift=column_shift)
+    _check_month("DSP MCR-I report", res["month"], report_month)
+    return res
 
