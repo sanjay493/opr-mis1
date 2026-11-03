@@ -2901,7 +2901,12 @@ async def extract_preview_endpoint(
         # Attach current DB values to each production row so the UI can show
         # DB-vs-extracted side by side before the user confirms the insert.
         _resolved_month = result.get("month") or month
-        rp.enrich_rows_with_db_production(result.get("production_rows", []), plant_name, _resolved_month)
+        # Look up under the name confirm/insert will save (e.g. BSP "CC SLAB" -> "SEMIS SLABS").
+        _rows = result.get("production_rows", [])
+        _shadow = [{**r, "item_name": normalize_item_name(r.get("item_name") or r.get("pdf_label"), plant_name)} for r in _rows]
+        rp.enrich_rows_with_db_production(_shadow, plant_name, _resolved_month)
+        for r, s in zip(_rows, _shadow):
+            r["db_value"] = s["db_value"]
         return result
     except HTTPException:
         raise
