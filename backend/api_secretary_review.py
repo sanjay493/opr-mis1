@@ -7,7 +7,7 @@ from fastapi.responses import Response
 import page_secretary_review as psr
 import page_secretary_review_texts as pst
 import secretary_review_text as srt
-from secretary_review_layout import BLOCKS, validate_month
+from secretary_review_layout import BLOCKS, LAYOUTS, validate_month
 
 # Plain `def` handlers: building the context, defaults and the deck takes
 # seconds, so FastAPI runs them in its threadpool instead of blocking the
@@ -43,6 +43,7 @@ def context(month: str = Query(None)):
                for key, name in psr.ITEMS]
     return {"labels": ctx["labels"], "plan_label": psr.BASIS_LABEL[ctx["basis"]],
             "filename": ctx["labels"]["filename"],
+            "filenames": {"standard": ctx["labels"]["filename"], "hsm": ctx["labels"]["filename_hsm"]},
             "warnings": ctx["warnings"], "summary": summary}
 
 
@@ -84,8 +85,11 @@ def default_text(month: str = Query(...), block: str = Query(...)):
 def pptx(payload: dict):
     month = _month(payload.get("month"))
     texts = _texts(payload)
+    layout = payload.get("layout") or "standard"
+    if layout not in LAYOUTS:
+        raise HTTPException(status_code=400, detail=f"layout must be one of {', '.join(LAYOUTS)}")
     try:
-        res = psr.render_pptx(month, texts)
+        res = psr.render_pptx(month, texts, layout)
     except FileNotFoundError as e:
         raise HTTPException(status_code=500, detail=f"Secretary Review template missing: {e}")
     except Exception as e:

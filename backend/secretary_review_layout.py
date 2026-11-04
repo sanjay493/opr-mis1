@@ -6,6 +6,9 @@ import re
 from pathlib import Path
 
 TEMPLATE_PATH = Path(__file__).resolve().parent / "secretary_review_templates" / "secretary_review.pptx"
+# Second layout: the redesigned HSM Review deck (scripts/prep_secretary_review_hsm_template.py).
+HSM_TEMPLATE_PATH = TEMPLATE_PATH.with_name("secretary_review_hsm.pptx")
+LAYOUTS = ("standard", "hsm")
 
 SCOPES = ["SAIL", "BSP", "DSP", "RSP", "BSL", "ISP"]
 PLANTS = ["BSP", "DSP", "RSP", "BSL", "ISP"]
@@ -43,6 +46,17 @@ def required_shape_names() -> set:
     return names
 
 
+HSM_KPIS = ["fuel", "coke", "pci", "bfprod", "energy"]
+HL_PROTOS = [f"hl_{kind}_{v}" for kind in ("card", "head", "tile", "fig", "note") for v in "ab"]
+
+
+def hsm_required_shape_names() -> set:
+    names = {"tbl_sail", "tbl_plants_hm_cs", "tbl_plants_ss_fs", "tbl_delay_hmcs", "tbl_delay_fs"}
+    names |= set(HL_PROTOS)
+    names |= {f"ch_{s}_{k}" for s in SCOPES for k in HSM_KPIS}
+    return names
+
+
 _MONTH_RE = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
 
 
@@ -73,4 +87,5 @@ def period_labels(month: str) -> dict:
         "fy_tgt": f"FY'{_yy(fy_start + 1)} Target",
         "ytd_cat": to_date if n > 1 else "Apr (YTD)",
         "filename": f"SECRETARY REVIEW Operations Inputs {ab}{_yy(y)}.pptx",
+        "filename_hsm": f"Operation Slides for HSM Review {ab}{_yy(y)}.pptx",
     }

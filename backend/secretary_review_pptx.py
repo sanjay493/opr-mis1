@@ -3,6 +3,7 @@
 the template's fonts, colours and chart styling survive."""
 
 import copy
+import math
 import re
 
 from pptx.chart.data import CategoryChartData
@@ -129,6 +130,31 @@ def replace_chart_data(chart, categories, values, number_format):
     cd.categories = categories
     cd.add_series(chart.plots[0].series[0].name, values)
     chart.replace_data(cd)
+
+
+def fit_value_axis(chart, values, step):
+    """Value-axis min/max around the values, so a copied chart's fixed range
+    fits other numbers: min well below the lowest bar (bars keep their
+    differences visible), max with headroom for the labels. No values: auto."""
+    scaling = chart._chartSpace.find(".//" + qn("c:valAx") + "/" + qn("c:scaling"))
+    for tag in ("c:max", "c:min"):
+        el = scaling.find(qn(tag))
+        if el is not None:
+            scaling.remove(el)
+    vals = [v for v in values if v is not None]
+    if not vals:
+        return
+    lo, hi = min(vals), max(vals)
+    span = max(hi - lo, lo * 0.03)
+    vmin = max(math.floor((lo - max(span * 1.5, lo * 0.08)) / step) * step, 0)
+    vmax = math.ceil((hi + (hi - vmin) * 0.2) / step) * step
+    orient = scaling.find(qn("c:orientation"))
+    after = orient
+    for tag, v in (("c:max", vmax), ("c:min", vmin)):  # CT_Scaling: orientation, max, min
+        el = OxmlElement(tag)
+        el.set("val", f"{v:.2f}".rstrip("0").rstrip("."))
+        after.addnext(el)
+        after = el
 
 
 def remove_shape(shape):

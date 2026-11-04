@@ -386,14 +386,23 @@ def _fill_charts(shapes, techno, labels, warn):
                                       head_vals + [v for _, v in t["trend"]], fmt)
 
 
-def render_pptx(month, texts=None):
-    ctx = build_context(month)
-    labels, production = ctx["labels"], ctx["production"]
-    warnings = list(ctx["warnings"])
+def merged_texts(month, texts):
+    """Every block's text: the passed text, else the block's effective text."""
     texts = texts or {}
     missing = [k for k, _, _ in BLOCKS if k not in texts]
     eff = {k: v["text"] for k, v in pst.effective_texts(month, missing).items()} if missing else {}
-    merged = {k: (texts[k] if k in texts else eff.get(k, "")) for k, _, _ in BLOCKS}
+    return {k: (texts[k] if k in texts else eff.get(k, "")) for k, _, _ in BLOCKS}
+
+
+def render_pptx(month, texts=None, layout="standard"):
+    """layout: 'standard' (this template) or 'hsm' (page_secretary_review_hsm)."""
+    if layout == "hsm":
+        import page_secretary_review_hsm as hsm  # it imports this module
+        return hsm.render_pptx(month, texts)
+    ctx = build_context(month)
+    labels, production = ctx["labels"], ctx["production"]
+    warnings = list(ctx["warnings"])
+    merged = merged_texts(month, texts)
 
     prs = Presentation(str(TEMPLATE_PATH))
     shapes = sp.named_shapes(prs)

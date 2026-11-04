@@ -6,6 +6,11 @@ import { ReportPage } from '../ReportUI';
 const API = process.env.NEXT_PUBLIC_API_URL || '';
 const SECTIONS = ['Highlights', 'Delays', 'Capital Repairs', 'Breakdowns'];
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+// Same numbers and narrative, two slide designs (backend LAYOUTS).
+const LAYOUTS = [
+  { id: 'standard', label: 'Standard (Secretary Review deck)' },
+  { id: 'hsm', label: 'Alternative: HSM Review (12 slides, redesigned)' },
+];
 
 async function getJson(url, opts) {
   const res = await fetch(url, opts);
@@ -31,6 +36,7 @@ export default function SecretaryReviewPage() {
   const [busy, setBusy] = useState('');
   const [error, setError] = useState(null);
   const [msg, setMsg] = useState(null);
+  const [layout, setLayout] = useState('standard');
   // The month on screen, read by async replies started for an earlier month.
   const monthRef = useRef(month);
   useEffect(() => { monthRef.current = month; }, [month]);
@@ -137,7 +143,7 @@ export default function SecretaryReviewPage() {
       const res = await fetch(`${API}/api/secretary-review/pptx`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ month, texts: textsPayload() }),
+        body: JSON.stringify({ month, texts: textsPayload(), layout }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -147,7 +153,7 @@ export default function SecretaryReviewPage() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = ctx?.filename || `Secretary_Review_${month}.pptx`;
+      a.download = ctx?.filenames?.[layout] || ctx?.filename || `Secretary_Review_${month}.pptx`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -170,7 +176,7 @@ export default function SecretaryReviewPage() {
     <ReportPage
       maxWidth={960}
       title={<>Secretary Review (PPTX)</>}
-      description={<>Monthly &ldquo;SECRETARY REVIEW Operations Inputs&rdquo; deck. Tables and charts come from the database for the chosen month. The narrative below starts from the database (breakdowns, capital repairs, best-ever records); edit it, save it for the month, then download. Download uses the text on screen, saved or not. Only blocks you edit are saved; a saved block keeps its text for that month. Untouched blocks stay linked to the database and follow the month you pick. &ldquo;Reset from DB&rdquo; removes a block&apos;s saved text and links it to the database again.</>}
+      description={<>Monthly &ldquo;SECRETARY REVIEW Operations Inputs&rdquo; deck. Tables and charts come from the database for the chosen month. The narrative below starts from the database (breakdowns, capital repairs, best-ever records); edit it, save it for the month, then download. Download uses the text on screen, saved or not. Layout &ldquo;HSM Review&rdquo; gives the shorter redesigned deck (SAIL table and highlights, plant-wise tables, delays, SAIL and plant techno charts) from the same numbers and text. Only blocks you edit are saved; a saved block keeps its text for that month. Untouched blocks stay linked to the database and follow the month you pick. &ldquo;Reset from DB&rdquo; removes a block&apos;s saved text and links it to the database again.</>}
     >
       <div style={{ ...box, display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
         <label style={{ fontSize: '11pt', fontWeight: 600 }} htmlFor="sr-month">Month</label>
@@ -181,6 +187,15 @@ export default function SecretaryReviewPage() {
           onChange={(e) => changeMonth(e.target.value)}
           style={{ padding: '9px 14px', fontSize: '11pt', border: '1px solid #dadce0', borderRadius: '6px' }}
         />
+        <label style={{ fontSize: '11pt', fontWeight: 600 }} htmlFor="sr-layout">Layout</label>
+        <select
+          id="sr-layout"
+          value={layout}
+          onChange={(e) => setLayout(e.target.value)}
+          style={{ padding: '9px 14px', fontSize: '11pt', border: '1px solid #dadce0', borderRadius: '6px', backgroundColor: '#ffffff' }}
+        >
+          {LAYOUTS.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
+        </select>
         <button onClick={download} disabled={!ready || !!busy} style={btn(!ready || !!busy)}>
           {busy === 'downloading' ? 'Generating…' : '⬇ Download PPTX'}
         </button>

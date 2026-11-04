@@ -38,7 +38,7 @@ def test_save_texts_rejects_unknown_keys(monkeypatch):
 
 def test_pptx_download(monkeypatch):
     monkeypatch.setattr(api.psr, "render_pptx",
-                        lambda m, t: api.psr.RenderResult(content=b"PK", filename="SECRETARY REVIEW Operations Inputs Sep26.pptx", warnings=["w"]))
+                        lambda m, t, layout: api.psr.RenderResult(content=b"PK", filename="SECRETARY REVIEW Operations Inputs Sep26.pptx", warnings=["w"]))
     r = client.post("/api/secretary-review/pptx", json={"month": "2026-09", "texts": {}})
     assert r.status_code == 200 and r.content == b"PK"
     assert 'filename="SECRETARY REVIEW Operations Inputs Sep26.pptx"' in r.headers["content-disposition"]
@@ -46,7 +46,7 @@ def test_pptx_download(monkeypatch):
 
 
 def test_pptx_missing_template_is_500(monkeypatch):
-    def boom(m, t):
+    def boom(m, t, layout):
         raise FileNotFoundError("secretary_review.pptx")
     monkeypatch.setattr(api.psr, "render_pptx", boom)
     r = client.post("/api/secretary-review/pptx", json={"month": "2026-09", "texts": {}})
@@ -65,7 +65,7 @@ def test_save_texts_coerces_values_to_str(monkeypatch):
 def test_pptx_coerces_values_to_str(monkeypatch):
     seen = {}
 
-    def fake(m, t):
+    def fake(m, t, layout):
         seen.update(t)
         return api.psr.RenderResult(content=b"PK", filename="x.pptx")
     monkeypatch.setattr(api.psr, "render_pptx", fake)
@@ -116,3 +116,17 @@ def test_reset_is_gated():
     assert main._match_gated("DELETE", "/api/secretary-review/texts") == ("secretary_review", False)
     r = TestClient(main.app).delete("/api/secretary-review/texts?month=2026-09&block=hl_BSL")
     assert r.status_code == 401
+
+
+def test_pptx_layout_passed_and_defaults_to_standard(monkeypatch):
+    seen = []
+    monkeypatch.setattr(api.psr, "render_pptx",
+                        lambda m, t, layout: seen.append(layout) or api.psr.RenderResult(content=b"PK", filename="x.pptx"))
+    client.post("/api/secretary-review/pptx", json={"month": "2026-09", "texts": {}})
+    client.post("/api/secretary-review/pptx", json={"month": "2026-09", "texts": {}, "layout": "hsm"})
+    assert seen == ["standard", "hsm"]
+
+
+def test_pptx_unknown_layout_is_400():
+    r = client.post("/api/secretary-review/pptx", json={"month": "2026-09", "texts": {}, "layout": "x"})
+    assert r.status_code == 400 and "layout" in r.json()["detail"]
