@@ -93,12 +93,13 @@ export const REPORT_GROUPS = [
     id: 'excel',
     route: '/reports/excel',
     title: 'Excel Report',
-    description: 'Reports with Excel downloads: plant-wise performance of main items (APP & MoU), the APP / MoU vs actual trend and the product-mix report.',
+    description: 'Reports with Excel downloads: plant-wise performance of main items (APP & MoU), the APP / MoU vs actual trend, mills performance and the product-mix report.',
     icon: '📗',
     tabs: [
       { id: 'plant-performance-items', label: 'Plant Wise Performance (APP & MoU)', description: 'Plant Wise Performance of Main Items against APP and MoU; Excel and PDF download.' },
       { id: 'pmix-fy', label: 'Pmix Report (Year-wise)', description: 'Product-mix report, financial-year view.' },
       { id: 'app-actual-trend', label: 'APP / MoU vs Actual Trend', description: 'FY trend of plan (APP or MoU) against actual for HM, Crude Steel, Saleable Steel, Saleable production and Finished Steel, plant-wise with quarter, half-year and FY totals; Excel and PDF download.' },
+      { id: 'mills-performance', label: 'Mills Performance', description: 'Mill-wise production of the five plants against the monthly APP, with capacity and quarter, half-year, FY and Apr-to-date totals; Excel and PDF download.' },
     ],
   },
   {

@@ -19,7 +19,7 @@ __pycache__/
 
 # Temp files
 backend/temp/
-backend/cover_photos/
+backend/
 backup.log
 uvicorn_out.log
 uvicorn_err.log
