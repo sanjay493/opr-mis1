@@ -45,6 +45,7 @@ const VIEWS = {
   'one-page-report': dynamic(() => import('./one-page-report/View'), { loading }),
   'plant-performance-items': dynamic(() => import('./plant-performance-items/View'), { loading }),
   'pmix-fy': dynamic(() => import('./pmix-fy/View'), { loading }),
+  'app-actual-trend': dynamic(() => import('./app-actual-trend/View'), { loading }),
   'sefi': dynamic(() => import('./sefi/View'), { loading }),
   'steel-bulletin': dynamic(() => import('./steel-bulletin/View'), { loading }),
   'cmd-monthly-report': dynamic(() => import('./cmd-monthly-report/View'), { loading }),

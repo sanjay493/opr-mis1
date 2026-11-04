@@ -152,5 +152,11 @@
   "khv_va_box_bg":            "#f0f9ff",
   "khv_assessment_green":     "#16a34a",
   "khv_assessment_amber":     "#d97706",
-  "khv_assessment_red":       "#dc2626"
+  "khv_assessment_red":       "#dc2626",
+
+  "_doc_trend": "APP/MoU vs Actual performance trend (/reports/excel, app_actual_trend.py): plan rows, %ful below 100, quarter/half-year columns, FY column.",
+  "trend_plan_text":          "#0000FF",
+  "trend_low_pct_text":       "#FF0000",
+  "trend_period_bg":          "#E2EFDA",
+  "trend_fy_bg":              "#F2F2F2"
 }

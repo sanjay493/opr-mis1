@@ -139,6 +139,10 @@ _DEFAULTS: Dict[str, str] = {
     "khv_assessment_green":     "#16a34a",
     "khv_assessment_amber":     "#d97706",
     "khv_assessment_red":       "#dc2626",
+    "trend_plan_text":            "#0000FF",
+    "trend_low_pct_text":         "#FF0000",
+    "trend_period_bg":            "#E2EFDA",
+    "trend_fy_bg":                "#F2F2F2",
 }
 
 
