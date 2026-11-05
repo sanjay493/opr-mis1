@@ -1,21 +1,23 @@
 """BF Parameters report for one financial year (/reports/excel tab
 'bf-parameters'), after the format sheet "BF Report.xlsx" (its print area,
-A2:JU35): each furnace with its plant's shop row and a SAIL row, across twelve
-parameter sections. A section runs: past FYs, APP, the 12 months, Cum.
+A2:JU35, without the Pellet (Kg/THM) block): each furnace with its plant's shop
+row and a SAIL row, across eleven parameter sections. A section runs: past FYs, APP, the 12 months, Cum.
 
 Static furnace data (working volume, tuyeres, CHSGP, ...) is in
 bf_report_config.json. Everything else comes from the database:
   months    techno_upload / techno_value 'month'; production from
-            production_monthly actual (a shop is the sum of its furnaces)
-  Cum, FYs  the latest 'till_month' value of that FY, else the production-
-            weighted monthly values (hot blast temperature: their average)
+            production_monthly actual (a shop is its plant's Hot Metal)
+  Cum, FYs  the latest 'till_month' value of that FY, else the monthly values
+            combined by techno_cumulative's rule for the parameter
   APP       techno_plan_fy; production from production_monthly abp, FY total
-  SAIL      the sheet's formulas over the plant rows: productivity weighted
-            as production / sum(production / rate), hot blast temperature a
-            plain average, the rest production-weighted
+  SAIL      as Techno page 27 (page_techno._bf_sail_v): a stored plant='SAIL'
+            value wins, else the plant rows combined by techno_cumulative's
+            rule, weighted by plant Hot Metal (productivity harmonic, HBT and
+            %Si plain average; BF_SAIL_SPECS' zero-fill plants count as 0).
+            SAIL APP is the stored SAIL plan, Fuel = coke + nut coke + CDI as
+            on page 27; a parameter it lacks is combined from the plant plans.
 
-A cell with no DB value is blank, not 0. Pellet (Kg/THM) has no furnace-wise
-key in the DB yet, so its section stays blank until one is stored."""
+A cell with no DB value is blank, not 0."""
 
 import io
 import json
@@ -23,6 +25,9 @@ import os
 from datetime import date
 
 import app_actual_trend as trend
+import techno_cumulative as tc
+import techno_period as tp
+from page_techno import BF_SAIL_SPECS
 from repo import production as rp
 from repo import techno as rt
 
@@ -34,19 +39,23 @@ SECTIONS = [
     ("production", "Production('000T)", 9, 0, ()),
     ("productivity", "Productivity-W.V.(T/m3/day)", 9, 2, ("bf_productivity",)),
     ("sinter", "Sinter in burden(%)", 9, 0, ("sinter_in_burden",)),
-    ("hbt", "HBT(oC)", 9, 0, ("hot_blast_temp",)),
+    ("hbt", "HBT(oC)", 9, 0, ("hot_blast_temp", "blast_temperature")),
     ("slag", "Slag Rate(Kg/THM)", 8, 0, ("slag_rate",)),
     ("coke", "Coke Rate(Kg/THM)", 8, 0, ("coke_rate",)),
     ("cdi", "CDI Rate(Kg/THM)", 8, 0, ("cdi",)),
     ("fuel", "Fuel Rate(Kg/THM)", 8, 0, ("fuel_rate",)),
     ("o2", "O2 enrichment(%)", 8, 1, ("o2_enrichment",)),
-    ("si", "%[Si]", 8, 2, ("silicon_in_hm", "si_in_hm")),
-    ("pellet_kg", "Pellet(Kg/THM)", 6, 1, ()),
+    ("si", "%[Si]", 8, 2, ("silicon_in_hm", "si_in_hm", "si%_in_hm")),
     ("pellet_pct", "Pellet(%)", 3, 0, ("pellet_in_burden",)),
 ]
 # A narrow blank column closes these sections, as on the sheet.
 _GAP_AFTER = {"production", "productivity", "sinter", "slag", "coke", "cdi", "fuel", "o2"}
 _MAX_PAST = max(s[2] for s in SECTIONS)
+_SAIL_UNITS = ("BF_Shop", "Shop")     # where a stored SAIL figure may sit
+# Section -> its name in the stored SAIL plan (plant='SAIL', unit='Shop').
+_SAIL_PLAN_NAMES = {"productivity": "BF Productivity", "sinter": "Sinter in Burden", "coke": "Coke Rate",
+                    "cdi": "CDI Rate", "pellet_pct": "Pellet in Burden"}
+_ZERO_FILL = {spec[0]: spec[4] for spec in BF_SAIL_SPECS.values() if spec[4]}
 _MON = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 
 
@@ -71,25 +80,10 @@ def _sum(values):
     return sum(vals) if vals else None
 
 
-def _mean(values):
-    vals = [v for v in values if v is not None]
-    return sum(vals) / len(vals) if vals else None
-
-
-def _weighted(pairs):
-    """Weighted mean of (value, weight), over pairs with both; None if none."""
-    use = [(v, w) for v, w in pairs if v is not None and w]
-    total = sum(w for _, w in use)
-    return sum(v * w for v, w in use) / total if total else None
-
-
-def _sail_rate(key, pairs):
-    if key == "hbt":
-        return _mean(v for v, _ in pairs)
-    if key == "productivity":
-        use = [(v, w) for v, w in pairs if v and w]
-        return sum(w for _, w in use) / sum(w / v for v, w in use) if use else None
-    return _weighted(pairs)
+def _combine(keys, pairs):
+    """(value, weight) pairs by the app's cumulative rule for the parameter."""
+    method, _basis = tc.get_rule(keys[0])
+    return tp._weighted_combine(method, pairs)[0]
 
 
 def _pct(num, den):
@@ -126,11 +120,12 @@ class _Data:
         units |= {p["shop_unit"] for p in cfg["plants"] if p["shop_unit"]}
         items = {i for p in cfg["plants"] for f in p["furnaces"] for i in f["production_items"]}
         items |= {p["plan_item"] for p in cfg["plants"]}
-        self.blobs = rt.blobs(every, plants, sorted(units))
+        self.blobs = rt.blobs(every, plants + ["SAIL"], sorted(units | set(_SAIL_UNITS)))
         self.actual = rp.values(every, plants, sorted(items), "actual")
         self.abp = rp.values(self.months[fy_start], plants, sorted(items), "abp")
         label = trend.fy_label(fy_start)
         self.plans = {p: rt.get_techno_plan(p, label) for p in plants}
+        self.sail_plan = rt.get_sail_techno_plan(label).get("data") or {}
 
     def rate(self, plant, unit, keys, month, period="month"):
         block = self.blobs.get((month, plant, unit), {}).get(period) or {}
@@ -146,11 +141,26 @@ class _Data:
             v = _num(data.get(k))
             if v is not None:
                 return v
-        if "fuel_rate" in keys:     # the sheet's Fuel APP: coke + CDI
+        if "fuel_rate" in keys:     # no stored Fuel plan: coke + nut coke + CDI, as page 27
             coke, cdi = _num(data.get("coke_rate")), _num(data.get("cdi"))
             if coke is not None and cdi is not None:
-                return coke + cdi
+                return coke + (_num(data.get("nut_coke_rate")) or 0) + cdi
         return None
+
+    def sail_stored(self, keys, month, period):
+        for unit in _SAIL_UNITS:
+            v = self.rate("SAIL", unit, keys, month, period)
+            if v is not None:
+                return v
+        return None
+
+    def sail_plan_rate(self, key):
+        if key == "fuel":
+            coke, cdi = _num(self.sail_plan.get("Coke Rate")), _num(self.sail_plan.get("CDI Rate"))
+            if coke is None or cdi is None:
+                return None
+            return coke + (_num(self.sail_plan.get("Nut Coke Rate")) or 0) + cdi
+        return _num(self.sail_plan.get(_SAIL_PLAN_NAMES.get(key)))
 
     @staticmethod
     def item(source, month, plant, items):
@@ -168,11 +178,10 @@ class _Line:
         self.data, self.plant, self.unit, self.items, self.furnaces = data, plant, unit, items, furnaces
 
     def prod(self, month):
-        if self.furnaces:
-            total = _sum(f.prod(month) for f in self.furnaces)
-            if total is not None:
-                return total
-        return self.data.item(self.data.actual, month, self.plant, self.items)
+        v = self.data.item(self.data.actual, month, self.plant, self.items)
+        if v is None and self.furnaces:     # no Hot Metal row: its furnaces
+            return _sum(f.prod(month) for f in self.furnaces)
+        return v
 
     def plan(self, month):
         return self.data.item(self.data.abp, month, self.plant, self.items)
@@ -183,16 +192,13 @@ class _Line:
     def rate(self, keys, month):
         return self.data.rate(self.plant, self.unit, keys, month)
 
-    def rate_fy(self, key, keys, year):
+    def rate_fy(self, keys, year):
         months = self.data.months[year]
         for m in reversed(months):
             v = self.data.rate(self.plant, self.unit, keys, m, "till_month")
             if v is not None:
                 return v
-        values = [(self.rate(keys, m), self.prod(m)) for m in months]
-        if key == "hbt" or not any(w for _, w in values):
-            return _mean(v for v, _ in values)
-        return _weighted(values)
+        return _combine(keys, [(self.rate(keys, m), self.prod(m)) for m in months])
 
     def plan_rate(self, keys):
         return self.data.plan_rate(self.plant, self.unit, keys)
@@ -233,18 +239,37 @@ def _line_cells(line, months, fy_start, sec_cols):
             if not keys:
                 cells.append(None)
             elif c["kind"] == "fy":
-                cells.append(line.rate_fy(key, keys, c["fy"]))
+                cells.append(line.rate_fy(keys, c["fy"]))
             elif c["kind"] == "app":
                 cells.append(line.plan_rate(keys))
             elif c["kind"] == "month":
                 cells.append(line.rate(keys, c["month"]))
             else:
-                cells.append(line.rate_fy(key, keys, fy_start))
+                cells.append(line.rate_fy(keys, fy_start))
         out[key] = _with_pct(key, cols, cells)
     return out
 
 
-def _sail_cells(lines, months, fy_start, sec_cols):
+def _sail_rate(lines, keys, pairs):
+    """Plant (value, weight) pairs -> SAIL; zero-fill plants' blanks count as 0."""
+    if all(v is None for v, _ in pairs):
+        return None
+    fill = _ZERO_FILL.get(keys[0]) or ()
+    # A plant with no Hot Metal drops out (w = 0), as in page_techno._bf_sail.
+    return _combine(keys, [(0.0 if v is None and ln.plant in fill else v, w or 0)
+                           for ln, (v, w) in zip(lines, pairs)])
+
+
+def _sail_fy(data, lines, keys, year):
+    """A stored SAIL till-month figure of the FY, else the plants' FY values."""
+    for m in reversed(data.months[year]):
+        v = data.sail_stored(keys, m, "till_month")
+        if v is not None:
+            return v
+    return _sail_rate(lines, keys, [(ln.rate_fy(keys, year), ln.prod_fy(year)) for ln in lines])
+
+
+def _sail_cells(lines, data, months, fy_start, sec_cols):
     out = {}
     for key, _h, _p, _d, keys in SECTIONS:
         cols = sec_cols[key]
@@ -257,16 +282,22 @@ def _sail_cells(lines, months, fy_start, sec_cols):
         cells = []
         for c in cols:
             if not keys:
-                pairs = []
+                cells.append(None)
             elif c["kind"] == "fy":
-                pairs = [(ln.rate_fy(key, keys, c["fy"]), ln.prod_fy(c["fy"])) for ln in lines]
+                cells.append(_sail_fy(data, lines, keys, c["fy"]))
             elif c["kind"] == "app":
-                pairs = [(ln.plan_rate(keys), _sum(ln.plan(m) for m in months)) for ln in lines]
+                v = data.sail_plan_rate(key)
+                if v is None:
+                    v = _sail_rate(lines, keys,
+                                   [(ln.plan_rate(keys), _sum(ln.plan(m) for m in months)) for ln in lines])
+                cells.append(v)
             elif c["kind"] == "month":
-                pairs = [(ln.rate(keys, c["month"]), ln.prod(c["month"])) for ln in lines]
+                v = data.sail_stored(keys, c["month"], "month")
+                if v is None:
+                    v = _sail_rate(lines, keys, [(ln.rate(keys, c["month"]), ln.prod(c["month"])) for ln in lines])
+                cells.append(v)
             else:
-                pairs = [(ln.rate_fy(key, keys, fy_start), ln.prod_fy(fy_start)) for ln in lines]
-            cells.append(_sail_rate(key, pairs))
+                cells.append(_sail_fy(data, lines, keys, fy_start))
         out[key] = _with_pct(key, cols, cells)
     return out
 
@@ -303,7 +334,7 @@ def build(fy_start):
         for i, row in enumerate(plant_rows):
             row["plant_span"] = len(plant_rows) if i == 0 else 0
         rows.extend(plant_rows)
-    sail = _sail_cells(plant_lines, months, fy_start, sec_cols)
+    sail = _sail_cells(plant_lines, data, months, fy_start, sec_cols)
     rows.append({"kind": "sail", "plant": "SAIL", "bf": "", "static": {}, "aux_fuel": None,
                  "plant_span": 1, "sections": sail})
     return {
