@@ -8,7 +8,7 @@ units, linked BD+CR shown once, process-order sort) is built in the browser
 already-built tables and this module only lays them out -- the downloads
 match the screen exactly without duplicating that logic here.
 
-Payload: {plant, plant_title, fy, units: [{title, type_label, bd, cr,
+Payload: {plant, plant_title, fy, month?, month_label?, units: [{title, type_label, bd, cr,
 events: [{month, kind, linked, dates, sub, details, duration, ongoing}]}]}
 -- events in display order; consecutive events of one month form a group.
 
@@ -62,7 +62,14 @@ def _details(ev: dict) -> str:
 
 
 def _filename(data: dict, ext: str) -> str:
-    return f"BD_CR_Log_{data.get('plant', '')}_{data.get('fy', '')}.{ext}"
+    month = f"_{data['month']}" if data.get("month") else ""
+    return f"BD_CR_Log_{data.get('plant', '')}_{data.get('fy', '')}{month}.{ext}"
+
+
+def _period(data: dict) -> str:
+    """'FY 2026-27', with the month when the log was narrowed to one."""
+    label = data.get("month_label")
+    return f"FY {data.get('fy', '')}" + (f"  ·  {label}" if label else "")
 
 
 def build_excel_bytes(data: dict) -> bytes:
@@ -72,7 +79,7 @@ def build_excel_bytes(data: dict) -> bytes:
 
     plant_title = data.get("plant_title") or data.get("plant", "")
     ws.cell(row=1, column=1, value=f"Breakdown & Capital Repair Log — {plant_title}").font = Font(bold=True, size=13)
-    ws.cell(row=2, column=1, value=f"FY {data.get('fy', '')}  ·  BD = Breakdown, CR = Capital Repair "
+    ws.cell(row=2, column=1, value=f"{_period(data)}  ·  BD = Breakdown, CR = Capital Repair "
                                    "(⏱ = timed by the linked breakdown entry)").font = Font(italic=True, size=9)
     row = 4
 
@@ -189,7 +196,7 @@ def build_pdf_html(data: dict) -> str:
 </head>
 <body>
   <h1>Breakdown &amp; Capital Repair Log — {esc(plant_title)}</h1>
-  <p class="subtitle">FY {esc(data.get("fy", ""))} · BD = Breakdown, CR = Capital Repair ·
+  <p class="subtitle">{esc(_period(data))} · BD = Breakdown, CR = Capital Repair ·
     ⏱ = capital repair timed by its linked breakdown entry</p>
   {''.join(sections)}
 </body></html>"""

@@ -27,6 +27,7 @@ const TYPE_LABEL = {
   BF: 'Blast Furnace', SMS: 'SMS', SINTER: 'Sinter Plant', COKE: 'Coke Oven',
   MILL: 'Rolling Mill', GENERAL: 'Plant-Level General', OTHER: 'Other',
 };
+const ALL_MONTHS = 'all';
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const KIND_STYLE = {
   BD: { bg: '#fce8e6', fg: '#c5221f', label: 'BD' },
@@ -120,6 +121,22 @@ const unitTitle = (u) => (u.name === 'Shop' ? `${TYPE_LABEL[u.type]} — whole s
 
 function monthKey(ts) { return String(ts).slice(0, 7); }
 function monthLabel(ym) { return `${MON[Number(ym.slice(5, 7)) - 1]}'${ym.slice(2, 4)}`; }
+// A chosen FY's months so far, Apr first: "2026-27" -> ["2026-04", ...].
+function fyMonthsSoFar(fy) {
+  const start = Number(fy.slice(0, 4));
+  const now = new Date();
+  const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  return [4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3]
+    .map((m) => `${m >= 4 ? start : start + 1}-${String(m).padStart(2, '0')}`)
+    .filter((ym) => ym <= thisMonth);
+}
+// One month of a plant's unit tables; units with nothing that month drop out.
+function unitsInMonth(units, month) {
+  if (month === ALL_MONTHS) return units;
+  return units
+    .map((u) => ({ ...u, events: u.events.filter((ev) => monthKey(ev.start) === month) }))
+    .filter((u) => u.events.length);
+}
 const subtagLabel = (s) => (s ? `${s.charAt(0)}${s.slice(1).toLowerCase()}` : '');
 
 // BD hours: the entered hours-lost override, else the start-to-end span. A
@@ -201,6 +218,7 @@ function buildUnits(breakdowns, repairs) {
 export default function BdCrLogView() {
   const [plant, setPlant] = useState('BSP');
   const [fy, setFy] = useState(defaultFy());
+  const [month, setMonth] = useState(ALL_MONTHS);
   const [data, setData] = useState({});        // { [plant]: { breakdowns, repairs } } for the chosen FY
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -234,8 +252,22 @@ export default function BdCrLogView() {
   const unitsByPlant = useMemo(() => Object.fromEntries(PLANTS.map((p) => [
     p, buildUnits(data[p]?.breakdowns || [], data[p]?.repairs || []),
   ])), [data]);
-  const units = unitsByPlant[plant] || [];
-  const countOf = (p) => (unitsByPlant[p] || []).reduce((n, u) => n + u.events.length, 0);
+  const units = useMemo(() => unitsInMonth(unitsByPlant[plant] || [], month), [unitsByPlant, plant, month]);
+  const countOf = (p) => unitsInMonth(unitsByPlant[p] || [], month).reduce((n, u) => n + u.events.length, 0);
+
+  // The FY's months so far, plus any month a plant's events fall in outside
+  // them (a CR is filed under its entered FY, whatever its actual start).
+  // The chosen month stays listed when another plant has nothing in it.
+  const monthOptions = useMemo(() => {
+    const counts = new Map();
+    for (const u of unitsByPlant[plant] || []) {
+      for (const ev of u.events) counts.set(monthKey(ev.start), (counts.get(monthKey(ev.start)) || 0) + 1);
+    }
+    const shown = [...fyMonthsSoFar(fy), ...counts.keys(), ...(month === ALL_MONTHS ? [] : [month])];
+    return [...new Set(shown)].sort()
+      .map((ym) => ({ ym, count: counts.get(ym) || 0 }));
+  }, [unitsByPlant, plant, fy, month]);
+  const monthText = month === ALL_MONTHS ? '' : monthLabel(month);
 
   // The backend only lays out what is on screen (page_bd_cr_log_export.py),
   // so post the selected plant's tables exactly as built here.
@@ -244,6 +276,7 @@ export default function BdCrLogView() {
     try {
       const payload = {
         plant, plant_title: PLANT_LABEL[plant], fy,
+        ...(monthText ? { month, month_label: monthText } : {}),
         units: units.map((u) => {
           const bd = u.events.filter((e) => e.kind === 'BD').length;
           return {
@@ -256,7 +289,7 @@ export default function BdCrLogView() {
         }),
       };
       await downloadFile(`${API_BASE}/api/bd-cr-log/${kind}`, payload,
-        `BD_CR_Log_${plant}_${fy}.${kind === 'excel' ? 'xlsx' : 'pdf'}`);
+        `BD_CR_Log_${plant}_${fy}${monthText ? `_${month}` : ''}.${kind === 'excel' ? 'xlsx' : 'pdf'}`);
     } catch (e) {
       setError(`Download failed: ${e.message}`);
     } finally {
@@ -273,13 +306,23 @@ export default function BdCrLogView() {
         repairs are not listed). Breakdown hours are the entered hours lost, else the start-to-end span.
         A capital repair the plant also logged in the breakdown log (linked on the Breakdown entry form) is
         shown once, as the CR, timed by the breakdown entry&apos;s exact date-times (marked ⏱).
+        Choosing a month lists what started in that month.
       </TabIntro>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', margin: '10px 0 12px' }}>
         <label style={{ fontSize: '9.5pt', color: '#5f6368' }}>
           FY{' '}
-          <select style={selStyle} value={fy} onChange={(e) => setFy(e.target.value)}>
+          <select style={selStyle} value={fy} onChange={(e) => { setFy(e.target.value); setMonth(ALL_MONTHS); }}>
             {fyOptions().map((f) => <option key={f}>{f}</option>)}
+          </select>
+        </label>
+        <label style={{ fontSize: '9.5pt', color: '#5f6368' }}>
+          Month{' '}
+          <select style={selStyle} value={month} onChange={(e) => setMonth(e.target.value)}>
+            <option value={ALL_MONTHS}>All months</option>
+            {monthOptions.map(({ ym, count }) => (
+              <option key={ym} value={ym}>{monthLabel(ym)} ({count})</option>
+            ))}
           </select>
         </label>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -300,7 +343,7 @@ export default function BdCrLogView() {
 
       {!loading && !error && units.length === 0 && (
         <div style={{ padding: 30, textAlign: 'center', color: '#5f6368', border: '1px solid #dadce0', borderRadius: 8 }}>
-          No breakdowns or capital repairs recorded for {plant} in {fy}.
+          No breakdowns or capital repairs recorded for {plant} in {monthText || fy}.
         </div>
       )}
 
