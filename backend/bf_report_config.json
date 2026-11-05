@@ -1,0 +1,419 @@
+{
+  "_note": "Static blast furnace data for the BF Parameters report (bf_report.py), from the format sheet 'BF Report.xlsx'. Edits apply on the next load. A furnace with show=false is listed only in a financial year it has data. production_items: production_monthly items, first with a value wins; plant plan_item gives the plant's Hot Metal row.",
+  "title": "Blast furnaces at SAIL",
+  "plants": [
+    {
+      "plant": "BSP",
+      "plan_item": "Hot Metal",
+      "shop_unit": "BF_Shop",
+      "shop_aux_fuel": "CDI",
+      "furnaces": [
+        {
+          "bf": "1",
+          "unit": "BF-1",
+          "production_items": [
+            "BF#1"
+          ],
+          "working_volume": 886,
+          "tuyeres": 14,
+          "tap_holes": 1,
+          "cast_houses": 1,
+          "chsgp": null,
+          "blt": null,
+          "stoves": 3,
+          "aux_fuel": "CDI",
+          "show": false
+        },
+        {
+          "bf": "2",
+          "unit": "BF-2",
+          "production_items": [
+            "BF#2"
+          ],
+          "working_volume": 886,
+          "tuyeres": 14,
+          "tap_holes": 1,
+          "cast_houses": 1,
+          "chsgp": null,
+          "blt": null,
+          "stoves": 3,
+          "aux_fuel": "Tar",
+          "show": false
+        },
+        {
+          "bf": "3",
+          "unit": "BF-3",
+          "production_items": [
+            "BF#3"
+          ],
+          "working_volume": 886,
+          "tuyeres": 14,
+          "tap_holes": 1,
+          "cast_houses": 1,
+          "chsgp": null,
+          "blt": null,
+          "stoves": 3,
+          "aux_fuel": "Tar",
+          "show": false
+        },
+        {
+          "bf": "4",
+          "unit": "BF-4",
+          "production_items": [
+            "BF#4"
+          ],
+          "working_volume": 1491,
+          "tuyeres": 18,
+          "tap_holes": 2,
+          "cast_houses": 1,
+          "chsgp": "Yes",
+          "blt": "Yes",
+          "stoves": 4,
+          "aux_fuel": "CDI",
+          "show": true
+        },
+        {
+          "bf": "5",
+          "unit": "BF-5",
+          "production_items": [
+            "BF#5"
+          ],
+          "working_volume": 1491,
+          "tuyeres": 18,
+          "tap_holes": 2,
+          "cast_houses": 1,
+          "chsgp": "Yes",
+          "blt": "Yes",
+          "stoves": 4,
+          "aux_fuel": "CDI",
+          "show": true
+        },
+        {
+          "bf": "6",
+          "unit": "BF-6",
+          "production_items": [
+            "BF#6"
+          ],
+          "working_volume": 1491,
+          "tuyeres": 18,
+          "tap_holes": 2,
+          "cast_houses": 2,
+          "chsgp": "Yes",
+          "blt": "Yes",
+          "stoves": 3,
+          "aux_fuel": "CDI",
+          "show": true
+        },
+        {
+          "bf": "7",
+          "unit": "BF-7",
+          "production_items": [
+            "BF#7"
+          ],
+          "working_volume": 2104,
+          "tuyeres": 24,
+          "tap_holes": 2,
+          "cast_houses": null,
+          "chsgp": "Yes",
+          "blt": "Yes",
+          "stoves": 4,
+          "aux_fuel": "CDI",
+          "show": true
+        },
+        {
+          "bf": "8",
+          "unit": "BF-8",
+          "production_items": [
+            "BF#8"
+          ],
+          "working_volume": 3445,
+          "tuyeres": 36,
+          "tap_holes": 4,
+          "cast_houses": "Circular",
+          "chsgp": "Yes",
+          "blt": "Yes",
+          "stoves": 3,
+          "aux_fuel": null,
+          "show": true
+        }
+      ]
+    },
+    {
+      "plant": "DSP",
+      "plan_item": "Hot Metal",
+      "shop_unit": "BF_Shop",
+      "shop_aux_fuel": "CDI",
+      "furnaces": [
+        {
+          "bf": "2",
+          "unit": "BF-2",
+          "production_items": [
+            "BF#2"
+          ],
+          "working_volume": 1204,
+          "tuyeres": 18,
+          "tap_holes": 2,
+          "cast_houses": 1,
+          "chsgp": null,
+          "blt": null,
+          "stoves": 3,
+          "aux_fuel": "TAR/CDI",
+          "show": true
+        },
+        {
+          "bf": "3",
+          "unit": "BF-3",
+          "production_items": [
+            "BF#3"
+          ],
+          "working_volume": 1204,
+          "tuyeres": 18,
+          "tap_holes": 2,
+          "cast_houses": 1,
+          "chsgp": "Yes",
+          "blt": "Yes",
+          "stoves": 3,
+          "aux_fuel": "CDI",
+          "show": true
+        },
+        {
+          "bf": "4",
+          "unit": "BF-4",
+          "production_items": [
+            "BF#4"
+          ],
+          "working_volume": 1539,
+          "tuyeres": 20,
+          "tap_holes": 2,
+          "cast_houses": 1,
+          "chsgp": "Yes",
+          "blt": null,
+          "stoves": 3,
+          "aux_fuel": "CDI",
+          "show": true
+        }
+      ]
+    },
+    {
+      "plant": "RSP",
+      "plan_item": "Hot Metal",
+      "shop_unit": "BF_Shop",
+      "shop_aux_fuel": "CDI",
+      "furnaces": [
+        {
+          "bf": "1",
+          "unit": "BF-1",
+          "production_items": [
+            "BF#1"
+          ],
+          "working_volume": 1491,
+          "tuyeres": 18,
+          "tap_holes": 1,
+          "cast_houses": 1,
+          "chsgp": "Yes",
+          "blt": null,
+          "stoves": 3,
+          "aux_fuel": null,
+          "show": true
+        },
+        {
+          "bf": "2",
+          "unit": "BF-2",
+          "production_items": [
+            "BF#2"
+          ],
+          "working_volume": 995,
+          "tuyeres": 18,
+          "tap_holes": 1,
+          "cast_houses": 1,
+          "chsgp": null,
+          "blt": "Yes",
+          "stoves": 3,
+          "aux_fuel": null,
+          "show": false
+        },
+        {
+          "bf": "3",
+          "unit": "BF-3",
+          "production_items": [
+            "BF#3"
+          ],
+          "working_volume": 995,
+          "tuyeres": 18,
+          "tap_holes": 1,
+          "cast_houses": 1,
+          "chsgp": null,
+          "blt": "Yes",
+          "stoves": 3,
+          "aux_fuel": null,
+          "show": false
+        },
+        {
+          "bf": "4",
+          "unit": "BF-4",
+          "production_items": [
+            "BF#4"
+          ],
+          "working_volume": 1448,
+          "tuyeres": 20,
+          "tap_holes": 2,
+          "cast_houses": 1,
+          "chsgp": "Yes",
+          "blt": "Yes",
+          "stoves": 3,
+          "aux_fuel": "CDI",
+          "show": true
+        },
+        {
+          "bf": "5\n(New)",
+          "unit": "BF-5",
+          "production_items": [
+            "BF#5"
+          ],
+          "working_volume": 3470,
+          "tuyeres": 36,
+          "tap_holes": 4,
+          "cast_houses": "Circular",
+          "chsgp": "Yes",
+          "blt": "Yes",
+          "stoves": 3,
+          "aux_fuel": "CDI",
+          "show": true
+        }
+      ]
+    },
+    {
+      "plant": "BSL",
+      "plan_item": "Hot Metal",
+      "shop_unit": "BF_Shop",
+      "shop_aux_fuel": "CDI",
+      "furnaces": [
+        {
+          "bf": "1",
+          "unit": "BF-1",
+          "production_items": [
+            "BF#1",
+            "BF-1"
+          ],
+          "working_volume": 1758,
+          "tuyeres": 20,
+          "tap_holes": 2,
+          "cast_houses": 2,
+          "chsgp": null,
+          "blt": "Yes",
+          "stoves": 3,
+          "aux_fuel": "CDI",
+          "show": true
+        },
+        {
+          "bf": "2",
+          "unit": "BF-2",
+          "production_items": [
+            "BF#2",
+            "BF-2"
+          ],
+          "working_volume": 2250,
+          "tuyeres": 28,
+          "tap_holes": 2,
+          "cast_houses": 2,
+          "chsgp": "Yes",
+          "blt": "Yes",
+          "stoves": 3,
+          "aux_fuel": "CDI",
+          "show": true
+        },
+        {
+          "bf": "3",
+          "unit": "BF-3",
+          "production_items": [
+            "BF#3",
+            "BF-3"
+          ],
+          "working_volume": 1758,
+          "tuyeres": 20,
+          "tap_holes": 2,
+          "cast_houses": 2,
+          "chsgp": "Yes",
+          "blt": "Yes",
+          "stoves": 3,
+          "aux_fuel": "CDI",
+          "show": false
+        },
+        {
+          "bf": "4",
+          "unit": "BF-4",
+          "production_items": [
+            "BF#4",
+            "BF-4"
+          ],
+          "working_volume": 1758,
+          "tuyeres": 20,
+          "tap_holes": 2,
+          "cast_houses": 2,
+          "chsgp": "Yes",
+          "blt": "Yes",
+          "stoves": 3,
+          "aux_fuel": "CDI",
+          "show": true
+        },
+        {
+          "bf": "5",
+          "unit": "BF-5",
+          "production_items": [
+            "BF#5",
+            "BF-5"
+          ],
+          "working_volume": 1758,
+          "tuyeres": 24,
+          "tap_holes": 2,
+          "cast_houses": 2,
+          "chsgp": "Yes",
+          "blt": "Yes",
+          "stoves": 3,
+          "aux_fuel": "CDI",
+          "show": true
+        }
+      ]
+    },
+    {
+      "plant": "ISP",
+      "plan_item": "Hot Metal",
+      "shop_unit": null,
+      "shop_aux_fuel": null,
+      "furnaces": [
+        {
+          "bf": "2",
+          "unit": "BF-2",
+          "production_items": [
+            "BF#2"
+          ],
+          "working_volume": 465,
+          "tuyeres": null,
+          "tap_holes": null,
+          "cast_houses": null,
+          "chsgp": null,
+          "blt": null,
+          "stoves": null,
+          "aux_fuel": null,
+          "show": false
+        },
+        {
+          "bf": "5\n(New)",
+          "unit": "BF-5",
+          "production_items": [
+            "Hot Metal"
+          ],
+          "working_volume": 3551,
+          "tuyeres": 38,
+          "tap_holes": 4,
+          "cast_houses": "Circular",
+          "chsgp": "Yes",
+          "blt": "Yes",
+          "stoves": 3,
+          "aux_fuel": "CDI",
+          "show": true
+        }
+      ]
+    }
+  ]
+}
