@@ -99,6 +99,34 @@ def test_cum_uses_till_month_else_production_weighted_else_hbt_average(db):
     assert _cell(db, bf8, "fuel", kind="app") == 516       # coke + CDI, as the sheet
 
 
+def test_narrow_drops_chosen_rows_and_columns_and_keeps_the_rest_aligned(db):
+    full_cum = _cell(db, _row(db, "BSP", "8"), "production", kind="cum")
+    rep = bf_report.narrow(db, hide_rows=["BSP:BF-4", "BSP:BF-8"], hide_fys=[2025], hide_months=["04"])
+    assert not [r for r in rep["rows"] if r["id"] in ("BSP:BF-4", "BSP:BF-8")]
+    for sec in rep["sections"]:
+        labels = [c["label"] for c in sec["columns"]]
+        assert "25-26" not in labels and "Apr'26" not in labels and "May'26" in labels and "Cum" in labels
+        for row in rep["rows"]:
+            assert len(row["sections"][sec["key"]]["cells"]) == len(labels)
+    shop = _row(rep, "BSP", "Shop")
+    assert _cell(rep, shop, "production", month="2026-05") == 300     # still covers the hidden furnace
+    assert _cell(rep, _row(rep, "SAIL", ""), "production", kind="cum") == _cell(db, _row(db, "SAIL", ""), "production", kind="cum")
+    assert full_cum == 500 and _cell(db, _row(db, "BSP", "8"), "production", month="2026-04") == 100    # db untouched
+
+
+def test_narrow_recounts_the_merged_plant_cell(db):
+    rep = bf_report.narrow(db, hide_rows=["BSP:BF-4"])
+    bsp = [r for r in rep["rows"] if r["plant"] == "BSP"]
+    assert bsp[0]["plant_span"] == len(bsp) and all(r["plant_span"] == 0 for r in bsp[1:])
+
+
+def test_narrowed_excel_builds_with_only_the_chosen_section(db):
+    rep = bf_report.narrow(db, hide_rows=["BSP:BF-4"], hide_fys=range(2017, 2026), sections=["coke"])
+    ws = openpyxl.load_workbook(io.BytesIO(bf_report.build_xlsx(rep))).active
+    assert [c.value for c in ws[5] if c.value] == ["Coke Rate(Kg/THM)"]
+    assert ws["J6"].value == " APP\n26-27" and ws["K6"].number_format == "mmm\\'yy"
+
+
 def test_a_shop_without_hot_metal_falls_back_to_its_furnaces(db):
     assert _cell(db, _row(db, "BSL", "Shop"), "production", month="2026-04") == 50
 

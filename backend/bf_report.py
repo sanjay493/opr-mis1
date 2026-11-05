@@ -320,12 +320,12 @@ def build(fy_start):
         for f, line in zip(p["furnaces"], lines):
             sections = _line_cells(line, months, fy_start, sec_cols)
             if f["show"] or _has_data(sections, sec_cols):
-                plant_rows.append({"kind": "furnace", "plant": p["plant"], "bf": f["bf"],
+                plant_rows.append({"id": f"{p['plant']}:{f['unit']}", "kind": "furnace", "plant": p["plant"], "bf": f["bf"],
                                    "static": {k: f.get(k) for k in _STATIC_FIELDS},
                                    "aux_fuel": f.get("aux_fuel"), "sections": sections})
         if p["shop_unit"]:
             shop = _Line(data, p["plant"], p["shop_unit"], [p["plan_item"]], furnaces=lines)
-            plant_rows.append({"kind": "shop", "plant": p["plant"], "bf": "Shop", "static": {},
+            plant_rows.append({"id": f"{p['plant']}:Shop", "kind": "shop", "plant": p["plant"], "bf": "Shop", "static": {},
                                "aux_fuel": p.get("shop_aux_fuel"),
                                "sections": _line_cells(shop, months, fy_start, sec_cols)})
             plant_lines.append(shop)
@@ -335,7 +335,7 @@ def build(fy_start):
             row["plant_span"] = len(plant_rows) if i == 0 else 0
         rows.extend(plant_rows)
     sail = _sail_cells(plant_lines, data, months, fy_start, sec_cols)
-    rows.append({"kind": "sail", "plant": "SAIL", "bf": "", "static": {}, "aux_fuel": None,
+    rows.append({"id": "SAIL", "kind": "sail", "plant": "SAIL", "bf": "", "static": {}, "aux_fuel": None,
                  "plant_span": 1, "sections": sail})
     return {
         "title": cfg["title"], "fy": fy_start, "fy_label": trend.fy_label(fy_start),
@@ -345,6 +345,39 @@ def build(fy_start):
         "rows": rows,
         "has_plan": any(sec["cells"][_app_index(sec_cols[key])] is not None for key, sec in sail.items()),
     }
+
+
+def narrow(rep, hide_rows=(), hide_fys=(), hide_months=(), sections=()):
+    """The report without the chosen rows (ids), past FYs (start years) and
+    calendar months ('04'), limited to `sections` (keys) if any are given, for
+    the Excel download of what the page shows. APP and Cum stay; every figure
+    keeps its value, so a shop or SAIL row still covers a hidden furnace and
+    Cum still covers a hidden month."""
+    hide_rows, hide_fys, hide_months = set(hide_rows), set(hide_fys), set(hide_months)
+    wanted = set(sections)
+
+    def keep(c):
+        return not ((c["kind"] == "fy" and c["fy"] in hide_fys)
+                    or (c["kind"] == "month" and c["month"][5:7] in hide_months))
+
+    secs = [s for s in rep["sections"] if not wanted or s["key"] in wanted]
+    out_rows, spans = [], {}
+    for row in rep["rows"]:
+        if row["id"] in hide_rows:
+            continue
+        out = dict(row, sections={})
+        for s in secs:
+            sec = row["sections"][s["key"]]
+            cells = [v for c, v in zip(s["columns"], sec["cells"]) if keep(c)]
+            out["sections"][s["key"]] = dict(sec, cells=cells)
+        spans[row["plant"]] = spans.get(row["plant"], 0) + 1
+        out_rows.append(out)
+    seen = set()
+    for row in out_rows:
+        row["plant_span"] = 0 if row["plant"] in seen else spans[row["plant"]]
+        seen.add(row["plant"])
+    return dict(rep, rows=out_rows,
+                sections=[dict(s, columns=[c for c in s["columns"] if keep(c)]) for s in secs])
 
 
 def available_fys():
