@@ -104,6 +104,16 @@ export const REPORT_GROUPS = [
     ],
   },
   {
+    id: 'abp',
+    route: '/reports/abp',
+    title: 'ABP',
+    description: 'Inputs for preparing the Annual Business Plan.',
+    icon: '🎯',
+    tabs: [
+      { id: 'production-projection', label: 'Production Projection', description: 'Hot Metal, Crude Steel, Saleable Steel and Finished Steel for any FY: capacities, last three years, APP, MoU, best months, and the full-year projection (actual + running month OP + remaining APP) and pro-rated estimate; Excel and PDF download.' },
+    ],
+  },
+  {
     id: 'external',
     route: '/reports/external',
     title: 'External Reports',

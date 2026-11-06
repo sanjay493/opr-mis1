@@ -143,6 +143,9 @@ _DEFAULTS: Dict[str, str] = {
     "trend_low_pct_text":         "#FF0000",
     "trend_period_bg":            "#E2EFDA",
     "trend_fy_bg":                "#F2F2F2",
+    "abp_plan_bg":                "#DCE6F1",
+    "abp_projection_bg":          "#F2DCDB",
+    "abp_best_fy_bg":             "#92D050",
 }
 
 

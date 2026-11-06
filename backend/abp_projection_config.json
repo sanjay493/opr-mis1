@@ -1,0 +1,8 @@
+{
+  "_doc": "Installed capacity ('000 T/yr) for the ABP production projection (abp_projection.py). No DB table holds it; figures are from the 'pre ABP HM-CS-SS FY 26-27 performance likely' sheet. Finished Steel has none. Totals are added up by the report.",
+  "installed_capacity": {
+    "Hot Metal":      { "BSP": 7220, "DSP": 2450, "RSP": 4500, "BSL": 5200, "ISP": 2700, "VISL": 216 },
+    "Crude Steel":    { "BSP": 6800, "DSP": 2200, "RSP": 3800, "BSL": 4610, "ISP": 2500, "ASP": 234, "SSP": 180, "VISL": 118 },
+    "Saleable Steel": { "BSP": 6360, "DSP": 2120, "RSP": 4306, "BSL": 4180, "ISP": 2390, "ASP": 184, "SSP": 340, "VISL": 98 }
+  }
+}

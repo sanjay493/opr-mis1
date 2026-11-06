@@ -138,6 +138,7 @@ already clubbed the same way into `/reports/techno` (its own tab pattern, see
 | `bd-cr-log` | `/reports/loss-breakdown` | frontend-only: merges `/api/breakdown` + `/api/capital-repair` (per plant/FY) into one table per unit, month-grouped in date order; CRs only once they have actual dates; a CR-linked breakdown (`capital_repair_id`) is shown once, as the CR, timed by the breakdown's date-times | `breakdown`, `capital_repair` |
 | `breakdown-analysis` | `/reports/loss-breakdown` | frontend-only (recharts); client-side aggregation over `GET /api/breakdown` (`api_breakdown.py`) | `breakdown` |
 | `ipt-fy` | `/reports/special-steel-ipt` | `page_ipt.py` | `ipt_monthly` |
+| `production-projection` | `/reports/abp` | `abp_projection.py`, `api_abp_projection.py` (`/api/abp-projection…`; installed capacity from `abp_projection_config.json`) | `production_monthly` (actual + ABP + MoU), `production_op_monthly`, `item_capacity` |
 | `new-facilities` | `/reports/external` | (frontend-only / static) | — |
 | `highlights` | `/reports/highlights-records` | frontend-only | — |
 | `special-steel-physical` | `/reports/production-analysis` | `page_special_steel_physical.py` | `special_steel_phys_perf`, `special_steel_phys_meta`, `special_steel_phys_note` |
