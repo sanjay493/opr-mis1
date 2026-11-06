@@ -139,6 +139,7 @@ already clubbed the same way into `/reports/techno` (its own tab pattern, see
 | `breakdown-analysis` | `/reports/loss-breakdown` | frontend-only (recharts); client-side aggregation over `GET /api/breakdown` (`api_breakdown.py`) | `breakdown` |
 | `ipt-fy` | `/reports/special-steel-ipt` | `page_ipt.py` | `ipt_monthly` |
 | `production-projection` | `/reports/abp` | `abp_projection.py`, `api_abp_projection.py` (`/api/abp-projection…`; installed capacity from `abp_projection_config.json`) | `production_monthly` (actual + ABP + MoU), `production_op_monthly`, `item_capacity` |
+| `abp-mills` | `/reports/abp` | `abp_mills.py`, `api_abp_mills.py` (`/api/abp-mills…`; mill capacities in `abp_mills.MILLS`) | `production_monthly` (actual + ABP), `production_op_monthly`, `item_capacity` |
 | `new-facilities` | `/reports/external` | (frontend-only / static) | — |
 | `highlights` | `/reports/highlights-records` | frontend-only | — |
 | `special-steel-physical` | `/reports/production-analysis` | `page_special_steel_physical.py` | `special_steel_phys_perf`, `special_steel_phys_meta`, `special_steel_phys_note` |

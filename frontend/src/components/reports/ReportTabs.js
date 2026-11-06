@@ -49,6 +49,7 @@ const VIEWS = {
   'mills-performance': dynamic(() => import('./mills-performance/View'), { loading }),
   'bf-parameters': dynamic(() => import('./bf-parameters/View'), { loading }),
   'production-projection': dynamic(() => import('./production-projection/View'), { loading }),
+  'abp-mills': dynamic(() => import('./abp-mills/View'), { loading }),
   'sefi': dynamic(() => import('./sefi/View'), { loading }),
   'steel-bulletin': dynamic(() => import('./steel-bulletin/View'), { loading }),
   'cmd-monthly-report': dynamic(() => import('./cmd-monthly-report/View'), { loading }),

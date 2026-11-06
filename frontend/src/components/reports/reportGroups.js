@@ -111,6 +111,7 @@ export const REPORT_GROUPS = [
     icon: '🎯',
     tabs: [
       { id: 'production-projection', label: 'Production Projection', description: 'Hot Metal, Crude Steel, Saleable Steel and Finished Steel for any FY: capacities, last three years, APP, MoU, best months, and the full-year projection (actual + running month OP + remaining APP) and pro-rated estimate; Excel and PDF download.' },
+      { id: 'abp-mills', label: 'Saleable Steel & Mills Performance', description: 'Mill-wise production with Finished Steel, Semis, Saleable Steel and % Finished Steel for any FY: installed capacity, last four years, best achieved, ABP, Likely (actual + running month OP + remaining APP) and best month; Excel and PDF download.' },
     ],
   },
   {

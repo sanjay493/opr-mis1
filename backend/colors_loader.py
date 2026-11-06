@@ -146,6 +146,8 @@ _DEFAULTS: Dict[str, str] = {
     "abp_plan_bg":                "#DCE6F1",
     "abp_projection_bg":          "#F2DCDB",
     "abp_best_fy_bg":             "#92D050",
+    "abp_mill_finished_bg":       "#C5D9F1",
+    "abp_mill_saleable_bg":       "#FFFF00",
 }
 
 

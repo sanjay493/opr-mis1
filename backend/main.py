@@ -465,6 +465,7 @@ from api_rsp_techno import router as rsp_techno_router
 from api_plant_performance import router as plant_performance_router
 from api_app_actual_trend import router as app_actual_trend_router
 from api_abp_projection import router as abp_projection_router
+from api_abp_mills import router as abp_mills_router
 from api_mills_performance import router as mills_performance_router
 from api_bf_report import router as bf_report_router
 from api_mines_performance import router as mines_performance_router
@@ -976,6 +977,7 @@ app.include_router(rsp_techno_router)
 app.include_router(plant_performance_router)
 app.include_router(app_actual_trend_router)
 app.include_router(abp_projection_router)
+app.include_router(abp_mills_router)
 app.include_router(mills_performance_router)
 app.include_router(bf_report_router)
 app.include_router(mines_performance_router)
