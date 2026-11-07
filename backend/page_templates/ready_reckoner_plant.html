@@ -77,12 +77,17 @@
     .rr-pm-equal table { table-layout: fixed; }
     .rr-pm-equal td { overflow-wrap: anywhere; }  /* long codes like "Mixed/Defective/PUP" would spill into the next cell */
     .rr-pm-wide-first table th:nth-child(1) { width: 15%; }
+    /* ISP (IISCO): narrower Mill and Product Mix columns, the rest goes to
+       Applications, whose hand-broken lines wrapped again in auto layout. */
+    .rr-pm-isp table { table-layout: fixed; }
+    .rr-pm-isp table th:nth-child(1) { width: 10%; }
+    .rr-pm-isp table th:nth-child(2) { width: 45%; }
 </style>
 
 <div class="rr-plant-title{% if page.pdf_landscape %} rr-title-landscape{% endif %}">{{ page.plant_name }}</div>
 <div class="rr-subtitle{% if page.pdf_landscape %} rr-subtitle-landscape{% endif %}">{{ page.subtype_label }}</div>
 
-{% set _pm_class = ' rr-pm-equal' if page.plant_code == 'BSL' else (' rr-pm-wide-first' if page.plant_code in ('BSP', 'DSP', 'RSP', 'ISP') else '') %}
+{% set _pm_class = ' rr-pm-equal' if page.plant_code == 'BSL' else (' rr-pm-isp' if page.plant_code == 'ISP' else (' rr-pm-wide-first' if page.plant_code in ('BSP', 'DSP', 'RSP') else '')) %}
 {% if page.subtype == 'process_flow' %}
     {% if page.image_data_uri %}
     <div class="rr-diagram-wrap{% if page.pdf_landscape %} rr-diagram-wrap-landscape{% endif %}">

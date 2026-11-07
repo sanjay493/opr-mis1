@@ -42,7 +42,7 @@ function CapacityTable({ rows }) {
   );
 }
 
-function ProductMixTable({ headers, rows, caption }) {
+function ProductMixTable({ headers, rows, caption, colWidths }) {
   if (!headers || headers.length === 0) {
     return <div style={{ textAlign: 'center', fontStyle: 'italic', padding: '40px 0', color: '#5f6368' }}>No product mix data yet.</div>;
   }
@@ -51,9 +51,9 @@ function ProductMixTable({ headers, rows, caption }) {
   return (
     <>
       {caption && <div style={{ fontWeight: 700, marginBottom: 4, fontSize: '12pt' }}>{caption}</div>}
-      <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '12pt' }}>
+      <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '12pt', tableLayout: colWidths ? 'fixed' : undefined }}>
         <thead>
-          <tr>{headers.map((h, i) => <th key={i} style={th}>{h}</th>)}</tr>
+          <tr>{headers.map((h, i) => <th key={i} style={{ ...th, width: colWidths?.[i] }}>{h}</th>)}</tr>
         </thead>
         <tbody>
           {rows.map((row, i) => (
@@ -152,7 +152,7 @@ export default function ReadyReckonerTemplate({ data }) {
           <div style={{ fontWeight: 700, margin: '10px 0 4px', fontSize: '12pt' }}>
             Product Mix{productMixCaption ? ` — ${productMixCaption}` : ''}
           </div>
-          <ProductMixTable headers={productMixHeaders} rows={productMixRows} />
+          <ProductMixTable headers={productMixHeaders} rows={productMixRows} colWidths={plantCode === 'ISP' ? ['10%', '45%'] : undefined} />
           {isEditor && (
             <div style={{ textAlign: 'center', marginTop: 8, fontSize: '8pt', color: '#5f6368' }}>
               Read-only here — edit at <a href="/data-entry/ready-reckoner">Data Entry &rarr; Ready Reckoner</a>.
