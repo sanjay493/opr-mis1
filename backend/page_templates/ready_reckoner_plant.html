@@ -82,6 +82,10 @@
     .rr-pm-isp table { table-layout: fixed; }
     .rr-pm-isp table th:nth-child(1) { width: 10%; }
     .rr-pm-isp table th:nth-child(2) { width: 45%; }
+    /* Let those lines flow (the cells' hand breaks each follow a space):
+       the rows get short enough for Product Mix to share the Unit-wise
+       Capacity page instead of splitting onto its own sheet. */
+    .rr-pm-isp td br { display: none; }
 </style>
 
 <div class="rr-plant-title{% if page.pdf_landscape %} rr-title-landscape{% endif %}">{{ page.plant_name }}</div>
