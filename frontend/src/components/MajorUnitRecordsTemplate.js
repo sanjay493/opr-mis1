@@ -12,6 +12,7 @@ const BORDER = '0.5pt solid #5f6368';
 const NAVY = '#1e3a8a';
 const RUST = '#B7410E';
 const TEAL = '#0f766e';
+const SAME_FY_BG = '#bbf7d0';
 
 const PERIOD_RE = /^(.*?)\s*<span class="mur-period">\((.*)\)<\/span>$/;
 
@@ -22,11 +23,11 @@ function unescapeHtml(s) {
     .replace(/&amp;/g, '&');
 }
 
-function DisplayCell({ display, bold, bg, color }) {
+function DisplayCell({ display, bold, bg, color, sameFy }) {
   const text = display ?? '—';
   const m = PERIOD_RE.exec(text);
   return (
-    <td style={{ border: BORDER, padding: '2.5px 6px', textAlign: 'center', whiteSpace: 'nowrap', fontWeight: bold ? 700 : undefined, background: bg, color }}>
+    <td style={{ border: BORDER, padding: '2.5px 6px', textAlign: 'center', whiteSpace: 'nowrap', fontWeight: bold || sameFy ? 700 : undefined, background: sameFy ? SAME_FY_BG : bg, color }}>
       {m ? (
         <>
           {m[1]}{' '}
@@ -38,7 +39,7 @@ function DisplayCell({ display, bold, bg, color }) {
 }
 
 export default function MajorUnitRecordsTemplate({ data }) {
-  const { plant_name: plantName, rows = [] } = data || {};
+  const { plant_name: plantName, rows = [], same_fy_label: sameFyLabel } = data || {};
 
   return (
     <div>
@@ -48,6 +49,13 @@ export default function MajorUnitRecordsTemplate({ data }) {
       <div style={{ textAlign: 'center', fontWeight: 600, fontSize: '10.5pt', color: '#5f6368', marginBottom: 10 }}>
         Major Units — Best Achieved (Annual / Monthly &apos;000 T, Daily T; Oven Pushing in Nos/day)
       </div>
+
+      {sameFyLabel && (
+        <div style={{ textAlign: 'right', fontSize: '9.5pt', marginBottom: 3 }}>
+          <span style={{ display: 'inline-block', width: 18, height: 9, marginRight: 4, background: SAME_FY_BG, border: BORDER }} />
+          Record set in FY {sameFyLabel}
+        </div>
+      )}
 
       <table style={{ fontSize: '11pt', borderCollapse: 'collapse', width: '100%', lineHeight: 1.2 }}>
         <thead>
@@ -70,9 +78,9 @@ export default function MajorUnitRecordsTemplate({ data }) {
                 }}>
                   {row.label}
                 </td>
-                <DisplayCell display={row.annual_display} bold={highlight} bg={bg} color={color} />
-                <DisplayCell display={row.monthly_display} bold={highlight} bg={bg} color={color} />
-                <DisplayCell display={row.daily_display} bold={highlight} bg={bg} color={color} />
+                <DisplayCell display={row.annual_display} bold={highlight} bg={bg} color={color} sameFy={row.annual_same_fy} />
+                <DisplayCell display={row.monthly_display} bold={highlight} bg={bg} color={color} sameFy={row.monthly_same_fy} />
+                <DisplayCell display={row.daily_display} bold={highlight} bg={bg} color={color} sameFy={row.daily_same_fy} />
               </tr>
             );
           })}

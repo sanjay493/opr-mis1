@@ -239,7 +239,7 @@ def best_for_unit(cur, plant: str, item_names: list, is_rate: bool, upto_month: 
         return empty
 
     best_rm = max(monthly, key=lambda rm: monthly[rm])
-    month_best = {"value": round(monthly[best_rm], 3), "period": _mon_label(best_rm)}
+    month_best = {"value": round(monthly[best_rm], 3), "period": _mon_label(best_rm), "month": best_rm}
 
     fy_groups = {}
     for rm, v in monthly.items():
@@ -391,6 +391,14 @@ def _row_class(item_names: list) -> str:
     return "mur-row-highlight" if tuple(item_names) in _HIGHLIGHT_ITEM_NAMES else ""
 
 
+def _daily_in_fy(daily, report_fy: int) -> bool:
+    """True if a Daily best with a figure is dated in FY report_fy. record_date
+    is free text (see _fmt_date_ddmmyyyy), so a non-ISO date never matches."""
+    if not daily or daily.get("value") is None or not _ISO_DATE_RE.match(daily.get("date") or ""):
+        return False
+    return _fy_of(daily["date"]) == report_fy
+
+
 def generate_major_unit_page(plant_code: str, report_month: str = None) -> dict:
     """One plant's Annexure-3 page: Unit / Annual Best / Monthly Best /
     Daily Best. Annual/Monthly are computed live from production_table
@@ -403,7 +411,10 @@ def generate_major_unit_page(plant_code: str, report_month: str = None) -> dict:
     report_month ('YYYY-MM'): records are as of that month — Annual/Monthly
     ignore later months, and a stored Daily best dated after it is not
     shown (only the current best-ever day is stored, so the best as of an
-    earlier month isn't known)."""
+    earlier month isn't known). A record set in report_month's own FY gets
+    its *_same_fy flag, and same_fy_label names that FY for the legend when
+    the page has at least one such record."""
+    report_fy = _fy_of(report_month) if report_month else None
     conn = dbengine.connect()
     cur = conn.cursor()
     try:
@@ -421,13 +432,17 @@ def generate_major_unit_page(plant_code: str, report_month: str = None) -> dict:
                       "remarks": daily_row["remarks"]}
                      if daily_row and (daily_row["value"] is not None or daily_row["remarks"])
                      else None)
+            month_best = live["month_best"]
             rows.append({
                 "label": unit["label"],
                 "unit": unit["unit"],
                 "row_class": _row_class(unit["item_names"]),
                 "annual_display": _fmt_pair(fy_best),
-                "monthly_display": _fmt_pair(live["month_best"]),
+                "monthly_display": _fmt_pair(month_best),
                 "daily_display": _fmt_daily(daily),
+                "annual_same_fy": bool(report_month and fy_best and fy_best["period"] == _fy_label(report_fy)),
+                "monthly_same_fy": bool(report_month and month_best and _fy_of(month_best["month"]) == report_fy),
+                "daily_same_fy": bool(report_month and _daily_in_fy(daily, report_fy)),
             })
     finally:
         conn.close()
@@ -438,4 +453,6 @@ def generate_major_unit_page(plant_code: str, report_month: str = None) -> dict:
         "plant_code": plant_code,
         "plant_name": _PLANT_NAMES.get(plant_code, plant_code),
         "rows": rows,
+        "same_fy_label": (_fy_label(report_fy) if any(
+            r["annual_same_fy"] or r["monthly_same_fy"] or r["daily_same_fy"] for r in rows) else ""),
     }

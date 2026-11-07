@@ -38,10 +38,24 @@
         font-weight: 600;
         font-size: 0.93em;
     }
+
+    /* A record set in the report month's own FY (see page_major_unit_records.py's
+       *_same_fy flags). "tr td" so the fill also wins on a call-out row. */
+    .mur-table tr td.mur-same-fy {
+        background: {{ colors.mur_same_fy_bg }};
+        font-weight: 700;
+    }
+    .mur-legend { text-align: right; font-size: 9.5pt; margin-bottom: 3px; }
+    .mur-legend-key {
+        display: inline-block; width: 18px; height: 9px; margin-right: 4px;
+        background: {{ colors.mur_same_fy_bg }};
+        border: 0.5pt solid {{ colors.border_dark|default('#5f6368') }};
+    }
 </style>
 
 <div class="mur-title">{{ page.plant_name }}</div>
 <div class="mur-subtitle">Major Units — Best Achieved (Annual / Monthly '000 T, Daily T; Oven Pushing in Nos/day)</div>
+{% if page.same_fy_label %}<div class="mur-legend"><span class="mur-legend-key"></span>Record set in FY {{ page.same_fy_label }}</div>{% endif %}
 
 <table class="mur-table">
     <thead>
@@ -56,9 +70,9 @@
     {% for row in page.rows %}
         <tr class="{{ row.row_class }}">
             <td class="mur-unit">{{ row.label }}</td>
-            <td class="mur-value">{{ row.annual_display }}</td>
-            <td class="mur-value">{{ row.monthly_display }}</td>
-            <td class="mur-value">{{ row.daily_display }}</td>
+            <td class="mur-value{% if row.annual_same_fy %} mur-same-fy{% endif %}">{{ row.annual_display }}</td>
+            <td class="mur-value{% if row.monthly_same_fy %} mur-same-fy{% endif %}">{{ row.monthly_display }}</td>
+            <td class="mur-value{% if row.daily_same_fy %} mur-same-fy{% endif %}">{{ row.daily_display }}</td>
         </tr>
     {% endfor %}
     </tbody>
