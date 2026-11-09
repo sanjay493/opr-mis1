@@ -1,12 +1,17 @@
 """Rake detention PDF extractor (page_rake_detention_pdf_extractor) against
 the monthly "Average Plant Detention Report" samples in
-Report_format/Miscellaneous (Feb, Mar, Jun, Jul, Aug, Sep 2026).
+Report_format/Miscellaneous (Feb, Mar, Jun-Oct 2026).
 
 Pins down the fixes for:
   - Jun/Sep'26 page 1 rendering its header letter-spaced ("W A G O N"),
     which skipped BSP/DSP/RSP entirely;
   - the report title's "COMMODITY" being taken as the column header,
     which dropped every wagon-type label;
+  - a printed line whose words straddle a .5pt top boundary being split
+    in two by round(top) (Oct'26 BSP/ISP totals lost their last months
+    to a bogus extra row; Sep'26 totals silently lost their last month);
+  - SAIL's Overall Wagon figure, printed only in the last page's trend
+    table, never being extracted;
   - rows being paired with the Wagon Types registry by position, which
     filed older reports' rows (9 BSP inward rows vs 15 in the registry)
     and ISP's differently-ordered rows under the wrong wagon type.
@@ -33,6 +38,7 @@ SAMPLES = {
     "2026-07": "Average Plant Detention Report for the period _(01-07-2026 to 31-07-2026).pdf",
     "2026-08": "Average Plant Detention Report for the period_(01-08-2026 to 31-08-2026.pdf",
     "2026-09": "Average Plant Detention report for the period _(01-09-2026 to 30-09-2026).pdf",
+    "2026-10": "Average Plant Detention Report for the period_(01-10-2026 to 31-10-2026).pdf",
 }
 
 _cache = {}
@@ -59,9 +65,13 @@ def _row(result, plant, section, commodity, wagon):
 @pytest.mark.parametrize("month", sorted(SAMPLES))
 def test_every_plant_and_summary_extracted(month):
     r = _extract(month)
-    assert set(r["plants"]) == {"BSP", "DSP", "RSP", "BSL", "ISP"}
+    assert set(r["plants"]) == {"BSP", "DSP", "RSP", "BSL", "ISP", "SAIL"}
     assert len(r["summary"]) == 9
-    assert r["warnings"] == []
+    if month == "2026-06":
+        # The Jun'26 PDF's trend page leaves SAIL's June cell blank.
+        assert len(r["warnings"]) == 1 and r["warnings"][0].startswith("SAIL")
+    else:
+        assert r["warnings"] == []
     for plant, sections in r["plants"].items():
         for section, sec in sections.items():
             assert sec["total"] is not None, f"{plant}/{section} total row missing"
@@ -106,3 +116,38 @@ def test_wrapped_labels_are_reassembled():
     r = _extract("2026-08")
     row = _row(r, "ISP", "OVERALL", None, "BOXN (NEW PLANT) *")
     assert row["monthly"]["2026-08"] == 7.3
+
+
+@pytest.mark.parametrize("month", sorted(SAMPLES))
+def test_every_row_and_total_has_every_month(month):
+    import page_rake_detention_pdf_extractor as ex
+    r = _extract(month)
+    want = ex._fy_months_from(month, 12)
+    want = want[:want.index(month) + 1]
+    for plant, sections in r["plants"].items():
+        for section, sec in sections.items():
+            if plant == "SAIL" and month == "2026-06":
+                continue  # the Jun'26 PDF leaves SAIL's June cell blank
+            assert list(sec["total"]["monthly"]) == want, f"{plant}/{section} total"
+            for row in sec["rows"]:
+                if row["status"] == "ok":
+                    assert list(row["monthly"]) == want, f"{plant}/{section} {row['matched_row_label']}"
+
+
+def test_line_split_across_rounding_boundary_is_one_row():
+    # Oct'26 BSP "OVERALL WAGON" total: words at top 379.49 and 379.51.
+    r = _extract("2026-10")
+    assert list(r["plants"]["BSP"]["OVERALL"]["total"]["monthly"].values()) == [
+        7.44, 7.44, 8.05, 9.16, 11.41, 11.37, 11.0]
+    assert r["plants"]["ISP"]["OUTWARD"]["total"]["monthly"]["2026-10"] == 18.07
+    assert r["plants"]["ISP"]["OVERALL"]["total"]["monthly"]["2026-09"] == 11.16
+
+
+def test_sail_overall_from_trend_page():
+    r = _extract("2026-10")
+    total = r["plants"]["SAIL"]["OVERALL"]["total"]
+    assert total["status"] == "ok" and total["matched_row_label"] == "Overall Wagon"
+    assert list(total["monthly"].values()) == [12.7, 12.3, 12.5, 15.8, 18.7, 16.7, 15.0]
+    # Months after the report month print as 0.0 placeholders.
+    feb = _extract("2026-02")["plants"]["SAIL"]["OVERALL"]["total"]["monthly"]
+    assert feb["2026-02"] == 12.6 and "2026-03" not in feb

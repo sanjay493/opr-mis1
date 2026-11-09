@@ -103,11 +103,23 @@ def _num(tok):
         return None
 
 
+_LINE_TOL = 1.0  # pt — words this close vertically are one printed line
+
+
 def _page_words_by_top(page):
-    by_top = {}
-    for w in page.extract_words():
-        by_top.setdefault(round(w["top"]), []).append(w)
-    return [(top, sorted(by_top[top], key=lambda w: w["x0"])) for top in sorted(by_top.keys())]
+    """[(top, words sorted by x0), ...] per printed line. Words are grouped
+    by closeness of `top`, not by round(top): the words of one line can sit
+    a fraction of a point apart either side of an .5 boundary (Oct'26's BSP
+    "OVERALL WAGON" total at 379.49 / 379.51), and rounding split that line
+    in two — the total kept 5 of its 7 months and the other 2 became a
+    bogus extra row. Real lines are ~7pt apart."""
+    lines = []
+    for w in sorted(page.extract_words(), key=lambda w: w["top"]):
+        if lines and w["top"] - lines[-1][0] <= _LINE_TOL:
+            lines[-1][1].append(w)
+        else:
+            lines.append((w["top"], [w]))
+    return [(round(top), sorted(ws, key=lambda w: w["x0"])) for top, ws in lines]
 
 
 def _find_in_row(row, phrase):
@@ -405,6 +417,57 @@ def _extract_summary_page(rows) -> list:
     return out
 
 
+_TREND_PLANTS = {"BSP", "DSP", "RSP", "BSL", "ISP", "SAIL"}
+_TREND_MONTHS = ["APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC", "JAN", "FEB", "MAR"]
+
+
+def _extract_trend_page(rows, report_month: str) -> dict:
+    """Last page — "AVERAGE DETENTION PER WAGONS IN HOURS": per plant
+    (BSP..ISP, SAIL) one row per FY ("2026-27", "2025-26", ...) x APR..MAR
+    + an APR-MAR average column. -> {plant: {"YYYY-MM": value}} for
+    report_month's own FY row. It is the only place the report prints
+    SAIL's monthly Overall Wagon figure (SAIL has no plant-detail table).
+
+    Values are filed under the month header nearest by x (the current FY
+    row has blank cells after the report month, so position-in-row would
+    put the APR-MAR average under November). The plant label is printed
+    mid-block, between its FY rows, so each plant takes the current-FY row
+    vertically nearest its label. {} if this isn't that page."""
+    header = next((row for _, row in rows
+                   if any(w["text"].upper() == "YEAR" for w in row)
+                   and any(w["text"].upper() == "APR-MAR" for w in row)), None)
+    if header is None:
+        return {}
+    cols = [(w["x0"], w["text"].upper()) for w in header
+            if w["text"].upper() in _TREND_MONTHS or w["text"].upper() == "APR-MAR"]
+    year_x = next(w["x0"] for w in header if w["text"].upper() == "YEAR")
+    # Months after report_month print as 0.0 placeholders — not values.
+    months = {k: v for k, v in zip(_TREND_MONTHS, _fy_months_from(report_month, 12))
+              if v <= report_month}
+    y, m = int(report_month[:4]), int(report_month[5:7])
+    fy = y if m >= 4 else y - 1
+    fy_label = f"{fy}-{(fy + 1) % 100:02d}"
+
+    fy_rows = [(top, row) for top, row in rows
+               if any(w["text"] == fy_label and w["x0"] < year_x + 40 for w in row)]
+    out = {}
+    for top, row in rows:
+        for w in row:
+            plant = w["text"].upper()
+            if plant not in _TREND_PLANTS or w["x0"] >= year_x or not fy_rows:
+                continue
+            _, fy_row = min(fy_rows, key=lambda r: abs(r[0] - top))
+            vals = {}
+            for v in fy_row:
+                if not _NUM_RE.match(v["text"]):
+                    continue
+                _, col = min(cols, key=lambda c: abs(c[0] - v["x0"]))
+                if col in months:
+                    vals[months[col]] = float(v["text"])
+            out[plant] = vals
+    return out
+
+
 def extract_rake_detention_pdf(file_path: str, report_month: str) -> dict:
     """Main entry point — see module docstring. Returns a preview dict:
     {"detected_period": "...", "plants": {plant_code: {section: {
@@ -422,6 +485,7 @@ def extract_rake_detention_pdf(file_path: str, report_month: str) -> dict:
     warnings = []
     plant_blob = {}
     summary_rows = []
+    trend = {}
 
     with pdfplumber.open(file_path) as pdf:
         for page in pdf.pages:
@@ -448,6 +512,8 @@ def extract_rake_detention_pdf(file_path: str, report_month: str) -> dict:
             # get misread as summary rows.
             if any(w["text"].upper() == "IMPROVEMENT" for _, row in rows for w in row):
                 summary_rows.extend(_extract_summary_page(rows))
+            else:
+                trend = _extract_trend_page(rows, report_month) or trend
 
     if not plant_blob:
         raise ValueError(
@@ -537,6 +603,23 @@ def extract_rake_detention_pdf(file_path: str, report_month: str) -> dict:
 
             sections_out[section] = {"rows": out_rows, "total": total_out}
         plants_out[plant_code] = sections_out
+
+    # SAIL's Overall Wagon row: only on the last (trend) page.
+    sail_total = next((r for r in rrk.get_rake_detention_master(plants=["SAIL"])
+                       if r["section"] == "OVERALL" and r["is_total"]), None)
+    if trend.get("SAIL"):
+        if report_month not in trend["SAIL"]:
+            warnings.append(f"SAIL Overall Wagon: the trend page (last page) has no "
+                            f"{report_month} figure for SAIL — enter it by hand.")
+        plants_out["SAIL"] = {"OVERALL": {"rows": [], "total": {
+            "monthly": trend["SAIL"],
+            "matched_master_id": sail_total["id"] if sail_total else None,
+            "matched_row_label": sail_total["row_label"] if sail_total else None,
+            "status": "ok" if sail_total else "no_total_row_in_registry",
+        }}}
+    elif sail_total:
+        warnings.append("SAIL Overall Wagon: the \"Average Detention per Wagons in Hours\" "
+                        "trend page (last page) wasn't found — SAIL's value not extracted.")
 
     from page_rake_detention import PERIOD_ROWS, SUMMARY_PLANTS
 

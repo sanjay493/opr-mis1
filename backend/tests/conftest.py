@@ -19,6 +19,7 @@ _SAMPLE_ROOTS = [
         __import__("os").environ.get("REPORT_FORMAT_DIR"),
         str(BACKEND_DIR.parent / "Report_format"),
         r"G:\My Drive\Report_format",   # the shared Report_format folder (Google Drive)
+        r"I:\My Drive\Report_format",   # same, where Drive is mounted on I:
     ) if p
 ]
 
