@@ -37,7 +37,8 @@ _MONTH_ABBR = {
     "JAN": 1, "FEB": 2, "MAR": 3, "APR": 4, "MAY": 5, "JUN": 6,
     "JUL": 7, "AUG": 8, "SEP": 9, "OCT": 10, "NOV": 11, "DEC": 12,
 }
-_HEADER_RE = re.compile(r"([A-Z]{3,})'?\s*(\d{4})")
+# The month may carry a trailing period ("Oct.'2026", "Upto Sept.'2026").
+_HEADER_RE = re.compile(r"([A-Z]{3,})\.*\s*'?\s*(\d{4})")
 
 
 def _parse_header(text: str):
@@ -61,7 +62,7 @@ def _find_month_cell_text(ws):
     rather than trusting one fixed column (observed to vary by sheet)."""
     for c in range(1, 20):
         v = ws.cell(row=3, column=c).value
-        if v and re.search(r"[A-Za-z]{3,}'?\s*\d{4}", str(v)):
+        if v and re.search(r"[A-Za-z]{3,}\.*\s*'?\s*\d{4}", str(v)):
             return str(v)
     return None
 
@@ -104,7 +105,8 @@ def extract_cost_trend_workbook(file_path) -> dict:
     products = {}
 
     for sheet_name in wb.sheetnames:
-        key = sheet_name.strip().upper()
+        # Letters only: sheet names carry stray spaces/periods ("HM  ", "SS.").
+        key = re.sub(r"[^A-Z]", "", sheet_name.upper())
         if key not in ("HM", "CS", "SS"):
             continue
         ws = wb[sheet_name]
@@ -189,7 +191,7 @@ _BF_COKE_COLUMNS = {
     "ISP": dict(var_m=4, fixed_m=5, var_u=11, fixed_u=12, label_col=1, block_re=re.compile(r"COMBINED", re.I)),
 }
 
-_MONTHLIKE_RE = re.compile(r"([A-Za-z]{3,9})\s*'?\s*(\d{2,4})")
+_MONTHLIKE_RE = re.compile(r"([A-Za-z]{3,9})\.*\s*'?\s*(\d{2,4})")  # "Sept.'26" too
 _HEADER_TOKEN_RE = re.compile(r"\bFIX(ED)?\b|\bVAR(IABLE)?\b", re.I)
 
 
