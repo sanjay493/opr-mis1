@@ -161,15 +161,16 @@ def _xl_pp(ws, d, colors):
             ws.row_dimensions[r].height = 24
             r += 1
         _put(ws, first, 2, blk["plant"], Font(name=f, size=16 if sail else 14, bold=True))
+        # no rule between the years of a plant: a medium rule over each
+        # plant block, a thin one under the last
+        closing = blk is d["plants"][-1]
+        for rr in range(first, r):
+            for c in range(2, last + 1):
+                cell = ws.cell(rr, c)
+                cell.border = Border(left=cell.border.left, right=cell.border.right,
+                                     top=_MED if rr == first else None,
+                                     bottom=_THIN if closing and rr == r - 1 else None)
         _merge(ws, first, 2, r - 1, 2)
-        for c in range(2, last + 1):
-            top = ws.cell(first, c)
-            top.border = Border(left=top.border.left, right=top.border.right, top=_MED, bottom=top.border.bottom)
-    if d.get("note"):
-        _put(ws, r, 3, d["note"], Font(name=f, size=11), align=Alignment(wrap_text=True, vertical="top"),
-             border=None)
-        _merge(ws, r, 3, r, last)
-        ws.row_dimensions[r].height = 36
     widths = {1: 3, 2: 10, 3: 34}
     for n in range(len(d["items"])):
         for i, w in enumerate([12, 10, 10, 13, 8, 8, 8, 8]):
@@ -178,7 +179,7 @@ def _xl_pp(ws, d, colors):
         ws.column_dimensions[get_column_letter(c)].width = w
     ws.freeze_panes = "D8"
     _page(ws, False, "5:7")
-    ws.print_area = f"B2:{get_column_letter(last)}{r}"
+    ws.print_area = f"B2:{get_column_letter(last)}{r - 1}"
 
 
 def _xl_ph(ws, d, colors):
@@ -355,14 +356,13 @@ def _html_pp(d):
             rows.append(f'<tr class="{row["kind"]}">{"".join(cells)}</tr>')
         cls = "blk sail" if blk["plant"] == "SAIL" else "blk"
         bodies.append(f'<tbody class="{cls}">{"".join(rows)}</tbody>')
-    note = f'<p class="note">{escape(d["note"])}</p>' if d.get("note") else ""
     return (
         '<section class="sheet pp">'
         f'<div class="org">{escape(L["org"])}</div>'
         f'<div class="hd"><div class="ttl"><h1>{escape(L["title"])}</h1><h2>{escape(L["subtitle"])}</h2></div>'
         f'<div class="ann">{escape(L["annexure"])}<br><span>{escape(L["unit"])}</span></div></div>'
         f'<table><colgroup><col class="c-plant"><col class="c-year">{"<col>" * (8 * len(items))}</colgroup>'
-        f'<thead>{head1}{head2}{head3}</thead>{"".join(bodies)}</table>{note}</section>'
+        f'<thead>{head1}{head2}{head3}</thead>{"".join(bodies)}</table></section>'
     )
 
 
@@ -459,9 +459,13 @@ def build_html(report, d) -> str:
   .pp .act {{ background: {c["parl_actual_bg"]}; }}
   .pp .wall {{ border-left: 1.6px solid {blk}; }}
   .pp tbody.blk {{ border-top: 1.6px solid {blk}; break-inside: avoid; }}
+  /* no rule between the years of a plant, only between plant blocks
+     (and under the last one) */
+  .pp tbody td {{ border-top: none; border-bottom: none; }}
+  .pp tbody tr:first-child td {{ border-top: 1.6px solid {blk}; }}
+  .pp tbody:last-child tr:last-child td, .pp tbody td.plant {{ border-bottom: 1px solid {blk}; }}
   .pp tbody.sail td {{ font-weight: 700; }}
   .pp thead {{ display: table-header-group; }}
-  .pp .note {{ font-size: 7.5pt; margin: 4px 0 0; white-space: pre-line; }}
   /* ProdHIS */
   .ph .org {{ font-size: 10pt; }} .ph .co {{ font-size: 13pt; font-weight: 700; margin: 4px 0 8px; }}
   .ph .hd {{ display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 3px; }}
