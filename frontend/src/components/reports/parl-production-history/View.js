@@ -19,7 +19,6 @@ function Table({ data, devs }) {
   const fys = data.fys;
   return (
     <div style={{ maxWidth: 1000 }}>
-      <div style={{ fontSize: '10pt', fontWeight: 700 }}>{L.org}</div>
       <div style={{ fontSize: '13pt', fontWeight: 700, margin: '4px 0 8px' }}>{L.company}</div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 3 }}>
         <span style={{ fontFamily: SERIF, fontSize: '13pt', fontWeight: 700 }}>{L.title}</span>

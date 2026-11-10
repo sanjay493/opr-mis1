@@ -32,7 +32,6 @@ function Table({ data, devs }) {
   const items = data.items;
   return (
     <div style={{ fontFamily: 'Arial, sans-serif', minWidth: 1250 }}>
-      <div style={{ fontSize: '9pt', fontWeight: 700 }}>{L.org}</div>
       <div style={{ display: 'flex', alignItems: 'flex-start' }}>
         <div style={{ flex: 1, textAlign: 'center' }}>
           <div style={{ fontSize: '13pt', fontWeight: 700 }}>{L.title}</div>

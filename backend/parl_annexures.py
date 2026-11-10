@@ -435,7 +435,7 @@ def production_performance(month: str, years: int = 5) -> dict:
         "report": "production_performance",
         "labels": {**L, "title": "PRODUCTION PERFORMANCE OF SAIL PLANTS",
                    "subtitle": f"{first}  to  {fy}", "annexure": "ANNEXURE-II",
-                   "unit": "UNIT : '000 T", "org": "Operations Directorate"},
+                   "unit": "UNIT : '000 T"},
         "items": [{"key": k, "label": t} for k, t in PP_ITEMS],
         "plants": plants,
         "note": hist.get("note", ""),
@@ -486,7 +486,7 @@ def production_history(month: str, years: int = 7) -> dict:
     return {
         "report": "production_history",
         "labels": {**L, "title": "PRODUCTION", "unit": "Unit:'000T",
-                   "org": "OPERATIONS DIRECTORATE", "company": "STEEL AUTHORITY OF INDIA LIMITED"},
+                   "company": "STEEL AUTHORITY OF INDIA LIMITED"},
         "fys": past,
         "items": items,
     }

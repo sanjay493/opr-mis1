@@ -114,7 +114,6 @@ def _xl_pp(ws, d, colors):
     item_fill, cap_fill, act_fill = (_fill(colors["parl_item_bg"]), _fill(colors["parl_cap_bg"]),
                                      _fill(colors["parl_actual_bg"]))
     last = 3 + 8 * len(d["items"])
-    _put(ws, 1, 2, L["org"], Font(name=f, size=12, bold=True), align=_L, border=None)
     _put(ws, 2, 2, L["title"], Font(name=f, size=18, bold=True), border=None)
     _merge(ws, 2, 2, 2, last - 3)
     _put(ws, 2, last, L["annexure"], Font(name=f, size=14, bold=True), align=_R, border=None)
@@ -188,7 +187,6 @@ def _xl_ph(ws, d, colors):
     bk, nar = FONT, FONT
     ncy = 3 + len(fys)          # period CY column
     last = ncy + 2              # % growth
-    _put(ws, 2, 2, L["org"], Font(name=FONT, size=11, bold=True), align=_L, border=None)
     _put(ws, 4, 2, L["company"], Font(name=FONT, size=16, bold=True), align=_L, border=None)
     _put(ws, 6, 2, L["title"], Font(name=bk, size=16, bold=True), align=_L, border=None)
     _put(ws, 6, last, L["unit"], Font(name=bk, size=11), align=_R, border=None)
@@ -358,7 +356,6 @@ def _html_pp(d):
         bodies.append(f'<tbody class="{cls}">{"".join(rows)}</tbody>')
     return (
         '<section class="sheet pp">'
-        f'<div class="org">{escape(L["org"])}</div>'
         f'<div class="hd"><div class="ttl"><h1>{escape(L["title"])}</h1><h2>{escape(L["subtitle"])}</h2></div>'
         f'<div class="ann">{escape(L["annexure"])}<br><span>{escape(L["unit"])}</span></div></div>'
         f'<table><colgroup><col class="c-plant"><col class="c-year">{"<col>" * (8 * len(items))}</colgroup>'
@@ -385,7 +382,7 @@ def _html_ph(d):
             body.append(f'<tr class="{"tot" if row["total"] else ""}"><td class="lbl">{escape(label)}</td>{cells}</tr>')
     return (
         '<section class="sheet ph">'
-        f'<div class="org">{escape(L["org"])}</div><div class="co">{escape(L["company"])}</div>'
+        f'<div class="co">{escape(L["company"])}</div>'
         f'<div class="hd"><h1>{escape(L["title"])}</h1><span>{escape(L["unit"])}</span></div>'
         f'<table><thead>{head}</thead><tbody>{"".join(body)}</tbody></table></section>'
     )
@@ -436,9 +433,7 @@ def build_html(report, d) -> str:
   table {{ border-collapse: collapse; width: 100%; }}
   th, td {{ border: 1px solid {blk}; text-align: center; padding: 1px 3px; line-height: 1.15; white-space: nowrap; }}
   h1 {{ margin: 0; text-align: center; }}
-  .org {{ font-weight: 700; }}
   /* hisparlia */
-  .pp .org {{ font-size: 9pt; }}
   .pp .hd {{ display: flex; align-items: flex-start; }}
   .pp .ttl {{ flex: 1; text-align: center; }}
   .pp h1 {{ font-size: 13pt; }} .pp h2 {{ font-size: 12pt; margin: 2px 0 4px; }}
@@ -467,7 +462,7 @@ def build_html(report, d) -> str:
   .pp tbody.sail td {{ font-weight: 700; }}
   .pp thead {{ display: table-header-group; }}
   /* ProdHIS */
-  .ph .org {{ font-size: 10pt; }} .ph .co {{ font-size: 13pt; font-weight: 700; margin: 4px 0 8px; }}
+  .ph .co {{ font-size: 13pt; font-weight: 700; margin: 4px 0 8px; }}
   .ph .hd {{ display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 3px; }}
   .ph h1 {{ font-family: Calibri, Carlito, sans-serif; font-size: 13pt; text-align: left; }}
   .ph .hd span {{ font-size: 9pt; }}
