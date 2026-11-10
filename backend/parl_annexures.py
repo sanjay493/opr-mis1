@@ -8,8 +8,9 @@ of a FY:
                           FY's annual APP/MoU row and the period row. Hot Metal,
                           Crude Steel, Saleable Steel: Cap., APP, MoU, Actual,
                           %Ful. (APP, MoU), %Gr., %C.U.
-  production_history      "ProdHIS"    Production: HM / CS / SS / Pig Iron actual
-                          by plant for past FYs, the period, its CPLY and % growth.
+  production_history      "ProdHIS"    Production: HM / CS / SS / Pig Iron and
+                          Iron & Steel (SS + Pig Iron) actual by plant for past
+                          FYs, the period, its CPLY and % growth.
   techno_history          "techhistoryfinal"  Annexure-III: BF productivity, coke
                           rate and energy consumption by plant for past FYs, the
                           period, its CPLY and % improvement.
@@ -500,6 +501,7 @@ def production_history(month: str, years: int = 7) -> dict:
             rows.append({"plant": plant, "fys": [v for v, _ in vals], "hard": [h for _, h in vals],
                          "cy": cy, "cply": cp, "gr": _gr(cy, cp), "total": plant in plants_of})
         items.append({"key": key, "label": title, "rows": rows})
+    items.append(_iron_and_steel(items, past))
     return {
         "report": "production_history",
         "labels": {**L, "title": "PRODUCTION", "unit": "Unit:'000T",
@@ -507,6 +509,32 @@ def production_history(month: str, years: int = 7) -> dict:
         "fys": past,
         "items": items,
     }
+
+
+IRON_STEEL_ROWS = FIVE_PLANTS + ["SAIL-5PL", "ASP", "SSP", "VISL", "SAIL"]
+
+
+def _iron_and_steel(items, past):
+    """The workbook's "PRODUCTION OF IRON AND STEEL" block: Saleable Steel +
+    Pig Iron of each row as shown above it (a plant with no Pig Iron row,
+    ASP / SSP, is its Saleable Steel). Computed, never hard-coded."""
+    by = {it["key"]: {r["plant"]: r for r in it["rows"]} for it in items}
+
+    def add(a, b):
+        return None if a is None and b is None else (a or 0) + (b or 0)
+
+    rows = []
+    for plant in IRON_STEEL_ROWS:
+        ss, pi = by["ss"].get(plant, {}), by["pig_iron"].get(plant, {})
+        n = len(past)
+        fys = [add((ss.get("fys") or [None] * n)[i], (pi.get("fys") or [None] * n)[i]) for i in range(n)]
+        # hard-coded when a non-zero hard-coded figure went into it
+        hard = [any((x.get("hard") or [False] * n)[i] and (x.get("fys") or [None] * n)[i] for x in (ss, pi))
+                for i in range(n)]
+        cy, cp = add(ss.get("cy"), pi.get("cy")), add(ss.get("cply"), pi.get("cply"))
+        rows.append({"plant": plant, "fys": fys, "hard": hard, "cy": cy, "cply": cp, "gr": _gr(cy, cp),
+                     "total": plant in ("SAIL", "SAIL-5PL")})
+    return {"key": "iron_steel", "label": "PRODUCTION OF IRON AND STEEL", "rows": rows}
 
 
 # ── report 3: techno history (techhistoryfinal, Annexure-III) ────────────────

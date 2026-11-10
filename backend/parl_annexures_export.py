@@ -502,7 +502,7 @@ _FIT_JS = """([W, H, onePage]) => {
     const w = Math.max(...Array.from(s.querySelectorAll('table')).map(x => x.getBoundingClientRect().width));
     const h0 = s.getBoundingClientRect().height;
     let z = w > W ? W / w : 1;
-    if (onePage && h0 * z > H) z = H / h0;
+    if (onePage && h0 * z > H * 0.97) z = H * 0.97 / h0;   // same 3% margin as below
     if (z < 1) s.style.zoom = z;
     // Chromium may report sizes inside a zoomed element zoomed or not
     const hz = s.getBoundingClientRect().height;
