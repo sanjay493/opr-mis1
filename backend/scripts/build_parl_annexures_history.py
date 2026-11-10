@@ -162,6 +162,13 @@ def _th(ws):
 
 DB_FROM_FY = "2022-23"
 
+# Corrections to the workbook, applied to db_gaps (report -> plant -> FY ->
+# item -> field -> value). VISL's Saleable Steel capacity for 2025-26 is
+# blank in the workbook; it is 98 ('000 T).
+CORRECTIONS = {
+    "production_performance": {"VISL": {"2025-26": {"ss": {"cap": 98.0}}}},
+}
+
 
 def _split(pp_plants, ph_hist, th_hist, cutoff):
     """Keep FYs before `cutoff` as they are; from it on keep only what the
@@ -230,6 +237,11 @@ def build(xlsx: str, cutoff: str = DB_FROM_FY) -> dict:
     refs.setdefault(ph_cy_m, {})["techno_history"] = th_cy
     refs.setdefault(ph_cply_m, {})["techno_history"] = th_cply
     gaps = _split(pp_plants, ph_hist, th_hist, cutoff)
+    for plant, years in CORRECTIONS["production_performance"].items():
+        for f, items in years.items():
+            for item, fields in items.items():
+                (gaps["production_performance"].setdefault(plant, {}).setdefault(f, {})
+                 .setdefault(item, {})).update(fields)
     return {
         "_doc": ("Hard-coded data for the Parliament annexures (External Reports > Parliament "
                  "Annexures), from Report_format/work/HisParlia_Annexures.xlsx, built by "

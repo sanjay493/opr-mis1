@@ -16,8 +16,8 @@ of a FY:
 
 Past FYs up to 2021-22 come from parl_annexures_history.json (hard-coded
 from the workbook), from 2022-23 (the JSON's "db_from_fy") from the DB (a
-full FY; techno: the March till_month; SAIL / SAIL-5PL the sum of the
-plants shown). The JSON holds nothing the DB gives: for a DB year only the
+full FY; techno: the March till_month; SAIL / SAIL-5PL -- actual, and
+Annexure-II's Cap. / APP / MoU -- the sum of the plants shown). The JSON holds nothing the DB gives: for a DB year only the
 figures the DB lacks ("db_gaps": capacity, APP and MoU before 2026-27,
 Pig Iron months). Each row says which figures are hard-coded ("hard"). The period, its CPLY and
 the annual APP / MoU are always from the DB: production_monthly (actual,
@@ -393,6 +393,24 @@ def production_performance(month: str, years: int = 5) -> dict:
                 memo[key] = (v, src == "history" and v is not None)
         return memo[key]
 
+    tmemo = {}
+
+    def target(plant, item, f, field):
+        """(Cap. / APP / MoU of a DB year, hard-coded?). SAIL is the sum of
+        the plants shown, so a plant's figure (or its correction) carries
+        into the total."""
+        key = (plant, item, f, field)
+        if key not in tmemo:
+            if plant == "SAIL":
+                parts = [x for x in (target(p, item, f, field) for p in ALL_PLANTS) if x[0] is not None]
+                tmemo[key] = ((sum(x[0] for x in parts), any(x[1] and x[0] for x in parts)) if parts
+                              else (None, False))
+            else:
+                db = _pp_block(prod, cap, plant, item, fy_months(f), _fy_days(f), None)[field]
+                v, src = _pick(f, db, js(plant, item, f, field))
+                tmemo[key] = (v, src == "history" and v is not None)
+        return tmemo[key]
+
     plants = []
     for plant in PP_PLANTS:
         rows = []
@@ -405,11 +423,10 @@ def production_performance(month: str, years: int = 5) -> dict:
                 continue
             fm, values, hard = fy_months(f), {}, {}
             for k, _ in PP_ITEMS:
-                db = _pp_block(prod, cap, plant, k, fm, _fy_days(f), None)
                 v, h = {}, []
                 for field in ("cap", "app", "mou"):
-                    v[field], src = _pick(f, db[field], js(plant, k, f, field))
-                    if v[field] is not None and src == "history":
+                    v[field], is_hard = target(plant, k, f, field)
+                    if v[field] is not None and is_hard:
                         h.append(field)
                 v["actual"], hard_act = actual(plant, k, f)
                 if hard_act:
