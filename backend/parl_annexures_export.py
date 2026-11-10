@@ -1,11 +1,11 @@
 """Excel and PDF of the Parliament annexures (parl_annexures.py), laid out
 like the sheets of Report_format/work/HisParlia_Annexures.xlsx:
 
-  production_performance  "hisparlia"         A4 landscape, header rows repeat
+  production_performance  "hisparlia"         A4 portrait, one page
   production_history      "ProdHIS"           A4 portrait, one page
   techno_history          "techhistoryfinal"  A4 portrait, one page
 
-Each workbook also gets a "Data check" sheet listing the deviations (the
+All in Calibri. Each workbook also gets a "Data check" sheet listing the deviations (the
 JSON / workbook figure against the DB). The PDF is its own small template,
 not part of the layout-guarded monthly report. Colours: colors_config.json
 (parl_* keys).
@@ -61,6 +61,8 @@ def _hex(c):
 
 # ── Excel ────────────────────────────────────────────────────────────────────
 
+FONT = "Calibri"   # every downloaded sheet / PDF page
+
 _THIN = Side(style="thin", color="000000")
 _MED = Side(style="medium", color="000000")
 _BOX = Border(left=_THIN, right=_THIN, top=_THIN, bottom=_THIN)
@@ -108,7 +110,7 @@ def _page(ws, landscape, title_rows=None):
 
 def _xl_pp(ws, d, colors):
     L = d["labels"]
-    f = "Arial"
+    f = FONT
     item_fill, cap_fill, act_fill = (_fill(colors["parl_item_bg"]), _fill(colors["parl_cap_bg"]),
                                      _fill(colors["parl_actual_bg"]))
     last = 3 + 8 * len(d["items"])
@@ -120,7 +122,7 @@ def _xl_pp(ws, d, colors):
     _merge(ws, 3, 2, 3, last - 3)
     _put(ws, 4, last, L["unit"], Font(name=f, size=12), align=_R, border=None)
 
-    hf, hn = Font(name=f, size=16, bold=True), Font(name="Arial Narrow", size=14, bold=True)
+    hf, hn = Font(name=f, size=16, bold=True), Font(name=FONT, size=14, bold=True)
     _put(ws, 5, 2, "PLANT", hf)
     _merge(ws, 5, 2, 7, 2)
     _put(ws, 5, 3, "YEAR", hf)
@@ -134,8 +136,8 @@ def _xl_pp(ws, d, colors):
             _put(ws, 6, c, t, hn, cap_fill if c == c0 else (act_fill if c == c0 + 3 else None))
             if span == 2:
                 _merge(ws, 6, c, 6, c + 1)
-                _put(ws, 7, c, "APP", Font(name="Arial Narrow", size=14))
-                _put(ws, 7, c + 1, "MoU", Font(name="Arial Narrow", size=14))
+                _put(ws, 7, c, "APP", Font(name=FONT, size=14))
+                _put(ws, 7, c + 1, "MoU", Font(name=FONT, size=14))
             else:
                 _put(ws, 7, c, None, fill=cap_fill if c == c0 else (act_fill if c == c0 + 3 else None))
                 _merge(ws, 6, c, 7, c)
@@ -175,18 +177,18 @@ def _xl_pp(ws, d, colors):
     for c, w in widths.items():
         ws.column_dimensions[get_column_letter(c)].width = w
     ws.freeze_panes = "D8"
-    _page(ws, True, "5:7")
+    _page(ws, False, "5:7")
     ws.print_area = f"B2:{get_column_letter(last)}{r}"
 
 
 def _xl_ph(ws, d, colors):
     L = d["labels"]
     fys = d["fys"]
-    bk, nar = "Book Antiqua", "Arial Narrow"
+    bk, nar = FONT, FONT
     ncy = 3 + len(fys)          # period CY column
     last = ncy + 2              # % growth
-    _put(ws, 2, 2, L["org"], Font(name="Calibri", size=11, bold=True), align=_L, border=None)
-    _put(ws, 4, 2, L["company"], Font(name="Arial", size=16, bold=True), align=_L, border=None)
+    _put(ws, 2, 2, L["org"], Font(name=FONT, size=11, bold=True), align=_L, border=None)
+    _put(ws, 4, 2, L["company"], Font(name=FONT, size=16, bold=True), align=_L, border=None)
     _put(ws, 6, 2, L["title"], Font(name=bk, size=16, bold=True), align=_L, border=None)
     _put(ws, 6, last, L["unit"], Font(name=bk, size=11), align=_R, border=None)
     hb = Font(name=bk, size=12, bold=True)
@@ -196,14 +198,14 @@ def _xl_ph(ws, d, colors):
         c = 3 + i
         _put(ws, 7, c, fy, hb)
         _merge(ws, 7, c, 8, c)
-        _put(ws, 9, c, "ACTUAL", Font(name="Arial", size=11))
+        _put(ws, 9, c, "ACTUAL", Font(name=FONT, size=11))
     _put(ws, 7, ncy, L["span"], hb)
     _merge(ws, 7, ncy, 8, ncy + 1)
-    _put(ws, 9, ncy, L["fy"], Font(name="Arial", size=11))
-    _put(ws, 9, ncy + 1, L["cply_fy"], Font(name="Arial", size=11))
+    _put(ws, 9, ncy, L["fy"], Font(name=FONT, size=11))
+    _put(ws, 9, ncy + 1, L["cply_fy"], Font(name=FONT, size=11))
     _put(ws, 7, last, "% growth", hb)
     _put(ws, 8, last, "over", hb)
-    _put(ws, 9, last, "CPLY", Font(name="Arial", size=11))
+    _put(ws, 9, last, "CPLY", Font(name=FONT, size=11))
     for rr in (7, 8, 9):
         for c in range(2, last + 1):
             ws.cell(rr, c).border = _BOX
@@ -234,11 +236,11 @@ def _xl_ph(ws, d, colors):
 def _xl_th(ws, d, colors):
     L = d["labels"]
     fys = d["fys"]
-    nar = "Arial Narrow"
+    nar = FONT
     ncy = 3 + len(fys)
     last = ncy + 2
     _put(ws, 4, last, L["annexure"], Font(name=nar, size=16, bold=True), align=_R, border=None)
-    _put(ws, 7, 2, L["title"], Font(name="Calibri", size=18, bold=True), align=_L, border=None)
+    _put(ws, 7, 2, L["title"], Font(name=FONT, size=18, bold=True), align=_L, border=None)
     b14 = Font(name=nar, size=14, bold=True)
     r = 9
     for sec in d["sections"]:
@@ -359,7 +361,8 @@ def _html_pp(d):
         f'<div class="org">{escape(L["org"])}</div>'
         f'<div class="hd"><div class="ttl"><h1>{escape(L["title"])}</h1><h2>{escape(L["subtitle"])}</h2></div>'
         f'<div class="ann">{escape(L["annexure"])}<br><span>{escape(L["unit"])}</span></div></div>'
-        f'<table><thead>{head1}{head2}{head3}</thead>{"".join(bodies)}</table>{note}</section>'
+        f'<table><colgroup><col class="c-plant"><col class="c-year">{"<col>" * (8 * len(items))}</colgroup>'
+        f'<thead>{head1}{head2}{head3}</thead>{"".join(bodies)}</table>{note}</section>'
     )
 
 
@@ -425,11 +428,10 @@ def build_html(report, d) -> str:
     c = load_colors_config()
     blk = c.get("border_black", "#000000")
     txt = c.get("text_black", "#000000")
-    landscape = report == "production_performance"
     css = f"""
   {_fonts()}
-  @page {{ size: A4 {"landscape" if landscape else "portrait"}; margin: 8mm 8mm 8mm 8mm; }}
-  body {{ font-family: Arial, sans-serif; margin: 0; color: {txt};
+  @page {{ size: A4 portrait; margin: 8mm 8mm 8mm 8mm; }}
+  body {{ font-family: Calibri, Carlito, sans-serif; margin: 0; color: {txt};
          -webkit-print-color-adjust: exact; print-color-adjust: exact; }}
   table {{ border-collapse: collapse; width: 100%; }}
   th, td {{ border: 1px solid {blk}; text-align: center; padding: 1px 3px; line-height: 1.15; white-space: nowrap; }}
@@ -442,11 +444,17 @@ def build_html(report, d) -> str:
   .pp h1 {{ font-size: 13pt; }} .pp h2 {{ font-size: 12pt; margin: 2px 0 4px; }}
   .pp .ann {{ font-size: 11pt; font-weight: 700; text-align: right; }}
   .pp .ann span {{ font-size: 8.5pt; font-weight: 400; }}
-  .pp th {{ font-family: 'Arial Narrow', Arial, sans-serif; font-size: 8.5pt; font-weight: 700; }}
-  .pp th.item {{ font-family: Arial, sans-serif; font-size: 9.5pt; background: {c["parl_item_bg"]}; }}
+  .pp th {{ font-family: Calibri, Carlito, sans-serif; font-size: 8.5pt; font-weight: 700; }}
+  .pp th.item {{ font-family: Calibri, Carlito, sans-serif; font-size: 9.5pt; background: {c["parl_item_bg"]}; }}
   .pp td {{ font-size: 8.5pt; font-weight: 400; }}
   .pp td.plant {{ font-weight: 700; font-size: 10pt; vertical-align: middle; }}
-  .pp td.year {{ font-weight: 700; text-align: center; }}
+  .pp td.year {{ font-weight: 700; text-align: center; white-space: normal; line-height: 1.05; }}
+  /* portrait: the 26 columns fit the page width as laid out (no zoom);
+     _FIT_JS shrinks the font until no figure is clipped */
+  .pp table {{ table-layout: fixed; }}
+  .pp col.c-plant {{ width: 30px; }} .pp col.c-year {{ width: 50px; }}
+  .pp th, .pp td {{ padding: 1px 1px; overflow: hidden; }}
+  .pp th {{ white-space: normal; line-height: 1.0; }}
   .pp .cap {{ background: {c["parl_cap_bg"]}; }}
   .pp .act {{ background: {c["parl_actual_bg"]}; }}
   .pp .wall {{ border-left: 1.6px solid {blk}; }}
@@ -457,22 +465,22 @@ def build_html(report, d) -> str:
   /* ProdHIS */
   .ph .org {{ font-size: 10pt; }} .ph .co {{ font-size: 13pt; font-weight: 700; margin: 4px 0 8px; }}
   .ph .hd {{ display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 3px; }}
-  .ph h1 {{ font-family: 'Book Antiqua', Palatino, serif; font-size: 13pt; text-align: left; }}
+  .ph h1 {{ font-family: Calibri, Carlito, sans-serif; font-size: 13pt; text-align: left; }}
   .ph .hd span {{ font-size: 9pt; }}
-  .ph th {{ font-family: 'Book Antiqua', Palatino, serif; font-size: 9.5pt; font-weight: 700; }}
-  .ph th.sub {{ font-family: Arial, sans-serif; font-weight: 400; font-size: 8.5pt; }}
+  .ph th {{ font-family: Calibri, Carlito, sans-serif; font-size: 9.5pt; font-weight: 700; }}
+  .ph th.sub {{ font-family: Calibri, Carlito, sans-serif; font-weight: 400; font-size: 8.5pt; }}
   .ph th.nb {{ border-top: none; }}
-  .ph td {{ font-family: 'Arial Narrow', Arial, sans-serif; font-size: 10pt; border-top: none; border-bottom: none; }}
-  .ph td.lbl, .ph th.lbl {{ text-align: left; font-family: 'Book Antiqua', Palatino, serif; }}
+  .ph td {{ font-family: Calibri, Carlito, sans-serif; font-size: 10pt; border-top: none; border-bottom: none; }}
+  .ph td.lbl, .ph th.lbl {{ text-align: left; font-family: Calibri, Carlito, sans-serif; }}
   .ph tr.sec td {{ font-weight: 700; border-top: 1px solid {blk}; }}
   .ph tr.tot td {{ font-weight: 700; border-top: 1px solid {blk}; border-bottom: 1px solid {blk}; }}
   .ph tbody tr:last-child td {{ border-bottom: 1px solid {blk}; }}
   /* techhistoryfinal */
-  .th .ann {{ text-align: right; font-family: 'Arial Narrow', Arial, sans-serif; font-size: 12pt; font-weight: 700; }}
+  .th .ann {{ text-align: right; font-family: Calibri, Carlito, sans-serif; font-size: 12pt; font-weight: 700; }}
   .th h1 {{ font-size: 14pt; text-align: left; margin: 6px 0 10px; }}
-  .th h3 {{ font-family: 'Arial Narrow', Arial, sans-serif; font-size: 11pt; margin: 14px 0 0; }}
-  .th .unit {{ font-family: 'Arial Narrow', Arial, sans-serif; font-size: 10.5pt; font-weight: 700; margin-bottom: 3px; }}
-  .th th, .th td {{ font-family: 'Arial Narrow', Arial, sans-serif; font-size: 10.5pt; padding: 2px 4px; }}
+  .th h3 {{ font-family: Calibri, Carlito, sans-serif; font-size: 11pt; margin: 14px 0 0; }}
+  .th .unit {{ font-family: Calibri, Carlito, sans-serif; font-size: 10.5pt; font-weight: 700; margin-bottom: 3px; }}
+  .th th, .th td {{ font-family: Calibri, Carlito, sans-serif; font-size: 10.5pt; padding: 2px 4px; }}
   .th th {{ font-weight: 700; }}
   .th td.lbl {{ text-align: left; font-weight: 700; }}
   .th tr.tot td {{ font-weight: 700; }}
@@ -481,11 +489,17 @@ def build_html(report, d) -> str:
             f'<body>{_HTML[report](d)}</body></html>')
 
 
-# Portrait sheets fit one page: zoom down when too tall, then let the rows
-# grow to fill the sheet. The landscape sheet is paginated (header repeats,
-# a plant block never splits), only zoomed down when too wide.
+# Every sheet is A4 portrait on one page: zoom down to the page width (the
+# 26-column Annexure-II) and height, then let the rows grow to fill it.
 _FIT_JS = """([W, H, onePage]) => {
     const s = document.querySelector('.sheet');
+    const fits = c => c.scrollWidth <= c.clientWidth + 0.5;
+    const cells = Array.from(s.querySelectorAll('.pp td, .pp th'));
+    if (cells.length) {
+        const fs = parseFloat(getComputedStyle(s.querySelector('.pp td')).fontSize);
+        for (let k = 1; k <= 30 && !cells.every(fits); k++)
+            cells.forEach(c => c.style.fontSize = (fs * (1 - 0.025 * k)) + 'px');
+    }
     const w = s.scrollWidth;
     let z = w > W ? W / w : 1;
     if (onePage) {
@@ -502,7 +516,7 @@ _FIT_JS = """([W, H, onePage]) => {
 }"""
 
 # A4 at 96 dpi minus 8 mm margins
-_SIZE = {True: (1062, 733), False: (733, 1062)}
+_SIZE = (733, 1062)
 
 
 def render_pdf(pages) -> bytes:
@@ -517,14 +531,13 @@ def render_pdf(pages) -> bytes:
         browser = pw.chromium.launch()
         try:
             for report, d in pages:
-                landscape = report == "production_performance"
-                W, H = _SIZE[landscape]
+                W, H = _SIZE
                 page = browser.new_page(viewport={"width": W, "height": H})
                 page.emulate_media(media="print")
                 page.set_content(build_html(report, d), wait_until="load")
                 page.evaluate("document.fonts.ready.then(() => true)")
-                page.evaluate(_FIT_JS, [W, H, not landscape])
-                pdf = page.pdf(format="A4", landscape=landscape, print_background=True,
+                page.evaluate(_FIT_JS, [W, H, True])
+                pdf = page.pdf(format="A4", landscape=False, print_background=True,
                                margin={"top": "8mm", "right": "8mm", "bottom": "8mm", "left": "8mm"})
                 page.close()
                 for p in PdfReader(io.BytesIO(pdf)).pages:
