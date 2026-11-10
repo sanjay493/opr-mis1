@@ -149,6 +149,10 @@ _DEFAULTS: Dict[str, str] = {
     "abp_best_fy_bg":             "#92D050",
     "abp_mill_finished_bg":       "#C5D9F1",
     "abp_mill_saleable_bg":       "#FFFF00",
+    "parl_item_bg":               "#CCFFFF",
+    "parl_cap_bg":                "#E3FFAB",
+    "parl_actual_bg":             "#FFFF99",
+    "parl_deviation_bg":          "#F8CBAD",
 }
 
 

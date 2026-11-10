@@ -140,6 +140,7 @@ already clubbed the same way into `/reports/techno` (its own tab pattern, see
 | `ipt-fy` | `/reports/special-steel-ipt` | `page_ipt.py` | `ipt_monthly` |
 | `production-projection` | `/reports/abp` | `abp_projection.py`, `api_abp_projection.py` (`/api/abp-projection…`; installed capacity from `abp_projection_config.json`) | `production_monthly` (actual + ABP + MoU), `production_op_monthly`, `item_capacity` |
 | `abp-mills` | `/reports/abp` | `abp_mills.py`, `api_abp_mills.py` (`/api/abp-mills…`; mill capacities in `abp_mills.MILLS`) | `production_monthly` (actual + ABP), `production_op_monthly`, `item_capacity` |
+| `parl-production-performance`, `parl-production-history`, `parl-techno-history` | `/reports/external` (Parliament Annexures menu) | `parl_annexures.py` (+ `parl_annexures_export.py`, `api_parl_annexures.py`: `/api/parl-annexures/{report}[/xlsx|/pdf]`); past FYs hard-coded in `parl_annexures_history.json` (built from Report_format/work/HisParlia_Annexures.xlsx by `scripts/build_parl_annexures_history.py`), with a data check of that JSON against the DB | `production_monthly` (actual + ABP + MoU), `item_capacity`, `techno_upload` / `techno_value` (till_month) |
 | `new-facilities` | `/reports/external` | (frontend-only / static) | — |
 | `highlights` | `/reports/highlights-records` | frontend-only | — |
 | `special-steel-physical` | `/reports/production-analysis` | `page_special_steel_physical.py` | `special_steel_phys_perf`, `special_steel_phys_meta`, `special_steel_phys_note` |
