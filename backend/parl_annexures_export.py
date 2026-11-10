@@ -447,8 +447,8 @@ def build_html(report, d) -> str:
   /* portrait: the 26 columns fit the page width as laid out (no zoom);
      _FIT_JS shrinks the font until no figure is clipped */
   .pp table {{ table-layout: fixed; }}
-  .pp col.c-plant {{ width: 30px; }} .pp col.c-year {{ width: 50px; }}
-  .pp th, .pp td {{ padding: 1px 1px; overflow: hidden; }}
+  .pp col.c-plant {{ width: 26px; }} .pp col.c-year {{ width: 54px; }}
+  .pp th, .pp td {{ padding: 1px 0; overflow: hidden; }}
   .pp th {{ white-space: normal; line-height: 1.0; }}
   .pp .cap {{ background: {c["parl_cap_bg"]}; }}
   .pp .act {{ background: {c["parl_actual_bg"]}; }}
@@ -466,10 +466,10 @@ def build_html(report, d) -> str:
   .ph .hd {{ display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 3px; }}
   .ph h1 {{ font-family: Calibri, Carlito, sans-serif; font-size: 13pt; text-align: left; }}
   .ph .hd span {{ font-size: 9pt; }}
-  .ph th {{ font-family: Calibri, Carlito, sans-serif; font-size: 9.5pt; font-weight: 700; }}
-  .ph th.sub {{ font-family: Calibri, Carlito, sans-serif; font-weight: 400; font-size: 8.5pt; }}
+  .ph th {{ font-family: Calibri, Carlito, sans-serif; font-size: 10.5pt; font-weight: 700; }}
+  .ph th.sub {{ font-family: Calibri, Carlito, sans-serif; font-weight: 400; font-size: 9.5pt; }}
   .ph th.nb {{ border-top: none; }}
-  .ph td {{ font-family: Calibri, Carlito, sans-serif; font-size: 10pt; border-top: none; border-bottom: none; }}
+  .ph td {{ font-family: Calibri, Carlito, sans-serif; font-size: 11.5pt; border-top: none; border-bottom: none; }}
   .ph td.lbl, .ph th.lbl {{ text-align: left; font-family: Calibri, Carlito, sans-serif; }}
   .ph tr.sec td {{ font-weight: 700; border-top: 1px solid {blk}; }}
   .ph tr.tot td {{ font-weight: 700; border-top: 1px solid {blk}; border-bottom: 1px solid {blk}; }}
@@ -479,7 +479,7 @@ def build_html(report, d) -> str:
   .th h1 {{ font-size: 14pt; text-align: left; margin: 6px 0 10px; }}
   .th h3 {{ font-family: Calibri, Carlito, sans-serif; font-size: 11pt; margin: 14px 0 0; }}
   .th .unit {{ font-family: Calibri, Carlito, sans-serif; font-size: 10.5pt; font-weight: 700; margin-bottom: 3px; }}
-  .th th, .th td {{ font-family: Calibri, Carlito, sans-serif; font-size: 10.5pt; padding: 2px 4px; }}
+  .th th, .th td {{ font-family: Calibri, Carlito, sans-serif; font-size: 12pt; padding: 2px 4px; }}
   .th th {{ font-weight: 700; }}
   .th td.lbl {{ text-align: left; font-weight: 700; }}
   .th tr.tot td {{ font-weight: 700; }}
@@ -499,18 +499,28 @@ _FIT_JS = """([W, H, onePage]) => {
         for (let k = 1; k <= 30 && !cells.every(fits); k++)
             cells.forEach(c => c.style.fontSize = (fs * (1 - 0.025 * k)) + 'px');
     }
-    const w = s.scrollWidth;
+    const w = Math.max(...Array.from(s.querySelectorAll('table')).map(x => x.getBoundingClientRect().width));
+    const h0 = s.getBoundingClientRect().height;
     let z = w > W ? W / w : 1;
-    if (onePage) {
-        const h = s.getBoundingClientRect().height * z;
-        if (h > H) z *= H / h;
-    }
+    if (onePage && h0 * z > H) z = H / h0;
     if (z < 1) s.style.zoom = z;
+    // Chromium may report sizes inside a zoomed element zoomed or not
+    const hz = s.getBoundingClientRect().height;
+    const scale = Math.abs(hz - h0 * z) < Math.abs(hz - h0) ? 1 : z;
+    const height = () => s.getBoundingClientRect().height * scale;
     if (onePage) {
+        // grow the rows into the free height, backing off until the sheet
+        // keeps a 3% margin (print layout runs a little taller than this
+        // measure; a plant block that no longer fits would move to page 2)
         const rows = Array.from(s.querySelectorAll('tbody tr'));
-        const h = s.getBoundingClientRect().height * z;
-        const extra = (H - h) * 0.9 / rows.length / z;
-        if (extra > 0) rows.forEach(r => r.style.height = (r.getBoundingClientRect().height + extra) + 'px');
+        const base = rows.map(r => r.offsetHeight);
+        const free = H - height();
+        for (let f = 0.9; f > 0 && free > 0; f -= 0.1) {
+            const extra = free * f / rows.length / z;
+            rows.forEach((r, i) => r.style.height = (base[i] + extra) + 'px');
+            if (height() <= H * 0.97) break;
+            rows.forEach(r => r.style.height = '');
+        }
     }
 }"""
 
