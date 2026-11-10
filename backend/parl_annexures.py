@@ -526,6 +526,7 @@ def deviations(report: str, data: dict) -> list:
     if report == "production_performance":
         past = [r["label"] for r in data["plants"][0]["rows"] if r["kind"] == "fy"]
         prod = _Prod(_union_months(past))
+        jplants = history()["production_performance"]["plants"]
         for blk in data["plants"]:
             plant = blk["plant"]
             ref = refs.get(month, {}).get(report, {}).get(plant)
@@ -533,7 +534,8 @@ def deviations(report: str, data: dict) -> list:
                 if r["kind"] == "fy" and r["source"] == "history":
                     fm = fy_months(r["label"])
                     for k, _ in PP_ITEMS:
-                        if _complete(prod, plant, k, fm):
+                        if _complete(prod, plant, k, fm,
+                                     lambda p, f=r["label"], k=k: (jplants.get(p, {}).get(f) or {}).get(k, {}).get("actual")):
                             _dev(out, plant, k, r["label"], r["label"], "Actual",
                                  r["values"][k]["actual"], prod.get("actual", plant, k, fm))
                 elif r["kind"] == "period" and ref:
@@ -551,7 +553,8 @@ def deviations(report: str, data: dict) -> list:
             for r in it["rows"]:
                 plant = r["plant"]
                 for f, v in zip(fys, r["fys"]):
-                    if f in jh.get(k, {}).get(plant, {}) and _complete(prod, plant, k, fy_months(f)):
+                    if f in jh.get(k, {}).get(plant, {}) and _complete(
+                            prod, plant, k, fy_months(f), lambda p, f=f, k=k: jh.get(k, {}).get(p, {}).get(f)):
                         _dev(out, plant, k, f, f, "Actual", v, prod.get("actual", plant, k, fy_months(f)))
                 for which, m, lbl in (("cy", month, f"{L['span']} {fy}"),
                                       ("cply", cply(month), f"{L['span']} {L['cply_fy']}")):
@@ -580,12 +583,15 @@ def deviations(report: str, data: dict) -> list:
     return out
 
 
-def _complete(prod, plant, item, months):
-    """The DB holds an actual for every month (SAIL / SAIL-5PL: for some
-    plant in every month)."""
+def _complete(prod, plant, item, months, ref_of=None):
+    """The DB holds an actual for every month. SAIL / SAIL-5PL: so does every
+    plant the workbook has a non-zero figure for (ref_of(plant)), else the
+    DB total is a partial sum (e.g. 2019-20 Pig Iron, held for BSP and DSP
+    only), not a deviation."""
     if plant in ("SAIL", "SAIL-5PL"):
         plants = FIVE_PLANTS if plant == "SAIL-5PL" else ALL_PLANTS
-        return all(any(prod.months_with("actual", p, item, [m]) for p in plants) for m in months)
+        need = [p for p in plants if ref_of and ref_of(p)]
+        return bool(need) and all(_complete(prod, p, item, months) for p in need)
     return prod.months_with("actual", plant, item, months) == len(months)
 
 
