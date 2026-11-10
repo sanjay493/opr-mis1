@@ -16,6 +16,18 @@ const API = process.env.NEXT_PUBLIC_API_URL || '';
 export const C = {
   item: '#CCFFFF', cap: '#E3FFAB', act: '#FFFF99', dev: '#F8CBAD', line: '1px solid #000', thick: '2px solid #000',
 };
+// A figure hard-coded in parl_annexures_history.json (not from the DB).
+export const HARD = { color: '#1d4ed8', fontStyle: 'italic' };
+
+export function HardKey() {
+  return (
+    <p style={{ fontSize: '8.5pt', color: '#5f6368', margin: '6px 0 0' }}>
+      <span style={HARD}>Blue italics</span>: hard-coded from the workbook (parl_annexures_history.json) —
+      every FY up to 2021-22, and later figures the DB does not hold. Everything else is from the DB.
+    </p>
+  );
+}
+
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const PERIOD_ENDS = [4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3];
 
@@ -205,6 +217,7 @@ export default function ParlAnnexure({ slug, title, description, defaultYears, f
       {!loading && data && (
         <>
           <div style={{ overflowX: 'auto' }}><Table data={data} devs={devs} /></div>
+          <HardKey />
           <Deviations devs={data.deviations} />
         </>
       )}

@@ -45,10 +45,25 @@ def test_source_by_fy(monkeypatch):
 def test_history_json_shape():
     h = pa.history()
     pp = h["production_performance"]["plants"]
-    assert set(pa.PP_PLANTS) <= set(pp) and "2025-26" in pp["SAIL"]
-    assert set(pp["SAIL"]["2025-26"]) == {"hm", "cs", "ss"}
+    assert set(pa.PP_PLANTS) <= set(pp) and "2021-22" in pp["SAIL"]
+    assert set(pp["SAIL"]["2021-22"]) == {"hm", "cs", "ss"}
     assert set(h["production_history"]) == {"hm", "cs", "ss", "pig_iron"}
     assert set(h["techno_history"]) == {"bf_productivity", "coke_rate", "energy"}
+
+
+def test_json_holds_only_hard_coded_years():
+    """From db_from_fy on, the report reads the DB: the JSON may hold those
+    years only under db_gaps (figures the DB lacks), never a DB figure."""
+    h = pa.history()
+    cut = h["db_from_fy"]
+    fys = {f for p in h["production_performance"]["plants"].values() for f in p}
+    for sec in ("production_history", "techno_history"):
+        fys |= {f for i in h[sec].values() for p in i.values() for f in p}
+    assert fys and max(fys) < cut
+    gaps = h["db_gaps"]["production_performance"]
+    assert all(set(v) <= {"cap", "app", "mou", "actual"}
+               for p in gaps.values() for y in p.values() for v in y.values())
+    assert "SAIL-5PL" not in h["db_gaps"]["production_history"].get("pig_iron", {})
 
 
 FAKE = {

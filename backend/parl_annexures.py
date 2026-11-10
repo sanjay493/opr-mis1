@@ -16,9 +16,10 @@ of a FY:
 
 Past FYs up to 2021-22 come from parl_annexures_history.json (hard-coded
 from the workbook), from 2022-23 (the JSON's "db_from_fy") from the DB (a
-full FY; techno: the March till_month). A figure the preferred source lacks
-comes from the other -- the DB holds no capacity, APP or MoU before
-2026-27, so those stay the workbook's. The period, its CPLY and
+full FY; techno: the March till_month; SAIL / SAIL-5PL the sum of the
+plants shown). The JSON holds nothing the DB gives: for a DB year only the
+figures the DB lacks ("db_gaps": capacity, APP and MoU before 2026-27,
+Pig Iron months). Each row says which figures are hard-coded ("hard"). The period, its CPLY and
 the annual APP / MoU are always from the DB: production_monthly (actual,
 abp, mou; SAIL = sum of the plants) and item_capacity; the period's
 Cap., APP and MoU are the annual figures x days in the period / days in
@@ -150,8 +151,14 @@ DEFAULT_DB_FROM_FY = "2022-23"
 def from_db(fy: str) -> bool:
     """A past FY from this one on is taken from the DB (the JSON's
     "db_from_fy"); earlier ones from the JSON. Either way a figure the
-    preferred source lacks comes from the other."""
+    preferred source lacks comes from the other: for a DB year, the JSON
+    holds only those (its "db_gaps")."""
     return fy >= history().get("db_from_fy", DEFAULT_DB_FROM_FY)
+
+
+def _gaps(report):
+    """The JSON's hard-coded figures for DB years the DB does not hold."""
+    return history().get("db_gaps", {}).get(report, {})
 
 
 def _pick(fy, db, js):
@@ -348,6 +355,7 @@ def production_performance(month: str, years: int = 5) -> dict:
     fy = L["fy"]
     hist = history()["production_performance"]
     jplants = hist["plants"]
+    gaps = _gaps("production_performance")
     past = _past_fys(fy, years)
     months = period_months(month)
     cply_months = [cply(m) for m in months]
@@ -360,17 +368,30 @@ def production_performance(month: str, years: int = 5) -> dict:
     pdays = sum(_days(m) for m in months)
 
     def js(plant, item, f, field):
-        return ((jplants.get(plant, {}).get(f) or {}).get(item) or {}).get(field)
+        """The hard-coded figure: a FY before db_from_fy, else a DB gap."""
+        src = gaps if from_db(f) else jplants
+        return ((src.get(plant, {}).get(f) or {}).get(item) or {}).get(field)
 
-    def db_actual(plant, item, f):
-        """The DB's FY actual, only when the DB holds the whole year (else
-        None, so the workbook figure is used)."""
-        fm = fy_months(f)
-        ok = _complete(prod, plant, item, fm, lambda p: js(p, item, f, "actual"))
-        return prod.get("actual", plant, item, fm) if ok else None
+    memo = {}
 
-    def fy_actual(plant, item, f):
-        return _pick(f, db_actual(plant, item, f), js(plant, item, f, "actual"))[0]
+    def actual(plant, item, f):
+        """(FY actual shown, hard-coded?). In a DB year SAIL is the sum of
+        the plants shown; a plant's DB year counts only when complete."""
+        key = (plant, item, f)
+        if key not in memo:
+            fm = fy_months(f)
+            if plant == "SAIL" and from_db(f):
+                parts = [actual(p, item, f) for p in ALL_PLANTS]
+                parts = [x for x in parts if x[0] is not None]
+                # a hard-coded zero (VISL's Hot Metal) does not make the total hard-coded
+                memo[key] = ((sum(x[0] for x in parts), any(x[1] and x[0] for x in parts)) if parts
+                             else (prod.get("actual", "SAIL", item, fm), False))
+            else:
+                ok = _complete(prod, plant, item, fm, lambda p: js(p, item, f, "actual"))
+                v, src = _pick(f, prod.get("actual", plant, item, fm) if ok else None,
+                               js(plant, item, f, "actual"))
+                memo[key] = (v, src == "history" and v is not None)
+        return memo[key]
 
     plants = []
     for plant in PP_PLANTS:
@@ -379,29 +400,32 @@ def production_performance(month: str, years: int = 5) -> dict:
             rec = jplants.get(plant, {}).get(f)
             if not from_db(f) and rec is not None:
                 rows.append({"kind": "fy", "label": f, "source": "history",
-                             "values": {k: dict(rec[k]) for k, _ in PP_ITEMS}})
+                             "values": {k: dict(rec[k]) for k, _ in PP_ITEMS},
+                             "hard": {k: ["cap", "app", "mou", "actual"] for k, _ in PP_ITEMS}})
                 continue
-            fm, values, sources = fy_months(f), {}, set()
+            fm, values, hard = fy_months(f), {}, {}
             for k, _ in PP_ITEMS:
                 db = _pp_block(prod, cap, plant, k, fm, _fy_days(f), None)
-                db["actual"] = db_actual(plant, k, f)
-                v = {}
-                for field in ("cap", "app", "mou", "actual"):
+                v, h = {}, []
+                for field in ("cap", "app", "mou"):
                     v[field], src = _pick(f, db[field], js(plant, k, f, field))
-                    if v[field] is not None:
-                        sources.add(src)
+                    if v[field] is not None and src == "history":
+                        h.append(field)
+                v["actual"], hard_act = actual(plant, k, f)
+                if hard_act:
+                    h.append("actual")
                 v["ful_app"] = _pct(v["actual"], v["app"])
                 v["ful_mou"] = _pct(v["actual"], v["mou"])
-                v["gr"] = _gr(v["actual"], fy_actual(plant, k, shift_fy(f, -1)))
+                v["gr"] = _gr(v["actual"], actual(plant, k, shift_fy(f, -1))[0])
                 v["cu"] = _pct(v["actual"], v["cap"])
-                values[k] = v
-            rows.append({"kind": "fy", "label": f, "values": values,
-                         "source": "db" if sources == {"db"} else ("history" if sources == {"history"} else "mixed")})
+                values[k], hard[k] = v, h
+            rows.append({"kind": "fy", "label": f, "values": values, "hard": hard,
+                         "source": "db" if not any(hard.values()) else "mixed"})
         fm = fy_months(fy)
         annual = {k: {"cap": cap.get(plant, k, fm, fdays), "app": prod.get("abp", plant, k, fm),
                       "mou": prod.get("mou", plant, k, fm)} for k, _ in PP_ITEMS}
-        rows.append({"kind": "plan", "label": L["plan"], "source": "db", "values": annual})
-        rows.append({"kind": "period", "label": L["period"], "source": "db", "values": {
+        rows.append({"kind": "plan", "label": L["plan"], "source": "db", "values": annual, "hard": {}})
+        rows.append({"kind": "period", "label": L["period"], "source": "db", "hard": {}, "values": {
             k: _period_block(prod, plant, k, months, annual[k], pdays / fdays,
                              prod.get("actual", plant, k, cply_months))
             for k, _ in PP_ITEMS}})
@@ -424,6 +448,7 @@ def production_history(month: str, years: int = 7) -> dict:
     L = labels(month)
     fy = L["fy"]
     jh = history()["production_history"]
+    gaps = _gaps("production_history")
     past = _past_fys(fy, years)
     months = period_months(month)
     cply_months = [cply(m) for m in months]
@@ -433,18 +458,30 @@ def production_history(month: str, years: int = 7) -> dict:
     prod = _Prod(need)
     items = []
     for key, title in PH_ITEMS:
+        plants_of = {"SAIL-5PL": FIVE_PLANTS,
+                     "SAIL": [p for p in PH_ROWS[key] if p not in ("SAIL", "SAIL-5PL")]}
+
+        def js(plant, f, key=key):
+            return ((gaps if from_db(f) else jh).get(key, {}).get(plant) or {}).get(f)
+
+        def shown(plant, f, key=key, plants_of=plants_of, js=js):
+            """(FY actual, hard-coded?); in a DB year a total is the sum of
+            the plant rows shown."""
+            if plant in plants_of and from_db(f):
+                parts = [x for x in (shown(p, f) for p in plants_of[plant]) if x[0] is not None]
+                return (sum(x[0] for x in parts), any(x[1] and x[0] for x in parts)) if parts else (None, False)
+            fm = fy_months(f)
+            whole = _complete(prod, plant, key, fm, lambda p: js(p, f))
+            v, src = _pick(f, prod.get("actual", plant, key, fm) if whole else None, js(plant, f))
+            return v, src == "history" and v is not None
+
         rows = []
         for plant in PH_ROWS[key]:
-            jp = jh.get(key, {}).get(plant, {})
-            fys = []
-            for f in past:
-                fm = fy_months(f)
-                whole = _complete(prod, plant, key, fm, lambda p, f=f: jh.get(key, {}).get(p, {}).get(f))
-                fys.append(_pick(f, prod.get("actual", plant, key, fm) if whole else None, jp.get(f))[0])
+            vals = [shown(plant, f) for f in past]
             cy = prod.get("actual", plant, key, months)
             cp = prod.get("actual", plant, key, cply_months)
-            rows.append({"plant": plant, "fys": fys, "cy": cy, "cply": cp, "gr": _gr(cy, cp),
-                         "total": plant in ("SAIL", "SAIL-5PL")})
+            rows.append({"plant": plant, "fys": [v for v, _ in vals], "hard": [h for _, h in vals],
+                         "cy": cy, "cply": cp, "gr": _gr(cy, cp), "total": plant in plants_of})
         items.append({"key": key, "label": title, "rows": rows})
     return {
         "report": "production_history",
@@ -461,6 +498,7 @@ def techno_history(month: str, years: int = 6) -> dict:
     L = labels(month)
     fy = L["fy"]
     jh = history()["techno_history"]
+    gaps = _gaps("techno_history")
     past = _past_fys(fy, years)
     cm = cply(month)
     db_marches = [f"{fy_start(f) + 1}-03" for f in past]
@@ -474,18 +512,20 @@ def techno_history(month: str, years: int = 6) -> dict:
         key, title, unit, _, _, _, _, higher, dp = spec
         rows = []
         for plant in TH_PLANTS:
-            jp = jh.get(key, {}).get(plant, {})
-            fys = []
+            fys, hard = [], []
             for f in past:
                 mar = f"{fy_start(f) + 1}-03"
-                fys.append(_pick(f, _techno_value(till.get(mar, {}), prod, spec, plant, mar), jp.get(f))[0])
+                js = ((gaps if from_db(f) else jh).get(key, {}).get(plant) or {}).get(f)
+                v, src = _pick(f, _techno_value(till.get(mar, {}), prod, spec, plant, mar), js)
+                fys.append(v)
+                hard.append(src == "history" and v is not None)
             cy = _techno_value(till.get(month, {}), prod, spec, plant, month)
             cp = _techno_value(till.get(cm, {}), prod, spec, plant, cm)
             if cy is None or not cp:
                 imp = None
             else:
                 imp = (cy / cp - 1) * 100 if higher else (cp - cy) / cp * 100
-            rows.append({"plant": plant, "fys": fys, "cy": cy, "cply": cp, "imp": imp,
+            rows.append({"plant": plant, "fys": fys, "hard": hard, "cy": cy, "cply": cp, "imp": imp,
                          "total": plant == "SAIL"})
         sections.append({"key": key, "label": title, "unit": f"Unit: {unit}", "decimals": dp, "rows": rows})
     return {

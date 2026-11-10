@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import ParlAnnexure, { C, devTitle, fmt } from '../parl-annexures/ParlAnnexure';
+import ParlAnnexure, { C, HARD, devTitle, fmt } from '../parl-annexures/ParlAnnexure';
 
 // "Production" history (the workbook's "ProdHIS" sheet): HM / CS / SS /
 // Pig Iron actual by plant for the past FYs, the selected period, its CPLY
@@ -55,7 +55,7 @@ function Table({ data, devs }) {
                     {[...r.fys, r.cy, r.cply].map((v, i) => {
                       const hit = devs.get(`${r.plant}|${it.key}|${cols[i]}`);
                       return (
-                        <td key={i} title={hit ? devTitle(hit) : undefined} style={{ ...TD, ...tot, ...(hit ? { background: C.dev } : {}) }}>
+                        <td key={i} title={hit ? devTitle(hit) : undefined} style={{ ...TD, ...tot, ...(r.hard?.[i] ? HARD : {}), ...(hit ? { background: C.dev } : {}) }}>
                           {fmt(v, 0)}
                         </td>
                       );

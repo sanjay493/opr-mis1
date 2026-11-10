@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import ParlAnnexure, { C, devTitle, fmt } from '../parl-annexures/ParlAnnexure';
+import ParlAnnexure, { C, HARD, devTitle, fmt } from '../parl-annexures/ParlAnnexure';
 
 // Annexure-III "Major techno economic parameters" (the workbook's
 // "techhistoryfinal" sheet): BF productivity, coke rate and energy
@@ -41,7 +41,7 @@ function Table({ data, devs }) {
                   {[...r.fys, r.cy, r.cply].map((v, i) => {
                     const hit = devs.get(`${r.plant}|${sec.key}|${cols[i]}`);
                     return (
-                      <td key={i} title={hit ? devTitle(hit) : undefined} style={{ ...TD, ...(hit ? { background: C.dev } : {}) }}>
+                      <td key={i} title={hit ? devTitle(hit) : undefined} style={{ ...TD, ...(r.hard?.[i] ? HARD : {}), ...(hit ? { background: C.dev } : {}) }}>
                         {v == null && i < fys.length ? '-' : fmt(v, sec.decimals)}
                       </td>
                     );

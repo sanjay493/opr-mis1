@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import ParlAnnexure, { C, devTitle, fmt } from '../parl-annexures/ParlAnnexure';
+import ParlAnnexure, { C, HARD, devTitle, fmt } from '../parl-annexures/ParlAnnexure';
 
 // Annexure-II "Production performance of SAIL plants" (the workbook's
 // "hisparlia" sheet): per plant, the past FYs, the FY's annual APP / MoU
@@ -74,19 +74,17 @@ function Table({ data, devs }) {
                 return (
                   <tr key={row.label} style={{ fontWeight: sail ? 700 : 400 }}>
                     {k === 0 && <td rowSpan={blk.rows.length} style={{ ...TD, fontWeight: 700, fontSize: '10.5pt', borderTop: C.thick }}>{blk.plant}</td>}
-                    <td style={{ ...TD, fontWeight: 700, ...(k === 0 ? { borderTop: C.thick } : {}) }}
-                        title={row.kind !== 'fy' ? 'From the DB' : row.source === 'history' ? 'From the hard-coded history (workbook)' : 'Actual from the DB; Cap. / APP / MoU from the workbook where the DB has none'}>
-                      {row.label}{row.kind === 'fy' && row.source !== 'history' ? ' †' : ''}
-                    </td>
+                    <td style={{ ...TD, fontWeight: 700, ...(k === 0 ? { borderTop: C.thick } : {}) }}>{row.label}</td>
                     {items.map((it) => {
                       const dev = devs.get(`${blk.plant}|${it.key}|${col}`);
                       return cells(row.kind, row.values[it.key]).map((v, i) => {
                         const measure = { 1: 'APP', 2: 'MoU', 3: 'Actual' }[i];
                         const hit = dev && dev.filter((d) => d.measure === measure);
                         const bg = hit && hit.length ? C.dev : i === 0 ? C.cap : i === 3 ? C.act : undefined;
+                        const hard = i <= 3 && v != null && v !== '-' && (row.hard?.[it.key] || []).includes(FIELDS[i]);
                         return (
                           <td key={`${it.key}${i}`} title={hit && hit.length ? devTitle(hit) : undefined}
-                              style={{ ...TD, background: bg, ...(i === 0 ? { borderLeft: C.thick } : {}), ...(k === 0 ? { borderTop: C.thick } : {}) }}>
+                              style={{ ...TD, background: bg, ...(hard ? HARD : {}), ...(i === 0 ? { borderLeft: C.thick } : {}), ...(k === 0 ? { borderTop: C.thick } : {}) }}>
                             {fmt(v, 0)}
                           </td>
                         );
@@ -100,7 +98,6 @@ function Table({ data, devs }) {
         })}
       </table>
       {data.note && <p style={{ fontSize: '8pt', whiteSpace: 'pre-line', margin: '4px 0 0' }}>{data.note}</p>}
-      <p style={{ fontSize: '8pt', color: '#5f6368', margin: '2px 0 0' }}>† from the DB (actuals); Cap., APP and MoU from the workbook where the DB has none (before 2026-27).</p>
     </div>
   );
 }

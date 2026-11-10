@@ -4,7 +4,9 @@ workbook (Report_format/work/HisParlia_Annexures.xlsx), sheets "hisparlia",
 
 Every completed FY in those sheets is copied as it stands (the workbook's
 cached values; Excel errors such as #REF! / #N/A / #DIV/0! become null).
-The workbook's current-period column(s) (e.g. "Apr-Jun 2026-27" and its
+FYs from DB_FROM_FY on are left out (the report reads them from the DB)
+except the figures the DB does not hold (db_gaps). The workbook's
+current-period column(s) (e.g. "Apr-Jun 2026-27" and its
 CPLY) are kept under "reference_periods" -- page parl_annexures.py
 compares the DB's figures for that period against them and lists the
 deviations.
@@ -158,9 +160,66 @@ def _th(ws):
     return hist, cy, cply, months
 
 
-def build(xlsx: str) -> dict:
+DB_FROM_FY = "2022-23"
+
+
+def _split(pp_plants, ph_hist, th_hist, cutoff):
+    """Keep FYs before `cutoff` as they are; from it on keep only what the
+    DB cannot give (db_gaps): Annexure-II Cap. / APP / MoU (and an Actual
+    the DB lacks a month of), a plant's production / techno figure the DB
+    lacks. Totals (SAIL, SAIL-5PL) are not kept for those years: the report
+    adds them up from the plants it shows."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    import parl_annexures as pa
+
+    gaps = {"production_performance": {}, "production_history": {}, "techno_history": {}}
+    fys = sorted({f for p in pp_plants.values() for f in p}
+                 | {f for i in ph_hist.values() for p in i.values() for f in p}
+                 | {f for i in th_hist.values() for p in i.values() for f in p})
+    late = [f for f in fys if f >= cutoff]
+    prod = pa._Prod(set().union(*[pa.fy_months(f) for f in late]) if late else set())
+    totals = ("SAIL", "SAIL-5PL")
+
+    for plant, years in pp_plants.items():
+        for f in [f for f in years if f >= cutoff]:
+            rec = years.pop(f)
+            keep = {}
+            for item, v in rec.items():
+                g = {k: v[k] for k in ("cap", "app", "mou") if v.get(k) is not None}
+                if (plant not in totals and v.get("actual") is not None
+                        and not pa._complete(prod, plant, item, pa.fy_months(f))):
+                    g["actual"] = v["actual"]
+                if g:
+                    keep[item] = g
+            if keep:
+                gaps["production_performance"].setdefault(plant, {})[f] = keep
+
+    for item, plants in ph_hist.items():
+        for plant, years in plants.items():
+            for f in [f for f in years if f >= cutoff]:
+                v = years.pop(f)
+                if (plant not in totals and v is not None
+                        and not pa._complete(prod, plant, item, pa.fy_months(f))):
+                    gaps["production_history"].setdefault(item, {}).setdefault(plant, {})[f] = v
+
+    marches = [f"{pa.fy_start(f) + 1}-03" for f in late]
+    till = pa._techno_till(marches)
+    tprod = pa._Prod(set().union(*[pa.period_months(m) for m in marches]) if marches else set())
+    specs = {s[0]: s for s in pa.TECHNO}
+    for key, plants in th_hist.items():
+        for plant, years in plants.items():
+            for f in [f for f in years if f >= cutoff]:
+                v = years.pop(f)
+                mar = f"{pa.fy_start(f) + 1}-03"
+                if (plant != "SAIL" and v is not None
+                        and pa._techno_value(till.get(mar, {}), tprod, specs[key], plant, mar) is None):
+                    gaps["techno_history"].setdefault(key, {}).setdefault(plant, {})[f] = v
+    return gaps
+
+
+def build(xlsx: str, cutoff: str = DB_FROM_FY) -> dict:
     wb = openpyxl.load_workbook(xlsx, data_only=True)
-    pp_plants, pp_plan, pp_period, pp_month, note = _pp(wb["hisparlia"])
+    pp_plants, _plan, pp_period, pp_month, note = _pp(wb["hisparlia"])
     ph_hist, (ph_cy_m, ph_cy), (ph_cply_m, ph_cply) = _ph(wb["ProdHIS"])
     th_hist, th_cy, th_cply, _ = _th(wb["techhistoryfinal"])
     # techhistoryfinal's period column is ProdHIS's (its header is =ProdHIS!W7)
@@ -170,20 +229,24 @@ def build(xlsx: str) -> dict:
     refs.setdefault(ph_cply_m, {})["production_history"] = ph_cply
     refs.setdefault(ph_cy_m, {})["techno_history"] = th_cy
     refs.setdefault(ph_cply_m, {})["techno_history"] = th_cply
+    gaps = _split(pp_plants, ph_hist, th_hist, cutoff)
     return {
-        "_doc": ("Hard-coded history for the Parliament annexures (External Reports > Parliament Annexures): every "
-                 "completed FY of Report_format/work/HisParlia_Annexures.xlsx, built by "
-                 "scripts/build_parl_annexures_history.py. FYs before db_from_fy are shown as "
-                 "written here; from db_from_fy on they come from the DB, falling back to these "
-                 "figures where the DB has none. Units: '000 T; techno: T/CuM/day, Kg/thm, "
-                 "Gcal/tcs. null = blank / '-' in the workbook. reference_periods holds the "
-                 "workbook's own current-period figures, which the report compares with the DB "
-                 "(deviations)."),
+        "_doc": ("Hard-coded data for the Parliament annexures (External Reports > Parliament "
+                 "Annexures), from Report_format/work/HisParlia_Annexures.xlsx, built by "
+                 "scripts/build_parl_annexures_history.py. Only figures that are NOT taken from "
+                 "the DB are kept here: every FY before db_from_fy (production_performance, "
+                 "production_history, techno_history), and in db_gaps the figures of later FYs "
+                 "the DB does not hold (Annexure-II Cap. / APP / MoU before 2026-27, Pig Iron "
+                 "for months the DB lacks). Everything else is read from the DB. Units: '000 T; "
+                 "techno: T/CuM/day, Kg/thm, Gcal/tcs. null = blank / '-' in the workbook. "
+                 "reference_periods holds the workbook's own current-period figures, used only "
+                 "by the data check (never shown)."),
         "source": "Report_format/work/HisParlia_Annexures.xlsx",
-        "db_from_fy": "2022-23",
-        "production_performance": {"note": note, "plants": pp_plants, "plan": pp_plan},
+        "db_from_fy": cutoff,
+        "production_performance": {"note": note, "plants": pp_plants},
         "production_history": ph_hist,
         "techno_history": th_hist,
+        "db_gaps": gaps,
         "reference_periods": refs,
     }
 
