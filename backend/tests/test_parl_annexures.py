@@ -34,6 +34,14 @@ def test_deviation_tolerance():
     assert not pa._differs(None, 5.0, 0.01)
 
 
+def test_source_by_fy(monkeypatch):
+    monkeypatch.setattr(pa, "history", lambda: {"db_from_fy": "2022-23"})
+    assert pa._pick("2021-22", 2.0, 1.0) == (1.0, "history")
+    assert pa._pick("2022-23", 2.0, 1.0) == (2.0, "db")
+    assert pa._pick("2022-23", None, 1.0) == (1.0, "history")   # DB lacks it: workbook
+    assert pa._pick("2021-22", 2.0, None) == (2.0, "db")
+
+
 def test_history_json_shape():
     h = pa.history()
     pp = h["production_performance"]["plants"]

@@ -171,14 +171,16 @@ def build(xlsx: str) -> dict:
     refs.setdefault(ph_cy_m, {})["techno_history"] = th_cy
     refs.setdefault(ph_cply_m, {})["techno_history"] = th_cply
     return {
-        "_doc": ("Hard-coded history for the Parliament annexures (/reports/parliament): every "
+        "_doc": ("Hard-coded history for the Parliament annexures (External Reports > Parliament Annexures): every "
                  "completed FY of Report_format/work/HisParlia_Annexures.xlsx, built by "
-                 "scripts/build_parl_annexures_history.py. A FY present here is shown as written; "
-                 "a later FY is computed from the DB. Units: '000 T; techno: T/CuM/day, Kg/thm, "
+                 "scripts/build_parl_annexures_history.py. FYs before db_from_fy are shown as "
+                 "written here; from db_from_fy on they come from the DB, falling back to these "
+                 "figures where the DB has none. Units: '000 T; techno: T/CuM/day, Kg/thm, "
                  "Gcal/tcs. null = blank / '-' in the workbook. reference_periods holds the "
                  "workbook's own current-period figures, which the report compares with the DB "
                  "(deviations)."),
         "source": "Report_format/work/HisParlia_Annexures.xlsx",
+        "db_from_fy": "2022-23",
         "production_performance": {"note": note, "plants": pp_plants, "plan": pp_plan},
         "production_history": ph_hist,
         "techno_history": th_hist,

@@ -75,8 +75,8 @@ function Table({ data, devs }) {
                   <tr key={row.label} style={{ fontWeight: sail ? 700 : 400 }}>
                     {k === 0 && <td rowSpan={blk.rows.length} style={{ ...TD, fontWeight: 700, fontSize: '10.5pt', borderTop: C.thick }}>{blk.plant}</td>}
                     <td style={{ ...TD, fontWeight: 700, ...(k === 0 ? { borderTop: C.thick } : {}) }}
-                        title={row.source === 'db' ? 'From the DB' : 'From the hard-coded history (workbook)'}>
-                      {row.label}{row.source === 'db' && row.kind === 'fy' ? ' †' : ''}
+                        title={row.kind !== 'fy' ? 'From the DB' : row.source === 'history' ? 'From the hard-coded history (workbook)' : 'Actual from the DB; Cap. / APP / MoU from the workbook where the DB has none'}>
+                      {row.label}{row.kind === 'fy' && row.source !== 'history' ? ' †' : ''}
                     </td>
                     {items.map((it) => {
                       const dev = devs.get(`${blk.plant}|${it.key}|${col}`);
@@ -100,7 +100,7 @@ function Table({ data, devs }) {
         })}
       </table>
       {data.note && <p style={{ fontSize: '8pt', whiteSpace: 'pre-line', margin: '4px 0 0' }}>{data.note}</p>}
-      <p style={{ fontSize: '8pt', color: '#5f6368', margin: '2px 0 0' }}>† not in the hard-coded history: computed from the DB.</p>
+      <p style={{ fontSize: '8pt', color: '#5f6368', margin: '2px 0 0' }}>† from the DB (actuals); Cap., APP and MoU from the workbook where the DB has none (before 2026-27).</p>
     </div>
   );
 }
@@ -113,7 +113,7 @@ export default function ParlProductionPerformanceView() {
       defaultYears={5}
       Table={Table}
       title={<>Annexure-II: Production Performance of SAIL Plants</>}
-      description={<>Past FYs from the hard-coded history (Report_format/work/HisParlia_Annexures.xlsx); the FY&apos;s annual APP / MoU row and the selected period from the DB (MoU &quot;-&quot; when not loaded). The period&apos;s Cap., APP and MoU = annual figure × days in the period ÷ days in the FY.</>}
+      description={<>Past FYs up to 2021-22 from the hard-coded history (Report_format/work/HisParlia_Annexures.xlsx), from 2022-23 from the DB (a year the DB holds only in part stays the workbook&apos;s); the FY&apos;s annual APP / MoU row and the selected period from the DB (MoU &quot;-&quot; when not loaded). The period&apos;s Cap., APP and MoU = annual figure × days in the period ÷ days in the FY.</>}
     />
   );
 }

@@ -65,7 +65,7 @@ export default function ParlTechnoHistoryView() {
       defaultYears={6}
       Table={Table}
       title={<>Annexure-III: Major Techno-Economic Parameters</>}
-      description={<>BF productivity, coke rate and energy consumption. Past FYs from the hard-coded history (a later FY from the DB&apos;s March cumulative); the period and its CPLY are the DB&apos;s Apr-to-month cumulative (SAIL: stored figure, else HM / Crude Steel weighted). % improvement: higher is better for productivity, lower for coke rate and energy.</>}
+      description={<>BF productivity, coke rate and energy consumption. Past FYs up to 2021-22 from the hard-coded history, from 2022-23 the DB&apos;s March cumulative (the workbook&apos;s figure where the DB has none); the period and its CPLY are the DB&apos;s Apr-to-month cumulative (SAIL: stored figure, else HM / Crude Steel weighted). % improvement: higher is better for productivity, lower for coke rate and energy.</>}
     />
   );
 }

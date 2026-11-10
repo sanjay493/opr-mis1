@@ -80,7 +80,7 @@ export default function ParlProductionHistoryView() {
       defaultYears={7}
       Table={Table}
       title={<>Production History (HM / CS / SS / Pig Iron)</>}
-      description={<>Past FYs from the hard-coded history (Report_format/work/HisParlia_Annexures.xlsx, a later FY from the DB); the selected period and its CPLY from the DB, with % growth.</>}
+      description={<>Past FYs up to 2021-22 from the hard-coded history (Report_format/work/HisParlia_Annexures.xlsx), from 2022-23 from the DB where it holds the whole year (else the workbook&apos;s figure); the selected period and its CPLY from the DB, with % growth.</>}
     />
   );
 }

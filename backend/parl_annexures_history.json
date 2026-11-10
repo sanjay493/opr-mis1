@@ -1,6 +1,7 @@
 {
- "_doc": "Hard-coded history for the Parliament annexures (/reports/parliament): every completed FY of Report_format/work/HisParlia_Annexures.xlsx, built by scripts/build_parl_annexures_history.py. A FY present here is shown as written; a later FY is computed from the DB. Units: '000 T; techno: T/CuM/day, Kg/thm, Gcal/tcs. null = blank / '-' in the workbook. reference_periods holds the workbook's own current-period figures, which the report compares with the DB (deviations).",
+ "_doc": "Hard-coded history for the Parliament annexures (External Reports > Parliament Annexures): every completed FY of Report_format/work/HisParlia_Annexures.xlsx, built by scripts/build_parl_annexures_history.py. FYs before db_from_fy are shown as written here; from db_from_fy on they come from the DB, falling back to these figures where the DB has none. Units: '000 T; techno: T/CuM/day, Kg/thm, Gcal/tcs. null = blank / '-' in the workbook. reference_periods holds the workbook's own current-period figures, which the report compares with the DB (deviations).",
  "source": "Report_format/work/HisParlia_Annexures.xlsx",
+ "db_from_fy": "2022-23",
  "production_performance": {
   "note": "Note: * Capacity for FY 2021-22 and FY 2022-23 is based on  current operating capacity as per CHM  office correspondence to MoS and presentation to HSM\n            ** FY 19-20  Saleable Steel Production includes production from SPU's(Kangra: 25,571 T, JSU: 37,529 T, Bettiah: 1,061 T)",
   "plants": {

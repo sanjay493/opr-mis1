@@ -14,8 +14,11 @@ of a FY:
                           rate and energy consumption by plant for past FYs, the
                           period, its CPLY and % improvement.
 
-Past FYs come from parl_annexures_history.json (hard-coded from the workbook)
-when they are in it, else from the DB (a full FY). The period, its CPLY and
+Past FYs up to 2021-22 come from parl_annexures_history.json (hard-coded
+from the workbook), from 2022-23 (the JSON's "db_from_fy") from the DB (a
+full FY; techno: the March till_month). A figure the preferred source lacks
+comes from the other -- the DB holds no capacity, APP or MoU before
+2026-27, so those stay the workbook's. The period, its CPLY and
 the annual APP / MoU are always from the DB: production_monthly (actual,
 abp, mou; SAIL = sum of the plants) and item_capacity; the period's
 Cap., APP and MoU are the annual figures x days in the period / days in
@@ -139,6 +142,22 @@ def _history_cached(mtime):
 def history() -> dict:
     """parl_annexures_history.json, re-read when the file changes."""
     return _history_cached(HISTORY_PATH.stat().st_mtime)
+
+
+DEFAULT_DB_FROM_FY = "2022-23"
+
+
+def from_db(fy: str) -> bool:
+    """A past FY from this one on is taken from the DB (the JSON's
+    "db_from_fy"); earlier ones from the JSON. Either way a figure the
+    preferred source lacks comes from the other."""
+    return fy >= history().get("db_from_fy", DEFAULT_DB_FROM_FY)
+
+
+def _pick(fy, db, js):
+    """(value, source) by from_db(fy), falling back to the other source."""
+    first, second = ((db, "db"), (js, "history")) if from_db(fy) else ((js, "history"), (db, "db"))
+    return first if first[0] is not None else (second if second[0] is not None else (None, first[1]))
 
 
 # ── DB access ────────────────────────────────────────────────────────────────
@@ -330,36 +349,54 @@ def production_performance(month: str, years: int = 5) -> dict:
     hist = history()["production_performance"]
     jplants = hist["plants"]
     past = _past_fys(fy, years)
-    db_fys = [f for f in past if not all(f in jplants.get(p, {}) for p in PP_PLANTS)]
     months = period_months(month)
     cply_months = [cply(m) for m in months]
     need = set(fy_months(fy)) | set(cply_months)
-    for f in db_fys:
-        need |= set(fy_months(f)) | set(fy_months(shift_fy(f, -1)))
+    for f in past + [shift_fy(past[0], -1)] if past else []:
+        need |= set(fy_months(f))
     prod = _Prod(need)
     cap = _Cap()
     fdays = _fy_days(fy)
     pdays = sum(_days(m) for m in months)
 
+    def js(plant, item, f, field):
+        return ((jplants.get(plant, {}).get(f) or {}).get(item) or {}).get(field)
+
+    def db_actual(plant, item, f):
+        """The DB's FY actual, only when the DB holds the whole year (else
+        None, so the workbook figure is used)."""
+        fm = fy_months(f)
+        ok = _complete(prod, plant, item, fm, lambda p: js(p, item, f, "actual"))
+        return prod.get("actual", plant, item, fm) if ok else None
+
     def fy_actual(plant, item, f):
-        rec = jplants.get(plant, {}).get(f)
-        if rec is not None:
-            return rec[item]["actual"]
-        return prod.get("actual", plant, item, fy_months(f))
+        return _pick(f, db_actual(plant, item, f), js(plant, item, f, "actual"))[0]
 
     plants = []
     for plant in PP_PLANTS:
         rows = []
         for f in past:
             rec = jplants.get(plant, {}).get(f)
-            if rec is not None:
+            if not from_db(f) and rec is not None:
                 rows.append({"kind": "fy", "label": f, "source": "history",
                              "values": {k: dict(rec[k]) for k, _ in PP_ITEMS}})
-            else:
-                fm = fy_months(f)
-                rows.append({"kind": "fy", "label": f, "source": "db", "values": {
-                    k: _pp_block(prod, cap, plant, k, fm, _fy_days(f), fy_actual(plant, k, shift_fy(f, -1)))
-                    for k, _ in PP_ITEMS}})
+                continue
+            fm, values, sources = fy_months(f), {}, set()
+            for k, _ in PP_ITEMS:
+                db = _pp_block(prod, cap, plant, k, fm, _fy_days(f), None)
+                db["actual"] = db_actual(plant, k, f)
+                v = {}
+                for field in ("cap", "app", "mou", "actual"):
+                    v[field], src = _pick(f, db[field], js(plant, k, f, field))
+                    if v[field] is not None:
+                        sources.add(src)
+                v["ful_app"] = _pct(v["actual"], v["app"])
+                v["ful_mou"] = _pct(v["actual"], v["mou"])
+                v["gr"] = _gr(v["actual"], fy_actual(plant, k, shift_fy(f, -1)))
+                v["cu"] = _pct(v["actual"], v["cap"])
+                values[k] = v
+            rows.append({"kind": "fy", "label": f, "values": values,
+                         "source": "db" if sources == {"db"} else ("history" if sources == {"history"} else "mixed")})
         fm = fy_months(fy)
         annual = {k: {"cap": cap.get(plant, k, fm, fdays), "app": prod.get("abp", plant, k, fm),
                       "mou": prod.get("mou", plant, k, fm)} for k, _ in PP_ITEMS}
@@ -392,8 +429,7 @@ def production_history(month: str, years: int = 7) -> dict:
     cply_months = [cply(m) for m in months]
     need = set(months) | set(cply_months)
     for f in past:
-        if not all(f in jh.get(i, {}).get(p, {}) for i in PH_ROWS for p in PH_ROWS[i]):
-            need |= set(fy_months(f))
+        need |= set(fy_months(f))
     prod = _Prod(need)
     items = []
     for key, title in PH_ITEMS:
@@ -402,10 +438,9 @@ def production_history(month: str, years: int = 7) -> dict:
             jp = jh.get(key, {}).get(plant, {})
             fys = []
             for f in past:
-                if f in jp:
-                    fys.append(jp[f])
-                else:
-                    fys.append(prod.get("actual", plant, key, fy_months(f)))
+                fm = fy_months(f)
+                whole = _complete(prod, plant, key, fm, lambda p, f=f: jh.get(key, {}).get(p, {}).get(f))
+                fys.append(_pick(f, prod.get("actual", plant, key, fm) if whole else None, jp.get(f))[0])
             cy = prod.get("actual", plant, key, months)
             cp = prod.get("actual", plant, key, cply_months)
             rows.append({"plant": plant, "fys": fys, "cy": cy, "cply": cp, "gr": _gr(cy, cp),
@@ -428,8 +463,7 @@ def techno_history(month: str, years: int = 6) -> dict:
     jh = history()["techno_history"]
     past = _past_fys(fy, years)
     cm = cply(month)
-    db_marches = [f"{fy_start(f) + 1}-03" for f in past
-                  if not all(f in jh.get(s[0], {}).get(p, {}) for s in TECHNO for p in TH_PLANTS)]
+    db_marches = [f"{fy_start(f) + 1}-03" for f in past]
     till = _techno_till([month, cm] + db_marches)
     pm = set(period_months(month)) | set(period_months(cm))
     for m in db_marches:
@@ -443,11 +477,8 @@ def techno_history(month: str, years: int = 6) -> dict:
             jp = jh.get(key, {}).get(plant, {})
             fys = []
             for f in past:
-                if f in jp:
-                    fys.append(jp[f])
-                else:
-                    mar = f"{fy_start(f) + 1}-03"
-                    fys.append(_techno_value(till.get(mar, {}), prod, spec, plant, mar))
+                mar = f"{fy_start(f) + 1}-03"
+                fys.append(_pick(f, _techno_value(till.get(mar, {}), prod, spec, plant, mar), jp.get(f))[0])
             cy = _techno_value(till.get(month, {}), prod, spec, plant, month)
             cp = _techno_value(till.get(cm, {}), prod, spec, plant, cm)
             if cy is None or not cp:
@@ -531,13 +562,14 @@ def deviations(report: str, data: dict) -> list:
             plant = blk["plant"]
             ref = refs.get(month, {}).get(report, {}).get(plant)
             for r in blk["rows"]:
-                if r["kind"] == "fy" and r["source"] == "history":
+                rec = jplants.get(plant, {}).get(r["label"]) if r["kind"] == "fy" else None
+                if rec is not None:
                     fm = fy_months(r["label"])
                     for k, _ in PP_ITEMS:
                         if _complete(prod, plant, k, fm,
                                      lambda p, f=r["label"], k=k: (jplants.get(p, {}).get(f) or {}).get(k, {}).get("actual")):
                             _dev(out, plant, k, r["label"], r["label"], "Actual",
-                                 r["values"][k]["actual"], prod.get("actual", plant, k, fm))
+                                 rec[k]["actual"], prod.get("actual", plant, k, fm))
                 elif r["kind"] == "period" and ref:
                     for k, _ in PP_ITEMS:
                         # Actual only: the workbook's period APP / MoU are
@@ -552,8 +584,9 @@ def deviations(report: str, data: dict) -> list:
             k = it["key"]
             for r in it["rows"]:
                 plant = r["plant"]
-                for f, v in zip(fys, r["fys"]):
-                    if f in jh.get(k, {}).get(plant, {}) and _complete(
+                for f in fys:
+                    v = jh.get(k, {}).get(plant, {}).get(f)
+                    if v is not None and _complete(
                             prod, plant, k, fy_months(f), lambda p, f=f, k=k: jh.get(k, {}).get(p, {}).get(f)):
                         _dev(out, plant, k, f, f, "Actual", v, prod.get("actual", plant, k, fy_months(f)))
                 for which, m, lbl in (("cy", month, f"{L['span']} {fy}"),
@@ -572,8 +605,9 @@ def deviations(report: str, data: dict) -> list:
             tol = 0.5 * 10 ** -sec["decimals"]
             for r in sec["rows"]:
                 plant = r["plant"]
-                for f, mar, v in zip(fys, marches, r["fys"]):
-                    if f in jh.get(k, {}).get(plant, {}):
+                for f, mar in zip(fys, marches):
+                    v = jh.get(k, {}).get(plant, {}).get(f)
+                    if v is not None:
                         _dev(out, plant, k, f, f, "Value", v,
                              _techno_value(till.get(mar, {}), prod, specs[k], plant, mar), tol)
                 for which, m, lbl in (("cy", month, f"{L['span']} {fy}"),
@@ -586,8 +620,9 @@ def deviations(report: str, data: dict) -> list:
 def _complete(prod, plant, item, months, ref_of=None):
     """The DB holds an actual for every month. SAIL / SAIL-5PL: so does every
     plant the workbook has a non-zero figure for (ref_of(plant)), else the
-    DB total is a partial sum (e.g. 2019-20 Pig Iron, held for BSP and DSP
-    only), not a deviation."""
+    DB total is a partial sum (e.g. Pig Iron: none for RSP in 2022-23, only
+    2-3 months for BSL in 2022-23 to 2024-25). Used both to choose the DB
+    for a past FY and to decide what the data check compares."""
     if plant in ("SAIL", "SAIL-5PL"):
         plants = FIVE_PLANTS if plant == "SAIL-5PL" else ALL_PLANTS
         need = [p for p in plants if ref_of and ref_of(p)]
