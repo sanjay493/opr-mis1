@@ -59,6 +59,13 @@ MAX_PER_CHECK = 20
 # is reported as data loss).
 DROPPED_V1_COLUMNS: Dict[str, set] = {}     # techno_data.id is carried as techno_upload.seq (7c)
 
+# Tables added to v2 after the cutover: no v1 source, so not in mig.LOAD_ORDER.
+V2_ONLY_TABLES = {
+    "production_op_monthly",
+    "rmt_ipt_row", "rmt_month", "rmt_plan_note", "rmt_stock_row",
+    "unique_activity", "unique_activity_tag",
+}
+
 # Every v1 -> v2 column rename of the SIMPLE tables, written by hand from
 # tests/fixtures/schema_v1.sql vs scripts/v2/schema_v2.sql (NOT derived from
 # migrate's map): verify checks migrate's map against it, so a mispaired
@@ -267,7 +274,7 @@ class _Verifier:
             self.problems.append(f"v1 tables missing from the source: {missing}")
         self.d.execute("SHOW FULL TABLES WHERE Table_type = 'BASE TABLE'")
         v2 = {r[0] for r in self.d.fetchall()}
-        want = set(mig.LOAD_ORDER) | {"cal_month", "data_version"}
+        want = set(mig.LOAD_ORDER) | {"cal_month", "data_version"} | V2_ONLY_TABLES
         if v2 != want:
             self.problems.append(f"v2 tables differ from the v2 model: missing {sorted(want - v2)}, "
                                  f"unexpected {sorted(v2 - want)}")
