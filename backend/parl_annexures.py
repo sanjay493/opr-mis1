@@ -23,8 +23,8 @@ figures the DB lacks ("db_gaps": capacity, APP and MoU before 2026-27,
 Pig Iron months). Each row says which figures are hard-coded ("hard"). The period, its CPLY and
 the annual APP / MoU are always from the DB: production_monthly (actual,
 abp, mou; SAIL = sum of the plants) and item_capacity; the period's
-Cap., APP and MoU are the annual figures x days in the period / days in
-the FY) and techno_value till_month (SAIL: the
+APP and MoU are the sums of its months, its Cap. the annual figure x days
+in the period / days in the FY) and techno_value till_month (SAIL: the
 stored SAIL figure, else the HM / CS weighted average page 27 uses).
 
 deviations() compares the DB with the figures the JSON holds for the same
@@ -333,11 +333,12 @@ def _pp_block(prod, cap, plant, item, months, fy_days, prev_actual):
 
 
 def _period_block(prod, plant, item, months, annual, share, prev_actual):
-    """The period row: Cap., APP and MoU are the annual figures pro rata by
-    days (annual x days in the period / days in the FY); Actual is the
-    period's own."""
-    v = {f: None if annual[f] is None else annual[f] * share for f in ("cap", "app", "mou")}
-    v["actual"] = prod.get("actual", plant, item, months)
+    """The period row: Cap. is the annual figure pro rata by days (annual x
+    days in the period / days in the FY); APP, MoU and Actual are the sums
+    of the period's months."""
+    v = {"cap": None if annual["cap"] is None else annual["cap"] * share}
+    for f, meas in (("app", "abp"), ("mou", "mou"), ("actual", "actual")):
+        v[f] = prod.get(meas, plant, item, months)
     v["ful_app"] = _pct(v["actual"], v["app"])
     v["ful_mou"] = _pct(v["actual"], v["mou"])
     v["gr"] = _gr(v["actual"], prev_actual)
@@ -657,10 +658,10 @@ def deviations(report: str, data: dict) -> list:
                                  rec[k]["actual"], prod.get("actual", plant, k, fm))
                 elif r["kind"] == "period" and ref:
                     for k, _ in PP_ITEMS:
-                        # Actual only: the workbook's period APP / MoU are
-                        # monthly sums, this report's are pro rata by days
-                        _dev(out, plant, k, "period", L["period"], "Actual",
-                             ref[k].get("actual"), r["values"][k].get("actual"))
+                        # not Cap.: this report's is pro rata by days
+                        for f, lbl in (("app", "APP"), ("mou", "MoU"), ("actual", "Actual")):
+                            _dev(out, plant, k, "period", L["period"], lbl,
+                                 ref[k].get(f), r["values"][k].get(f))
     elif report == "production_history":
         fys = data["fys"]
         prod = _Prod(_union_months(fys))

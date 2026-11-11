@@ -109,7 +109,7 @@ export default function ParlProductionPerformanceView() {
       defaultYears={5}
       Table={Table}
       title={<>Annexure-II: Production Performance of SAIL Plants</>}
-      description={<>Past FYs up to 2021-22 from the hard-coded history (Report_format/work/HisParlia_Annexures.xlsx), from 2022-23 from the DB (a year the DB holds only in part stays the workbook&apos;s); the FY&apos;s annual APP / MoU row and the selected period from the DB (MoU &quot;-&quot; when not loaded). The period&apos;s Cap., APP and MoU = annual figure × days in the period ÷ days in the FY.</>}
+      description={<>Past FYs up to 2021-22 from the hard-coded history (Report_format/work/HisParlia_Annexures.xlsx), from 2022-23 from the DB (a year the DB holds only in part stays the workbook&apos;s); the FY&apos;s annual APP / MoU row and the selected period from the DB (MoU &quot;-&quot; when not loaded). The period&apos;s APP and MoU = sum of its months&apos; targets; its Cap. = annual capacity × days in the period ÷ days in the FY.</>}
     />
   );
 }
