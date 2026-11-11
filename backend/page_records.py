@@ -6,6 +6,7 @@ individual plant/unit (keyed by plant code, e.g. 'BSP', 'ASP').
 Used by the /api/production-records endpoint.
 """
 import functools
+import itertools
 
 import dbengine
 import report_context
@@ -130,8 +131,25 @@ def _fy_window_cells(cur, scope, s_pos: int, e_pos: int):
             yield (item, f['fy_start'], plant, rm, None if value is None else 0.0 + value, f['days'])
 
 
+_FS = 'Finished Steel'
+
+
+def _sail_conversion(cur, upto_month: str = None) -> dict:
+    """{month: SAIL 'Conversion' actual}. SAIL (8 Plants) Finished Steel
+    includes it (data from 2024-04), the same rule as report pages 3 and 4;
+    callers pass it as `conv` for the all8 scope only."""
+    return {rm: v for rm, v in rp.sail_conversion_totals_upto(cur, upto_month or '9999-12') if v}
+
+
+def _conv_cells(conv: dict, bucket: str) -> list:
+    """Conversion as one more 'plant' of Finished Steel, in _bucket_cells'
+    row shape (bucket 'fy' gives _fy_window_cells' shape)."""
+    return [(_FS, *_month_fields(rm)[bucket], 'Conversion', rm, v, _month_fields(rm)['days'])
+            for rm, v in conv.items()]
+
+
 def _bucketed_period_values(cur, items: list, scope, bucket: str,
-                            required_months: int) -> dict:
+                            required_months: int, conv: dict = None) -> dict:
     """{(item_name, *bucket): value} for every (item, period bucket) whose
     window has exactly `required_months` distinct report_months.
 
@@ -142,7 +160,8 @@ def _bucketed_period_values(cur, items: list, scope, bucket: str,
     item_set = set(items)
 
     acc = {}  # (item, bucket_tuple) -> {'months': set, 'plants': {plant: [wsum, wdays, total]}}
-    for row in _bucket_cells(cur, scope, bucket):
+    for row in itertools.chain(_bucket_cells(cur, scope, bucket),
+                               _conv_cells(conv, bucket) if conv else ()):
         n = len(row) - 5
         item, bucket = row[0], tuple(row[1:1 + n])
         plant, rm, v, days = row[1 + n], row[2 + n], row[3 + n], row[4 + n]
@@ -173,7 +192,22 @@ def _item_sort_key():
         return lambda n: n
 
 
-def _compute_group_records(cur, items: list, scope) -> dict:
+def _calendar_month_totals(cur, scope, conv: dict = None) -> list:
+    """rp.records_calendar_month_totals, with Conversion added to each
+    Finished Steel month and those rows put back in total-DESC order."""
+    rows = list(rp.records_calendar_month_totals(cur, scope))
+    if not conv:
+        return rows
+    rows = [(item, mon, rm, total + conv.get(rm, 0.0) if item == _FS and total is not None else total)
+            for item, mon, rm, total in rows]
+    group_pos = {}
+    for item, mon, _rm, _total in rows:
+        group_pos.setdefault((item, mon), len(group_pos))
+    rows.sort(key=lambda r: (group_pos[(r[0], r[1])], -r[3] if r[3] is not None else float('inf')))
+    return rows
+
+
+def _compute_group_records(cur, items: list, scope, conv: dict = None) -> dict:
     """Best/2nd-best by calendar month, FY quarter, FY half, and top-5 FY /
     calendar-year, for one scope (a plant group or a single plant/unit) and
     item list — extracted out of generate_records()'s per-group loop body so
@@ -196,7 +230,7 @@ def _compute_group_records(cur, items: list, scope) -> dict:
     # ── Calendar month: top 2 per (item, month number). The global
     #    best/2nd-best month are always contained in this set. ───────
     all_months = {}
-    for item, mon_num, rm, total in rp.records_calendar_month_totals(cur, scope):
+    for item, mon_num, rm, total in _calendar_month_totals(cur, scope, conv):
         cal = grp['cal_months'].get(item)
         if cal is None or total is None:
             continue
@@ -223,7 +257,7 @@ def _compute_group_records(cur, items: list, scope) -> dict:
     # months present) count. ───────────────────────────────────────────
     q_buckets = {}
     for (item, qnum, fy_start), value in _bucketed_period_values(
-            cur, items, scope, 'quarter', 3).items():
+            cur, items, scope, 'quarter', 3, conv).items():
         q_buckets.setdefault((item, qnum), []).append(
             {'period': _fy_label(fy_start), 'fy_start': fy_start, 'total': value})
     for (item, qnum), rows in q_buckets.items():
@@ -232,7 +266,7 @@ def _compute_group_records(cur, items: list, scope) -> dict:
 
     h_buckets = {}
     for (item, hnum, fy_start), value in _bucketed_period_values(
-            cur, items, scope, 'half', 6).items():
+            cur, items, scope, 'half', 6, conv).items():
         h_buckets.setdefault((item, hnum), []).append(
             {'period': _fy_label(fy_start), 'fy_start': fy_start, 'total': value})
     for (item, hnum), rows in h_buckets.items():
@@ -241,7 +275,7 @@ def _compute_group_records(cur, items: list, scope) -> dict:
 
     fy_buckets = {}
     for (item, fy_start), value in _bucketed_period_values(
-            cur, items, scope, 'fy', 12).items():
+            cur, items, scope, 'fy', 12, conv).items():
         fy_buckets.setdefault(item, []).append(
             {'period': _fy_label(fy_start), 'total': value})
     for item, rows in fy_buckets.items():
@@ -250,7 +284,7 @@ def _compute_group_records(cur, items: list, scope) -> dict:
 
     cy_buckets = {}
     for (item, yr), value in _bucketed_period_values(
-            cur, items, scope, 'cy', 12).items():
+            cur, items, scope, 'cy', 12, conv).items():
         cy_buckets.setdefault(item, []).append({'period': yr, 'total': value})
     for item, rows in cy_buckets.items():
         rows.sort(key=lambda r: r['total'], reverse=True)
@@ -316,7 +350,8 @@ def generate_records() -> dict:
                     items = ITEMS
                     sql_scope = rp.records_scope(plants, ITEMS)
 
-                result[group_name] = _compute_group_records(cur, items, sql_scope)
+                conv = _sail_conversion(cur) if group_name == 'all8' else None
+                result[group_name] = _compute_group_records(cur, items, sql_scope, conv)
 
             result['latest_month'] = _latest_production_month(cur)
             return result
@@ -359,7 +394,7 @@ _BEST_PERIOD_SCOPES = {
 
 
 def _compute_best_period(cur, items: list, scope,
-                         s_pos: int, e_pos: int, top_n: int) -> dict:
+                         s_pos: int, e_pos: int, top_n: int, conv: dict = None) -> dict:
     """Top-`top_n` financial years by production over the FY-relative month
     window [s_pos, e_pos] (0 = Apr … 11 = Mar), per item. Only FYs whose
     window is complete (all window_len months present) are ranked.
@@ -373,7 +408,10 @@ def _compute_best_period(cur, items: list, scope,
     item_set = set(items)
     # (item, fy_start) -> {'months': set, 'plants': {plant: [wsum, wdays, total]}}
     acc: dict = {}
-    for item, fy_start, plant, rm, v, days in _fy_window_cells(cur, scope, s_pos, e_pos):
+    conv_cells = [c for c in _conv_cells(conv or {}, 'fy')
+                  if s_pos <= _month_fields(c[3])['fy_pos'] <= e_pos]
+    for item, fy_start, plant, rm, v, days in itertools.chain(
+            _fy_window_cells(cur, scope, s_pos, e_pos), conv_cells):
         if item not in item_set or v is None:
             continue
         d = acc.setdefault((item, fy_start), {'months': set(), 'plants': {}})
@@ -441,8 +479,9 @@ def generate_best_period(start_mon: int, end_mon: int, scope: str = 'sail5',
                 else:
                     items = MAJOR_ITEMS
                 sql_scope = rp.records_scope(plants, items)
+                conv = _sail_conversion(cur) if scope == 'all8' else None
                 results[col_key] = _compute_best_period(
-                    cur, items, sql_scope, s_pos, e_pos, top_n)
+                    cur, items, sql_scope, s_pos, e_pos, top_n, conv)
 
             window_months = [_MON[_pos_to_mon(p)] for p in range(s_pos, e_pos + 1)]
             return {
@@ -495,7 +534,8 @@ def _build_group_records(items: list, upto_month: str = None) -> dict:
             result = {}
             for group_name, plants in [('sail5', SAIL5), ('all8', ALL8)]:
                 sql_scope = rp.records_scope(plants, items, upto_month)
-                result[group_name] = _compute_group_records(cur, items, sql_scope)
+                conv = _sail_conversion(cur, upto_month) if group_name == 'all8' else None
+                result[group_name] = _compute_group_records(cur, items, sql_scope, conv)
 
             latest = _latest_production_month(cur)
             result['latest_month'] = min(latest, upto_month) if (latest and upto_month) else (upto_month or latest)

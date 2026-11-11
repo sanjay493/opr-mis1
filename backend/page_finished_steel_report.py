@@ -35,6 +35,13 @@ _ITEM_KEYS = [key for key, _ in ITEMS]
 DEFAULT_ITEM = "Finished Steel"
 
 
+def _plant_order(item: str) -> list:
+    """Columns for `item`: Finished Steel gets Conversion before SAIL."""
+    if item == "Finished Steel":
+        return _PLANT_ORDER[:-1] + ["Conversion", "SAIL"]
+    return _PLANT_ORDER
+
+
 def resolve_item(item: str | None) -> str:
     """Validate a requested item key, falling back to the default."""
     return item if item in _ITEM_ALIASES else DEFAULT_ITEM
@@ -59,6 +66,10 @@ def _item_pivot(item: str, months: list = None) -> dict:
     cur = conn.cursor()
     try:
         rows = rp.item_alias_rows(cur, aliases, months)
+        # Finished Steel: SAIL also includes the SAIL-level Conversion figure
+        # (same rule as report pages 3 and 4), shown in its own column.
+        conv = ({rm: v for rm, v in rp.sail_conversion_totals_upto(cur, "9999-12") if v}
+                if resolve_item(item) == "Finished Steel" else {})
     finally:
         conn.close()
 
@@ -77,6 +88,9 @@ def _item_pivot(item: str, months: list = None) -> dict:
 
     for month, by_plant in pivot.items():
         present = [by_plant[p] for p in _SAIL_8 if by_plant.get(p) is not None]
+        if month in conv:
+            by_plant["Conversion"] = conv[month]
+            present.append(conv[month])
         by_plant["SAIL"] = round(sum(present), 3) if present else None
 
     return pivot
@@ -91,10 +105,10 @@ def build_finished_steel_report_csv(fy_start: int = None, item: str = DEFAULT_IT
     buf = io.StringIO()
     buf.write("﻿")  # BOM so Excel reads UTF-8 correctly
     w = csv.writer(buf)
-    w.writerow([f"Report Month ({item})"] + _PLANT_ORDER)
+    w.writerow([f"Report Month ({item})"] + _plant_order(item))
     for month in sorted(months) if months is not None else sorted(pivot):
         row = [month]
-        for plant in _PLANT_ORDER:
+        for plant in _plant_order(item):
             v = pivot.get(month, {}).get(plant)
             row.append("" if v is None else round(v, 3))
         w.writerow(row)
@@ -130,7 +144,7 @@ def build_finished_steel_fy_data(fy_start: int, item: str = DEFAULT_ITEM) -> dic
     rows = {}
     for m in months:
         by_plant = pivot.get(m, {})
-        rows[m] = {p: (round(v, 3) if (v := by_plant.get(p)) is not None else None) for p in _PLANT_ORDER}
+        rows[m] = {p: (round(v, 3) if (v := by_plant.get(p)) is not None else None) for p in _plant_order(item)}
 
     return {
         "fy_start": fy_start,
@@ -138,6 +152,6 @@ def build_finished_steel_fy_data(fy_start: int, item: str = DEFAULT_ITEM) -> dic
         "item": item,
         "items": _ITEM_KEYS,
         "months": months,
-        "plants": _PLANT_ORDER,
+        "plants": _plant_order(item),
         "rows": rows,
     }

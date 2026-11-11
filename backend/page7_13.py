@@ -28,7 +28,7 @@ _PIG_IRON_CFG = {
 }
 
 _FINISHED_STEEL_CFG = {
-    "display": "Finished Steel (SAIL 8 Plants incl. Conversion from FY 25-26)",
+    "display": "Finished Steel (SAIL 8 Plants incl. Conversion from FY 24-25)",
     "unit": "'000 T",
     "db_item": "Finished Steel",
     "is_nos": False,
@@ -41,12 +41,13 @@ _FINISHED_STEEL_CFG = {
     # historically) undercount badly instead of falling back to the
     # historically-recorded SAIL total.
     "show_all_rows": True,
-    # From FY 2025-26 SAIL Finished Steel includes the SAIL-level
-    # 'Conversion' figure (per direct instruction 2026-10-16) -- same rule
-    # as Page 3/4's "incl. Conv." row and Annexure-4's FY2025-26 figure.
-    # Earlier FYs have no Conversion data and stay as before. Actual rows
-    # only: there is no Conversion plan.
-    "sail_conversion_from": "2025-04",
+    # From FY 2024-25 (the first FY with Conversion data) SAIL Finished
+    # Steel includes the SAIL-level 'Conversion' figure (per direct
+    # instruction 2026-10-16, extended back to FY 24-25 on 2026-11-11) --
+    # same rule as Page 3/4's "incl. Conv." row. Earlier FYs have no
+    # Conversion data and stay as before. Actual rows only: there is no
+    # Conversion plan.
+    "sail_conversion_from": "2024-04",
 }
 
 TREND_PAGES = {
@@ -417,7 +418,7 @@ def _generate_rows_for_config(report_month: str, config: dict) -> list:
     # falls back to the stored value per-month when the live sum would be
     # partial (some plant hasn't reported that month), so older months with
     # incomplete per-plant tracking keep their historically recorded total
-    # instead of silently showing a partial sum. From conv_from (FY 2025-26)
+    # instead of silently showing a partial sum. From conv_from (FY 2024-25)
     # onward the SAIL actual also adds Conversion -- see _with_conversion.
     prefer_live_sum = (db_item == "Finished Steel")
 

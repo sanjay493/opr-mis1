@@ -83,7 +83,8 @@ def get_trend_data(basis: str, group: str) -> dict:
 
     sail_direct = {}
     if use_sail_direct:
-        for item, rm, val in rp.items_plant_all_months(cur, db_items, "SAIL"):
+        # + SAIL 'Conversion': added to SAIL (8 Plants) Finished Steel below.
+        for item, rm, val in rp.items_plant_all_months(cur, db_items + ["Conversion"], "SAIL"):
             if val is not None:
                 sail_direct.setdefault(item, {})[rm] = val
     conn.close()
@@ -111,9 +112,11 @@ def get_trend_data(basis: str, group: str) -> dict:
             # page7_13.py's _live_sum_or_sail_fallback / prefer_live_sum,
             # since Finished Steel's stored SAIL row goes stale the moment
             # a constituent plant's own figure is corrected afterwards.
-            if all(v is not None for v in plant_vals):
-                return sum(plant_vals)
-            return direct
+            # Plus the SAIL-level Conversion figure (data from 2024-04), the
+            # same rule as report pages 3, 4 and 11.
+            fs = sum(plant_vals) if all(v is not None for v in plant_vals) else direct
+            conv = sail_direct.get("Conversion", {}).get(month)
+            return fs if fs is None or conv is None else fs + conv
         return direct if direct is not None else live
 
     def year_incomplete(item, months):
