@@ -473,6 +473,7 @@ from api_mines_performance import router as mines_performance_router
 from api_rmt_plan import router as rmt_plan_router
 from api_cost_production import router as cost_production_router
 from api_mines_group_wise import router as mines_group_wise_router
+from api_mines_sales_booking import router as mines_sales_booking_router
 from api_rsp_bf_glance import router as rsp_bf_glance_router
 from api_bsp_techno import router as bsp_techno_router
 from api_bsp_bf_techno import router as bsp_bf_techno_router
@@ -986,6 +987,7 @@ app.include_router(mines_performance_router)
 app.include_router(rmt_plan_router)
 app.include_router(cost_production_router)
 app.include_router(mines_group_wise_router)
+app.include_router(mines_sales_booking_router)
 app.include_router(rsp_bf_glance_router)
 app.include_router(bsp_techno_router)
 app.include_router(bsp_bf_techno_router)

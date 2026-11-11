@@ -36,6 +36,7 @@ export const ENTRY_GROUPS = [
     tabs: [
       { id: 'sail-mines', label: 'SAIL Mines (Page 4.5)', description: 'Monthly actual and plan for coal mines, washery, coal despatch and flux.' },
       { id: 'mines-production-despatch', label: 'Iron Ore Mines Production & Despatch', description: 'Mine-level fresh production and despatch by rail/road to captive, sales or pellet conversion.' },
+      { id: 'mines-sales-booking', label: 'Sale Booking & Despatch (FY)', description: 'Iron ore sales to 3rd party for a whole FY: Plan (booking = despatch), actual booking and actual sale despatch by Rail / Road, month-wise.' },
     ],
   },
   {

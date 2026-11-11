@@ -25,6 +25,7 @@ const FORMS = {
   'co2-water-pm-manual': dynamic(() => import('./co2-water-pm-manual/Form'), { loading }),
   'sail-mines': dynamic(() => import('./sail-mines/Form'), { loading }),
   'mines-production-despatch': dynamic(() => import('./mines-production-despatch/Form'), { loading }),
+  'mines-sales-booking': dynamic(() => import('./mines-sales-booking/Form'), { loading }),
   'special-steel': dynamic(() => import('./special-steel/Form'), { loading }),
   'special-steel-grade-clubs': dynamic(() => import('./special-steel-grade-clubs/Form'), { loading }),
   'special-steel-physical': dynamic(() => import('./special-steel-physical/Form'), { loading }),

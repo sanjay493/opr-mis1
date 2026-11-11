@@ -303,6 +303,96 @@ def save_mines_production_despatch_monthly(
     return saved
 
 
+def get_sales_booking_fy(report_months: List[str]) -> Dict[str, Any]:
+    """Sales (3rd party) booking and despatch for a FY's months, flat rows
+    for the Mines Sales Booking entry grid:
+        {"plan": [{report_month, mine_code, material_code, qty}],
+         "booking_actual": [{report_month, mine_code, material_code, transport_mode, qty}],
+         "despatch_actual": [... same, end_use_code = 'SALES']}
+    The plan is the booking plan (mine_booked_qty_plan_monthly); the Sales
+    despatch plan is kept equal to it (save_sales_booking_fy)."""
+    out = {"plan": [], "booking_actual": [], "despatch_actual": []}
+    if not report_months:
+        return out
+    ph = ",".join(["%s"] * len(report_months))
+    with rc.cursor() as cur:
+        cur.execute(f"SELECT report_month, mine_code, material_code, qty_plan "
+                    f"FROM mine_booked_qty_plan_monthly WHERE report_month IN ({ph}) "
+                    f"ORDER BY report_month, mine_code, material_code", report_months)
+        out["plan"] = [{"report_month": r[0], "mine_code": r[1], "material_code": r[2], "qty": r[3]}
+                       for r in cur.fetchall()]
+        for key, sql in (
+            ("booking_actual", f"SELECT report_month, mine_code, material_code, transport_mode, qty_actual "
+                               f"FROM mine_booked_qty_actual_monthly WHERE report_month IN ({ph}) "
+                               f"ORDER BY report_month, mine_code, material_code, transport_mode"),
+            ("despatch_actual", f"SELECT report_month, mine_code, material_code, transport_mode, qty_actual "
+                                f"FROM mine_despatch_actual_monthly "
+                                f"WHERE report_month IN ({ph}) AND end_use_code = 'SALES' "
+                                f"ORDER BY report_month, mine_code, material_code, transport_mode"),
+        ):
+            cur.execute(sql, report_months)
+            out[key] = [{"report_month": r[0], "mine_code": r[1], "material_code": r[2],
+                         "transport_mode": r[3], "qty": r[4]} for r in cur.fetchall()]
+    return out
+
+
+def save_sales_booking_fy(kind: str, entries: List[Dict[str, Any]]) -> int:
+    """Upsert changed cells of the Mines Sales Booking grid, one kind per
+    call. entries: {report_month, mine_code, material_code, qty[, transport_mode]}
+    (qty None clears the cell).
+      "plan"            booking plan AND the Sales despatch plan (same figure)
+      "booking_actual"  mine_booked_qty_actual_monthly, by transport mode
+      "despatch_actual" mine_despatch_actual_monthly, end_use_code 'SALES'"""
+    if kind not in ("plan", "booking_actual", "despatch_actual"):
+        raise ValueError(f"unknown kind {kind!r}")
+    conn = connect()
+    try:
+        cur = conn.cursor()
+        saved = 0
+        _ver.bump(cur)
+        current = []        # (v2 constraint, master table, column, value) of the row being written
+        with _keys.v1_fk_errors(_V1_FKS, lambda: _first_failing(cur, current)):
+            for e in entries:
+                month = _keys.fit_month(e["report_month"])
+                mine, material, qty = e["mine_code"], e["material_code"], e.get("qty")
+                _month_for_write(cur, month)
+                if kind == "plan":
+                    current[:] = _fk_checks("booked_plan", mine, material)
+                    cur.execute("""
+                        INSERT INTO mine_booked_qty_plan_monthly (report_month, mine_code, material_code, qty_plan)
+                        VALUES (%s, %s, %s, %s)
+                        AS new ON DUPLICATE KEY UPDATE qty_plan = new.qty_plan
+                    """, (month, mine, material, qty))
+                    current[:] = _fk_checks("desp_plan", mine, material, "SALES")
+                    cur.execute("""
+                        INSERT INTO mine_despatch_plan_monthly
+                            (report_month, mine_code, material_code, end_use_code, qty_plan)
+                        VALUES (%s, %s, %s, 'SALES', %s)
+                        AS new ON DUPLICATE KEY UPDATE qty_plan = new.qty_plan
+                    """, (month, mine, material, qty))
+                elif kind == "booking_actual":
+                    current[:] = _fk_checks("booked_act", mine, material)
+                    cur.execute("""
+                        INSERT INTO mine_booked_qty_actual_monthly
+                            (report_month, mine_code, material_code, transport_mode, qty_actual)
+                        VALUES (%s, %s, %s, %s, %s)
+                        AS new ON DUPLICATE KEY UPDATE qty_actual = new.qty_actual
+                    """, (month, mine, material, e["transport_mode"], qty))
+                else:
+                    current[:] = _fk_checks("desp_act", mine, material, "SALES")
+                    cur.execute("""
+                        INSERT INTO mine_despatch_actual_monthly
+                            (report_month, mine_code, material_code, transport_mode, end_use_code, qty_actual)
+                        VALUES (%s, %s, %s, %s, 'SALES', %s)
+                        AS new ON DUPLICATE KEY UPDATE qty_actual = new.qty_actual
+                    """, (month, mine, material, e["transport_mode"], qty))
+                saved += 1
+        conn.commit()
+    finally:
+        conn.close()
+    return saved
+
+
 # The group rollups below are v1's code with the v2 table names; the
 # statements' row order (GROUP BY report_month, group_code) is explicit.
 _PROD_SUMS = """
