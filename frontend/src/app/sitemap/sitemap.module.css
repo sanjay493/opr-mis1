@@ -1,0 +1,85 @@
+/* The body doesn't scroll (globals.css); like wb.module.css's shell, the
+   area under the navbar does. */
+.shell {
+  height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+  background: var(--ui-bg); font-family: var(--ui-font); color: var(--ui-text);
+}
+.scroll { flex: 1; min-height: 0; overflow-y: auto; }
+.page { max-width: 1600px; margin: 0 auto; padding: 24px 32px 48px; }
+
+.head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+.title { margin: 0; font-size: 22px; font-weight: 800; }
+.sub { margin: 4px 0 0; color: var(--ui-text-secondary); font-size: 13px; }
+.tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.search {
+  width: 240px; max-width: 100%; padding: 7px 10px; font: inherit; font-size: 13px;
+  border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm); background: var(--ui-surface); color: var(--ui-text);
+}
+.search:focus { outline: 2px solid var(--ui-primary); outline-offset: -1px; }
+.btn {
+  padding: 7px 12px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  border: 1px solid var(--ui-border); border-radius: var(--ui-radius-sm); background: var(--ui-surface); color: var(--ui-text);
+}
+.btn:hover { background: var(--ui-bg-subtle); }
+
+/* Root, then a rule the section cards hang from. */
+.rootRow { display: flex; justify-content: center; position: relative; padding-bottom: 18px; }
+.rootRow::after { content: ''; position: absolute; left: 50%; bottom: 0; height: 18px; border-left: 2px solid var(--ui-primary); }
+.root {
+  display: inline-flex; gap: 8px; align-items: center; padding: 10px 20px; border-radius: 999px;
+  background: var(--ui-primary); color: #fff; font-weight: 800; font-size: 15px; text-decoration: none;
+  box-shadow: var(--ui-shadow-sm);
+}
+.root:hover { background: var(--ui-primary-hover); }
+
+.grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 16px; align-items: start;
+  border-top: 2px solid var(--ui-primary); padding-top: 18px;
+}
+.card {
+  position: relative; background: var(--ui-surface); border: 1px solid var(--ui-border); border-radius: var(--ui-radius-lg);
+  box-shadow: var(--ui-shadow-sm); padding: 12px 14px 14px; min-width: 0;
+}
+.card::before { content: ''; position: absolute; left: 50%; top: -19px; height: 18px; border-left: 2px solid var(--ui-primary); }
+
+/* Tree with connector lines: each child has an elbow from its parent's rail. */
+.tree, .children { list-style: none; margin: 0; padding: 0; }
+.children { margin-left: 10px; padding-left: 14px; }
+.children > .item { position: relative; }
+.children > .item::before {
+  content: ''; position: absolute; left: -14px; top: 0; bottom: 0; border-left: 1px solid var(--ui-border);
+}
+.children > .item:last-child::before { bottom: auto; height: 15px; }
+.children > .item::after {
+  content: ''; position: absolute; left: -14px; top: 15px; width: 12px; border-top: 1px solid var(--ui-border);
+}
+
+.row { display: flex; align-items: center; gap: 4px; min-height: 30px; }
+.twist {
+  width: 18px; height: 18px; flex: none; padding: 0; border: 0; background: none; cursor: pointer;
+  color: var(--ui-text-tertiary); font-size: 12px; line-height: 18px;
+}
+.twist:hover { color: var(--ui-primary); }
+.twistGap { width: 18px; flex: none; }
+
+.node {
+  display: inline-flex; gap: 6px; align-items: center; min-width: 0; padding: 3px 8px; border-radius: var(--ui-radius-sm);
+  font-size: 13px; line-height: 1.35; color: var(--ui-primary); text-decoration: none; overflow-wrap: anywhere;
+}
+a.node:hover { background: var(--ui-primary-subtle); text-decoration: underline; }
+.nodeGroup { color: var(--ui-text-secondary); font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+.nodeTop { font-size: 15px; font-weight: 800; text-transform: none; letter-spacing: 0; color: var(--ui-text); }
+a.nodeTop { color: var(--ui-text); }
+.hit { background: var(--ui-warning-bg); }
+.icon { flex: none; }
+.badge {
+  flex: none; margin-left: 2px; padding: 0 6px; border-radius: 999px; font-size: 11px; font-weight: 700;
+  background: var(--ui-bg-subtle); color: var(--ui-text-tertiary);
+}
+.empty { text-align: center; color: var(--ui-text-secondary); padding: 32px 0; }
+
+@media (max-width: 700px) {
+  .page { padding: 16px; }
+  .grid { grid-template-columns: 1fr; }
+  .search { width: 100%; }
+}

@@ -8,19 +8,21 @@ import TechnoDashboardView from '@/components/techno/TechnoDashboardView';
 import TechnoCustomView from '@/components/techno/TechnoCustomView';
 import TechnoVerificationView from '@/components/techno/TechnoVerificationView';
 import TechnoBfFurnaceView from '@/components/techno/TechnoBfFurnaceView';
+import { TECHNO_TABS as TAB_LIST } from '@/components/techno/technoTabs';
 import s from '@/components/reports/ReportTabs.module.css';
 import wb from '@/styles/wb.module.css';
 
 // One page for every techno report. The old per-report URLs
 // (/reports/techno-monthly, -dashboard, -custom, -verification, -bf-furnace)
 // redirect here with ?tab=<id>, so bookmarks keep working.
-const TECHNO_TABS = [
-  { id: 'monthly', label: 'Plant-wise Monthly', icon: '⚙️', Component: TechnoMonthlyView },
-  { id: 'dashboard', label: 'Trend Dashboard', icon: '🔬', Component: TechnoDashboardView },
-  { id: 'custom', label: 'Custom Report', icon: '🧮', Component: TechnoCustomView },
-  { id: 'verification', label: 'Verification', icon: '✅', Component: TechnoVerificationView },
-  { id: 'bf-furnace', label: 'BF Furnace-wise', icon: '🌋', Component: TechnoBfFurnaceView },
-];
+const VIEWS = {
+  'monthly': TechnoMonthlyView,
+  'dashboard': TechnoDashboardView,
+  'custom': TechnoCustomView,
+  'verification': TechnoVerificationView,
+  'bf-furnace': TechnoBfFurnaceView,
+};
+const TECHNO_TABS = TAB_LIST.map((t) => ({ ...t, Component: VIEWS[t.id] }));
 const TAB_IDS = new Set(TECHNO_TABS.map((t) => t.id));
 
 function TechnoReports() {
