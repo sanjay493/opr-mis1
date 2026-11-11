@@ -31,10 +31,15 @@ export function HardKey() {
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const PERIOD_ENDS = [4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3];
 
+// Rounded half up like the backend's techno pages (page_techno._round_half_up:
+// Decimal(str(v)), ROUND_HALF_UP) and the PDF of these annexures: 6.095 ->
+// 6.10, as Excel shows it; toFixed alone gives 6.09 (binary 6.0949999...).
 export function fmt(v, dp = 0) {
   if (v == null) return '';
   if (typeof v === 'string') return v;
-  const s = Number(v).toFixed(dp);
+  const n = Number(v);
+  const r = Math.round(Number(`${Math.abs(n)}e${dp}`));
+  const s = Number.isFinite(r) ? (Math.sign(n) * Number(`${r}e-${dp}`)).toFixed(dp) : n.toFixed(dp);
   return /^-0(\.0+)?$/.test(s) ? s.slice(1) : s;
 }
 

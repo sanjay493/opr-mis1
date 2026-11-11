@@ -17,6 +17,7 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
 from colors_loader import load_colors_config
+from page_techno import _round_half_up
 
 SHEET_NAMES = {
     "production_performance": "hisparlia",
@@ -34,9 +35,11 @@ PP_FIELDS = ["cap", "app", "mou", "actual", "ful_app", "ful_mou", "gr", "cu"]
 # ── display rules (shared by Excel and PDF) ──────────────────────────────────
 
 def fmt(v, dp=0):
+    """Rounded half up like the techno pages (page_techno._round_half_up):
+    6.095 -> 6.10, as Excel shows it."""
     if v is None:
         return ""
-    s = f"{v:.{dp}f}"
+    s = f"{_round_half_up(float(v), dp):f}"
     return s[1:] if s.startswith("-") and not s.strip("-0.") else s
 
 
