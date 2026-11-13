@@ -5,7 +5,7 @@ BSL Techno Extractor — Extracts from two file sources:
 
 Both save to the techno_data table with plant='BSL'.
 Unit names follow the same convention as RSP/BSP/ISP/DSP:
-  BF_Shop, BF-1/BF-2/BF-4/BF-5, Coke Ovens, Sinter, SMS-I, SMS-II, General, CRM 1&2, CRM 3
+  BF_Shop, BF-1/BF-2/BF-3/BF-4/BF-5, Coke Ovens, Sinter, SMS-I, SMS-II, General, CRM 1&2, CRM 3
 """
 
 import re

@@ -757,9 +757,12 @@ _TECHNO_PARAM_MAP = [
 #   rows 34-42   (per-furnace BF table): mon/cum columns adjacent, per param
 #   rows 48-93   (particulars table 2): mon_col=8, cum_col=10
 #
-# FCE 3 / BF-3 is intentionally excluded: its cells hold obvious placeholder
-# values (e.g. repeated "7") rather than real readings, consistent with BF-3
-# not being an operating furnace in BSL's current PDF-based BF reporting.
+# Furnaces that aren't operating carry placeholder values instead of real
+# readings: a bare "7" in every numeric cell (and "15" in Not Dry Cast) — e.g.
+# FCE 3 / BF-3 up to Jun'26 (re-lit Jul'26), and FCE 5 / BF-5's month columns
+# from Oct'26 once it was blown down (its till-month cumulative stays real).
+# All five furnaces are mapped; _fax_furnace_idle() decides per furnace and
+# per period (month / cum) whether the row holds data — see its docstring.
 # ---------------------------------------------------------------------------
 _FAX_SHEET = "FAX GM OPRN"
 
@@ -769,6 +772,7 @@ _FAX_SINGLE_PARAM_MAP = [
     (22,  7,  9, 1.0, "IRON_MAKING", "Nut Coke",              "BSL",                    "Kg/THM"),
     (23,  7,  9, 1.0, "IRON_MAKING", "BF-1",                  "CDI",                    "Kg/THM"),
     (24,  7,  9, 1.0, "IRON_MAKING", "BF-2",                  "CDI",                    "Kg/THM"),
+    (25,  7,  9, 1.0, "IRON_MAKING", "BF-3",                  "CDI",                    "Kg/THM"),
     (26,  7,  9, 1.0, "IRON_MAKING", "BF-4",                  "CDI",                    "Kg/THM"),
     (27,  7,  9, 1.0, "IRON_MAKING", "BF-5",                  "CDI",                    "Kg/THM"),
     (29,  7,  9, 1.0, "IRON_MAKING", "Tar Injection",         "BSL",                    "Kg/THM"),
@@ -803,8 +807,7 @@ _FAX_SINGLE_PARAM_MAP = [
 ]
 
 # Per-furnace BF dimension/quality table (rows 37-42); month/cum columns are
-# adjacent pairs here, one pair per parameter. FCE 3 (row 39) excluded — see
-# note above.
+# adjacent pairs here, one pair per parameter.
 #
 # NOTE: columns 2-3 and 4-5 are NOT furnace volume dimensions despite the
 # sheet's original "Useful Volume"/"Working Volume" column headers — their
@@ -813,7 +816,11 @@ _FAX_SINGLE_PARAM_MAP = [
 # computed on a useful/working-volume basis, so they're labelled and unit'd
 # accordingly here (see bsl_technopara_extractor.py's _BF_KEY_NORM for how
 # the working-volume figure folds onto the shared "bf_productivity" key).
-_FAX_BF_FURNACE_ROWS = {37: "BF-1", 38: "BF-2", 40: "BF-4", 41: "BF-5", 42: "BF_Shop"}
+_FAX_BF_FURNACE_ROWS = {37: "BF-1", 38: "BF-2", 39: "BF-3", 40: "BF-4", 41: "BF-5", 42: "BF_Shop"}
+# Per-furnace CDI rows in the particulars table -> that furnace's row in the
+# table above, whose Productivity cell says whether the furnace operated.
+_FAX_CDI_FURNACE_ROW = {23: 37, 24: 38, 25: 39, 26: 40, 27: 41}
+_FAX_IDLE_PLACEHOLDER = 7.0
 _FAX_BF_FURNACE_PARAMS = [
     # mon_col, cum_col, parameter,                    unit
     (2,   3,   "BF Productivity (Useful Volume)",  "T/m³/day"),
@@ -822,6 +829,21 @@ _FAX_BF_FURNACE_PARAMS = [
     (8,   9,   "Coke Rate",                        "Kg/THM"),
     (10,  11,  "Not Dry Cast",                     "%"),
 ]
+
+
+def _fax_furnace_idle(fax_ws, furnace_row: int) -> tuple:
+    """(month_idle, cum_idle) for one furnace row of FAX GM OPRN's
+    per-furnace table, judged from its Useful-Volume Productivity cells
+    (cols B/C). A non-operating furnace's cells hold the placeholder 7 —
+    never a real productivity (~0.6-2.3 T/m³/day) — or are blank / "-" / 0.
+    Its other cells can't be judged on their own (Not Dry Cast shows "15",
+    CDI a plausible-looking 7), so the whole period is blanked from this one
+    test. A furnace blown down mid-year (BF-5 from Oct'26) is idle for the
+    month but keeps a real cumulative."""
+    def idle(col):
+        v = _cell_float(fax_ws, furnace_row, col)
+        return v is None or v <= 0 or v == _FAX_IDLE_PLACEHOLDER
+    return idle(2), idle(3)
 
 # ---------------------------------------------------------------------------
 # Sheet4 iron-making block (Sinter/Pellet in Burden, O2 Enrichment, Coke
@@ -3121,7 +3143,7 @@ def extract_preview(file_path: str, report_month: str, all_months: bool = False)
             logger.warning(
                 "BSL techno: %r sheet reports %s but upload is for %s — "
                 "skipping its rows (incl. the ONLY source of per-furnace "
-                "BF-1/2/4/5 Coke Rate/Hot Blast Temp/Productivity/CDI) "
+                "BF-1..5 Coke Rate/Hot Blast Temp/Productivity/CDI) "
                 "rather than attaching stale data to the wrong month.",
                 _FAX_SHEET, _fmt_month(fax_month), _fmt_month(db_month))
 
@@ -3129,9 +3151,10 @@ def extract_preview(file_path: str, report_month: str, all_months: bool = False)
         fax_ws = wb[_FAX_SHEET]
         fax_idx = len(rows_out)
 
-        def _fax_row(row, mon_col, cum_col, mult, group, section, param, unit, idx):
-            actual_raw = _cell_float(fax_ws, row, mon_col)
-            cum_raw    = _cell_float(fax_ws, row, cum_col)
+        def _fax_row(row, mon_col, cum_col, mult, group, section, param, unit, idx,
+                     idle=(False, False)):
+            actual_raw = None if idle[0] else _cell_float(fax_ws, row, mon_col)
+            cum_raw    = None if idle[1] else _cell_float(fax_ws, row, cum_col)
             actual = round(actual_raw * mult, 4) if actual_raw is not None else None
             cum    = round(cum_raw   * mult, 4) if cum_raw    is not None else None
             mon_ltr = get_column_letter(mon_col)
@@ -3159,12 +3182,16 @@ def extract_preview(file_path: str, report_month: str, all_months: bool = False)
             }
 
         for row, mon_col, cum_col, mult, group, section, param, unit in _FAX_SINGLE_PARAM_MAP:
-            rows_out.append(_fax_row(row, mon_col, cum_col, mult, group, section, param, unit, fax_idx))
+            furnace_row = _FAX_CDI_FURNACE_ROW.get(row)
+            idle = _fax_furnace_idle(fax_ws, furnace_row) if furnace_row else (False, False)
+            rows_out.append(_fax_row(row, mon_col, cum_col, mult, group, section, param, unit, fax_idx, idle))
             fax_idx += 1
 
         for row, unit_name in _FAX_BF_FURNACE_ROWS.items():
+            # BF_Shop (OVERALL) is the shop average, never idle.
+            idle = _fax_furnace_idle(fax_ws, row) if unit_name != "BF_Shop" else (False, False)
             for mon_col, cum_col, param, unit in _FAX_BF_FURNACE_PARAMS:
-                rows_out.append(_fax_row(row, mon_col, cum_col, 1.0, "IRON_MAKING", unit_name, param, unit, fax_idx))
+                rows_out.append(_fax_row(row, mon_col, cum_col, 1.0, "IRON_MAKING", unit_name, param, unit, fax_idx, idle))
                 fax_idx += 1
     elif _FAX_SHEET not in wb.sheetnames:
         logger.info("BSL techno: sheet %r not found — skipping FAX GM OPRN extras", _FAX_SHEET)
