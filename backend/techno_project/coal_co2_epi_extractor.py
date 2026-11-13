@@ -172,6 +172,77 @@ def _norm(s: str) -> str:
     return s.replace("\u2019", "'")
 
 
+_FY_LABEL_RE = re.compile(r"^(\d{4})-(\d{2})$")
+_CUM_LABEL_RE = re.compile(r"^Apr\.?\s*-\s*([A-Za-z]{3})'(\d{2})$", re.IGNORECASE)
+_MON_LABEL_RE = re.compile(r"^([A-Za-z]{3})'(\d{2})$")
+
+
+def _classify_period_label(label: str, group_label: str = ""):
+    """One wide-table period header -> (report_month, field), or None for a
+    non-period column. Shared by extract_xlsx and _extract_docx_major_epis,
+    whose header text varies release to release ("Apr.- Jul'26",
+    "Apr.-Aug'26", "Apr-Oct'26" for the same FY-cumulative column), so it's
+    matched by pattern rather than one exact spelling:
+      "Oct'26"                -> ("2026-10", "month")
+      "Apr-Oct'26"            -> ("2026-10", "till_month")
+      "2025-26" under Actual  -> ("2026-03", "till_month")  (FY total = March's till-month)
+      "2026-27" under Target  -> ("2026-27", "target")
+    group_label is the header cell above (e.g. "Actual"/"Target")."""
+    label = _norm(label or "").strip()
+    m = _FY_LABEL_RE.match(label)
+    if m:
+        fy = int(m.group(1))
+        if "target" in (group_label or "").lower():
+            return label, "target"
+        return f"{fy + 1}-03", "till_month"
+    m = _CUM_LABEL_RE.match(label)
+    if m:
+        mon = _MONTH_NUM.get(m.group(1).lower())
+        return (f"{2000 + int(m.group(2))}-{mon:02d}", "till_month") if mon else None
+    m = _MON_LABEL_RE.match(label)
+    if m:
+        mon = _MONTH_NUM.get(m.group(1).lower())
+        return (f"{2000 + int(m.group(2))}-{mon:02d}", "month") if mon else None
+    return None
+
+
+def _period_columns(header_cells: dict, group_cells: dict, report_month: str) -> dict:
+    """{col: header text}, {col: group-header text} -> {col: (report_month,
+    field)} for every period column, keeping only the report month's own FY
+    target column. Raises if report_month's own month column is missing (the
+    wrong month was selected for this file)."""
+    year, mon_num = report_month.split("-")
+    fy = int(year) if int(mon_num) >= 4 else int(year) - 1
+    target_label = f"{fy}-{(fy + 1) % 100:02d}"
+    cols = {}
+    for c, text in header_cells.items():
+        got = _classify_period_label(text, group_cells.get(c, ""))
+        if got is None:
+            continue
+        if got[1] == "target":
+            if got[0] != target_label:
+                continue
+            got = (report_month, "target")
+        cols[c] = got
+    if (report_month, "month") not in cols.values():
+        raise ValueError(
+            f"'{mlabel_from_report_month(report_month)}' column not found \u2014 "
+            f"check the selected month matches the uploaded file")
+    return cols
+
+
+def _periods_from_parsed(parsed_blocks: list, cols: dict) -> dict:
+    """[{col: {plant: val}} per ENVIRO_PARAM_ORDER block], {col: (rm, field)}
+    -> {rm: {key: {field: {plant: val}}}} - the multi-month shape extract_xlsx
+    and _extract_docx_major_epis return."""
+    out = {}
+    for (key, _label, _jk), block in zip(ENVIRO_PARAM_ORDER, parsed_blocks):
+        for c, (rm, field) in cols.items():
+            vals = block.get(c) or {}
+            out.setdefault(rm, {}).setdefault(key, {}).setdefault(field, {}).update(vals)
+    return out
+
+
 def _words(page):
     return [(w[0], w[1], w[2], w[3], _norm(w[4])) for w in page.get_text("words")]
 
@@ -388,25 +459,22 @@ def _extract_docx_major_epis(table, report_month: str, mlabel: str) -> dict:
     """Extract from the newer "Major EPIs" .docx format (seen starting
     Aug'26) - the same underlying "Major Environmental Performance
     Indicators (EPIs)" report as the old PDF/xlsx formats, just delivered as
-    a single wide Word table instead: one column per period, located by its
-    own header text in row 2 (0-indexed 1) - e.g. "Aug'26" (month),
-    "Apr.-Aug'26" (FY-cumulative, no space after the dash - unlike
-    extract_xlsx's "Apr.- <mlabel>"), "2026-27" (annual target) - column
-    position isn't fixed, same resilience approach as extract_xlsx. Row
-    layout: 3 fixed parameter blocks (Sp. CO2 Emission, Sp. Water
-    Consumption, Sp. PM Emission, same ENVIRO_PARAM_ORDER as every other
-    format), each with exactly 6 plant rows (BSP/DSP/RSP/BSL/ISP/SAIL, in
-    that order) located by its own "BSP" cell in the Plant column, mirroring
-    extract_xlsx's _xlsx_block_starts. Unlike the old "EMD Flash Report"
-    .docx, this format DOES carry Sp. PM Emission.
+    a single wide Word table instead: one column per period, its header text
+    in row 2 (0-indexed 1) under an "Actual"/"Target" group row - e.g.
+    "2024-25"/"2025-26" (FY actuals), "2026-27" (annual target), "Apr'26" ..
+    "Oct'26" (every month of the FY so far), "Oct'25" (Comparable-Prior-Year
+    month), "Apr-Oct'26"/"Apr-Oct'25" (FY-cumulatives; spelt "Apr.-Aug'26" in
+    earlier releases). Columns are classified by _classify_period_label, not
+    by position or one exact spelling. Row layout: 3 fixed parameter blocks
+    (Sp. CO2 Emission, Sp. Water Consumption, Sp. PM Emission, same
+    ENVIRO_PARAM_ORDER as every other format), each with exactly 6 plant rows
+    (BSP/DSP/RSP/BSL/ISP/SAIL, in that order) located by its own "BSP" cell
+    in the Plant column, mirroring extract_xlsx's _xlsx_block_starts.
 
-    The table also carries a Comparable-Prior-Year month column (e.g.
-    "Aug'25") and its own FY-cumulative ("Apr.-Aug'25") — same
-    year-over-year comparison extract_xlsx's workbook carries, so this
-    returns both report_month's and cply_report_month's figures in one
-    pass, same shape/reasoning as extract_xlsx.
+    Every period column is returned, keyed by the month it belongs to (an FY
+    actual lands in that FY's March as till_month):
     -> {report_month: {"co2": {"month":.., "till_month":.., "target":..}, "water":.., "pm":..},
-        cply_report_month: {"co2": {"month":.., "till_month":..}, "water":.., "pm":..}}"""
+        <other month>: {"co2": {"month":..} and/or {"till_month":..}, ...}, ...}"""
     n_rows, n_cols = len(table.rows), len(table.columns)
 
     def cell(r, c):
@@ -421,31 +489,10 @@ def _extract_docx_major_epis(table, report_month: str, mlabel: str) -> dict:
         raise ValueError(
             f"'{mlabel}' column not found — check the selected month matches the uploaded file")
 
-    def find_col(label):
-        for c in range(n_cols):
-            if cell(header_row, c) == label:
-                return c
-        return None
-
-    year, mon_num = report_month.split("-")
-    mon_num = int(mon_num)
-    fy = int(year) if mon_num >= 4 else int(year) - 1
-    target_label = f"{fy}-{(fy + 1) % 100:02d}"
-    cply_report_month = cply_report_month_from(report_month)
-    cply_mlabel = mlabel_from_report_month(cply_report_month)
-    # April has no "Apr.-Apr'YY" cumulative column (same edge case as
-    # till_mlabel_from_report_month) - cumulative simply isn't read for an
-    # April report_month.
-    till_label = f"Apr.-{mlabel}" if mon_num != 4 else None
-    cply_till_label = f"Apr.-{cply_mlabel}" if mon_num != 4 else None
-
-    cols = {
-        "month":      find_col(mlabel),
-        "cply_month": find_col(cply_mlabel),
-        "till_month": find_col(till_label) if till_label else None,
-        "cply_till":  find_col(cply_till_label) if cply_till_label else None,
-        "target":     find_col(target_label),
-    }
+    cols = _period_columns(
+        {c: cell(header_row, c) for c in range(2, n_cols)},
+        {c: cell(header_row - 1, c) for c in range(2, n_cols)} if header_row > 0 else {},
+        report_month)
 
     plants_seq = PLANTS + ["SAIL"]
     block_starts = [r for r in range(n_rows) if cell(r, 1) == "BSP"]
@@ -455,32 +502,23 @@ def _extract_docx_major_epis(table, report_month: str, mlabel: str) -> dict:
             f"Plant column), found {len(block_starts)} in this .docx table")
 
     def parse_block(start_row):
-        out = {k: {} for k in cols}
+        out = {c: {} for c in cols}
         for i, plant in enumerate(plants_seq):
             r = start_row + i
             got = cell(r, 1) if r < n_rows else None
             if got != plant:
                 raise ValueError(
                     f"unexpected plant label {got!r} at row {r} (expected {plant!r})")
-            for key, col in cols.items():
-                if col is None:
-                    continue
+            for col in cols:
                 v = cell(r, col)
                 if v:
                     try:
-                        out[key][plant] = float(v)
+                        out[col][plant] = float(v)
                     except ValueError:
                         pass
         return out
 
-    enviro_cur, enviro_cply = {}, {}
-    for (key, _label, _jk), start_row in zip(ENVIRO_PARAM_ORDER, block_starts):
-        parsed = parse_block(start_row)
-        enviro_cur[key]  = {"month": parsed["month"],      "till_month": parsed["till_month"],
-                             "target": parsed["target"]}
-        enviro_cply[key] = {"month": parsed["cply_month"], "till_month": parsed["cply_till"]}
-
-    return {report_month: enviro_cur, cply_report_month: enviro_cply}
+    return _periods_from_parsed([parse_block(r) for r in block_starts], cols)
 
 
 def _extract_docx_flash_report(table, report_month: str, mlabel: str) -> dict:
@@ -591,16 +629,18 @@ def _xlsx_block_starts(ws, plant_col: int = 2, label: str = "BSP") -> list:
 def extract_xlsx(xlsx_path, report_month: str, mlabel: str) -> dict:
     """Extract from the "Major EPIs <Mon>'<YY>.xlsx" workbook — a different
     source format from the PDF/.docx EMD reports above (single "Table 1"
-    sheet, one column per period located by its own header text in row 4,
-    e.g. "Jul'26"/"Jul'25"/"Apr.- Jul'26"/"Apr.- Jul'25" — column position
-    isn't fixed, the sheet just grows another month-column each release,
-    same resilience approach as the PDF/docx paths above).
+    sheet, one column per period with its header text in row 4 under an
+    "Actual"/"Target" group row 3, e.g. "2024-25"/"2025-26" (FY actuals),
+    "2026-27" (target), "Apr'26".."Jul'26", "Jul'25", "Apr.- Jul'26",
+    "Apr.- Jul'25" — column position isn't fixed, the sheet just grows
+    another month-column each release; columns are classified by
+    _classify_period_label, same as the "Major EPIs" .docx).
 
-    Unlike the PDF/docx reports (one file = one month), this workbook carries
-    BOTH the current month AND the same month last year side by side in the
-    same row (its own year-over-year comparison), plus each one's own
-    Apr-to-month cumulative column — so a single call here extracts TWO
-    report_months worth of data at once, keyed by report_month string.
+    Unlike the PDF/docx Flash reports (one file = one month), this workbook
+    carries every month of the FY so far, the same month last year, both
+    FY-cumulatives and the previous FYs' totals — so a single call here
+    extracts several report_months' worth of data at once, keyed by
+    report_month string (an FY total lands in that FY's March as till_month).
 
     Row layout: 3 fixed parameter blocks (Sp. CO2 Emission, Sp. Water
     Consumption, Sp. PM Emission — same ENVIRO_PARAM_ORDER as the other
@@ -614,12 +654,8 @@ def extract_xlsx(xlsx_path, report_month: str, mlabel: str) -> dict:
     so it isn't tied to RSP+BSL specifically if a future month merges a
     different pair.
 
-    No Target/Coal Consumption data is read here (this workbook's own
-    "Target 2026-27" column exists but isn't wired to techno_plant_plan —
-    only month/till_month is needed today).
-
-    -> {report_month: {key: {"month":{plant:val}, "till_month":{plant:val}}},
-        cply_report_month: {key: {...}}}
+    -> {report_month: {key: {"month":{plant:val}, "till_month":{plant:val}, "target":{..}}},
+        <other month>: {key: {...}}, ...}
     (key = "co2"/"water"/"pm", same as every other extract_* here)."""
     import openpyxl
     wb = openpyxl.load_workbook(xlsx_path, data_only=True)
@@ -636,26 +672,12 @@ def extract_xlsx(xlsx_path, report_month: str, mlabel: str) -> dict:
             f"'{mlabel}' column not found in {xlsx_path} — "
             f"check the selected month matches the uploaded file")
 
-    mon_num = int(report_month.split("-")[1])
-    cply_report_month = cply_report_month_from(report_month)
-    cply_mlabel = mlabel_from_report_month(cply_report_month)
-    # April has no "Apr.- Apr'YY" cumulative column in this workbook (same
-    # edge case as till_mlabel_from_report_month above) — cumulative simply
-    # isn't extracted for an April report_month.
-    till_label      = f"Apr.- {mlabel}"      if mon_num != 4 else None
-    cply_till_label = f"Apr.- {cply_mlabel}" if mon_num != 4 else None
-
-    cols = {
-        "month":      _xlsx_find_col(ws, header_row, mlabel),
-        "cply_month": _xlsx_find_col(ws, header_row, cply_mlabel),
-        "till_month": _xlsx_find_col(ws, header_row, till_label) if till_label else None,
-        "cply_till":  _xlsx_find_col(ws, header_row, cply_till_label) if cply_till_label else None,
-    }
-    if cols["month"] is None:
-        raise ValueError(
-            f"'{mlabel}' column not found — check the selected month matches the uploaded file")
-    if cols["cply_month"] is None:
-        raise ValueError(f"comparable-prior-year column '{cply_mlabel}' not found in {xlsx_path}")
+    cols = _period_columns(
+        {c: _xlsx_norm(ws.cell(row=header_row, column=c).value).strip()
+         for c in range(3, ws.max_column + 1)},
+        {c: _xlsx_norm(ws.cell(row=header_row - 1, column=c).value).strip()
+         for c in range(3, ws.max_column + 1)} if header_row > 1 else {},
+        report_month)
 
     block_starts = _xlsx_block_starts(ws)
     if len(block_starts) != len(ENVIRO_PARAM_ORDER):
@@ -666,7 +688,7 @@ def extract_xlsx(xlsx_path, report_month: str, mlabel: str) -> dict:
     plants_seq = PLANTS + ["SAIL"]
 
     def parse_block(start_row):
-        out = {k: {} for k in cols}
+        out = {c: {} for c in cols}
         r, pi = start_row, 0
         while pi < len(plants_seq):
             label = _xlsx_norm(ws.cell(row=r, column=2).value).strip()
@@ -679,9 +701,7 @@ def extract_xlsx(xlsx_path, report_month: str, mlabel: str) -> dict:
                 raise ValueError(
                     f"unexpected plant label {label!r} at row {r} "
                     f"(expected {plants_seq[pi]!r}) in {xlsx_path}")
-            for key, col in cols.items():
-                if col is None:
-                    continue
+            for col in cols:
                 raw = ws.cell(row=r, column=col).value
                 if raw is None:
                     continue
@@ -690,20 +710,14 @@ def extract_xlsx(xlsx_path, report_month: str, mlabel: str) -> dict:
                     continue
                 for plant, part in zip(plants_here, parts):
                     try:
-                        out[key][plant] = float(part)
+                        out[col][plant] = float(part)
                     except ValueError:
                         pass
             pi += len(plants_here)
             r += 1
         return out
 
-    enviro_cur, enviro_cply = {}, {}
-    for (key, _label, _jk), start_row in zip(ENVIRO_PARAM_ORDER, block_starts):
-        parsed = parse_block(start_row)
-        enviro_cur[key]  = {"month": parsed["month"],      "till_month": parsed["till_month"]}
-        enviro_cply[key] = {"month": parsed["cply_month"], "till_month": parsed["cply_till"]}
-
-    return {report_month: enviro_cur, cply_report_month: enviro_cply}
+    return _periods_from_parsed([parse_block(r) for r in block_starts], cols)
 
 
 def load_xlsx(xlsx_path, report_month: str, write: bool = True) -> dict:
@@ -738,26 +752,29 @@ def extract_report(path, report_month: str, mlabel: str) -> dict:
     """Dispatches to the PDF, .docx or .xlsx extractor by file extension and
     normalizes their differing native return shapes into one envelope:
     -> {"enviro": {...report_month's own data...},
-        "cply": {"report_month": "YYYY-MM", "enviro": {...}} | None}
-    "enviro" has no "pm" key for the older "EMD Flash Report" .docx, and no
-    "target" key for .xlsx (see extract_xlsx's docstring) — the newer
-    "Major EPIs" .docx and old-style PDF have both;
+        "cply": {"report_month": "YYYY-MM", "enviro": {...}} | None,
+        "others": [{"report_month": "YYYY-MM", "enviro": {...}}, ...]}
+    "enviro" has no "pm" key for the older "EMD Flash Report" .docx.
     plant_techno_json()/plant_till_techno_json() treat every key as
     optional. "cply" carries the Comparable-Prior-Year month's figures
-    (same month, one year earlier) for the two formats that print it
-    alongside the current month (extract_xlsx, _extract_docx_major_epis) -
-    None for every other format, which prints only the current month."""
+    (same month, one year earlier) and "others" every further month the
+    file prints (earlier months of the FY, previous FYs' totals as their
+    March till_month), newest first — both only for the two wide-table
+    formats (extract_xlsx, _extract_docx_major_epis); None / [] for every
+    other format, which prints only the current month."""
     suffix = Path(path).suffix.lower()
     if suffix == ".docx":
         blob = extract_docx(path, report_month, mlabel)
     elif suffix in (".xlsx", ".xlsm"):
         blob = extract_xlsx(path, report_month, mlabel)
     else:
-        return {"enviro": extract_pdf(path, report_month, mlabel)["enviro"], "cply": None}
+        return {"enviro": extract_pdf(path, report_month, mlabel)["enviro"], "cply": None, "others": []}
 
-    cply_months = [rm for rm in blob if rm != report_month]
-    cply = {"report_month": cply_months[0], "enviro": blob[cply_months[0]]} if cply_months else None
-    return {"enviro": blob[report_month], "cply": cply}
+    cply_month = cply_report_month_from(report_month)
+    cply = {"report_month": cply_month, "enviro": blob[cply_month]} if cply_month in blob else None
+    others = [{"report_month": rm, "enviro": blob[rm]}
+              for rm in sorted(blob, reverse=True) if rm not in (report_month, cply_month)]
+    return {"enviro": blob[report_month], "cply": cply, "others": others}
 
 
 def plant_techno_json(enviro: dict, plant: str) -> dict:

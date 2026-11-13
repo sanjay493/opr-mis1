@@ -19,6 +19,9 @@ a Comparable-Prior-Year (CPLY) column alongside the current month — the
 same calendar month, one year earlier, plus its own FY-cumulative. /preview
 surfaces that as a second, independent record set (`cply`) the caller can
 choose to submit to /insert or not; the two are never merged automatically.
+Those same formats also print every earlier month of the FY and the
+previous FYs' totals; /preview returns each as its own group in `others`,
+and /insert saves only the ones submitted.
 
 Flow (mirrors /api/mcr-techno's tentative-data safeguard):
   1. POST /preview — extract for all 5 plants + FY targets (+ CPLY, when
@@ -90,16 +93,20 @@ def _build_plant_records(enviro: dict) -> list:
 
 
 def _existing_conflicts(report_month: str, plant_records: list) -> list:
-    """Plants whose extracted parameters already hold a value in techno_data
-    (unit='General') for this month."""
+    """Plants whose extracted month/till_month parameters already hold a
+    DIFFERENT value in techno_data (unit='General') for this month —
+    re-saving an identical figure isn't an overwrite, which matters now that
+    one wide-table upload can carry a dozen already-saved months."""
     conflicts = []
     for rec in plant_records:
-        existing = get_techno_data(rec["plant"], report_month, unit="General")
-        existing_month = (existing.get("General") or {}).get("month", {})
-        overlap = [
-            k for k, v in rec["techno_json"]["month"].items()
-            if v is not None and existing_month.get(k) is not None
-        ]
+        existing = get_techno_data(rec["plant"], report_month, unit="General").get("General") or {}
+        overlap = []
+        for field in ("month", "till_month"):
+            existing_field = existing.get(field) or {}
+            for k, v in (rec["techno_json"].get(field) or {}).items():
+                old = existing_field.get(k)
+                if v is not None and old is not None and abs(float(v) - float(old)) > 1e-6:
+                    overlap.append(k if field == "month" else f"{k} (till month)")
         if overlap:
             conflicts.append({"plant": rec["plant"], "params": overlap})
     return conflicts
@@ -125,7 +132,8 @@ def _month_group_preview(report_month: str, enviro: dict) -> dict:
 
     conflicts = _existing_conflicts(report_month, plant_records)
     total_params = sum(
-        sum(1 for v in r["techno_json"]["month"].values() if v is not None)
+        sum(1 for field in ("month", "till_month")
+            for v in r["techno_json"][field].values() if v is not None)
         for r in plant_records
     )
     return {
@@ -178,12 +186,14 @@ async def preview_coal_co2(
         cply = None
         if blob.get("cply"):
             cply = _month_group_preview(blob["cply"]["report_month"], blob["cply"]["enviro"])
+        others = [_month_group_preview(o["report_month"], o["enviro"]) for o in blob.get("others") or []]
 
         return {
             "status": "preview",
             "source_file": file.filename or "",
             "targets": targets,
             "cply": cply,
+            "others": others,
             **main,
         }
 
@@ -226,7 +236,12 @@ async def insert_coal_co2(payload: dict):
     Body: { report_month, source_file, plants: [{plant, unit, techno_json}],
             targets: {fy, <plant>: {<param label>: {value, unit}}, ...},
             cply: {report_month, plants: [...]} | omitted,
+            others: [{report_month, plants: [...]}, ...] | omitted,
             confirm_replace: bool }
+
+    others[] are the further months a wide-table report prints (earlier
+    months of the FY, previous FYs' totals as their March till_month) —
+    only the ones the user ticked in the preview are sent.
 
     plants[] merges into techno_data (unit='General') per plant. targets
     (if present) merges into techno_plan_fy per plant + SAIL, keyed by
@@ -243,6 +258,7 @@ async def insert_coal_co2(payload: dict):
     cply = payload.get("cply") or None
     cply_report_month = cply.get("report_month") if cply else None
     cply_records = (cply.get("plants") or []) if cply else []
+    others = [o for o in (payload.get("others") or []) if o.get("plants")]
     confirm_replace = bool(payload.get("confirm_replace"))
 
     _validate_month(report_month)
@@ -250,17 +266,22 @@ async def insert_coal_co2(payload: dict):
         raise HTTPException(status_code=400, detail="No plant records to insert")
     if cply_records:
         _validate_month(cply_report_month)
+    for o in others:
+        _validate_month(o.get("report_month", ""))
 
     conflicts = _existing_conflicts(report_month, plant_records)
     cply_conflicts = _existing_conflicts(cply_report_month, cply_records) if cply_records else []
-    if (conflicts or cply_conflicts) and not confirm_replace:
+    other_conflicts = [(o["report_month"], _existing_conflicts(o["report_month"], o["plants"])) for o in others]
+    if (conflicts or cply_conflicts or any(c for _rm, c in other_conflicts)) and not confirm_replace:
         parts = [f"{c['plant']} ({len(c['params'])} params)" for c in conflicts]
         cply_parts = [f"{c['plant']} ({len(c['params'])} params, {cply_report_month})" for c in cply_conflicts]
-        summary = "; ".join(parts + cply_parts)
+        other_parts = [f"{c['plant']} ({len(c['params'])} params, {rm})"
+                       for rm, cs in other_conflicts for c in cs]
+        summary = "; ".join(parts + cply_parts + other_parts)
         raise HTTPException(
             status_code=409,
             detail=(
-                f"{report_month} already has values for: {summary}. "
+                f"Already saved with different values: {summary}. "
                 "Confirm to overwrite with the newly extracted figures."
             ),
         )
@@ -268,6 +289,11 @@ async def insert_coal_co2(payload: dict):
     saved_plants = _save_month_group(report_month, plant_records, source_file)
     replaced_existing = bool(conflicts)
     cply_saved_plants = _save_month_group(cply_report_month, cply_records, source_file) if cply_records else []
+    others_saved = [
+        {"report_month": o["report_month"],
+         "plants_saved": _save_month_group(o["report_month"], o["plants"], source_file)}
+        for o in others
+    ]
 
     saved_targets = []
     target_fy = targets.get("fy")
@@ -300,4 +326,5 @@ async def insert_coal_co2(payload: dict):
         "replaced_existing": replaced_existing,
         "cply_report_month": cply_report_month,
         "cply_plants_saved": cply_saved_plants,
+        "others_saved": others_saved,
     }

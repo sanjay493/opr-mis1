@@ -149,12 +149,51 @@ function EpiCompareTable({ plants, field, sail, warnStyle, cellStyle, labelCellS
   );
 }
 
+// Counts of extracted values in one month group that are new to the DB /
+// differ from it / already match — shown next to each optional month so
+// the user can see which ones are worth ticking.
+function _epiGroupCounts(group) {
+  const counts = { added: 0, changed: 0, same: 0 };
+  for (const rec of group.plants) {
+    for (const field of ['month', 'till_month']) {
+      for (const [k, v] of Object.entries(rec.techno_json?.[field] || {})) {
+        if (v === null || v === undefined) continue;
+        const old = rec.existing?.[field]?.[k];
+        if (old === null || old === undefined) counts.added += 1;
+        else if (_valuesDiffer(v, old)) counts.changed += 1;
+        else counts.same += 1;
+      }
+    }
+  }
+  return counts;
+}
+
+const _MON_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function _epiGroupFields(group) {
+  return ['month', 'till_month'].filter(f =>
+    group.plants.some(r => Object.keys(r.techno_json?.[f] || {}).length));
+}
+
+// "2026-03" with only till_month data is the report's "2025-26" FY-total
+// column (stored as March's till_month); anything else is a plain month.
+function _epiGroupTitle(group) {
+  const [y, m] = group.report_month.split('-').map(Number);
+  const label = `${_MON_ABBR[m - 1]}'${String(y).slice(-2)}`;
+  const fields = _epiGroupFields(group);
+  if (m === 3 && fields.length === 1 && fields[0] === 'till_month') {
+    return `FY ${y - 1}-${String(y).slice(-2)} total → Till Month of ${label} (${group.report_month})`;
+  }
+  return `${label} (${group.report_month})`;
+}
+
 function CoalCo2ExtractRow({ reportMonth, apiBase, onSuccess }) {
   const [file, setFile] = React.useState(null);
   const [busy, setBusy] = React.useState(false);
   const [status, setStatus] = React.useState(null);
   const [preview, setPreview] = React.useState(null);
   const [includeCply, setIncludeCply] = React.useState(false);
+  const [selectedOthers, setSelectedOthers] = React.useState([]);
   const inputRef = React.useRef();
 
   React.useEffect(() => {
@@ -162,8 +201,12 @@ function CoalCo2ExtractRow({ reportMonth, apiBase, onSuccess }) {
     setStatus(null);
     setPreview(null);
     setIncludeCply(false);
+    setSelectedOthers([]);
     if (inputRef.current) inputRef.current.value = '';
   }, [reportMonth]);
+
+  const toggleOther = (rm, on) => setSelectedOthers(prev =>
+    on ? [...new Set([...prev, rm])] : prev.filter(x => x !== rm));
 
   const handlePreview = async () => {
     if (!file) return;
@@ -171,6 +214,7 @@ function CoalCo2ExtractRow({ reportMonth, apiBase, onSuccess }) {
     setStatus(null);
     setPreview(null);
     setIncludeCply(false);
+    setSelectedOthers([]);
     const form = new FormData();
     form.append('file', file);
     form.append('report_month', reportMonth);
@@ -198,6 +242,9 @@ function CoalCo2ExtractRow({ reportMonth, apiBase, onSuccess }) {
         ...(includeCply && preview.cply
           ? { cply: { report_month: preview.cply.report_month, plants: preview.cply.plants } }
           : {}),
+        others: (preview.others || [])
+          .filter(g => selectedOthers.includes(g.report_month))
+          .map(g => ({ report_month: g.report_month, plants: g.plants })),
         ...(confirmReplace ? { confirm_replace: true } : {}),
       }),
     });
@@ -222,11 +269,15 @@ function CoalCo2ExtractRow({ reportMonth, apiBase, onSuccess }) {
         type: 'success',
         text: `✓ Saved ${json.plants_saved.length} plants for ${json.report_month}`
           + (json.targets_saved.length ? ` + FY targets for ${json.targets_saved.length}` : '')
-          + (json.cply_plants_saved.length ? ` + ${json.cply_plants_saved.length} plants for ${json.cply_report_month}` : ''),
+          + (json.cply_plants_saved.length ? ` + ${json.cply_plants_saved.length} plants for ${json.cply_report_month}` : '')
+          + ((json.others_saved || []).length
+            ? ` + ${json.others_saved.length} more month(s): ${json.others_saved.map(o => o.report_month).join(', ')}`
+            : ''),
       });
       setPreview(null);
       setFile(null);
       setIncludeCply(false);
+      setSelectedOthers([]);
       if (inputRef.current) inputRef.current.value = '';
       onSuccess();
     } catch (err) {
@@ -236,7 +287,7 @@ function CoalCo2ExtractRow({ reportMonth, apiBase, onSuccess }) {
     }
   };
 
-  const handleCancel = () => { setPreview(null); setStatus(null); setIncludeCply(false); };
+  const handleCancel = () => { setPreview(null); setStatus(null); setIncludeCply(false); setSelectedOthers([]); };
 
   const fmt = (v) => (v === null || v === undefined ? '—' : v);
   const cellStyle = { padding: '4px 8px', fontSize: 12.5, textAlign: 'right', borderBottom: '1px solid #f1f3f4' };
@@ -258,7 +309,9 @@ function CoalCo2ExtractRow({ reportMonth, apiBase, onSuccess }) {
         Report .docx carries only Sp. CO2 Emission and Sp. Water Consumption (no Sp. PM Emission) — those fields are
         left as-is. Coal Consumption is handled by the dedicated Coal OMI extractor below, not here. Saved into the
         same techno_data table (unit=&quot;General&quot;) as the rest of the Techno Data page. ⚠ next to a value
-        means it differs from what&apos;s already saved for that month — hover for the existing figure.
+        means it differs from what&apos;s already saved for that month — hover for the existing figure. The
+        &quot;Major EPIs&quot; .docx/.xlsx also carry every earlier month of the FY and the previous FYs&apos; totals
+        (saved as March&apos;s Till Month); they&apos;re listed below the main month — tick the ones to save.
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <input ref={inputRef} type="file" accept=".pdf,.docx,.xlsx"
@@ -310,7 +363,7 @@ function CoalCo2ExtractRow({ reportMonth, apiBase, onSuccess }) {
               marginBottom: 8, padding: '6px 12px', borderRadius: 6, fontSize: 12,
               background: '#fffbeb', color: '#92400e', border: '1px solid #fde68a',
             }}>
-              ⚠ {preview.report_month} already has values for {preview.existing_conflicts.map(c => c.plant).join(', ')} —
+              ⚠ {preview.report_month} already has different values for {preview.existing_conflicts.map(c => c.plant).join(', ')} —
               saving will ask to confirm overwriting them.
             </div>
           )}
@@ -375,7 +428,7 @@ function CoalCo2ExtractRow({ reportMonth, apiBase, onSuccess }) {
                   marginBottom: 8, padding: '6px 12px', borderRadius: 6, fontSize: 12,
                   background: '#fffbeb', color: '#92400e', border: '1px solid #fde68a',
                 }}>
-                  ⚠ {preview.cply.report_month} already has values for {preview.cply.existing_conflicts.map(c => c.plant).join(', ')} —
+                  ⚠ {preview.cply.report_month} already has different values for {preview.cply.existing_conflicts.map(c => c.plant).join(', ')} —
                   saving will ask to confirm overwriting them.
                 </div>
               )}
@@ -389,6 +442,57 @@ function CoalCo2ExtractRow({ reportMonth, apiBase, onSuccess }) {
               </div>
               <EpiCompareTable plants={preview.cply.plants} field="till_month" sail={preview.cply.sail}
                 warnStyle={warnStyle} cellStyle={cellStyle} labelCellStyle={labelCellStyle} fmt={fmt} />
+            </div>
+          )}
+
+          {preview.others?.length > 0 && (
+            <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px dashed #86efac' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
+                <span style={{ fontSize: 12.5, fontWeight: 700, color: '#166534' }}>
+                  Other months in this report — tick the ones to save
+                </span>
+                <button type="button" onClick={() => setSelectedOthers(preview.others.map(g => g.report_month))}
+                  style={{ fontSize: 11.5, padding: '2px 8px', border: '1px solid #86efac', background: '#fff', borderRadius: 4, cursor: 'pointer' }}>
+                  Select all
+                </button>
+                <button type="button"
+                  onClick={() => setSelectedOthers(preview.others
+                    .filter(g => { const c = _epiGroupCounts(g); return c.added || c.changed; })
+                    .map(g => g.report_month))}
+                  style={{ fontSize: 11.5, padding: '2px 8px', border: '1px solid #86efac', background: '#fff', borderRadius: 4, cursor: 'pointer' }}>
+                  Select new/changed
+                </button>
+                <button type="button" onClick={() => setSelectedOthers([])}
+                  style={{ fontSize: 11.5, padding: '2px 8px', border: '1px solid #dadce0', background: '#fff', borderRadius: 4, cursor: 'pointer' }}>
+                  Clear
+                </button>
+              </div>
+              {preview.others.map(group => {
+                const counts = _epiGroupCounts(group);
+                const checked = selectedOthers.includes(group.report_month);
+                return (
+                  <div key={group.report_month} style={{ marginBottom: 10 }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 4, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={checked} onChange={e => toggleOther(group.report_month, e.target.checked)} />
+                      {_epiGroupTitle(group)}
+                      <span style={{ fontWeight: 400, color: counts.changed ? '#b45309' : '#5f6368' }}>
+                        — {counts.added} new, {counts.changed} differ, {counts.same} same as DB
+                      </span>
+                    </label>
+                    {_epiGroupFields(group).map(field => (
+                      <div key={field} style={{ marginBottom: 4 }}>
+                        {_epiGroupFields(group).length > 1 && (
+                          <div style={{ fontSize: 11, color: '#5f6368', margin: '2px 0' }}>
+                            {field === 'month' ? 'Month' : 'Till Month'}
+                          </div>
+                        )}
+                        <EpiCompareTable plants={group.plants} field={field} sail={group.sail}
+                          warnStyle={warnStyle} cellStyle={cellStyle} labelCellStyle={labelCellStyle} fmt={fmt} />
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
