@@ -28,7 +28,7 @@ const C = {
 const TINT = { ok: C.ok, watch: C.watch, behind: C.behind };
 
 const fmt = (v, nd = 0) => (v === null || v === undefined ? '–' : Number(v).toFixed(nd));
-const table = (fontSize) => ({ borderCollapse: 'collapse', width: '100%', tableLayout: 'fixed', fontSize });
+const table = (fontSize) => ({ borderCollapse: 'collapse', width: '100%', tableLayout: 'fixed', fontSize, lineHeight: fontSize === '7.5pt' ? 1.1 : undefined });
 const cell = (pad) => ({ border: `1px solid ${C.dark}`, padding: pad, textAlign: 'center', fontVariantNumeric: 'tabular-nums' });
 const plan = { background: C.planBg, color: C.planText };
 const act = { background: C.actBg, color: C.actText };
@@ -179,7 +179,7 @@ export function RailLogisticsSummaryTemplate({ data }) {
 
 export function RailLogisticsHistoryTemplate({ data }) {
   if (!data?.available) return <div><Head data={data || {}} /><Placeholder data={data || {}} /></div>;
-  const c = cell('1.2pt 2pt');
+  const c = cell('0.6pt 2pt');
   const l = { ...c, textAlign: 'left', fontWeight: 700 };
   const mon = data.month_label.slice(0, 3);
   const span = (plant) => data.trend.filter((r) => r.plant === plant).length;
@@ -261,7 +261,7 @@ export function RailLogisticsHistoryTemplate({ data }) {
 
 export function RailLogisticsWagonTemplate({ data }) {
   if (!data?.available) return <div><Head data={data || {}} /><Placeholder data={data || {}} /></div>;
-  const c = cell('1.2pt 2pt');
+  const c = cell('0.6pt 2pt');
   const l = { ...c, textAlign: 'left', fontWeight: 700 };
   const { mix, blocks, month_labels: months } = data;
   return (
