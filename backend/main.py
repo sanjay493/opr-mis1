@@ -4,6 +4,7 @@ import json
 import copy
 import calendar
 import re
+import traceback
 from repo.conn import Row, OperationalError
 import time
 import uuid
@@ -892,6 +893,9 @@ def _match_gated(method: str, path: str):
     return None
 
 
+_ACTIVITY_DETAILS_MAX = 65535
+
+
 class EditorAdminGateMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         path = request.url.path
@@ -935,7 +939,18 @@ class EditorAdminGateMiddleware(BaseHTTPMiddleware):
             # was hit.
             changes = _activity_context.pop()
             details = json.dumps(changes, separators=(",", ":"), default=str) if changes else ""
-            _auth.log_activity(user, "insert/update/delete", f"{method} {path}", details)
+            # activity_log.details is TEXT (65,535 bytes). A big multi-month
+            # upload (e.g. the EPI report with every earlier month ticked)
+            # overflows it; cut it to fit rather than lose the log row.
+            raw = details.encode("utf-8")
+            if len(raw) > _ACTIVITY_DETAILS_MAX:
+                details = raw[:_ACTIVITY_DETAILS_MAX - 40].decode("utf-8", "ignore") + f"…[truncated, {len(raw)} bytes]"
+            # The request's writes are already committed: a failed log write
+            # must not turn a completed save into a bare 500.
+            try:
+                _auth.log_activity(user, "insert/update/delete", f"{method} {path}", details)
+            except Exception:
+                traceback.print_exc()
         return response
 
 

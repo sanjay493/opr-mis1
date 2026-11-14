@@ -38,6 +38,7 @@ Flow (mirrors /api/mcr-techno's tentative-data safeguard):
 import os
 import sys
 import tempfile
+import traceback
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
@@ -232,6 +233,19 @@ def _save_month_group(report_month: str, plant_records: list, source_file: str) 
 
 @router.post("/insert")
 async def insert_coal_co2(payload: dict):
+    # An uncaught error here would reach the uploads page as a bare
+    # plain-text "Internal Server Error"; return its message as JSON instead,
+    # as /preview does, and keep the traceback on the backend console.
+    try:
+        return _insert_coal_co2(payload)
+    except HTTPException:
+        raise
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Save failed: {type(e).__name__}: {e}")
+
+
+def _insert_coal_co2(payload: dict):
     """
     Body: { report_month, source_file, plants: [{plant, unit, techno_json}],
             targets: {fy, <plant>: {<param label>: {value, unit}}, ...},
