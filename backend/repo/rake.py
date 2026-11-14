@@ -25,6 +25,7 @@ message (_keys.v1_fk_errors).
 """
 from typing import Any, Dict, List, Optional
 
+import activity_context
 from dbengine import connect
 from repo import version as _ver
 from repo import _keys
@@ -281,3 +282,138 @@ def save_rake_detention_annual(rows: List[Dict[str, Any]]) -> int:
     finally:
         conn.close()
     return len(rows)
+
+
+# ── Rake despatch (Despatch Summary Report; api_rake_despatch) ──────────────
+# v2-only tables: rake_despatch_upload / _type / _history / _position,
+# rake_slab_despatch, rake_export_despatch. Plant rows only; SAIL is summed
+# by the caller.
+
+def _dict_rows(cur, sql, args=()):
+    cur.execute(sql, args)
+    cols = [d[0] for d in cur.description]
+    return [dict(zip(cols, r)) for r in cur.fetchall()]
+
+
+def _read(sql, args=()):
+    conn = connect()
+    try:
+        return _dict_rows(conn.cursor(), sql, args)
+    finally:
+        conn.close()
+
+
+def rake_despatch_months() -> List[dict]:
+    """Uploaded months, newest first: [{report_month, as_on, source_file, created_at, created_by}]."""
+    return _read("SELECT report_month, as_on, source_file, created_at, created_by"
+                 " FROM rake_despatch_upload ORDER BY report_month DESC")
+
+
+def rake_despatch_upload(report_month: str) -> Optional[dict]:
+    """The month's upload row ({report_month, as_on, slab_note, source_file, created_at, created_by}) or None."""
+    rows = _read("SELECT report_month, as_on, slab_note, source_file, created_at, created_by"
+                 " FROM rake_despatch_upload WHERE report_month = %s", (report_month,))
+    return rows[0] if rows else None
+
+
+def rake_despatch_position_rows(report_month: str) -> List[dict]:
+    """[{plant_code, metric, value}] for the month's page-1 position."""
+    return _read("SELECT plant_code, metric, value FROM rake_despatch_position"
+                 " WHERE report_month = %s ORDER BY plant_code, metric", (report_month,))
+
+
+def rake_slab_despatch_rows(report_month: str) -> List[dict]:
+    """[{from_plant_code, to_plant_code, rakes, qty_mt}] for the month."""
+    return _read("SELECT from_plant_code, to_plant_code, rakes, qty_mt FROM rake_slab_despatch"
+                 " WHERE report_month = %s ORDER BY from_plant_code, to_plant_code", (report_month,))
+
+
+def rake_export_despatch_rows(report_month: str) -> List[dict]:
+    """[{destination, plant_code, dest_group, sort_order, prog, actual}] for the month, printed order."""
+    return _read("SELECT destination, plant_code, dest_group, sort_order, prog, actual"
+                 " FROM rake_export_despatch WHERE report_month = %s ORDER BY sort_order, plant_code",
+                 (report_month,))
+
+
+def rake_despatch_type_rows(first_month: str, last_month: str) -> List[dict]:
+    """[{report_month, plant_code, wagon_type, rakes}] for first_month..last_month."""
+    return _read("SELECT report_month, plant_code, wagon_type, rakes FROM rake_despatch_type"
+                 " WHERE report_month BETWEEN %s AND %s ORDER BY report_month, plant_code, wagon_type",
+                 (first_month, last_month))
+
+
+def rake_despatch_history_rows(first_month: str, last_month: str) -> List[dict]:
+    """[{report_month, plant_code, rakes}] (page-5 plant totals) for first_month..last_month."""
+    return _read("SELECT report_month, plant_code, rakes FROM rake_despatch_history"
+                 " WHERE report_month BETWEEN %s AND %s ORDER BY report_month, plant_code",
+                 (first_month, last_month))
+
+
+def save_rake_despatch(data: Dict[str, Any], source_file: Optional[str], user: Optional[str]) -> dict:
+    """Save one Despatch Summary Report (pdf_extractor_rake_despatch.extract's
+    shape) in one transaction. The month's page-1 position, slab and export
+    rows are replaced; wagon-type rows are replaced for every month the file
+    carries; page-5 history is upserted month by month.
+    -> {"report_month", "type_months", "history_months"}."""
+    month = _keys.fit_month(data["report_month"])
+    _keys.check_month(month)
+    _keys.fits("slab_note", data.get("slab_note"), 255)
+    _keys.fits("source_file", source_file, 255)
+    _keys.fits("created_by", user, 190)
+    type_months = sorted(data.get("types") or {})
+    history_months = sorted(data.get("history") or {})
+    for m in type_months + history_months:
+        _keys.check_month(m)
+    for m in type_months:
+        for plant, by_type in data["types"][m].items():
+            _keys.fits("plant_code", plant, 8, nullable=False)
+            for wagon in by_type:
+                _keys.fits("wagon_type", wagon, 16, nullable=False)
+    for e in data.get("export") or []:
+        _keys.fits("destination", e["destination"], 48, nullable=False)
+    conn = connect()
+    try:
+        cur = conn.cursor()
+        _ver.bump(cur)
+        for m in sorted({month, *type_months, *history_months}):
+            _keys.ensure_month(cur, m, bump=False)
+        cur.execute("INSERT INTO rake_despatch_upload (report_month, as_on, slab_note, source_file, created_at,"
+                    " created_by) VALUES (%s, %s, %s, %s, NOW(6), %s) AS new ON DUPLICATE KEY UPDATE"
+                    " as_on = new.as_on, slab_note = new.slab_note, source_file = new.source_file,"
+                    " created_at = new.created_at, created_by = new.created_by",
+                    (month, data["as_on"], data.get("slab_note"), source_file, user))
+        for table in ("rake_despatch_position", "rake_slab_despatch", "rake_export_despatch"):
+            cur.execute(f"DELETE FROM {table} WHERE report_month = %s", (month,))
+        pos = [(month, plant, metric, value)
+               for plant, metrics in (data.get("position") or {}).items()
+               for metric, value in metrics.items()]
+        if pos:
+            cur.executemany("INSERT INTO rake_despatch_position (report_month, plant_code, metric, value)"
+                            " VALUES (%s, %s, %s, %s)", pos)
+        slab = [(month, s["from"], s["to"], s["rakes"], s.get("qty_mt")) for s in data.get("slab") or []]
+        if slab:
+            cur.executemany("INSERT INTO rake_slab_despatch (report_month, from_plant_code, to_plant_code, rakes,"
+                            " qty_mt) VALUES (%s, %s, %s, %s, %s)", slab)
+        export = [(month, e["destination"], e["plant"], e["group"], e["sort_order"], e.get("prog"), e.get("actual"))
+                  for e in data.get("export") or []]
+        if export:
+            cur.executemany("INSERT INTO rake_export_despatch (report_month, destination, plant_code, dest_group,"
+                            " sort_order, prog, actual) VALUES (%s, %s, %s, %s, %s, %s, %s)", export)
+        for m in type_months:
+            cur.execute("DELETE FROM rake_despatch_type WHERE report_month = %s", (m,))
+            rows = [(m, plant, wagon, rakes) for plant, by_type in data["types"][m].items()
+                    for wagon, rakes in by_type.items()]
+            if rows:
+                cur.executemany("INSERT INTO rake_despatch_type (report_month, plant_code, wagon_type, rakes)"
+                                " VALUES (%s, %s, %s, %s)", rows)
+        hist = [(m, plant, rakes) for m in history_months for plant, rakes in data["history"][m].items()]
+        if hist:
+            cur.executemany("INSERT INTO rake_despatch_history (report_month, plant_code, rakes) VALUES (%s, %s, %s)"
+                            " AS new ON DUPLICATE KEY UPDATE rakes = new.rakes", hist)
+        conn.commit()
+    finally:
+        conn.close()
+    activity_context.record(f"rake_despatch/{month}", None,
+                            {"source_file": source_file, "type_months": len(type_months),
+                             "history_months": len(history_months)})
+    return {"report_month": month, "type_months": type_months, "history_months": history_months}

@@ -187,7 +187,7 @@ contain SQL (guard test `tests/test_repo_boundary.py`).
 | `repo/stock.py` | `stock_monthly`, `sail_sales_monthly`, `sail_stock_snapshot` |
 | `repo/ipt.py` | `ipt_monthly` |
 | `repo/cost_trend.py` | `cost_trend_annual`, `cost_trend_monthly` |
-| `repo/rake.py` | `rake_detention_master`, `rake_detention_monthly`, `rake_detention_summary`, `rake_detention_annual` |
+| `repo/rake.py` | `rake_detention_master`, `rake_detention_monthly`, `rake_detention_summary`, `rake_detention_annual`; `rake_despatch_upload`, `rake_despatch_type`, `rake_despatch_history`, `rake_despatch_position`, `rake_slab_despatch`, `rake_export_despatch` |
 | `repo/mines.py` | `mine_group`, `mine`, `mine_material`, `mine_end_use`, `mine_production_monthly`, `mine_despatch_actual_monthly`, `mine_despatch_plan_monthly`, `mine_booked_qty_actual_monthly`, `mine_booked_qty_plan_monthly`, `sail_mines_monthly` |
 | `repo/breakdown.py` | `breakdown`, `capital_repair`, `plant_unit` |
 | `repo/misc.py` | `power_monthly`, `pdf_item_alias`, `macro_indicator_monthly`, `market_price_monthly`, `steel_sector_performance`, `rail_prod_despatch`, `bf_benchmark_external_bf`, `bf_benchmark_external_data`, `bf_benchmark_sail_meta`, `major_unit_daily_record`, `ready_reckoner_page`, `cover_photo`, `report_cover_setting`, `unique_activity`, `unique_activity_tag`, `rmt_month`, `rmt_plan_note`, `rmt_ipt_row`, `rmt_stock_row` (RMT Production Plan manual rows) |
@@ -252,6 +252,7 @@ The physical-performance notes are `report_text` rows with scope `ss_phys_note`.
 | `cost_trend_annual` | `(fy, product, cost_type, plant_code)` → value. Products HM, CS, SS, COKE, SINTER; COKE and SINTER only feed the Inter Plant page | `page_cost_trend.py`, `page_key_parameters.py` |
 | `cost_trend_monthly` | `(report_month, product, cost_type, plant_code)` → month / till-month value | same |
 | `rake_detention_master`, `rake_detention_monthly`, `rake_detention_summary`, `rake_detention_annual` | rake-detention reference rows and the monthly, period and annual figures | `page_rake_detention.py` |
+| `rake_despatch_upload`, `rake_despatch_type`, `rake_despatch_history`, `rake_despatch_position`, `rake_slab_despatch`, `rake_export_despatch` | the monthly Despatch Summary Report (rake loading): month-end position, rakes by wagon type, seven-year history, slab and export rakes. Uploaded on Data Entry > Uploads (`api_rake_despatch.py`) | web page only: Reports > Rail Logistics (`rake_despatch_report.py`), not in the MIS PDF |
 | `macro_indicator_monthly`, `market_price_monthly` | market-intelligence series by `(report_month, metric_code / series_code)` | market commentary views |
 
 ### 4.7 SAIL Mines

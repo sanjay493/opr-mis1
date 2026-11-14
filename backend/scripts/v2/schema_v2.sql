@@ -729,6 +729,91 @@ CREATE TABLE rake_detention_annual (
     CONSTRAINT fk_rake_annual_plant FOREIGN KEY (plant_code) REFERENCES plant (plant_code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+-- v2-only. Rake despatch: the Rail Movement Cell's monthly "Despatch Summary
+-- Report" PDF (api_rake_despatch.py, Reports > Rail Logistics). Counts are
+-- rakes. Only plant rows are stored; SAIL rows and totals are summed at read
+-- time (the upload preview checks the PDF's own SAIL rows against them).
+-- One row per uploaded month-end file; report_month = the month it closes.
+CREATE TABLE rake_despatch_upload (
+    report_month CHAR(7)      NOT NULL,
+    as_on        DATE         NOT NULL,
+    slab_note    VARCHAR(255) NULL,
+    source_file  VARCHAR(255) NULL,
+    created_at   DATETIME(6)  NOT NULL,
+    created_by   VARCHAR(190) NULL,
+    -- repo.rake.rake_despatch_upload, rake_despatch_months, save_rake_despatch
+    PRIMARY KEY (report_month),
+    CONSTRAINT fk_rake_desp_upload_month FOREIGN KEY (report_month) REFERENCES cal_month (report_month)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Page 2: rakes despatched per plant, wagon type and month of the FY. Each
+-- upload rewrites every month it carries (later files correct earlier ones).
+CREATE TABLE rake_despatch_type (
+    report_month CHAR(7)     NOT NULL,
+    plant_code   VARCHAR(8)  NOT NULL,
+    wagon_type   VARCHAR(16) NOT NULL,
+    rakes        INT         NOT NULL,
+    -- repo.rake.rake_despatch_type_rows (WHERE report_month BETWEEN ...), save_rake_despatch
+    PRIMARY KEY (report_month, plant_code, wagon_type),
+    CONSTRAINT fk_rake_desp_type_month FOREIGN KEY (report_month) REFERENCES cal_month (report_month),
+    CONSTRAINT fk_rake_desp_type_plant FOREIGN KEY (plant_code) REFERENCES plant (plant_code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Page 5: total rakes per plant and month, seven FYs back.
+CREATE TABLE rake_despatch_history (
+    report_month CHAR(7)    NOT NULL,
+    plant_code   VARCHAR(8) NOT NULL,
+    rakes        INT        NOT NULL,
+    -- repo.rake.rake_despatch_history_rows, save_rake_despatch
+    PRIMARY KEY (report_month, plant_code),
+    CONSTRAINT fk_rake_desp_hist_month FOREIGN KEY (report_month) REFERENCES cal_month (report_month),
+    CONSTRAINT fk_rake_desp_hist_plant FOREIGN KEY (plant_code) REFERENCES plant (plant_code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Page 1: the month-end position per plant (plan avg/day, cumulative,
+-- average/day, rakes under loading, empty forecast, slag/coke/sinter ...),
+-- one row per metric; the metric codes are listed in rake_despatch_extractor.
+CREATE TABLE rake_despatch_position (
+    report_month CHAR(7)     NOT NULL,
+    plant_code   VARCHAR(8)  NOT NULL,
+    metric       VARCHAR(32) NOT NULL,
+    value        DOUBLE      NULL,
+    -- repo.rake.rake_despatch_position_rows, save_rake_despatch
+    PRIMARY KEY (report_month, plant_code, metric),
+    CONSTRAINT fk_rake_desp_pos_month FOREIGN KEY (report_month) REFERENCES cal_month (report_month),
+    CONSTRAINT fk_rake_desp_pos_plant FOREIGN KEY (plant_code) REFERENCES plant (plant_code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Page 1: slab rakes sent between plants in the month.
+CREATE TABLE rake_slab_despatch (
+    report_month    CHAR(7)    NOT NULL,
+    from_plant_code VARCHAR(8) NOT NULL,
+    to_plant_code   VARCHAR(8) NOT NULL,
+    rakes           INT        NOT NULL,
+    qty_mt          DOUBLE     NULL,
+    -- repo.rake.rake_slab_despatch_rows, save_rake_despatch
+    PRIMARY KEY (report_month, from_plant_code, to_plant_code),
+    CONSTRAINT fk_rake_slab_month FOREIGN KEY (report_month) REFERENCES cal_month (report_month),
+    CONSTRAINT fk_rake_slab_from FOREIGN KEY (from_plant_code) REFERENCES plant (plant_code),
+    CONSTRAINT fk_rake_slab_to   FOREIGN KEY (to_plant_code)   REFERENCES plant (plant_code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Page 2: export rakes per destination (Nepal border points, ports) and
+-- plant, programme vs actual, for the month.
+CREATE TABLE rake_export_despatch (
+    report_month CHAR(7)     NOT NULL,
+    destination  VARCHAR(48) NOT NULL,
+    plant_code   VARCHAR(8)  NOT NULL,
+    dest_group   VARCHAR(8)  NOT NULL,
+    sort_order   INT         NOT NULL DEFAULT 0,
+    prog         DOUBLE      NULL,
+    actual       DOUBLE      NULL,
+    -- repo.rake.rake_export_despatch_rows, save_rake_despatch
+    PRIMARY KEY (report_month, destination, plant_code),
+    CONSTRAINT fk_rake_export_month FOREIGN KEY (report_month) REFERENCES cal_month (report_month),
+    CONSTRAINT fk_rake_export_plant FOREIGN KEY (plant_code) REFERENCES plant (plant_code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 -- v1 macro_indicators_monthly.
 CREATE TABLE macro_indicator_monthly (
     report_month CHAR(7)     NOT NULL,

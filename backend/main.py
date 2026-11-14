@@ -487,6 +487,7 @@ from api_mcr_techno import router as mcr_techno_router
 from api_coal_co2_techno import router as coal_co2_techno_router
 from api_coal_omi_techno import router as coal_omi_techno_router
 from api_power_omi import router as power_omi_router
+from api_rake_despatch import router as rake_despatch_router
 from api_mou_plan import router as mou_plan_router
 from api_todo import router as todo_router
 from api_worklog import router as worklog_router
@@ -1015,6 +1016,7 @@ app.include_router(mcr_techno_router)
 app.include_router(coal_co2_techno_router)
 app.include_router(coal_omi_techno_router)
 app.include_router(power_omi_router)
+app.include_router(rake_despatch_router)
 app.include_router(mou_plan_router)
 app.include_router(todo_router)
 app.include_router(worklog_router)

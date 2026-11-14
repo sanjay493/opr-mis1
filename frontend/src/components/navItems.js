@@ -77,6 +77,7 @@ export const NAV_ITEMS = [
       { label: 'Iron Ore Mines', link: '/reports/mines', icon: '⛏️' },
       { label: 'Cost of Production', link: '/reports/cost-production', icon: '💰' },
       { label: 'Loss, Breakdown & Capital Repair', link: '/reports/loss-breakdown', icon: '🛠️' },
+      { label: 'Rail Logistics', link: '/reports/logistics', icon: '🚆' },
       { label: 'Techno Reports', link: '/reports/techno', icon: '⚙️' },
       { label: 'Excel Report', link: '/reports/excel', icon: '📗' },
       { label: 'ABP', link: '/reports/abp', icon: '🎯' },

@@ -1197,6 +1197,199 @@ function MouPlanExtractRow({ apiBase, onSuccess }) {
   );
 }
 
+// Rail Movement Cell's month-end Despatch Summary Report (rake loading) —
+// see backend/api_rake_despatch.py and
+// excel_extractors/pdf_extractor_rake_despatch.py. The month comes from the
+// file's own "REPORT AS ON" date, so it ignores reportMonth. Shown on
+// Reports > Rail Logistics.
+const _RAKE_PLANTS = ['BSP', 'DSP', 'RSP', 'BSL', 'ISP'];
+
+function RakeDespatchExtractRow({ apiBase, onSuccess }) {
+  const [file, setFile] = React.useState(null);
+  const [busy, setBusy] = React.useState(false);
+  const [status, setStatus] = React.useState(null);
+  const [preview, setPreview] = React.useState(null);
+  const inputRef = React.useRef();
+
+  const handlePreview = async () => {
+    if (!file) return;
+    setBusy(true);
+    setStatus(null);
+    setPreview(null);
+    const form = new FormData();
+    form.append('file', file);
+    try {
+      const res = await fetch(`${apiBase}/api/rake-despatch/preview`, { method: 'POST', body: form });
+      const json = await parseJsonResponse(res);
+      if (!res.ok) throw new Error(json.detail || 'Preview failed');
+      setPreview(json);
+    } catch (err) {
+      setStatus({ type: 'error', text: err.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const doSave = async (confirmReplace) => {
+    const res = await fetch(`${apiBase}/api/rake-despatch/insert`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        data: preview.data,
+        source_file: preview.source_file,
+        ...(confirmReplace ? { confirm_replace: true } : {}),
+      }),
+    });
+    return { res, json: await parseJsonResponse(res) };
+  };
+
+  const handleConfirmSave = async () => {
+    if (!preview) return;
+    setBusy(true);
+    setStatus(null);
+    try {
+      let { res, json } = await doSave(false);
+      if (res.status === 409) {
+        if (!window.confirm(`${json.detail}\n\nSave and replace them?`)) {
+          setBusy(false);
+          return;
+        }
+        ({ res, json } = await doSave(true));
+      }
+      if (!res.ok) throw new Error(json.detail || 'Save failed');
+      setStatus({
+        type: 'success',
+        text: `✓ Saved ${json.report_month}: ${json.type_months.length} month(s) of wagon-type figures and `
+          + `${json.history_months.length} month(s) of history. See Reports › Rail Logistics.`,
+      });
+      setPreview(null);
+      setFile(null);
+      if (inputRef.current) inputRef.current.value = '';
+      onSuccess();
+    } catch (err) {
+      setStatus({ type: 'error', text: err.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleCancel = () => { setPreview(null); setStatus(null); };
+
+  const cellStyle = { padding: '4px 8px', fontSize: 12.5, textAlign: 'right', borderBottom: '1px solid #f1f3f4' };
+  const labelCellStyle = { padding: '4px 8px', fontSize: 12.5, borderBottom: '1px solid #f1f3f4', color: '#374151' };
+  const fmt = (v) => (v === null || v === undefined ? '—' : v);
+  const btn = (primary) => ({
+    padding: primary ? '7px 18px' : '7px 14px', background: primary ? (busy ? '#5f6368' : '#1a73e8') : '#fff',
+    color: primary ? '#fff' : '#5f6368', border: primary ? 'none' : '1px solid #dadce0', borderRadius: 6, fontSize: 13,
+    cursor: busy ? 'not-allowed' : 'pointer', fontWeight: 600, whiteSpace: 'nowrap',
+  });
+
+  const d = preview?.data;
+  const typeMonths = d ? Object.keys(d.types).sort() : [];
+  const typeTotal = (m, p) => Object.values(d.types[m]?.[p] || {}).reduce((a, v) => a + v, 0);
+  const historyMonths = d ? Object.keys(d.history).sort() : [];
+
+  return (
+    <div style={{
+      marginBottom: 16, padding: '12px 14px',
+      background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8,
+    }}>
+      <div style={{ fontSize: 14, fontWeight: 700, color: '#1e40af', marginBottom: 4 }}>
+        Despatch Summary Report (PDF) — rake loading, all plants
+      </div>
+      <div style={{ fontSize: 12, color: '#5f6368', marginBottom: 10 }}>
+        The Rail Movement Cell&apos;s month-end report (&quot;REPORT AS ON 1.11.2026&quot; closes October). Reads the
+        despatch summary (page 1), rakes by wagon type and export (page 2) and seven years of month-wise rakes
+        (page 5); the date-wise pages are skipped. The month is taken from the file, not the selector above.
+        Shown on Reports › Rail Logistics.
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <input ref={inputRef} type="file" accept=".pdf"
+          onChange={e => { setFile(e.target.files[0]); setStatus(null); setPreview(null); }}
+          style={{ fontSize: 13, flex: 1, minWidth: 200 }}
+          suppressHydrationWarning
+        />
+        {!preview && (
+          <button onClick={handlePreview} disabled={!file || busy} style={{ ...btn(true), cursor: file && !busy ? 'pointer' : 'not-allowed' }}>
+            {busy ? 'Extracting…' : 'Preview'}
+          </button>
+        )}
+        {preview && (
+          <>
+            <button onClick={handleConfirmSave} disabled={busy} style={btn(true)}>{busy ? 'Saving…' : 'Confirm & Save'}</button>
+            <button onClick={handleCancel} disabled={busy} style={btn(false)}>Cancel</button>
+          </>
+        )}
+      </div>
+
+      <div style={{ marginTop: 10 }}><StatusMsg status={status} /></div>
+
+      {d && (
+        <div style={{ marginTop: 6 }}>
+          <div style={{ fontSize: 12.5, color: '#374151', marginBottom: 8 }}>
+            Report as on <b>{d.as_on}</b> → month <b>{d.report_month}</b> (FY {d.fy}). Found {typeMonths.length} month(s) of
+            wagon-type figures, {historyMonths.length} month(s) of history ({historyMonths[0]} – {historyMonths[historyMonths.length - 1]}),
+            {' '}{d.slab.length} slab route(s) and {new Set(d.export.map(e => e.destination)).size} export destination(s).
+          </div>
+          {preview.changes.length > 0 && (
+            <div style={{
+              marginBottom: 8, padding: '6px 12px', borderRadius: 6, fontSize: 12,
+              background: '#fffbeb', color: '#92400e', border: '1px solid #fde68a',
+            }}>
+              {preview.changes.map((c, i) => <div key={i}>⚠ {c}</div>)}
+              <div style={{ marginTop: 4 }}>Saving will ask you to confirm.</div>
+            </div>
+          )}
+          {d.checks.length > 0 && (
+            <div style={{
+              marginBottom: 8, padding: '6px 12px', borderRadius: 6, fontSize: 12,
+              background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca',
+            }}>
+              <div style={{ fontWeight: 700, marginBottom: 2 }}>The report disagrees with itself here (saved as printed; page 2 is used for the current FY):</div>
+              {d.checks.map((c, i) => <div key={i}>⚠ {c}</div>)}
+            </div>
+          )}
+
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: '#374151', marginBottom: 4 }}>
+            Rakes per month (page 2) — sanity check
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ borderCollapse: 'collapse', width: '100%', background: '#fff', borderRadius: 6, overflow: 'hidden' }}>
+              <thead>
+                <tr style={{ background: '#f8f9fa' }}>
+                  <th style={{ ...labelCellStyle, fontWeight: 700, textAlign: 'left' }}>Plant</th>
+                  {typeMonths.map(m => <th key={m} style={{ ...cellStyle, fontWeight: 700 }}>{m}</th>)}
+                  <th style={{ ...cellStyle, fontWeight: 700 }}>Plan/day</th>
+                  <th style={{ ...cellStyle, fontWeight: 700 }}>Avg/day</th>
+                  <th style={{ ...cellStyle, fontWeight: 700 }}>Under loading</th>
+                </tr>
+              </thead>
+              <tbody>
+                {_RAKE_PLANTS.map(p => (
+                  <tr key={p}>
+                    <td style={labelCellStyle}>{p}</td>
+                    {typeMonths.map(m => <td key={m} style={cellStyle}>{typeTotal(m, p)}</td>)}
+                    <td style={cellStyle}>{fmt(d.position[p]?.plan_avg_day)}</td>
+                    <td style={cellStyle}>{fmt(d.position[p]?.avg_day)}</td>
+                    <td style={cellStyle}>{fmt(d.position[p]?.under_loading)}</td>
+                  </tr>
+                ))}
+                <tr>
+                  <td style={{ ...labelCellStyle, fontWeight: 700 }}>SAIL</td>
+                  {typeMonths.map(m => (
+                    <td key={m} style={{ ...cellStyle, fontWeight: 700 }}>{_RAKE_PLANTS.reduce((a, p) => a + typeTotal(m, p), 0)}</td>
+                  ))}
+                  <td colSpan={3} style={cellStyle} />
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 function UploadsExtractionInner() {
   const def = getDefaultPeriod();
@@ -1250,6 +1443,8 @@ function UploadsExtractionInner() {
         <PowerOmiExtractRow apiBase={API_BASE_URL} onSuccess={() => {}} />
 
         <MouPlanExtractRow apiBase={API_BASE_URL} onSuccess={() => {}} />
+
+        <RakeDespatchExtractRow apiBase={API_BASE_URL} onSuccess={() => {}} />
       </div>
     </div>
   );

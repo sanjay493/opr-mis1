@@ -62,6 +62,8 @@ DROPPED_V1_COLUMNS: Dict[str, set] = {}     # techno_data.id is carried as techn
 # Tables added to v2 after the cutover: no v1 source, so not in mig.LOAD_ORDER.
 V2_ONLY_TABLES = {
     "production_op_monthly",
+    "rake_despatch_history", "rake_despatch_position", "rake_despatch_type",
+    "rake_despatch_upload", "rake_export_despatch", "rake_slab_despatch",
     "rmt_ipt_row", "rmt_month", "rmt_plan_note", "rmt_stock_row",
     "unique_activity", "unique_activity_tag",
 }

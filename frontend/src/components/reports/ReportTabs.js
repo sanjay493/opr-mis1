@@ -56,6 +56,7 @@ const VIEWS = {
   'sefi': dynamic(() => import('./sefi/View'), { loading }),
   'steel-bulletin': dynamic(() => import('./steel-bulletin/View'), { loading }),
   'cmd-monthly-report': dynamic(() => import('./cmd-monthly-report/View'), { loading }),
+  'rake-despatch': dynamic(() => import('./rake-despatch/View'), { loading }),
 };
 
 /**

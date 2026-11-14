@@ -214,4 +214,10 @@ PAGE_MODULES = {
             ("POST", "/api/power-omi/insert", False),
         ],
     },
+    "rake_despatch": {
+        "label": "Rake Despatch (Despatch Summary Report)",
+        "routes": [
+            ("POST", "/api/rake-despatch/insert", False),
+        ],
+    },
 }

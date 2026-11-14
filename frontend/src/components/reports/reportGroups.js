@@ -61,6 +61,16 @@ export const REPORT_GROUPS = [
     ],
   },
   {
+    id: 'logistics',
+    route: '/reports/logistics',
+    title: 'Rail Logistics',
+    description: 'Iron & steel rake loading and despatch from the Rail Movement Cell, with plan attainment and history.',
+    icon: '🚆',
+    tabs: [
+      { id: 'rake-despatch', label: 'Rake Despatch', description: 'Monthly rakes per plant vs plan, seven-year trend, run-rate to FY end, wagon-type mix, export and the Despatch Summary Report tables.' },
+    ],
+  },
+  {
     id: 'loss-breakdown',
     route: '/reports/loss-breakdown',
     title: 'Loss, Breakdown & Capital Repair',
