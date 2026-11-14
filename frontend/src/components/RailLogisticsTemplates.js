@@ -259,21 +259,34 @@ export function RailLogisticsWagonTemplate({ data }) {
   return (
     <div>
       <Head data={data} />
-      <Sec title="Wagon-type mix" sub={`share of FY-to-date rakes by wagon type (%); shift: ${mix.label}`} />
-      <table style={table('7.5pt')}>
-        <colgroup><col style={{ width: '14%' }} />{mix.plants.map((p) => <col key={p} />)}<col /><col /></colgroup>
-        <thead><tr><th style={c}>Wagon type</th>{mix.plants.map((p) => <th key={p} style={c}>{p}</th>)}<th style={{ ...c, ...total }}>SAIL</th><th style={c}>SAIL shift (pp)</th></tr></thead>
-        <tbody>
-          {mix.rows.map((r) => (
-            <tr key={r.type}>
-              <td style={l}>{r.type}</td>
-              {mix.plants.map((p) => <td key={p} style={c}>{fmt(r.shares[p], 1)}</td>)}
-              <td style={{ ...c, ...total }}>{fmt(r.sail_share, 1)}</td>
-              <td style={c}><Signed v={r.sail_shift} suffix="" /></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <Sec title="Wagon-type mix"
+           sub={`share of FY-to-date rakes by wagon type, with the shift in points (${mix.label}); the plant's biggest shift in bold`} />
+      {mix.rows.length === 0 ? (
+        <div style={{ fontSize: '8pt', fontStyle: 'italic', color: C.secondary }}>No wagon-type data for this FY.</div>
+      ) : (
+        <table style={{ ...table('8pt'), lineHeight: 1.3 }}>
+          <colgroup><col style={{ width: '8%' }} /><col style={{ width: '10%' }} /><col /></colgroup>
+          <thead><tr><th style={c}>Plant</th><th style={{ ...c, ...act }}>FYTD rakes</th><th style={c}>Mix (share, shift in points)</th></tr></thead>
+          <tbody>
+            {mix.rows.map((r) => (
+              <tr key={r.plant} style={r.plant === 'SAIL' ? total : undefined}>
+                <td style={l}>{r.plant}</td>
+                <td style={{ ...c, ...act }}>{fmt(r.fytd_total)}</td>
+                <td style={{ ...c, textAlign: 'left', padding: '1.5pt 4pt' }}>
+                  {r.types.map((t) => (
+                    <span key={t.type} style={{ display: 'inline-block', whiteSpace: 'nowrap', marginRight: '9pt' }}>
+                      <b>{t.type}</b> {fmt(t.share, 1)}%
+                      {t.shift != null && (
+                        <span style={{ color: t.shift >= 0 ? C.pos : C.neg, fontWeight: t.biggest ? 700 : 400 }}> ({t.shift >= 0 ? '+' : ''}{fmt(t.shift, 1)})</span>
+                      )}
+                    </span>
+                  ))}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
 
       <Sec title={`Rakes by wagon type, FY ${data.fy}`} sub="plant-wise, month by month" />
       {blocks.length === 0 ? (

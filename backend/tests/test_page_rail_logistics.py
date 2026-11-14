@@ -24,17 +24,21 @@ def test_commodity_rows_slab_from_despatch_rows():
     assert rows["SAIL"]["slab"]["cumm"] == 4
 
 
-def test_mix_matrix_order_and_shares():
+def test_mix_rows_per_plant():
+    boxn = {"type": "BOXN", "fytd_share": 45.0, "shift_pp": 2.0, "fytd_rakes": 9}
     mix = {"label": "Oct'26 vs H1", "plants": [
-        {"plant": "BSP", "types": [{"type": "BOXN", "fytd_share": 60.0, "shift_pp": 1.0, "fytd_rakes": 6}]},
-        {"plant": "SAIL", "types": [
-            {"type": "BRN", "fytd_share": 55.0, "shift_pp": -2.0, "fytd_rakes": 11},
-            {"type": "BOXN", "fytd_share": 45.0, "shift_pp": 2.0, "fytd_rakes": 9}]}]}
-    m = rl.mix_matrix(mix)
-    assert m["label"] == "Oct'26 vs H1" and m["plants"] == rl.PLANTS
-    assert [r["type"] for r in m["rows"]] == ["BRN", "BOXN"]
-    assert m["rows"][1]["shares"]["BSP"] == 60.0 and m["rows"][0]["shares"]["BSP"] is None
-    assert m["rows"][1]["sail_share"] == 45.0 and m["rows"][1]["sail_shift"] == 2.0
+        {"plant": "BSP", "fytd_total": 6, "biggest_shift": {"type": "BOXN"}, "types": [
+            {"type": "BOXN", "fytd_share": 100.0, "shift_pp": 1.0, "fytd_rakes": 6},
+            {"type": "LRN", "fytd_share": 0.0, "shift_pp": 0.0, "fytd_rakes": 0}]},
+        {"plant": "SAIL", "fytd_total": 20, "biggest_shift": boxn, "types": [
+            {"type": "BRN", "fytd_share": 55.0, "shift_pp": 0.04, "fytd_rakes": 11}, boxn]}]}
+    m = rl.mix_rows(mix)
+    assert m["label"] == "Oct'26 vs H1"
+    assert [r["plant"] for r in m["rows"]] == ["BSP", "SAIL"]
+    assert m["rows"][0]["fytd_total"] == 6
+    assert m["rows"][0]["types"] == [{"type": "BOXN", "share": 100.0, "shift": 1.0, "biggest": True}]
+    assert m["rows"][1]["types"] == [{"type": "BRN", "share": 55.0, "shift": None, "biggest": False},
+                                     {"type": "BOXN", "share": 45.0, "shift": 2.0, "biggest": True}]
 
 
 def test_wagon_type_blocks_sparse():

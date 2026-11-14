@@ -7,7 +7,10 @@
     .rlw-table th, .rlw-table td { border: 1px solid {{ colors.border_dark }}; padding: 0.6pt 2pt; text-align: center; font-variant-numeric: tabular-nums; }
     .rlw-table th { font-weight: 700; }
     .rlw-table td.rlw-l { text-align: left; font-weight: 700; }
-    .rlw-sail { font-weight: 700; background: {{ colors.rail_log_total_row_bg }}; }
+    .rlw-mix-table { font-size: 8pt; line-height: 1.3; }
+    .rlw-table td.rlw-mix-cell { text-align: left; padding: 1.5pt 4pt; }
+    .rlw-mix-item { display: inline-block; white-space: nowrap; margin-right: 9pt; }
+    .rlw-big { font-weight: 700; }
     .rlw-total td { font-weight: 700; background: {{ colors.rail_log_total_row_bg }}; }
     .rlw-act { background: {{ colors.perf_act_bg }}; color: {{ colors.perf_act_text }}; }
     .rlw-plant-first td { border-top: 1px solid {{ colors.rail_log_plant_rule }}; }
@@ -24,21 +27,24 @@
 {% if not page.available %}
 <div class="rlw-placeholder">{{ page.placeholder }}</div>
 {% else %}
-<div class="rlw-sec">Wagon-type mix <span class="rlw-sub">— share of FY-to-date rakes by wagon type (%); shift: {{ page.mix.label }}</span></div>
-<table class="rlw-table">
-    <colgroup><col style="width:14%"/>{% for _ in page.mix.plants %}<col/>{% endfor %}<col/><col/></colgroup>
-    <thead><tr><th>Wagon type</th>{% for p in page.mix.plants %}<th>{{ p }}</th>{% endfor %}<th class="rlw-sail">SAIL</th><th>SAIL shift (pp)</th></tr></thead>
+<div class="rlw-sec">Wagon-type mix <span class="rlw-sub">— share of FY-to-date rakes by wagon type, with the shift in points ({{ page.mix.label }}); the plant's biggest shift in bold</span></div>
+{% if not page.mix.rows %}
+<div class="rlw-none">No wagon-type data for this FY.</div>
+{% else %}
+<table class="rlw-table rlw-mix-table">
+    <colgroup><col style="width:8%"/><col style="width:10%"/><col/></colgroup>
+    <thead><tr><th>Plant</th><th class="rlw-act">FYTD rakes</th><th>Mix (share, shift in points)</th></tr></thead>
     <tbody>
     {% for r in page.mix.rows %}
-        <tr>
-            <td class="rlw-l">{{ r.type }}</td>
-            {% for p in page.mix.plants %}<td>{{ r.shares[p]|rl_fmt(1) }}</td>{% endfor %}
-            <td class="rlw-sail">{{ r.sail_share|rl_fmt(1) }}</td>
-            <td>{% if r.sail_shift is none %}–{% else %}<span class="{{ 'rlw-pos' if r.sail_shift >= 0 else 'rlw-neg' }}">{{ '+' if r.sail_shift >= 0 else '' }}{{ r.sail_shift|rl_fmt(1) }}</span>{% endif %}</td>
+        <tr{% if r.plant == 'SAIL' %} class="rlw-total"{% endif %}>
+            <td class="rlw-l">{{ r.plant }}</td>
+            <td class="rlw-act">{{ r.fytd_total|rl_fmt }}</td>
+            <td class="rlw-mix-cell">{% for t in r.types %}<span class="rlw-mix-item"><b>{{ t.type }}</b> {{ t.share|rl_fmt(1) }}%{% if t.shift is not none %} <span class="{{ 'rlw-pos' if t.shift >= 0 else 'rlw-neg' }}{% if t.biggest %} rlw-big{% endif %}">({{ '+' if t.shift >= 0 else '' }}{{ t.shift|rl_fmt(1) }})</span>{% endif %}</span>{% endfor %}</td>
         </tr>
     {% endfor %}
     </tbody>
 </table>
+{% endif %}
 
 <div class="rlw-sec">Rakes by wagon type, FY {{ page.fy }} <span class="rlw-sub">— plant-wise, month by month</span></div>
 {% if not page.blocks %}

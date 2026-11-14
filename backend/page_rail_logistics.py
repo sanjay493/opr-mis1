@@ -8,7 +8,7 @@ A selection of the web report (Reports > Rail Logistics > Rake Despatch):
                               the attainment cell is tinted instead), run-rate
   40.2 Performance history  — records & seasonality, seven-year monthly trend,
                               export programme vs actual
-  40.3 Wagon types          — wagon-type mix matrix, FY rakes by wagon type
+  40.3 Wagon types          — wagon-type mix per plant, FY rakes by wagon type
 
 Every figure comes from rake_despatch_report.build_report(month); this module
 only regroups it for the page layout, so the PDF and the web report always
@@ -58,17 +58,19 @@ def commodity_rows(position: dict, slab: list, month: str) -> list:
     return rows
 
 
-def mix_matrix(wagon_mix: dict) -> dict:
-    """Wagon type x plant FYTD share %, plus SAIL share and shift (pp)."""
-    by_plant = {e["plant"]: {t["type"]: t for t in e["types"]} for e in wagon_mix["plants"]}
-    sail = next((e for e in wagon_mix["plants"] if e["plant"] == "SAIL"), {"types": []})
-    rows = [{
-        "type": t["type"],
-        "shares": {p: by_plant.get(p, {}).get(t["type"], {}).get("fytd_share") for p in PLANTS},
-        "sail_share": t["fytd_share"],
-        "sail_shift": t["shift_pp"],
-    } for t in sail["types"]]
-    return {"label": wagon_mix["label"], "plants": PLANTS, "rows": rows}
+def mix_rows(wagon_mix: dict) -> dict:
+    """Per plant + SAIL: FYTD rakes and the mix as (type, share %, shift pp),
+    types with rakes only; a shift under 0.1 point prints nothing, and the
+    plant's biggest shift is flagged — as the web report's mix table."""
+    rows = []
+    for e in wagon_mix["plants"]:
+        big = (e.get("biggest_shift") or {}).get("type")
+        rows.append({"plant": e["plant"], "fytd_total": e["fytd_total"], "types": [
+            {"type": t["type"], "share": t["fytd_share"],
+             "shift": t["shift_pp"] if t["shift_pp"] is not None and abs(t["shift_pp"]) >= 0.1 else None,
+             "biggest": t["type"] == big}
+            for t in e["types"] if t["fytd_rakes"] > 0]})
+    return {"label": wagon_mix["label"], "rows": rows}
 
 
 def _block(plant: str, by_type: dict, fy_months: list) -> dict:
@@ -160,7 +162,7 @@ def generate_rail_logistics(month: str, part: str) -> dict:
         )
     else:
         page.update(
-            mix=mix_matrix(d["wagon_mix"]),
+            mix=mix_rows(d["wagon_mix"]),
             blocks=wagon_type_blocks(src["types"], d["fy_months"]),
             month_labels=month_labels(d["fy_months"]),
         )
