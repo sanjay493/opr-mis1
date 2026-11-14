@@ -19,6 +19,7 @@ from fastapi.responses import Response
 from jinja2 import Environment, FileSystemLoader
 from models import PDFRequest
 from report_utils import dept_badge_group
+import page_rail_logistics
 
 _TMPL_DIR = os.path.join(os.path.dirname(__file__), 'page_templates')
 _jinja_env = Environment(loader=FileSystemLoader(_TMPL_DIR), autoescape=False)
@@ -385,6 +386,7 @@ def _pgclass(page_num) -> str:
 
 
 _jinja_env.filters['pgclass'] = _pgclass
+_jinja_env.filters['rl_fmt'] = page_rail_logistics.fmt
 
 
 # Self-hosted from Google Fonts (each family embeds both its "latin" and

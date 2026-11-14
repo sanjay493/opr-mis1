@@ -82,3 +82,20 @@ def test_page_ids():
 
 def test_fmt():
     assert rl.fmt(None) == "–" and rl.fmt(12.345, 2) == "12.35" and rl.fmt(7) == "7"
+
+
+def test_records_rows_labels():
+    rec = [{"plant": "BSP", "actual": 120, "same_month_rank": 2, "same_month_count": 7,
+            "same_month_best": ("2025-10", 130), "same_month_worst": ["2020-10", 90],
+            "best_month": {"month": "2024-03", "rakes": 150}, "is_best_month_ever": False,
+            "best_fy": {"fy": "2024-25", "rakes": 1500}},
+           {"plant": "DSP", "actual": None, "same_month_rank": None, "same_month_count": 0,
+            "same_month_best": (None, None), "same_month_worst": (None, None),
+            "best_month": {"month": None, "rakes": None}, "is_best_month_ever": False,
+            "best_fy": {"fy": None, "rakes": None}}]
+    rows = rl.records_rows(rec)
+    assert rows[0]["rank"] == "2 of 7"
+    assert rows[0]["same_best"] == "130 (Oct'25)" and rows[0]["same_worst"] == "90 (Oct'20)"
+    assert rows[0]["best_month"] == "150 (Mar'24)" and rows[0]["best_fy"] == "1500 (2024-25)"
+    assert rows[1] == {"plant": "DSP", "actual": None, "rank": "–", "same_best": "–", "same_worst": "–",
+                       "best_month": "–", "best_fy": "–", "is_best_month_ever": False}

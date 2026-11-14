@@ -1,0 +1,69 @@
+{# Rail Logistics – Rake Despatch: Wagon Types (page 40.3, page_rail_logistics.py) #}
+<style>
+    .rlw-sec { font-weight: 700; font-size: 9.5pt; color: {{ colors.rail_log_section_title }}; margin: 6pt 0 3pt; }
+    .rlw-sub { font-weight: 400; font-style: italic; font-size: 7.5pt; color: {{ colors.text_secondary }}; }
+    .rlw-subtitle { text-align: right; font-size: 9pt; font-style: italic; color: {{ colors.text_secondary }}; margin-bottom: 2pt; }
+    .rlw-table { border-collapse: collapse; width: 100%; table-layout: fixed; font-size: 7.5pt; }
+    .rlw-table th, .rlw-table td { border: 1px solid {{ colors.border_dark }}; padding: 1.2pt 2pt; text-align: center; font-variant-numeric: tabular-nums; }
+    .rlw-table th { font-weight: 700; }
+    .rlw-table td.rlw-l { text-align: left; font-weight: 700; }
+    .rlw-sail { font-weight: 700; background: {{ colors.rail_log_total_row_bg }}; }
+    .rlw-total td { font-weight: 700; background: {{ colors.rail_log_total_row_bg }}; }
+    .rlw-act { background: {{ colors.perf_act_bg }}; color: {{ colors.perf_act_text }}; }
+    .rlw-plant-first td { border-top: 1px solid {{ colors.rail_log_plant_rule }}; }
+    .rlw-plant-cell { font-weight: 700; vertical-align: middle; }
+    .rlw-pos { color: {{ colors.rail_log_pos_text }}; }
+    .rlw-neg { color: {{ colors.rail_log_neg_text }}; }
+    .rlw-none { font-size: 8pt; font-style: italic; color: {{ colors.text_secondary }}; }
+    .rlw-placeholder { text-align: center; font-size: 11pt; color: {{ colors.text_secondary }}; margin-top: 60mm; }
+</style>
+
+<div class="coal-title">{{ page.title }}</div>
+<div class="rlw-subtitle">{{ page.subtitle }}</div>
+
+{% if not page.available %}
+<div class="rlw-placeholder">{{ page.placeholder }}</div>
+{% else %}
+<div class="rlw-sec">Wagon-type mix <span class="rlw-sub">— share of FY-to-date rakes by wagon type (%); shift: {{ page.mix.label }}</span></div>
+<table class="rlw-table">
+    <colgroup><col style="width:14%"/>{% for _ in page.mix.plants %}<col/>{% endfor %}<col/><col/></colgroup>
+    <thead><tr><th>Wagon type</th>{% for p in page.mix.plants %}<th>{{ p }}</th>{% endfor %}<th class="rlw-sail">SAIL</th><th>SAIL shift (pp)</th></tr></thead>
+    <tbody>
+    {% for r in page.mix.rows %}
+        <tr>
+            <td class="rlw-l">{{ r.type }}</td>
+            {% for p in page.mix.plants %}<td>{{ r.shares[p]|rl_fmt(1) }}</td>{% endfor %}
+            <td class="rlw-sail">{{ r.sail_share|rl_fmt(1) }}</td>
+            <td>{% if r.sail_shift is none %}–{% else %}<span class="{{ 'rlw-pos' if r.sail_shift >= 0 else 'rlw-neg' }}">{{ '+' if r.sail_shift >= 0 else '' }}{{ r.sail_shift|rl_fmt(1) }}</span>{% endif %}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+<div class="rlw-sec">Rakes by wagon type, FY {{ page.fy }} <span class="rlw-sub">— plant-wise, month by month</span></div>
+{% if not page.blocks %}
+<div class="rlw-none">No wagon-type data for this FY.</div>
+{% else %}
+<table class="rlw-table">
+    <colgroup><col style="width:7%"/><col style="width:10%"/>{% for _ in page.month_labels %}<col/>{% endfor %}<col style="width:8%"/></colgroup>
+    <thead><tr><th>Plant</th><th>Wagon type</th>{% for m in page.month_labels %}<th>{{ m }}</th>{% endfor %}<th class="rlw-act">FYTD</th></tr></thead>
+    <tbody>
+    {% for b in page.blocks %}
+        {% for r in b.rows %}
+        <tr{% if loop.first %} class="rlw-plant-first"{% endif %}>
+            {% if loop.first %}<td class="rlw-plant-cell" rowspan="{{ b.rows|length + 1 }}">{{ b.plant }}</td>{% endif %}
+            <td class="rlw-l">{{ r.type }}</td>
+            {% for v in r.months %}<td>{{ v|rl_fmt }}</td>{% endfor %}
+            <td class="rlw-act">{{ r.fytd|rl_fmt }}</td>
+        </tr>
+        {% endfor %}
+        <tr class="rlw-total">
+            <td class="rlw-l">Total</td>
+            {% for v in b.total.months %}<td>{{ v|rl_fmt }}</td>{% endfor %}
+            <td>{{ b.total.fytd|rl_fmt }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+{% endif %}

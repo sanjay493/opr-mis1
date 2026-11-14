@@ -1,0 +1,142 @@
+{# Rail Logistics – Rake Despatch: Summary (page 40.1, page_rail_logistics.py) #}
+<style>
+    .rls-sec { font-weight: 700; font-size: 9.5pt; color: {{ colors.rail_log_section_title }}; margin: 7pt 0 3pt; }
+    .rls-sub { font-weight: 400; font-style: italic; font-size: 7.5pt; color: {{ colors.text_secondary }}; }
+    .rls-subtitle { text-align: right; font-size: 9pt; font-style: italic; color: {{ colors.text_secondary }}; margin-bottom: 4pt; }
+    .rls-cards { display: flex; gap: 5pt; }
+    .rls-card { flex: 1; border: 1px solid {{ colors.rail_log_card_border }}; background: {{ colors.rail_log_card_bg }}; padding: 4pt 6pt; }
+    .rls-card-title { font-size: 7.5pt; color: {{ colors.text_secondary }}; font-weight: 600; }
+    .rls-card-value { font-size: 15pt; font-weight: 700; color: {{ colors.rail_log_card_value }}; line-height: 1.15; }
+    .rls-card-sub { font-size: 7.5pt; color: {{ colors.text_secondary }}; }
+    .rls-table { border-collapse: collapse; width: 100%; table-layout: fixed; font-size: 8pt; }
+    .rls-table th, .rls-table td { border: 1px solid {{ colors.border_dark }}; padding: 1.8pt 2pt; text-align: center; font-variant-numeric: tabular-nums; }
+    .rls-table th { font-weight: 700; }
+    .rls-table td.rls-l { text-align: left; font-weight: 700; }
+    .rls-sail td { font-weight: 700; background: {{ colors.rail_log_total_row_bg }}; }
+    .rls-plan { background: {{ colors.perf_app_bg }}; color: {{ colors.perf_app_text }}; }
+    .rls-act { background: {{ colors.perf_act_bg }}; color: {{ colors.perf_act_text }}; }
+    .rls-tint-ok { background: {{ colors.rail_log_tint_ok }}; font-weight: 700; }
+    .rls-tint-watch { background: {{ colors.rail_log_tint_watch }}; font-weight: 700; }
+    .rls-tint-behind { background: {{ colors.rail_log_tint_behind }}; font-weight: 700; }
+    .rls-pos { color: {{ colors.rail_log_pos_text }}; }
+    .rls-neg { color: {{ colors.rail_log_neg_text }}; }
+    .rls-points { margin: 0; padding-left: 14pt; font-size: 8.5pt; line-height: 1.35; }
+    .rls-points li { margin-bottom: 1.5pt; }
+    .rls-note { font-size: 7.5pt; font-style: italic; color: {{ colors.text_secondary }}; margin-top: 2pt; }
+    .rls-placeholder { text-align: center; font-size: 11pt; color: {{ colors.text_secondary }}; margin-top: 60mm; }
+</style>
+{% macro signed(v, nd=1, suffix='%') -%}
+{%- if v is none -%}–{%- else -%}<span class="{{ 'rls-pos' if v >= 0 else 'rls-neg' }}">{{ '+' if v >= 0 else '' }}{{ v|rl_fmt(nd) }}{{ suffix }}</span>{%- endif -%}
+{%- endmacro %}
+
+<div class="coal-title">{{ page.title }}</div>
+<div class="rls-subtitle">{{ page.subtitle }}</div>
+
+{% if not page.available %}
+<div class="rls-placeholder">{{ page.placeholder }}</div>
+{% else %}
+{% set h = page.headline %}
+<div class="rls-cards">
+    <div class="rls-card">
+        <div class="rls-card-title">SAIL rakes, {{ page.month_label }}</div>
+        <div class="rls-card-value">{{ h.month_actual|rl_fmt }}</div>
+        <div class="rls-card-sub">Plan {{ h.month_plan|rl_fmt }} · {{ h.month_attainment|rl_fmt(1) }}% · {{ h.month_avg_day|rl_fmt(2) }}/day vs {{ h.month_plan_avg_day|rl_fmt(2) }}</div>
+    </div>
+    <div class="rls-card">
+        <div class="rls-card-title">vs same month last year</div>
+        <div class="rls-card-value">{{ signed(h.vs_ly_month_pct) }}</div>
+        <div class="rls-card-sub">Last year {{ h.ly_month_actual|rl_fmt }} rakes</div>
+    </div>
+    <div class="rls-card">
+        <div class="rls-card-title">FY to date</div>
+        <div class="rls-card-value">{{ h.fytd_actual|rl_fmt }}</div>
+        <div class="rls-card-sub">{% if h.fytd_plan is not none %}Plan {{ h.fytd_plan|rl_fmt }} ({{ h.fytd_attainment|rl_fmt(1) }}%) · {% endif %}LY {{ h.ly_fytd_actual|rl_fmt }} ({{ signed(h.vs_ly_fytd_pct) }})</div>
+    </div>
+    <div class="rls-card">
+        <div class="rls-card-title">FY projection at current pace</div>
+        <div class="rls-card-value">{{ h.fy_projection|rl_fmt }}</div>
+        <div class="rls-card-sub">Last FY {{ h.ly_fy_total|rl_fmt }} ({{ signed(h.projection_vs_ly_pct) }})</div>
+    </div>
+</div>
+
+<div class="rls-sec">Commodity-wise rakes loaded <span class="rls-sub">— slag, coke &amp; sinter (month-end position); slab despatch between plants</span></div>
+<table class="rls-table">
+    <colgroup><col style="width:9%"/>{% for _ in range(12) %}<col/>{% endfor %}</colgroup>
+    <thead>
+        <tr><th rowspan="2">Plant</th><th colspan="4">Slag</th><th colspan="4">Coke</th><th colspan="4">Sinter</th></tr>
+        <tr>{% for _ in range(3) %}<th>On date</th><th>Cumm.</th><th class="rls-act">Avg/day</th><th class="rls-plan">Plan/day</th>{% endfor %}</tr>
+    </thead>
+    <tbody>
+    {% for r in page.commodity %}
+        <tr{% if r.plant == 'SAIL' %} class="rls-sail"{% endif %}>
+            <td class="rls-l">{{ r.plant }}</td>
+            {% for c in ('slag', 'coke', 'sinter') %}
+            <td>{{ r[c].on_date|rl_fmt }}</td><td>{{ r[c].cumm|rl_fmt }}</td>
+            <td class="rls-act">{{ r[c].avg_day|rl_fmt(2) }}</td><td class="rls-plan">{{ r[c].plan_avg_day|rl_fmt(2) }}</td>
+            {% endfor %}
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% if page.slab %}
+<table class="rls-table" style="width:60%;margin-top:4pt;">
+    <thead><tr><th>Slab despatch from</th><th>To</th><th>Rakes</th><th>Qty (MT)</th></tr></thead>
+    <tbody>
+    {% for s in page.slab %}
+        <tr><td>{{ s.from_plant_code }}</td><td>{{ s.to_plant_code }}</td><td>{{ s.rakes|rl_fmt }}</td><td>{{ s.qty_mt|rl_fmt(1) }}</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+{% if page.slab_note %}<div class="rls-note">{{ page.slab_note }}</div>{% endif %}
+
+<div class="rls-sec">Key points</div>
+<ul class="rls-points">
+{% for p in page.key_points %}<li>{{ p }}</li>{% endfor %}
+</ul>
+
+<div class="rls-sec">Plan attainment <span class="rls-sub">— {{ page.month_label }}, plants furthest behind plan first; plan = plan rakes/day × days in the month</span></div>
+<table class="rls-table">
+    <colgroup><col style="width:9%"/>{% for _ in range(9) %}<col/>{% endfor %}</colgroup>
+    <thead><tr>
+        <th>Plant</th><th class="rls-act">Actual</th><th class="rls-plan">Plan</th><th>Attainment</th>
+        <th class="rls-act">Avg/day</th><th class="rls-plan">Plan/day</th><th>Gap/day</th>
+        <th>FYTD</th><th>LY FYTD</th><th>FYTD vs LY</th>
+    </tr></thead>
+    <tbody>
+    {% for r in page.ranking %}
+        <tr{% if r.plant == 'SAIL' %} class="rls-sail"{% endif %}>
+            <td class="rls-l">{{ r.plant }}</td>
+            <td class="rls-act">{{ r.actual|rl_fmt }}</td><td class="rls-plan">{{ r.plan|rl_fmt }}</td>
+            <td class="rls-tint-{{ r.tint }}">{% if r.attainment is not none %}{{ r.attainment|rl_fmt(1) }}%{% else %}–{% endif %}</td>
+            <td class="rls-act">{{ r.avg_day|rl_fmt(2) }}</td><td class="rls-plan">{{ r.plan_avg_day|rl_fmt(2) }}</td>
+            <td>{{ signed(r.gap_per_day, 2, '') }}</td>
+            <td>{{ r.fytd_actual|rl_fmt }}</td><td>{{ r.ly_fytd_actual|rl_fmt }}</td><td>{{ signed(r.fytd_vs_ly_pct) }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+{% set rr = page.run_rate %}
+<div class="rls-sec">Run-rate to FY end <span class="rls-sub">— rakes/day needed for the rest of the FY to equal last FY's total, and where the FY ends at this month's plan rate or at the pace so far{% if rr %}; {{ rr[0].remaining_days }} days left{% endif %}</span></div>
+<table class="rls-table">
+    <colgroup><col style="width:9%"/>{% for _ in range(9) %}<col/>{% endfor %}</colgroup>
+    <thead><tr>
+        <th>Plant</th><th>FYTD</th><th class="rls-act">FYTD avg/day</th><th class="rls-act">Month avg/day</th>
+        <th class="rls-plan">Plan/day</th><th>Last FY total</th><th>Needed/day to match LY</th><th>Lift needed</th>
+        <th>FY at plan rate</th><th>FY at current pace</th>
+    </tr></thead>
+    <tbody>
+    {% for r in rr %}
+        <tr{% if r.plant == 'SAIL' %} class="rls-sail"{% endif %}>
+            <td class="rls-l">{{ r.plant }}</td><td>{{ r.fytd_actual|rl_fmt }}</td>
+            <td class="rls-act">{{ r.fytd_avg_day|rl_fmt(2) }}</td><td class="rls-act">{{ r.month_avg_day|rl_fmt(2) }}</td>
+            <td class="rls-plan">{{ r.plan_avg_day|rl_fmt(2) }}</td><td>{{ r.ly_total|rl_fmt }}</td>
+            <td><b>{{ r.required_avg_day_ly|rl_fmt(2) }}</b></td>
+            <td>{% if r.lift_needed_pct is none %}–{% elif r.lift_needed_pct > 0 %}<span class="rls-neg">+{{ r.lift_needed_pct|rl_fmt(1) }}%</span>{% else %}<span class="rls-pos">On course</span>{% endif %}</td>
+            <td>{{ r.fy_at_plan_rate|rl_fmt }}</td><td>{{ r.fy_at_current_pace|rl_fmt }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endif %}

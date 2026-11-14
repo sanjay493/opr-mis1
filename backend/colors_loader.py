@@ -153,6 +153,17 @@ _DEFAULTS: Dict[str, str] = {
     "parl_cap_bg":                "#E3FFAB",
     "parl_actual_bg":             "#FFFF99",
     "parl_deviation_bg":          "#F8CBAD",
+    "rail_log_card_bg":          "#F1F5F9",
+    "rail_log_card_border":      "#94A3B8",
+    "rail_log_card_value":       "#060177",
+    "rail_log_section_title":    "#060177",
+    "rail_log_tint_ok":          "#C6EFCE",
+    "rail_log_tint_watch":       "#FFEB9C",
+    "rail_log_tint_behind":      "#FFC7CE",
+    "rail_log_total_row_bg":     "#EAE1F5",
+    "rail_log_plant_rule":       "#1E293B",
+    "rail_log_pos_text":         "#006100",
+    "rail_log_neg_text":         "#9C0006",
 }
 
 

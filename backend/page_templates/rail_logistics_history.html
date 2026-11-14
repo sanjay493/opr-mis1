@@ -1,0 +1,88 @@
+{# Rail Logistics – Rake Despatch: Performance History (page 40.2, page_rail_logistics.py) #}
+<style>
+    .rlh-sec { font-weight: 700; font-size: 9.5pt; color: {{ colors.rail_log_section_title }}; margin: 6pt 0 3pt; }
+    .rlh-sub { font-weight: 400; font-style: italic; font-size: 7.5pt; color: {{ colors.text_secondary }}; }
+    .rlh-subtitle { text-align: right; font-size: 9pt; font-style: italic; color: {{ colors.text_secondary }}; margin-bottom: 2pt; }
+    .rlh-table { border-collapse: collapse; width: 100%; table-layout: fixed; font-size: 7.5pt; }
+    .rlh-table th, .rlh-table td { border: 1px solid {{ colors.border_dark }}; padding: 1.2pt 2pt; text-align: center; font-variant-numeric: tabular-nums; }
+    .rlh-table th { font-weight: 700; }
+    .rlh-table td.rlh-l { text-align: left; font-weight: 700; }
+    .rlh-sail td { font-weight: 700; background: {{ colors.rail_log_total_row_bg }}; }
+    .rlh-total td { font-weight: 700; background: {{ colors.rail_log_total_row_bg }}; }
+    .rlh-act { background: {{ colors.perf_act_bg }}; color: {{ colors.perf_act_text }}; }
+    .rlh-plan { background: {{ colors.perf_app_bg }}; color: {{ colors.perf_app_text }}; }
+    .rlh-current td { font-weight: 700; }
+    .rlh-plant-first td { border-top: 1px solid {{ colors.rail_log_plant_rule }}; }
+    .rlh-plant-cell { font-weight: 700; vertical-align: middle; }
+    .rlh-pos { color: {{ colors.rail_log_pos_text }}; }
+    .rlh-neg { color: {{ colors.rail_log_neg_text }}; }
+    .rlh-none { font-size: 8pt; font-style: italic; color: {{ colors.text_secondary }}; }
+    .rlh-placeholder { text-align: center; font-size: 11pt; color: {{ colors.text_secondary }}; margin-top: 60mm; }
+</style>
+
+<div class="coal-title">{{ page.title }}</div>
+<div class="rlh-subtitle">{{ page.subtitle }}</div>
+
+{% if not page.available %}
+<div class="rlh-placeholder">{{ page.placeholder }}</div>
+{% else %}
+{% set mon = page.month_label[:3] %}
+<div class="rlh-sec">Records &amp; seasonality <span class="rlh-sub">— how {{ page.month_label }} ranks against every stored {{ mon }}, and the best month and FY on record</span></div>
+<table class="rlh-table">
+    <colgroup><col style="width:9%"/><col style="width:10%"/><col style="width:11%"/><col/><col/><col/><col/></colgroup>
+    <thead><tr>
+        <th>Plant</th><th class="rlh-act">{{ page.month_label }}</th><th>Rank among {{ mon }}s</th>
+        <th>Best {{ mon }}</th><th>Lowest {{ mon }}</th><th>Best month ever</th><th>Best FY</th>
+    </tr></thead>
+    <tbody>
+    {% for r in page.records %}
+        <tr{% if r.plant == 'SAIL' %} class="rlh-sail"{% endif %}>
+            <td class="rlh-l">{{ r.plant }}</td><td class="rlh-act">{{ r.actual|rl_fmt }}</td><td>{{ r.rank }}</td>
+            <td>{{ r.same_best }}</td><td>{{ r.same_worst }}</td>
+            <td>{{ r.best_month }}{% if r.is_best_month_ever %} ★{% endif %}</td><td>{{ r.best_fy }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+<div class="rlh-sec">Seven-year monthly trend <span class="rlh-sub">— rakes per month, current FY first</span></div>
+<table class="rlh-table">
+    <colgroup><col style="width:7%"/><col style="width:9%"/>{% for _ in page.month_labels %}<col/>{% endfor %}<col style="width:8%"/></colgroup>
+    <thead><tr><th>Plant</th><th>FY</th>{% for m in page.month_labels %}<th>{{ m }}</th>{% endfor %}<th>Total</th></tr></thead>
+    <tbody>
+    {% for r in page.trend %}
+        <tr class="{% if r.first_of_plant %}rlh-plant-first rlh-current{% endif %}">
+            {% if r.first_of_plant %}<td class="rlh-plant-cell" rowspan="{{ page.trend|selectattr('plant', 'equalto', r.plant)|list|length }}">{{ r.plant }}</td>{% endif %}
+            <td>{{ r.fy }}</td>
+            {% for v in r.months %}<td>{{ v|rl_fmt }}</td>{% endfor %}
+            <td class="rlh-act">{{ r.total|rl_fmt }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+<div class="rlh-sec">Export <span class="rlh-sub">— export rakes, programme / actual by destination</span></div>
+{% if not page.export %}
+<div class="rlh-none">No export programme for {{ page.month_label }}.</div>
+{% else %}
+<table class="rlh-table">
+    <colgroup><col style="width:19%"/>{% for _ in range(page.export_plants|length * 2 + 3) %}<col/>{% endfor %}</colgroup>
+    <thead>
+        <tr><th rowspan="2">Destination</th>{% for p in page.export_plants %}<th colspan="2">{{ p }}</th>{% endfor %}<th colspan="3">SAIL</th></tr>
+        <tr>{% for p in page.export_plants %}<th class="rlh-plan">Prog</th><th class="rlh-act">Act</th>{% endfor %}<th class="rlh-plan">Prog</th><th class="rlh-act">Act</th><th>%</th></tr>
+    </thead>
+    <tbody>
+    {% for r in page.export %}
+        <tr{% if r.is_total %} class="rlh-total"{% endif %}>
+            <td class="rlh-l">{{ r.destination }}</td>
+            {% for p in page.export_plants %}{% set v = r.plants.get(p) %}
+            <td class="rlh-plan">{{ v.prog|rl_fmt if v else '–' }}</td><td class="rlh-act">{{ v.actual|rl_fmt if v else '–' }}</td>
+            {% endfor %}
+            <td class="rlh-plan">{{ r.prog|rl_fmt }}</td><td class="rlh-act">{{ r.actual|rl_fmt }}</td>
+            <td>{% if r.fulfilment is not none %}<span class="{{ 'rlh-pos' if r.actual >= r.prog else 'rlh-neg' }}">{{ r.fulfilment|rl_fmt }}%</span>{% else %}–{% endif %}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+{% endif %}

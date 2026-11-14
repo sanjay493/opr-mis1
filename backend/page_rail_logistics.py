@@ -88,6 +88,28 @@ def wagon_type_blocks(types: dict, fy_months: list) -> list:
     return blocks
 
 
+def _with(value, label) -> str:
+    return "–" if value is None else f"{value:g} ({label})"
+
+
+def records_rows(records: list) -> list:
+    """Records & seasonality with the (month, rakes) pairs written out as text."""
+    out = []
+    for r in records:
+        best, worst = r["same_month_best"], r["same_month_worst"]
+        out.append({
+            "plant": r["plant"],
+            "actual": r["actual"],
+            "rank": f"{r['same_month_rank']} of {r['same_month_count']}" if r["same_month_rank"] else "–",
+            "same_best": _with(best[1], best[0] and mlabel(best[0])),
+            "same_worst": _with(worst[1], worst[0] and mlabel(worst[0])),
+            "best_month": _with(r["best_month"]["rakes"], r["best_month"]["month"] and mlabel(r["best_month"]["month"])),
+            "best_fy": _with(r["best_fy"]["rakes"], r["best_fy"]["fy"]),
+            "is_best_month_ever": r["is_best_month_ever"],
+        })
+    return out
+
+
 def trend_rows(trend: dict) -> list:
     """Plant x FY rows (newest FY first), flagging each plant's first row."""
     return [{"plant": p, "fy": s["fy"], "months": s["months"], "total": s["total"], "first_of_plant": i == 0}
@@ -105,7 +127,7 @@ def generate_rail_logistics(month: str, part: str) -> dict:
     if not page["available"]:
         return {**page, "subtitle": mlabel(month),
                 "placeholder": f"Despatch Summary Report for {mlabel(month)} not uploaded"}
-    page.update(subtitle=f"{mlabel(month)} · FY {d['fy']}", placeholder=None, month_label=mlabel(month))
+    page.update(subtitle=f"{mlabel(month)} · FY {d['fy']}", placeholder=None, month_label=mlabel(month), fy=d["fy"])
     src = d["source"]
     if part == "summary":
         page.update(
@@ -119,7 +141,7 @@ def generate_rail_logistics(month: str, part: str) -> dict:
         )
     elif part == "history":
         page.update(
-            records=d["records"],
+            records=records_rows(d["records"]),
             trend=trend_rows(d["trend"]),
             month_labels=month_labels(d["fy_months"]),
             export=export_rows(d["export"]),
