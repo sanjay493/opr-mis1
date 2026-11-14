@@ -611,7 +611,7 @@ _BADGE_COLORS = {
     7: ("#4a3aa7", "#ffffff"),  # violet  — Techno Params (27-30)
     8: ("#e34948", "#0b0b0b"),  # red     — Mill Techno (31-35)
     9: ("#0a9698", "#0b0b0b"),  # teal    — Capital Repair (36-40)
-    10: ("#8b5e34", "#ffffff"), # brown   — Rakes Detention (1026,1027,1038-1040,1028,1029)
+    10: ("#8b5e34", "#ffffff"), # brown   — Rail Logistics (40.1-40.3) + Rakes Detention (1026,1027,1038-1040,1028,1029)
     11: ("#701a75", "#ffffff"), # dark purple — Ready Reckoner (1041-1058, +1059-1066 overflow)
 }
 

@@ -86,6 +86,7 @@ from page_rake_detention import (
     TREND_PAGE_ID as RAKE_DETENTION_TREND_PAGE_ID,
     generate_rake_detention_detail, generate_rake_detention_summary, generate_rake_detention_trend,
 )
+from page_rail_logistics import PAGE_IDS as RAIL_LOGISTICS_PAGES, generate_rail_logistics
 import page_ready_reckoner
 from page_ready_reckoner import (
     ISP_SEPARATOR_PAGE_ID as READY_RECKONER_ISP_SEPARATOR_PAGE_ID,
@@ -394,6 +395,10 @@ _INDEX_SECTIONS = [
     ("Details of Coking Coal Consumption, Blend and Stocks", 2),
     ("Plant Wise Power Data", 1),
     ("Status of Capital/Major Repairs Planned in ABP - Plant Wise", 5),
+    # Rake Despatch (SAIL Rail Movement Cell's Despatch Summary Report) —
+    # 3 portrait pages, RAIL_LOGISTICS_PAGES (40.1-40.3), right after
+    # Capital Repair. See page_rail_logistics.py.
+    ("Rail Logistics – Rake Despatch", 3),
     # SAIL Rail Movement Cell's "Average Plant Detention Report" — 7 pages:
     # 5 portrait commodity/wagon-type detail pages, one per plant
     # (RAKE_DETENTION_DETAIL_PAGES — split from the source PDF's own
@@ -802,6 +807,7 @@ _INDEX_SECTION_ANCHORS = [
     COAL_RECEIPTS_PAGE_ID,             # Details of Coking Coal Consumption, Blend and Stocks
     POWER_DATA_PAGE_ID,                # Plant Wise Power Data
     36,                                # Status of Capital/Major Repairs Planned in ABP - Plant Wise
+    min(RAIL_LOGISTICS_PAGES),         # Rail Logistics – Rake Despatch
     min(RAKE_DETENTION_DETAIL_PAGES),  # Details of Rakes Detention Plant Wise
     READY_RECKONER_ISP_SEPARATOR_PAGE_ID,  # Annexure-1 : 5 ISPs Ready Reckoner
     READY_RECKONER_SSP_SEPARATOR_PAGE_ID,  # Annexure-2 : 3 SSPs Ready Reckoner
@@ -1122,7 +1128,7 @@ def _get_data(month: str, page_number: Optional[float]):
                                 READY_RECKONER_ISP_SEPARATOR_PAGE_ID, READY_RECKONER_SSP_SEPARATOR_PAGE_ID,
                                 MAJOR_UNIT_SEPARATOR_PAGE_ID,
                                 SAIL8_TREND_SEPARATOR_PAGE_ID, SAIL8_TREND_PAGE_ID) \
-                    or page_number in STEEL_SECTOR_PAGES or page_number in RAKE_DETENTION_DETAIL_PAGES \
+                    or page_number in STEEL_SECTOR_PAGES or page_number in RAKE_DETENTION_DETAIL_PAGES                     or page_number in RAIL_LOGISTICS_PAGES \
                     or page_number in READY_RECKONER_ISP_PAGES or page_number in READY_RECKONER_SSP_PAGES \
                     or page_number in MAJOR_UNIT_ACTIVE_PAGES:
                 # Page 24 (SAIL), the trend sentinel page, the "at a
@@ -1269,6 +1275,7 @@ def _get_data(month: str, page_number: Optional[float]):
                                                       SAIL8_TREND_SEPARATOR_PAGE_ID, SAIL8_TREND_PAGE_ID)
                             and p.get("page") not in STEEL_SECTOR_PAGES
                             and p.get("page") not in RAKE_DETENTION_DETAIL_PAGES
+                            and p.get("page") not in RAIL_LOGISTICS_PAGES
                             and p.get("page") not in READY_RECKONER_ISP_PAGES
                             and p.get("page") not in READY_RECKONER_SSP_PAGES
                             and p.get("page") not in MAJOR_UNIT_ACTIVE_PAGES
@@ -1347,6 +1354,10 @@ def _get_data(month: str, page_number: Optional[float]):
             # everything else (Capital Repair, pages 36-40, is always the
             # last real section by this point in a full-month fetch) since
             # it sits right before the Annexures, which aren't real pages.
+            # "Rail Logistics – Rake Despatch" goes first, right after
+            # Capital Repair, for the same reason.
+            for _pg in RAIL_LOGISTICS_PAGES:
+                pages_config.append({"page": _pg})
             for _pg in RAKE_DETENTION_DETAIL_PAGES:
                 pages_config.append({"page": _pg})
             pages_config.append({"page": RAKE_DETENTION_SUMMARY_PAGE_ID})
@@ -1444,6 +1455,9 @@ def _get_data(month: str, page_number: Optional[float]):
                 page.update(_pc(month, pg, generate_rail_report, month))
                 page["type"] = "rail_report"
                 page["orientation"] = "landscape"
+            if pg in RAIL_LOGISTICS_PAGES:
+                page.update(_pc(month, pg, generate_rail_logistics, month, RAIL_LOGISTICS_PAGES[pg]))
+                page["orientation"] = "portrait"
             if pg in RAKE_DETENTION_DETAIL_PAGES:
                 page.update(_pc(month, pg, generate_rake_detention_detail, month, RAKE_DETENTION_DETAIL_PAGES[pg]))
                 page["orientation"] = "landscape"
@@ -1735,6 +1749,14 @@ def _enrich_pdf_pages_impl(request: PDFRequest) -> tuple[list, dict]:
         _idxcoal2 = next((i for i, p in enumerate(_pages_list) if p.get("page") == COAL_RECEIPTS_PAGE_2_ID), None)
         if _idxcoal2 is not None:
             _pages_list.insert(_idxcoal2 + 1, {"page": POWER_DATA_PAGE_ID})
+    # "Rail Logistics – Rake Despatch" sentinel pages: right after Capital
+    # Repair's last page (40), ahead of Rake Detention — inserted, not
+    # appended, since a saved page list may already end in Rake Detention.
+    if _is_full_export and not any(p.get("page") in RAIL_LOGISTICS_PAGES for p in _pages_list):
+        _idx40 = next((i for i, p in enumerate(_pages_list) if p.get("page") == 40), None)
+        _at = len(_pages_list) if _idx40 is None else _idx40 + 1
+        for _k, _pg in enumerate(RAIL_LOGISTICS_PAGES):
+            _pages_list.insert(_at + _k, {"page": _pg})
     # "Details of Rakes Detention Plant Wise" sentinel pages: appended at
     # the very end (right before the Annexures, which aren't real pages) —
     # same unconditional-insert-if-missing pattern as above, brand new so
@@ -1881,6 +1903,9 @@ def _enrich_pdf_pages_impl(request: PDFRequest) -> tuple[list, dict]:
             p.update(_pc(request.month, pg, generate_rail_report, request.month))
             p["type"] = "rail_report"
             p["orientation"] = "landscape"
+        if pg in RAIL_LOGISTICS_PAGES:
+            p.update(_pc(request.month, pg, generate_rail_logistics, request.month, RAIL_LOGISTICS_PAGES[pg]))
+            p["orientation"] = "portrait"
         if pg in RAKE_DETENTION_DETAIL_PAGES:
             p.update(_pc(request.month, pg, generate_rake_detention_detail, request.month, RAKE_DETENTION_DETAIL_PAGES[pg]))
             p["orientation"] = "landscape"
