@@ -3,7 +3,7 @@
 Capital Repair (pages 36-40), right before Details of Rakes Detention.
 A selection of the web report (Reports > Rail Logistics > Rake Despatch):
 
-  40.1 Summary              — headline cards, slag/coke/sinter & slab by plant,
+  40.1 Summary              — headline cards, slag/coke/sinter/slab by plant,
                               key points, plan attainment (no Status column;
                               the attainment cell is tinted instead), run-rate
   40.2 Performance history  — records & seasonality, seven-year monthly trend,
@@ -26,7 +26,7 @@ _TITLES = {
     "wagon": "Rail Logistics – Rake Despatch: Wagon Types",
 }
 _COMMODITIES = ("slag", "coke", "sinter")
-_FIELDS = ("on_date", "cumm", "avg_day", "plan_avg_day")
+_FIELDS = ("plan_avg_day", "avg_day", "cumm")
 
 
 def fmt(v, nd=0) -> str:
@@ -38,11 +38,24 @@ def month_labels(fy_months: list) -> list:
     return [mlabel(m)[:3] for m in fy_months]
 
 
-def commodity_rows(position: dict) -> list:
-    """Slag/coke/sinter (on date, cumulative, avg/day, plan avg/day) per plant + SAIL."""
-    return [{"plant": p, **{c: {f: position.get(p, {}).get(f"{c}_{f}") for f in _FIELDS}
-                            for c in _COMMODITIES}}
-            for p in ALL]
+def commodity_rows(position: dict, slab: list, month: str) -> list:
+    """Plan/day, avg/day and cumulative per plant + SAIL for slag, coke and
+    sinter (page-1 position), and slab: rakes despatched from the plant this
+    month (the slab rows summed), avg/day = those rakes / days in the month.
+    The source has no slab plan, so its plan/day is always None."""
+    sent = {}
+    for r in slab:
+        sent[r["from_plant_code"]] = sent.get(r["from_plant_code"], 0) + r["rakes"]
+    if sent:
+        sent["SAIL"] = sum(sent.values())
+    days = rdr.days_in(month)
+    rows = []
+    for p in ALL:
+        row = {"plant": p, **{c: {f: position.get(p, {}).get(f"{c}_{f}") for f in _FIELDS} for c in _COMMODITIES}}
+        cumm = sent.get(p)
+        row["slab"] = {"plan_avg_day": None, "avg_day": None if cumm is None else round(cumm / days, 2), "cumm": cumm}
+        rows.append(row)
+    return rows
 
 
 def mix_matrix(wagon_mix: dict) -> dict:
@@ -132,9 +145,7 @@ def generate_rail_logistics(month: str, part: str) -> dict:
     if part == "summary":
         page.update(
             headline=d["headline"],
-            commodity=commodity_rows(src["position"]),
-            slab=src["slab"],
-            slab_note=src["slab_note"],
+            commodity=commodity_rows(src["position"], src["slab"], month),
             key_points=d["key_points"],
             ranking=[{**r, "tint": status_of(r["attainment"])} for r in d["ranking"]],
             run_rate=d["run_rate"],

@@ -22,7 +22,6 @@
     .rls-neg { color: {{ colors.rail_log_neg_text }}; }
     .rls-points { margin: 0; padding-left: 14pt; font-size: 8.5pt; line-height: 1.35; }
     .rls-points li { margin-bottom: 1.5pt; }
-    .rls-note { font-size: 7.5pt; font-style: italic; color: {{ colors.text_secondary }}; margin-top: 2pt; }
     .rls-placeholder { text-align: center; font-size: 11pt; color: {{ colors.text_secondary }}; margin-top: 60mm; }
 </style>
 {% macro signed(v, nd=1, suffix='%') -%}
@@ -59,36 +58,24 @@
     </div>
 </div>
 
-<div class="rls-sec">Commodity-wise rakes loaded <span class="rls-sub">— slag, coke &amp; sinter (month-end position); slab despatch between plants</span></div>
+<div class="rls-sec">Commodity-wise rakes loaded <span class="rls-sub">— {{ page.month_label }}; slab = slab rakes despatched from the plant to other plants, avg/day over the month (no slab plan in the source)</span></div>
 <table class="rls-table">
     <colgroup><col style="width:9%"/>{% for _ in range(12) %}<col/>{% endfor %}</colgroup>
     <thead>
-        <tr><th rowspan="2">Plant</th><th colspan="4">Slag</th><th colspan="4">Coke</th><th colspan="4">Sinter</th></tr>
-        <tr>{% for _ in range(3) %}<th>On date</th><th>Cumm.</th><th class="rls-act">Avg/day</th><th class="rls-plan">Plan/day</th>{% endfor %}</tr>
+        <tr><th rowspan="2">Plant</th><th colspan="3">Slag</th><th colspan="3">Coke</th><th colspan="3">Sinter</th><th colspan="3">Slab</th></tr>
+        <tr>{% for _ in range(4) %}<th class="rls-plan">Plan/day</th><th class="rls-act">Avg/day</th><th>Cumm.</th>{% endfor %}</tr>
     </thead>
     <tbody>
     {% for r in page.commodity %}
         <tr{% if r.plant == 'SAIL' %} class="rls-sail"{% endif %}>
             <td class="rls-l">{{ r.plant }}</td>
-            {% for c in ('slag', 'coke', 'sinter') %}
-            <td>{{ r[c].on_date|rl_fmt }}</td><td>{{ r[c].cumm|rl_fmt }}</td>
-            <td class="rls-act">{{ r[c].avg_day|rl_fmt(2) }}</td><td class="rls-plan">{{ r[c].plan_avg_day|rl_fmt(2) }}</td>
+            {% for c in ('slag', 'coke', 'sinter', 'slab') %}
+            <td class="rls-plan">{{ r[c].plan_avg_day|rl_fmt(2) }}</td><td class="rls-act">{{ r[c].avg_day|rl_fmt(2) }}</td><td>{{ r[c].cumm|rl_fmt }}</td>
             {% endfor %}
         </tr>
     {% endfor %}
     </tbody>
 </table>
-{% if page.slab %}
-<table class="rls-table" style="width:60%;margin-top:4pt;">
-    <thead><tr><th>Slab despatch from</th><th>To</th><th>Rakes</th><th>Qty (MT)</th></tr></thead>
-    <tbody>
-    {% for s in page.slab %}
-        <tr><td>{{ s.from_plant_code }}</td><td>{{ s.to_plant_code }}</td><td>{{ s.rakes|rl_fmt }}</td><td>{{ s.qty_mt|rl_fmt(1) }}</td></tr>
-    {% endfor %}
-    </tbody>
-</table>
-{% endif %}
-{% if page.slab_note %}<div class="rls-note">{{ page.slab_note }}</div>{% endif %}
 
 <div class="rls-sec">Key points</div>
 <ul class="rls-points">
@@ -99,17 +86,17 @@
 <table class="rls-table">
     <colgroup><col style="width:9%"/>{% for _ in range(9) %}<col/>{% endfor %}</colgroup>
     <thead><tr>
-        <th>Plant</th><th class="rls-act">Actual</th><th class="rls-plan">Plan</th><th>Attainment</th>
-        <th class="rls-act">Avg/day</th><th class="rls-plan">Plan/day</th><th>Gap/day</th>
+        <th>Plant</th><th class="rls-plan">Plan</th><th class="rls-act">Actual</th><th>Attainment</th>
+        <th class="rls-plan">Plan/day</th><th class="rls-act">Actual/day</th><th>Gap/day</th>
         <th>FYTD</th><th>LY FYTD</th><th>FYTD vs LY</th>
     </tr></thead>
     <tbody>
     {% for r in page.ranking %}
         <tr{% if r.plant == 'SAIL' %} class="rls-sail"{% endif %}>
             <td class="rls-l">{{ r.plant }}</td>
-            <td class="rls-act">{{ r.actual|rl_fmt }}</td><td class="rls-plan">{{ r.plan|rl_fmt }}</td>
+            <td class="rls-plan">{{ r.plan|rl_fmt }}</td><td class="rls-act">{{ r.actual|rl_fmt }}</td>
             <td class="rls-tint-{{ r.tint }}">{% if r.attainment is not none %}{{ r.attainment|rl_fmt(1) }}%{% else %}–{% endif %}</td>
-            <td class="rls-act">{{ r.avg_day|rl_fmt(2) }}</td><td class="rls-plan">{{ r.plan_avg_day|rl_fmt(2) }}</td>
+            <td class="rls-plan">{{ r.plan_avg_day|rl_fmt(2) }}</td><td class="rls-act">{{ r.avg_day|rl_fmt(2) }}</td>
             <td>{{ signed(r.gap_per_day, 2, '') }}</td>
             <td>{{ r.fytd_actual|rl_fmt }}</td><td>{{ r.ly_fytd_actual|rl_fmt }}</td><td>{{ signed(r.fytd_vs_ly_pct) }}</td>
         </tr>

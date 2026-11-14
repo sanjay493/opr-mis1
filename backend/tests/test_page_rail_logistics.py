@@ -6,11 +6,22 @@ FY_MONTHS = [f"2026-{m:02d}" for m in range(4, 13)] + [f"2027-{m:02d}" for m in 
 
 
 def test_commodity_rows_missing_metrics():
-    rows = rl.commodity_rows({"BSP": {"slag_cumm": 40.0, "slag_on_date": 1.0}})
+    rows = rl.commodity_rows({"BSP": {"slag_cumm": 40.0, "slag_on_date": 1.0}}, [], "2026-10")
     bsp = next(r for r in rows if r["plant"] == "BSP")
-    assert bsp["slag"] == {"on_date": 1.0, "cumm": 40.0, "avg_day": None, "plan_avg_day": None}
+    assert bsp["slag"] == {"plan_avg_day": None, "avg_day": None, "cumm": 40.0}
     assert [r["plant"] for r in rows] == ["BSP", "DSP", "RSP", "BSL", "ISP", "SAIL"]
     assert next(r for r in rows if r["plant"] == "DSP")["coke"]["cumm"] is None
+
+
+def test_commodity_rows_slab_from_despatch_rows():
+    slab = [{"from_plant_code": "BSL", "to_plant_code": "RSP", "rakes": 3, "qty_mt": 7548.6},
+            {"from_plant_code": "BSL", "to_plant_code": "ISP", "rakes": 1, "qty_mt": 2500.0},
+            {"from_plant_code": "BSP", "to_plant_code": "RSP", "rakes": 0, "qty_mt": 0.0}]
+    rows = {r["plant"]: r for r in rl.commodity_rows({}, slab, "2026-10")}
+    assert rows["BSL"]["slab"] == {"plan_avg_day": None, "avg_day": round(4 / 31, 2), "cumm": 4}
+    assert rows["BSP"]["slab"] == {"plan_avg_day": None, "avg_day": 0.0, "cumm": 0}
+    assert rows["DSP"]["slab"] == {"plan_avg_day": None, "avg_day": None, "cumm": None}
+    assert rows["SAIL"]["slab"]["cumm"] == 4
 
 
 def test_mix_matrix_order_and_shares():

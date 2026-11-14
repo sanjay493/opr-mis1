@@ -90,38 +90,30 @@ export function RailLogisticsSummaryTemplate({ data }) {
               sub={<>Last FY {fmt(h.ly_fy_total)} (<Signed v={h.projection_vs_ly_pct} />)</>} />
       </div>
 
-      <Sec title="Commodity-wise rakes loaded" sub="slag, coke & sinter (month-end position); slab despatch between plants" />
+      <Sec title="Commodity-wise rakes loaded"
+           sub={`${data.month_label}; slab = slab rakes despatched from the plant to other plants, avg/day over the month (no slab plan in the source)`} />
       <table style={table('8pt')}>
         <colgroup><col style={{ width: '9%' }} />{Array.from({ length: 12 }, (_, i) => <col key={i} />)}</colgroup>
         <thead>
-          <tr><th style={c} rowSpan={2}>Plant</th><th style={c} colSpan={4}>Slag</th><th style={c} colSpan={4}>Coke</th><th style={c} colSpan={4}>Sinter</th></tr>
-          <tr>{[0, 1, 2].map((i) => (
-            <React.Fragment key={i}><th style={c}>On date</th><th style={c}>Cumm.</th><th style={{ ...c, ...act }}>Avg/day</th><th style={{ ...c, ...plan }}>Plan/day</th></React.Fragment>
+          <tr><th style={c} rowSpan={2}>Plant</th>{['Slag', 'Coke', 'Sinter', 'Slab'].map((t) => <th key={t} style={c} colSpan={3}>{t}</th>)}</tr>
+          <tr>{[0, 1, 2, 3].map((i) => (
+            <React.Fragment key={i}><th style={{ ...c, ...plan }}>Plan/day</th><th style={{ ...c, ...act }}>Avg/day</th><th style={c}>Cumm.</th></React.Fragment>
           ))}</tr>
         </thead>
         <tbody>
           {data.commodity.map((r) => (
             <tr key={r.plant} style={rowStyle(r.plant)}>
               <td style={l}>{r.plant}</td>
-              {['slag', 'coke', 'sinter'].map((k) => (
+              {['slag', 'coke', 'sinter', 'slab'].map((k) => (
                 <React.Fragment key={k}>
-                  <td style={c}>{fmt(r[k].on_date)}</td><td style={c}>{fmt(r[k].cumm)}</td>
-                  <td style={{ ...c, ...act }}>{fmt(r[k].avg_day, 2)}</td><td style={{ ...c, ...plan }}>{fmt(r[k].plan_avg_day, 2)}</td>
+                  <td style={{ ...c, ...plan }}>{fmt(r[k].plan_avg_day, 2)}</td><td style={{ ...c, ...act }}>{fmt(r[k].avg_day, 2)}</td>
+                  <td style={c}>{fmt(r[k].cumm)}</td>
                 </React.Fragment>
               ))}
             </tr>
           ))}
         </tbody>
       </table>
-      {data.slab?.length > 0 && (
-        <table style={{ ...table('8pt'), width: '60%', marginTop: '4pt' }}>
-          <thead><tr><th style={c}>Slab despatch from</th><th style={c}>To</th><th style={c}>Rakes</th><th style={c}>Qty (MT)</th></tr></thead>
-          <tbody>{data.slab.map((s, i) => (
-            <tr key={i}><td style={c}>{s.from_plant_code}</td><td style={c}>{s.to_plant_code}</td><td style={c}>{fmt(s.rakes)}</td><td style={c}>{fmt(s.qty_mt, 1)}</td></tr>
-          ))}</tbody>
-        </table>
-      )}
-      {data.slab_note && <div style={{ fontSize: '7.5pt', fontStyle: 'italic', color: C.secondary, marginTop: '2pt' }}>{data.slab_note}</div>}
 
       <Sec title="Key points" />
       <ul style={{ margin: 0, paddingLeft: '14pt', fontSize: '8.5pt', lineHeight: 1.35 }}>
@@ -132,17 +124,17 @@ export function RailLogisticsSummaryTemplate({ data }) {
       <table style={table('8pt')}>
         <colgroup><col style={{ width: '9%' }} />{Array.from({ length: 9 }, (_, i) => <col key={i} />)}</colgroup>
         <thead><tr>
-          <th style={c}>Plant</th><th style={{ ...c, ...act }}>Actual</th><th style={{ ...c, ...plan }}>Plan</th><th style={c}>Attainment</th>
-          <th style={{ ...c, ...act }}>Avg/day</th><th style={{ ...c, ...plan }}>Plan/day</th><th style={c}>Gap/day</th>
+          <th style={c}>Plant</th><th style={{ ...c, ...plan }}>Plan</th><th style={{ ...c, ...act }}>Actual</th><th style={c}>Attainment</th>
+          <th style={{ ...c, ...plan }}>Plan/day</th><th style={{ ...c, ...act }}>Actual/day</th><th style={c}>Gap/day</th>
           <th style={c}>FYTD</th><th style={c}>LY FYTD</th><th style={c}>FYTD vs LY</th>
         </tr></thead>
         <tbody>
           {data.ranking.map((r) => (
             <tr key={r.plant} style={rowStyle(r.plant)}>
               <td style={l}>{r.plant}</td>
-              <td style={{ ...c, ...act }}>{fmt(r.actual)}</td><td style={{ ...c, ...plan }}>{fmt(r.plan)}</td>
+              <td style={{ ...c, ...plan }}>{fmt(r.plan)}</td><td style={{ ...c, ...act }}>{fmt(r.actual)}</td>
               <td style={{ ...c, fontWeight: 700, background: TINT[r.tint] }}>{r.attainment == null ? '–' : `${fmt(r.attainment, 1)}%`}</td>
-              <td style={{ ...c, ...act }}>{fmt(r.avg_day, 2)}</td><td style={{ ...c, ...plan }}>{fmt(r.plan_avg_day, 2)}</td>
+              <td style={{ ...c, ...plan }}>{fmt(r.plan_avg_day, 2)}</td><td style={{ ...c, ...act }}>{fmt(r.avg_day, 2)}</td>
               <td style={c}><Signed v={r.gap_per_day} nd={2} suffix="" /></td>
               <td style={c}>{fmt(r.fytd_actual)}</td><td style={c}>{fmt(r.ly_fytd_actual)}</td><td style={c}><Signed v={r.fytd_vs_ly_pct} /></td>
             </tr>
