@@ -150,6 +150,100 @@ def test_drifted_heading_is_reported_and_never_merged_into_the_month_before():
     text = text.replace("Total export rakes : 4.0 rakes.", "", 1)
     months, problems = rlh.parse(text)
     assert "2026-05" not in months and "2026-04" not in months and len(months) == 5
-    assert len(problems) == 2
-    assert problems[0] == "2026-04: not found: export_total"
-    assert problems[1].startswith("month heading not understood:") and "MAY'26" in problems[1]
+    assert len(problems) == 2 and "2026-04: not found: export_total" in problems
+    assert any(p.startswith("month heading not understood:") and "MAY'26" in p for p in problems)
+
+
+# ── review hardening ─────────────────────────────────────────────────────────
+
+def test_pellets_read_from_the_misc_section_only():
+    text = _text().replace("(Vizag- 82, Gangavaram -34", "(Vizag- 82 incl Pellets-3, Gangavaram -34")
+    assert "Pellets-3" in text
+    months, problems = rlh.parse(text)
+    assert months["2026-04"]["misc_pellets"] == 95 and months["2026-04"]["misc_other"] == 13 and problems == []
+
+
+def test_month_typed_twice_is_reported_and_skipped():
+    text = _text()
+    october = text[text.index("*Rail Transportation Performance of SAIL during OCTOBER"):]
+    months, problems = rlh.parse(text + "\n\n" + october.replace("2293 rakes", "9999 rakes"))
+    assert "2026-10" not in months and len(months) == 6
+    assert problems == ["2026-10: heading appears more than once; month skipped"]
+
+
+def test_month_after_the_latest_possible_is_reported_and_skipped():
+    months, problems = rlh.parse(_text().replace("OCTOBER 2026", "OCTOBER 2062"), latest="2026-11")
+    assert "2062-10" not in months and len(months) == 6
+    assert problems == ["2062-10: month is after 2026-11; skipped"]
+    assert len(rlh.parse(_text(), latest="2026-10")[0]) == 7
+
+
+def test_fmt_rakes_never_uses_an_exponent_or_minus_zero():
+    assert rl.fmt_rakes(1234567) == "1234567" and rl.fmt_rakes(-0.04) == "0" and rl.fmt_rakes(15907.0) == "15907"
+
+
+def test_save_month_refuses_unknown_codes(monkeypatch):
+    saved = []
+    monkeypatch.setattr(rl.rrake, "save_rail_loading", lambda *a: saved.append(a) or len(a[1]))
+    with pytest.raises(ValueError, match="bogus"):
+        rl.save_month("2026-04", {"grand_total": 1, "bogus": 2}, "u")
+    assert saved == []
+    assert rl.save_month("2026-04", {"grand_total": 1}, "u") == 1 and saved == [("2026-04", {"grand_total": 1}, "u")]
+
+
+def test_repo_refuses_a_non_numeric_figure_before_connecting():
+    from repo import rake as rrake
+    with pytest.raises(ValueError, match="grand_total"):
+        rrake.save_rail_loading("2026-04", {"grand_total": "abc"}, None)
+
+
+# ── loader script ────────────────────────────────────────────────────────────
+
+@pytest.fixture
+def loader(monkeypatch):
+    from scripts import load_rail_loading_highlights as script
+    saved = []
+    monkeypatch.setattr(script.rail_loading, "save_month", lambda m, v, u: saved.append(m) or len(v))
+    return script, saved
+
+
+def test_loader_dry_run_saves_nothing(loader, capsys):
+    script, saved = loader
+    assert script.main([str(FIXTURE), "--dry-run"]) == 0
+    out = capsys.readouterr().out
+    assert "7 month(s) read, 0 problem(s)" in out and "Dry run: nothing saved." in out and saved == []
+
+
+def test_loader_saves_every_month_or_only_the_ones_asked_for(loader):
+    script, saved = loader
+    assert script.main([str(FIXTURE)]) == 0 and saved == [f"2026-{m:02d}" for m in range(4, 11)]
+    del saved[:]
+    assert script.main([str(FIXTURE), "--month", "2026-10", "--month", "2026-04"]) == 0
+    assert saved == ["2026-04", "2026-10"]
+    assert script.main([str(FIXTURE), "--month", "2025-01"]) == 1          # not in the file
+
+
+def test_loader_reads_a_note_saved_in_ansi(loader, tmp_path, capsys):
+    script, saved = loader
+    ansi = tmp_path / "note.txt"
+    ansi.write_bytes(_text().encode("cp1252"))
+    assert script.main([str(ansi), "--dry-run"]) == 0
+    assert "7 month(s) read, 0 problem(s)" in capsys.readouterr().out
+
+
+# ── export page list ─────────────────────────────────────────────────────────
+
+def test_export_gets_each_missing_rail_logistics_page_in_its_place():
+    import main
+
+    def ids(pages):
+        main._add_missing_rail_logistics_pages(pages)
+        return [p["page"] for p in pages]
+
+    assert ids([{"page": 40}, {"page": 1026}]) == [40, 40.05, 40.1, 40.2, 40.3, 1026]
+    # a page list from before 40.05 existed (stale browser tab / old build)
+    assert ids([{"page": 40}, {"page": 40.1}, {"page": 40.2}, {"page": 40.3}, {"page": 1026}]) == [
+        40, 40.05, 40.1, 40.2, 40.3, 1026]
+    assert ids([{"page": 40}, {"page": 40.05}, {"page": 40.1}, {"page": 40.2}, {"page": 40.3}]) == [
+        40, 40.05, 40.1, 40.2, 40.3]
+    assert ids([{"page": 5}]) == [5, 40.05, 40.1, 40.2, 40.3]

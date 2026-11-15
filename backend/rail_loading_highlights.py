@@ -12,7 +12,8 @@ note reports them, never summed; only misc_other is derived
 """
 import calendar
 import re
-from typing import Dict, List, Tuple
+from datetime import date
+from typing import Dict, List, Optional, Tuple
 
 # A block starts at every heading, whatever follows it; the month and year
 # must then read as "during <MONTH> <YEAR>". A heading typed any other way
@@ -71,8 +72,11 @@ def _normalise(block: str) -> str:
 def _parse_block(text: str) -> Tuple[Dict[str, float], List[str], List[str]]:
     """-> (values, codes not found, cross-check notes)."""
     values, missing = {}, []
+    # "Pellets - N" is read from the misc section onwards only, so pellets
+    # mentioned under ore, flux or ports are never taken for it.
+    misc = PATTERNS["misc_total"].search(text)
     for code, rx in PATTERNS.items():
-        m = rx.search(text)
+        m = rx.search(text, misc.start() if misc else len(text)) if code == "misc_pellets" else rx.search(text)
         if m and m.group(1) is not None:
             values[code] = float(m.group(1))
         elif m and code in _MAY_BE_BLANK:
@@ -90,11 +94,14 @@ def _parse_block(text: str) -> Tuple[Dict[str, float], List[str], List[str]]:
     return values, missing, notes
 
 
-def parse(text: str) -> Tuple[Dict[str, Dict[str, float]], List[str]]:
+def parse(text: str, latest: Optional[str] = None) -> Tuple[Dict[str, Dict[str, float]], List[str]]:
     """text -> ({report_month: {item_code: rakes}}, problems). A month whose
-    block lacks any figure is listed in problems and left out whole; a
-    cross-check mismatch is listed too, but that month is still returned."""
-    months, problems = {}, []
+    block lacks any figure is listed in problems and left out whole; so is a
+    month typed twice, and one after `latest` (YYYY-MM, default the current
+    month — a mistyped year). A cross-check mismatch is listed too, but that
+    month is still returned."""
+    latest = latest or date.today().strftime("%Y-%m")
+    months, problems, blocks = {}, [], []
     starts = list(_BLOCK_START.finditer(text))
     for i, s in enumerate(starts):
         end = starts[i + 1].start() if i + 1 < len(starts) else len(text)
@@ -104,8 +111,19 @@ def parse(text: str) -> Tuple[Dict[str, Dict[str, float]], List[str]]:
             line = text[s.start():end].splitlines()[0].strip()
             problems.append(f"month heading not understood: {line[:90]}")
             continue
-        month = f"{h.group(2)}-{number:02d}"
-        values, missing, notes = _parse_block(_normalise(text[h.end():end]))
+        blocks.append((f"{h.group(2)}-{number:02d}", text[h.end():end]))
+    seen = [month for month, _body in blocks]
+    twice = set()
+    for month, body in blocks:
+        if seen.count(month) > 1:
+            if month not in twice:
+                twice.add(month)
+                problems.append(f"{month}: heading appears more than once; month skipped")
+            continue
+        if month > latest:
+            problems.append(f"{month}: month is after {latest}; skipped")
+            continue
+        values, missing, notes = _parse_block(_normalise(body))
         if missing:
             problems.append(f"{month}: not found: {', '.join(missing)}")
             continue

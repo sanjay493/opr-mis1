@@ -172,7 +172,7 @@
   "parl_actual_bg":           "#FFFF99",
   "parl_deviation_bg":        "#F8CBAD",
 
-  "_doc_rail_log": "Rail Logistics - Rake Despatch MIS pages (40.1-40.3, page_rail_logistics.py): headline cards, section titles, plan-attainment tint (ok >=100% / watch >=95% / behind), plant total rows, the rule between plant blocks, and +/- change text.",
+  "_doc_rail_log": "Rail Logistics MIS pages (40.05-40.3, page_rail_logistics.py): headline cards, section titles, plan-attainment tint (ok >=100% / watch >=95% / behind), plant total rows, the rule between plant blocks, and +/- change text.",
   "rail_log_card_bg":        "#F1F5F9",
   "rail_log_card_border":    "#94A3B8",
   "rail_log_card_value":     "#060177",

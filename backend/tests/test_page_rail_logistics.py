@@ -1,5 +1,5 @@
-"""page_rail_logistics: regrouping of the Rake Despatch report for the three
-MIS PDF pages. Pure helpers only — no database."""
+"""page_rail_logistics: regrouping of the Rake Despatch report for its three
+MIS PDF pages (40.1-40.3; 40.05 is tested in test_rail_loading.py). Pure helpers only — no database."""
 import page_rail_logistics as rl
 
 FY_MONTHS = [f"2026-{m:02d}" for m in range(4, 13)] + [f"2027-{m:02d}" for m in (1, 2, 3)]

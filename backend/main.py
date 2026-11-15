@@ -399,7 +399,7 @@ _INDEX_SECTIONS = [
     # Capital Repair: monthly rail loading by commodity (40.05), then Rake
     # Despatch (SAIL Rail Movement Cell's Despatch Summary Report, 40.1-40.3).
     # See page_rail_logistics.py.
-    ("Rail Logistics – Rake Despatch", 4),
+    ("Rail Logistics – Rail Loading & Rake Despatch", 4),
     # SAIL Rail Movement Cell's "Average Plant Detention Report" — 7 pages:
     # 5 portrait commodity/wagon-type detail pages, one per plant
     # (RAKE_DETENTION_DETAIL_PAGES — split from the source PDF's own
@@ -808,7 +808,7 @@ _INDEX_SECTION_ANCHORS = [
     COAL_RECEIPTS_PAGE_ID,             # Details of Coking Coal Consumption, Blend and Stocks
     POWER_DATA_PAGE_ID,                # Plant Wise Power Data
     36,                                # Status of Capital/Major Repairs Planned in ABP - Plant Wise
-    min(RAIL_LOGISTICS_PAGES),         # Rail Logistics – Rake Despatch
+    min(RAIL_LOGISTICS_PAGES),         # Rail Logistics – Rail Loading & Rake Despatch
     min(RAKE_DETENTION_DETAIL_PAGES),  # Details of Rakes Detention Plant Wise
     READY_RECKONER_ISP_SEPARATOR_PAGE_ID,  # Annexure-1 : 5 ISPs Ready Reckoner
     READY_RECKONER_SSP_SEPARATOR_PAGE_ID,  # Annexure-2 : 3 SSPs Ready Reckoner
@@ -817,6 +817,20 @@ _INDEX_SECTION_ANCHORS = [
 ]
 assert len(_INDEX_SECTION_ANCHORS) == len(_INDEX_SECTIONS), \
     "_INDEX_SECTION_ANCHORS must have one entry per _INDEX_SECTIONS row, same order"
+
+
+def _add_missing_rail_logistics_pages(pages_list: list) -> None:
+    """Insert every Rail Logistics page a full-export page list lacks, each
+    right after the page it follows in print order (40, then the previous
+    Rail Logistics page) — one by one, so a list sent by a browser tab or
+    build from before a page was added still gets that page, and the Index
+    row's page count stays true."""
+    follows = 40
+    for pg in RAIL_LOGISTICS_PAGES:
+        if not any(p.get("page") == pg for p in pages_list):
+            at = next((i for i, p in enumerate(pages_list) if p.get("page") == follows), None)
+            pages_list.insert(len(pages_list) if at is None else at + 1, {"page": pg})
+        follows = pg
 
 @contextlib.asynccontextmanager
 async def _lifespan(_app):
@@ -1355,7 +1369,7 @@ def _get_data(month: str, page_number: Optional[float]):
             # everything else (Capital Repair, pages 36-40, is always the
             # last real section by this point in a full-month fetch) since
             # it sits right before the Annexures, which aren't real pages.
-            # "Rail Logistics – Rake Despatch" goes first, right after
+            # Rail Logistics goes first, right after
             # Capital Repair, for the same reason.
             for _pg in RAIL_LOGISTICS_PAGES:
                 pages_config.append({"page": _pg})
@@ -1750,14 +1764,11 @@ def _enrich_pdf_pages_impl(request: PDFRequest) -> tuple[list, dict]:
         _idxcoal2 = next((i for i, p in enumerate(_pages_list) if p.get("page") == COAL_RECEIPTS_PAGE_2_ID), None)
         if _idxcoal2 is not None:
             _pages_list.insert(_idxcoal2 + 1, {"page": POWER_DATA_PAGE_ID})
-    # "Rail Logistics – Rake Despatch" sentinel pages: right after Capital
-    # Repair's last page (40), ahead of Rake Detention — inserted, not
-    # appended, since a saved page list may already end in Rake Detention.
-    if _is_full_export and not any(p.get("page") in RAIL_LOGISTICS_PAGES for p in _pages_list):
-        _idx40 = next((i for i, p in enumerate(_pages_list) if p.get("page") == 40), None)
-        _at = len(_pages_list) if _idx40 is None else _idx40 + 1
-        for _k, _pg in enumerate(RAIL_LOGISTICS_PAGES):
-            _pages_list.insert(_at + _k, {"page": _pg})
+    # Rail Logistics sentinel pages: right after Capital Repair's last page
+    # (40), ahead of Rake Detention — inserted, not appended, since a saved
+    # page list may already end in Rake Detention.
+    if _is_full_export:
+        _add_missing_rail_logistics_pages(_pages_list)
     # "Details of Rakes Detention Plant Wise" sentinel pages: appended at
     # the very end (right before the Annexures, which aren't real pages) —
     # same unconditional-insert-if-missing pattern as above, brand new so

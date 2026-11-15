@@ -54,7 +54,20 @@ CODES = tuple(code for kind, code, _label in ITEMS if kind not in ("group", "per
 def fmt_rakes(v) -> str:
     """Table cell text for a rake count: "–" for a missing value, one decimal
     only where the figure has one (coking coal is reported as 46.3)."""
-    return "–" if v is None else f"{round(v, 1):g}"
+    if v is None:
+        return "–"
+    text = f"{v:.1f}"
+    text = text[:-2] if text.endswith(".0") else text
+    return "0" if text == "-0" else text
+
+
+def save_month(month: str, values: dict, user) -> int:
+    """Save one month's {item_code: rakes} (replacing the month); only the
+    registry's codes are accepted. -> rows saved."""
+    unknown = sorted(set(values) - set(CODES))
+    if unknown:
+        raise ValueError(f"unknown rail loading item code(s): {', '.join(unknown)}")
+    return rrake.save_rail_loading(month, values, user)
 
 
 def loading_table(rows: list, month: str) -> dict:

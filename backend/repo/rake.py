@@ -435,8 +435,10 @@ def save_rail_loading(report_month: str, values: Dict[str, Optional[float]], use
     month = _keys.fit_month(report_month)
     _keys.check_month(month)
     _keys.fits("updated_by", user, 64)
-    for code in values:
+    for code, rakes in values.items():
         _keys.fits("item_code", code, 32, nullable=False)
+        if rakes is not None and (isinstance(rakes, bool) or not isinstance(rakes, (int, float))):
+            raise ValueError(f"rail loading {code}: rakes must be a number, got {rakes!r}")
     conn = connect()
     try:
         cur = conn.cursor()
