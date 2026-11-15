@@ -2,8 +2,8 @@
 
 import React from 'react';
 
-// Mirrors backend/page_templates/rail_logistics_{summary,history,wagon}.html
-// — see backend/page_rail_logistics.py (pages 40.1-40.3). Colours copied
+// Mirrors backend/page_templates/rail_logistics_{loading,summary,history,wagon}.html
+// — see backend/page_rail_logistics.py (pages 40.05-40.3). Colours copied
 // from colors_config.json's rail_log_* / perf_app_* / perf_act_* keys.
 const C = {
   title: 'rgb(0,0,255)',
@@ -319,6 +319,60 @@ export function RailLogisticsWagonTemplate({ data }) {
           </tbody>
         </table>
       )}
+    </div>
+  );
+}
+
+// Rake count as backend/rail_loading.py's fmt_rakes: one decimal only where
+// the figure has one (coking coal is reported as 46.3).
+const fmtRakes = (v) => (v === null || v === undefined ? '–' : String(Math.round(Number(v) * 10) / 10));
+
+// Page 40.05 — backend/page_templates/rail_logistics_loading.html (rail_loading.py).
+export function RailLogisticsLoadingTemplate({ data }) {
+  if (!data?.available) return <div><Head data={data || {}} /><Placeholder data={data || {}} /></div>;
+  const c = cell('2.4pt 2pt');
+  const { rows, month_labels: months } = data;
+  const grand = { fontWeight: 700, fontSize: '8.5pt', ...plan };
+  const label = (kind) => ({ ...c, textAlign: 'left', whiteSpace: 'nowrap', paddingLeft: kind === 'item' ? '9pt' : '3pt' });
+  return (
+    <div>
+      <Head data={data} />
+      <table style={{ ...table('8pt'), lineHeight: 1.15 }}>
+        <colgroup>
+          <col style={{ width: '26%' }} />{months.map((m) => <col key={m} style={{ width: '4.8%' }} />)}
+          <col style={{ width: '8.2%' }} /><col style={{ width: '8.2%' }} />
+        </colgroup>
+        <thead>
+          <tr>
+            <th style={c}>Rakes loaded</th>{months.map((m) => <th key={m} style={c}>{m}</th>)}
+            <th style={{ ...c, ...act }}>FYTD</th><th style={c}>FYTD rakes / day</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => {
+            if (r.kind === 'group') {
+              return (
+                <tr key={r.code}>
+                  <td colSpan={months.length + 3} style={{ ...c, textAlign: 'left', fontWeight: 700, color: C.section, background: C.cardBg }}>{r.label}</td>
+                </tr>
+              );
+            }
+            const perDay = r.kind === 'per_day';
+            const row = r.kind === 'total' ? total : (r.kind === 'grand' || perDay) ? grand : undefined;
+            return (
+              <tr key={r.code} style={row}>
+                <td style={label(r.kind)}>{r.label}</td>
+                {r.months.map((v, k) => <td key={k} style={c}>{perDay ? fmt(v, 2) : fmtRakes(v)}</td>)}
+                <td style={r.kind === 'item' ? { ...c, ...act } : c}>{perDay ? '' : fmtRakes(r.fytd)}</td>
+                <td style={c}>{r.kind === 'item' ? '' : fmt(r.fytd_per_day, 2)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <div style={{ fontSize: '7.5pt', fontStyle: 'italic', color: C.secondary, marginTop: '4pt' }}>
+        Rakes, as reported in the Rail Movement Cell&apos;s monthly highlights. Totals are as reported, not the sum of the rows above them: imported limestone is counted under both Flux and Ports.
+      </div>
     </div>
   );
 }
