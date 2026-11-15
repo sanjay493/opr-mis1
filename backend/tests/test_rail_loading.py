@@ -250,7 +250,7 @@ def test_placeholder(monkeypatch):
     assert (p["type"], p["title"], p["available"]) == (
         "rail_logistics_loading", "Rail Logistics – Monthly Rail Loading", False)
     assert p["placeholder"] == "Monthly rail loading for FY 2026-27 not yet entered"
-    assert list(prl.PAGE_IDS) == [40.05, 40.1, 40.2, 40.3]
+    assert list(prl.PAGE_IDS) == [40.05, 40.07, 40.1, 40.2, 40.3]
 
 
 def test_drifted_heading_is_reported_and_never_merged_into_the_month_before():
@@ -349,10 +349,10 @@ def test_export_gets_each_missing_rail_logistics_page_in_its_place():
         main._add_missing_rail_logistics_pages(pages)
         return [p["page"] for p in pages]
 
-    assert ids([{"page": 40}, {"page": 1026}]) == [40, 40.05, 40.1, 40.2, 40.3, 1026]
-    # a page list from before 40.05 existed (stale browser tab / old build)
-    assert ids([{"page": 40}, {"page": 40.1}, {"page": 40.2}, {"page": 40.3}, {"page": 1026}]) == [
-        40, 40.05, 40.1, 40.2, 40.3, 1026]
-    assert ids([{"page": 40}, {"page": 40.05}, {"page": 40.1}, {"page": 40.2}, {"page": 40.3}]) == [
-        40, 40.05, 40.1, 40.2, 40.3]
-    assert ids([{"page": 5}]) == [5, 40.05, 40.1, 40.2, 40.3]
+    every = [40.05, 40.07, 40.1, 40.2, 40.3]
+    assert ids([{"page": 40}, {"page": 1026}]) == [40] + every + [1026]
+    # a page list from before 40.05 / 40.07 existed (stale browser tab / old build)
+    assert ids([{"page": 40}, {"page": 40.1}, {"page": 40.2}, {"page": 40.3}, {"page": 1026}]) == [40] + every + [1026]
+    assert ids([{"page": 40}, {"page": 40.05}, {"page": 40.1}, {"page": 40.2}, {"page": 40.3}]) == [40] + every
+    assert ids([{"page": 40}] + [{"page": pg} for pg in every]) == [40] + every
+    assert ids([{"page": 5}]) == [5] + every

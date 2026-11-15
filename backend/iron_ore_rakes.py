@@ -188,10 +188,26 @@ def key_points(month: str, upto: str, totals: dict, mix: dict) -> list:
     return pts
 
 
+def coverage_note(counts: list, first_month: str):
+    """A sentence naming the mines whose first rake in `counts` is later
+    than first_month (the start of the trend), or None: the record does not
+    hold every mine from its first year, and the groups' earlier figures
+    leave those mines out."""
+    first = {}
+    for c in counts:
+        if c["mine_code"] not in first or c["report_month"] < first[c["mine_code"]]:
+            first[c["mine_code"]] = c["report_month"]
+    late = sorted((m, mine) for mine, m in first.items() if m > first_month)
+    if not late:
+        return None
+    return ("In the record from: " + ", ".join(f"{mine} {mlabel(m)}" for m, mine in late)
+            + ". Figures before those months leave these mines out.")
+
+
 def build_report(month: str) -> dict:
     """Everything page 40.07 prints for `month`, from the stored rakes:
     {available, fy, fy_months, month_label, key_points, trend, wagon_mix,
-    types}. trend and wagon_mix are rake_despatch_report's own shapes with
+    types, coverage_note}. trend and wagon_mix are rake_despatch_report's own shapes with
     the mines groups (and Total) where it has plants (and SAIL); types is
     {group: {wagon name: {month: rakes}}} for the report month's FY.
     Months after the report month are never shown; a report month with no
@@ -200,7 +216,8 @@ def build_report(month: str) -> dict:
     start = fy_start_year(month)
     months = fy_months(start)
     out = {"available": False, "fy": fy_label(start), "fy_months": months, "month_label": mlabel(month)}
-    counts = rrake.iron_ore_rake_counts(fy_months(start - rdr.HISTORY_FYS + 1)[0], month)
+    first_month = fy_months(start - rdr.HISTORY_FYS + 1)[0]
+    counts = rrake.iron_ore_rake_counts(first_month, month)
     totals = group_totals(counts)
     with_rakes = [m for m in months if m <= month and m in totals]
     if not with_rakes:
@@ -212,6 +229,11 @@ def build_report(month: str) -> dict:
     for r in rows:
         if r["report_month"] in months:
             types.setdefault(r["plant_code"], {}).setdefault(r["wagon_type"], {})[r["report_month"]] = r["rakes"]
+    # A group with no rakes in a month prints no figure in the trend: the
+    # record does not hold every mine from its first year, so that is "not
+    # in the record", not a month without loading.
+    shown = {m: {g: n for g, n in row.items() if n} for m, row in totals.items()}
     out.update(available=True, key_points=key_points(month, upto, totals, mix),
-               trend=rdr.trend(month, totals, rows=ALL), wagon_mix=mix, types=types)
+               trend=rdr.trend(month, shown, rows=ALL), wagon_mix=mix, types=types,
+               coverage_note=coverage_note(counts, first_month))
     return out

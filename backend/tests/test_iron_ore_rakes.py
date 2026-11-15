@@ -298,3 +298,26 @@ def test_plant_report_helpers_keep_their_defaults():
     rows = [{"report_month": "2026-10", "plant_code": "BSP", "wagon_type": "BOXN", "rakes": 4}]
     assert [p["plant"] for p in rdr.wagon_mix("2026-10", rows)["plants"]] == ["BSP", "SAIL"]
     assert list(rdr.trend("2026-10", {"2026-10": {"BSP": 4, "SAIL": 4}})) == rdr.ALL
+
+
+def test_trend_prints_no_figure_for_a_group_the_record_does_not_cover(counts):
+    """The record has no CGOM mines before a point in time: those months are
+    unknown, not zero."""
+    counts[:] = [c for c in counts if not (c["report_month"] == "2025-05")] + _counts([("2025-05", "BOL", "BS", 3)])
+    r = ior.build_report("2026-10")
+    cgom_ly, egom_ly = r["trend"]["CGOM"][1], r["trend"]["EGOM"][1]
+    assert cgom_ly["months"][1] is None and egom_ly["months"][1] == 3      # May'25: EGOM only
+    assert r["trend"]["Total"][1]["months"][1] == 3
+    assert r["trend"]["CGOM"][2]["months"] == [None] * 12 and r["trend"]["CGOM"][2]["total"] is None
+
+
+def test_coverage_note_names_mines_that_enter_the_record_late(counts):
+    # COUNTS: DAL and ROW rakes from 2025, RAJ from 2026-04; the window starts 2020-04
+    note = ior.build_report("2026-10")["coverage_note"]
+    assert note == ("In the record from: GUA Apr'25, ROW Apr'25, BOL Oct'25, DAL Oct'25, KAL Apr'26, RAJ Apr'26, "
+                    "KRB Oct'26. Figures before those months leave these mines out.")
+
+
+def test_no_coverage_note_when_every_mine_is_there_from_the_start(counts):
+    counts[:] = _counts([("2020-04", "BOL", "BS", 1), ("2026-10", "BOL", "BS", 1)])
+    assert ior.build_report("2026-10")["coverage_note"] is None

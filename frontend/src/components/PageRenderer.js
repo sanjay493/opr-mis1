@@ -43,7 +43,7 @@ import MinesPerformanceTemplate from './MinesPerformanceTemplate';
 import SpecialSteelDonutTemplate from './SpecialSteelDonutTemplate';
 import SpecialSteelTrendTemplate from './SpecialSteelTrendTemplate';
 import { RakeDetentionDetailTemplate, RakeDetentionSummaryTemplate, RakeDetentionTrendTemplate } from './RakeDetentionTemplates';
-import { RailLogisticsLoadingTemplate, RailLogisticsSummaryTemplate, RailLogisticsHistoryTemplate, RailLogisticsWagonTemplate } from './RailLogisticsTemplates';
+import { RailLogisticsLoadingTemplate, RailLogisticsMinesTemplate, RailLogisticsSummaryTemplate, RailLogisticsHistoryTemplate, RailLogisticsWagonTemplate } from './RailLogisticsTemplates';
 
 // Page types whose template draws its own title, so the generic
 // title/subtitle block above the content is skipped for them.
@@ -58,7 +58,7 @@ const SELF_TITLED_TYPES = new Set([
   'sail8_trend_annexure', 'sail8_trend_separator',
   'steel_sales_performance', 'mines_performance', 'special_steel_donut', 'special_steel_trend',
   'rake_detention_detail', 'rake_detention_summary', 'rake_detention_trend',
-  'rail_logistics_loading', 'rail_logistics_summary', 'rail_logistics_history', 'rail_logistics_wagon',
+  'rail_logistics_loading', 'rail_logistics_mines', 'rail_logistics_summary', 'rail_logistics_history', 'rail_logistics_wagon',
 ]);
 
 function IndexTemplate({ data, onCellChange }) {
@@ -240,6 +240,8 @@ export default function PageRenderer({ pageData, onCellChange, selectedMonth, to
         return <RakeDetentionTrendTemplate data={pageData} />;
       case 'rail_logistics_loading':
         return <RailLogisticsLoadingTemplate data={pageData} />;
+      case 'rail_logistics_mines':
+        return <RailLogisticsMinesTemplate data={pageData} />;
       case 'rail_logistics_summary':
         return <RailLogisticsSummaryTemplate data={pageData} />;
       case 'rail_logistics_history':

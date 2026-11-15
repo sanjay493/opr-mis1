@@ -84,8 +84,46 @@ def test_ranking_tint(monkeypatch):
 
 
 def test_page_ids():
-    assert rl.PAGE_IDS == {40.05: "loading", 40.1: "summary", 40.2: "history", 40.3: "wagon"}
+    assert rl.PAGE_IDS == {40.05: "loading", 40.07: "mines", 40.1: "summary", 40.2: "history", 40.3: "wagon"}
+    assert list(rl.PAGE_IDS) == sorted(rl.PAGE_IDS)                      # print order
 
 
 def test_fmt():
     assert rl.fmt(None) == "–" and rl.fmt(12.345, 2) == "12.35" and rl.fmt(7) == "7"
+
+
+def _mines_report(month):
+    import iron_ore_rakes as ior
+    counts = [{"report_month": m, "mine_code": mine, "wagon_code": w, "rakes": n} for m, mine, w, n in (
+        ("2026-10", "BOL", "BX", 5), ("2026-10", "KRB", "BS", 3), ("2026-10", "DAL", "BS", 4),
+        ("2025-10", "BOL", "BX", 10), ("2025-10", "DAL", "PR", 2))]
+    return counts, ior
+
+
+def test_mines_page(monkeypatch):
+    counts, ior = _mines_report("2026-10")
+    monkeypatch.setattr(ior.rrake, "iron_ore_rake_counts", lambda a, b: [c for c in counts if a <= c["report_month"] <= b])
+    p = rl.generate_rail_logistics("2026-10", "mines")
+    assert (p["type"], p["title"]) == ("rail_logistics_mines", "Rail Logistics – Iron Ore Rake Loading from Mines")
+    assert p["available"] and p["placeholder"] is None and p["subtitle"] == "Oct'26 · FY 2026-27"
+    assert p["fy"] == "2026-27" and p["month_labels"][0] == "Apr" and len(p["month_labels"]) == 12
+    assert p["key_points"][0].startswith("Iron ore loading from mines in Oct'26: EGOM 8 rakes")
+    # trend: EGOM, CGOM, Total x 7 FYs, flat, current FY first
+    assert len(p["trend"]) == 21 and [r["plant"] for r in p["trend"][::7]] == ["EGOM", "CGOM", "Total"]
+    assert p["trend"][0]["first_of_plant"] and p["trend"][0]["months"][6] == 8 and p["trend"][15]["months"][6] == 12
+    assert [r["plant"] for r in p["mix"]["rows"]] == ["EGOM", "CGOM", "Total"]
+    assert [b["plant"] for b in p["blocks"]] == ["EGOM", "CGOM", "Total"]
+    total = p["blocks"][-1]
+    assert {r["type"]: r["fytd"] for r in total["rows"]} == {"BOBSNM1": 7, "BOXN": 5} and total["total"]["fytd"] == 12
+
+
+def test_mines_page_placeholder(monkeypatch):
+    _counts, ior = _mines_report("2026-10")
+    monkeypatch.setattr(ior.rrake, "iron_ore_rake_counts", lambda a, b: [])
+    p = rl.generate_rail_logistics("2026-10", "mines")
+    assert p["available"] is False and p["subtitle"] == "Oct'26"
+    assert p["placeholder"] == "Iron ore rake file not uploaded for FY 2026-27"
+
+
+def test_plant_helpers_keep_their_defaults():
+    assert [b["plant"] for b in rl.wagon_type_blocks({"BSP": {"BOXN": {"2026-04": 5}}}, FY_MONTHS)] == ["BSP", "SAIL"]

@@ -395,11 +395,11 @@ _INDEX_SECTIONS = [
     ("Details of Coking Coal Consumption, Blend and Stocks", 2),
     ("Plant Wise Power Data", 1),
     ("Status of Capital/Major Repairs Planned in ABP - Plant Wise", 5),
-    # Rail Logistics — 4 portrait pages, RAIL_LOGISTICS_PAGES, right after
-    # Capital Repair: monthly rail loading by commodity (40.05), then Rake
-    # Despatch (SAIL Rail Movement Cell's Despatch Summary Report, 40.1-40.3).
-    # See page_rail_logistics.py.
-    ("Rail Logistics – Rail Loading & Rake Despatch", 4),
+    # Rail Logistics — 5 portrait pages, RAIL_LOGISTICS_PAGES, right after
+    # Capital Repair: monthly rail loading by commodity (40.05), iron ore
+    # rake loading from mines (40.07), then Rake Despatch (SAIL Rail Movement
+    # Cell's Despatch Summary Report, 40.1-40.3). See page_rail_logistics.py.
+    ("Rail Logistics – Rail Loading, Mines Loading & Rake Despatch", 5),
     # SAIL Rail Movement Cell's "Average Plant Detention Report" — 7 pages:
     # 5 portrait commodity/wagon-type detail pages, one per plant
     # (RAKE_DETENTION_DETAIL_PAGES — split from the source PDF's own
@@ -810,7 +810,7 @@ _INDEX_SECTION_ANCHORS = [
     COAL_RECEIPTS_PAGE_ID,             # Details of Coking Coal Consumption, Blend and Stocks
     POWER_DATA_PAGE_ID,                # Plant Wise Power Data
     36,                                # Status of Capital/Major Repairs Planned in ABP - Plant Wise
-    min(RAIL_LOGISTICS_PAGES),         # Rail Logistics – Rail Loading & Rake Despatch
+    min(RAIL_LOGISTICS_PAGES),         # Rail Logistics – Rail Loading, Mines Loading & Rake Despatch
     min(RAKE_DETENTION_DETAIL_PAGES),  # Details of Rakes Detention Plant Wise
     READY_RECKONER_ISP_SEPARATOR_PAGE_ID,  # Annexure-1 : 5 ISPs Ready Reckoner
     READY_RECKONER_SSP_SEPARATOR_PAGE_ID,  # Annexure-2 : 3 SSPs Ready Reckoner

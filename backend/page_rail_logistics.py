@@ -1,10 +1,14 @@
 """
-"Rail Logistics" — four portrait MIS PDF pages, right after Capital Repair
+"Rail Logistics" — five portrait MIS PDF pages, right after Capital Repair
 (pages 36-40), right before Details of Rakes Detention.
 
   40.05 Monthly rail loading — SAIL's rail loading by commodity, month by
                               month (rail_loading.py; its own table, not the
                               Despatch Summary Report)
+  40.07 Iron ore from mines — iron ore rakes loaded at the mines, EGOM /
+                              CGOM / Total: key points, seven-year monthly
+                              trend, wagon-type mix, FY rakes by wagon type
+                              (iron_ore_rakes.py; the mines' rake record)
 
 then a selection of the web report (Reports > Rail Logistics > Rake Despatch),
 the steel rakes despatched from the plants:
@@ -23,14 +27,16 @@ only regroups it for the page layout, so the PDF and the web report always
 agree. No upload for the month -> each page prints its title and a
 "not uploaded" line.
 """
+import iron_ore_rakes
 import rail_loading
 import rake_despatch_report as rdr
 from rake_despatch_report import ALL, PLANTS, mlabel, status_of
 
-PAGE_IDS = {40.05: "loading", 40.1: "summary", 40.2: "history", 40.3: "wagon"}   # print order
+PAGE_IDS = {40.05: "loading", 40.07: "mines", 40.1: "summary", 40.2: "history", 40.3: "wagon"}   # print order
 
 _TITLES = {
     "loading": "Rail Logistics – Monthly Rail Loading",
+    "mines": "Rail Logistics – Iron Ore Rake Loading from Mines",
     "summary": "Rail Logistics – Steel Rake Despatch from Plant: Summary",
     "history": "Rail Logistics – Steel Rake Despatch from Plant: Performance History",
     "wagon": "Rail Logistics – Steel Rake Despatch from Plant: Wagon Types",
@@ -76,10 +82,11 @@ def _block(plant: str, by_type: dict, fy_months: list) -> dict:
     return {"plant": plant, "rows": rows, "total": {"months": totals, "fytd": sum(present) if present else None}}
 
 
-def wagon_type_blocks(types: dict, fy_months: list) -> list:
-    """One block per plant with wagon-type rows, then SAIL (types summed)."""
+def wagon_type_blocks(types: dict, fy_months: list, groups=PLANTS, total="SAIL") -> list:
+    """One block per plant with wagon-type rows, then SAIL (types summed);
+    `groups` / `total` name the blocks when they are not the plants."""
     blocks, sail = [], {}
-    for p in PLANTS:
+    for p in groups:
         if not types.get(p):
             continue
         blocks.append(_block(p, types[p], fy_months))
@@ -87,14 +94,29 @@ def wagon_type_blocks(types: dict, fy_months: list) -> list:
             for m, v in by_month.items():
                 sail.setdefault(t, {})[m] = sail.get(t, {}).get(m, 0) + v
     if blocks:
-        blocks.append(_block("SAIL", sail, fy_months))
+        blocks.append(_block(total, sail, fy_months))
     return blocks
 
 
-def trend_rows(trend: dict) -> list:
+def trend_rows(trend: dict, rows=ALL) -> list:
     """Plant x FY rows (newest FY first), flagging each plant's first row."""
     return [{"plant": p, "fy": s["fy"], "months": s["months"], "total": s["total"], "first_of_plant": i == 0}
-            for p in ALL for i, s in enumerate(trend.get(p, []))]
+            for p in rows for i, s in enumerate(trend.get(p, []))]
+
+
+def mines_page(month: str) -> dict:
+    """Page 40.07's data: iron_ore_rakes.build_report regrouped with the
+    same helpers as the plant pages, so both read alike."""
+    r = iron_ore_rakes.build_report(month)
+    if not r["available"]:
+        return {"available": False, "subtitle": mlabel(month),
+                "placeholder": f"Iron ore rake file not uploaded for FY {r['fy']}"}
+    return {"available": True, "subtitle": f"{mlabel(month)} · FY {r['fy']}", "placeholder": None,
+            "month_label": r["month_label"], "fy": r["fy"], "month_labels": month_labels(r["fy_months"]),
+            "key_points": r["key_points"], "coverage_note": r["coverage_note"],
+            "trend": trend_rows(r["trend"], iron_ore_rakes.ALL),
+            "mix": mix_rows(r["wagon_mix"]),
+            "blocks": wagon_type_blocks(r["types"], r["fy_months"], iron_ore_rakes.GROUPS, iron_ore_rakes.TOTAL)}
 
 
 _EXPORT_LABELS = {"TOTAL NEPAL": "Nepal", "TOTAL PORT": "Port", "GRAND TOTAL": "Total"}
@@ -113,6 +135,8 @@ def export_rows(export: list) -> list:
 def generate_rail_logistics(month: str, part: str) -> dict:
     if part == "loading":
         return {"type": "rail_logistics_loading", "title": _TITLES[part], **rail_loading.build_page(month)}
+    if part == "mines":
+        return {"type": "rail_logistics_mines", "title": _TITLES[part], **mines_page(month)}
     d = rdr.build_report(month)
     page = {"type": f"rail_logistics_{part}", "title": _TITLES[part], "available": bool(d.get("available"))}
     if not page["available"]:

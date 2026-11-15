@@ -2,7 +2,7 @@
 
 import React from 'react';
 
-// Mirrors backend/page_templates/rail_logistics_{loading,summary,history,wagon}.html
+// Mirrors backend/page_templates/rail_logistics_{loading,mines,summary,history,wagon}.html
 // — see backend/page_rail_logistics.py (pages 40.05-40.3). Colours copied
 // from colors_config.json's rail_log_* / perf_app_* / perf_act_* keys.
 const C = {
@@ -337,6 +337,103 @@ export function RailLogisticsLoadingTemplate({ data }) {
       </table>
       <div style={{ fontSize: '7.5pt', fontStyle: 'italic', color: C.secondary, marginTop: '4pt' }}>
         Rakes, as reported in the Rail Movement Cell&apos;s monthly highlights. Totals are as reported, not the sum of the rows above them: imported limestone is counted under both Flux and Ports. EGOM = OGOM + JGOM; each &ldquo;Others&rdquo; is its total less the rows named above it.
+      </div>
+    </div>
+  );
+}
+
+// Page 40.07 — backend/page_templates/rail_logistics_mines.html (iron_ore_rakes.py).
+export function RailLogisticsMinesTemplate({ data }) {
+  if (!data?.available) return <div><Head data={data || {}} /><Placeholder data={data || {}} /></div>;
+  const c = cell('1pt 2pt');
+  const l = { ...c, textAlign: 'left', fontWeight: 700, whiteSpace: 'nowrap' };
+  const { mix, blocks, trend, month_labels: months } = data;
+  const span = (group) => trend.filter((r) => r.plant === group).length;
+  return (
+    <div>
+      <Head data={data} />
+      {data.key_points.length > 0 && (
+        <>
+          <Sec title="Key points" sub="iron ore rakes loaded at the mines, all destinations" />
+          <ul style={{ margin: 0, paddingLeft: '14pt', fontSize: '8.5pt', lineHeight: 1.35 }}>
+            {data.key_points.map((p, i) => <li key={i} style={{ marginBottom: '1.5pt' }}>{p}</li>)}
+          </ul>
+        </>
+      )}
+
+      <Sec title="Seven-year monthly trend" sub="iron ore rakes loaded per month, current FY first" />
+      <table style={table('7.5pt')}>
+        <colgroup><col style={{ width: '7%' }} /><col style={{ width: '9%' }} />{months.map((m) => <col key={m} />)}<col style={{ width: '8%' }} /></colgroup>
+        <thead><tr><th style={c}>Mines</th><th style={c}>FY</th>{months.map((m) => <th key={m} style={c}>{m}</th>)}<th style={c}>Total</th></tr></thead>
+        <tbody>
+          {trend.map((r) => {
+            const td = r.first_of_plant ? { ...c, borderTop: `1px solid ${C.plantRule}`, fontWeight: 700 } : c;
+            return (
+              <tr key={`${r.plant}-${r.fy}`}>
+                {r.first_of_plant && <td style={{ ...td, verticalAlign: 'middle' }} rowSpan={span(r.plant)}>{r.plant}</td>}
+                <td style={td}>{r.fy}</td>
+                {r.months.map((v, i) => <td key={i} style={td}>{fmt(v)}</td>)}
+                <td style={{ ...td, ...act }}>{fmt(r.total)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+
+      <Sec title="Wagon-type mix"
+           sub={`each wagon type's share of the group's FY-to-date rakes; in brackets, how many percentage points that share moved (${mix.label}), the group's biggest move in bold`} />
+      <table style={{ ...table('8pt'), lineHeight: 1.3 }}>
+        <colgroup><col style={{ width: '8%' }} /><col style={{ width: '10%' }} /><col /></colgroup>
+        <thead><tr><th style={c}>Mines</th><th style={{ ...c, ...act }}>FYTD rakes</th><th style={c}>Mix (share, shift in points)</th></tr></thead>
+        <tbody>
+          {mix.rows.map((r) => (
+            <tr key={r.plant} style={r.plant === 'Total' ? total : undefined}>
+              <td style={l}>{r.plant}</td>
+              <td style={{ ...c, ...act }}>{fmt(r.fytd_total)}</td>
+              <td style={{ ...c, textAlign: 'left', padding: '1.5pt 4pt' }}>
+                {r.types.map((t) => (
+                  <span key={t.type} style={{ display: 'inline-block', whiteSpace: 'nowrap', marginRight: '9pt' }}>
+                    <b>{t.type}</b> {fmt(t.share, 1)}%
+                    {t.shift != null && (
+                      <span style={{ color: t.shift >= 0 ? C.pos : C.neg, fontWeight: t.biggest ? 700 : 400 }}> ({t.shift >= 0 ? '+' : ''}{fmt(t.shift, 1)})</span>
+                    )}
+                  </span>
+                ))}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <Sec title={`Rakes by wagon type, FY ${data.fy}`} sub="mines group-wise, month by month" />
+      <table style={table('7.5pt')}>
+        <colgroup><col style={{ width: '7%' }} /><col style={{ width: '17%' }} />{months.map((m) => <col key={m} />)}<col style={{ width: '8%' }} /></colgroup>
+        <thead><tr><th style={c}>Mines</th><th style={c}>Wagon type</th>{months.map((m) => <th key={m} style={c}>{m}</th>)}<th style={{ ...c, ...act }}>FYTD</th></tr></thead>
+        <tbody>
+          {blocks.map((b) => (
+            <React.Fragment key={b.plant}>
+              {b.rows.map((r, i) => {
+                const td = i === 0 ? { ...c, borderTop: `1px solid ${C.plantRule}` } : c;
+                return (
+                  <tr key={r.type}>
+                    {i === 0 && <td style={{ ...td, fontWeight: 700, verticalAlign: 'middle' }} rowSpan={b.rows.length + 1}>{b.plant}</td>}
+                    <td style={{ ...td, textAlign: 'left', fontWeight: 700, whiteSpace: 'nowrap' }}>{r.type}</td>
+                    {r.months.map((v, k) => <td key={k} style={td}>{fmt(v)}</td>)}
+                    <td style={{ ...td, ...act }}>{fmt(r.fytd)}</td>
+                  </tr>
+                );
+              })}
+              <tr style={total}>
+                <td style={l}>Total</td>
+                {b.total.months.map((v, k) => <td key={k} style={c}>{fmt(v)}</td>)}
+                <td style={c}>{fmt(b.total.fytd)}</td>
+              </tr>
+            </React.Fragment>
+          ))}
+        </tbody>
+      </table>
+      <div style={{ fontSize: '7.5pt', fontStyle: 'italic', color: C.secondary, marginTop: '4pt' }}>
+        From the mines&apos; rake record, one rake per entry, whatever the destination (plants, sale, pellet fines to conversion agents). EGOM = OGOM + JGOM. BOXN includes BOXNEL.{data.coverage_note ? ` ${data.coverage_note}` : ''}
       </div>
     </div>
   );

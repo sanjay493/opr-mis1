@@ -1,0 +1,94 @@
+{# Rail Logistics – Iron Ore Rake Loading from Mines (page 40.07, iron_ore_rakes.py via page_rail_logistics.py) #}
+<style>
+    .rlm-sec { font-weight: 700; font-size: 9.5pt; color: {{ colors.rail_log_section_title }}; margin: 6pt 0 3pt; }
+    .rlm-sub { font-weight: 400; font-style: italic; font-size: 7.5pt; color: {{ colors.text_secondary }}; }
+    .rlm-subtitle { text-align: right; font-size: 9pt; font-style: italic; color: {{ colors.text_secondary }}; margin-bottom: 2pt; }
+    .rlm-points { margin: 0; padding-left: 14pt; font-size: 8.5pt; line-height: 1.35; }
+    .rlm-points li { margin-bottom: 1.5pt; }
+    .rlm-table { border-collapse: collapse; width: 100%; table-layout: fixed; font-size: 7.5pt; line-height: 1.1; }
+    .rlm-table th, .rlm-table td { border: 1px solid {{ colors.border_dark }}; padding: 1pt 2pt; text-align: center; font-variant-numeric: tabular-nums; }
+    .rlm-table th { font-weight: 700; }
+    .rlm-table td.rlm-l { text-align: left; font-weight: 700; white-space: nowrap; }
+    .rlm-mix-table { font-size: 8pt; line-height: 1.3; }
+    .rlm-table td.rlm-mix-cell { text-align: left; padding: 1.5pt 4pt; }
+    .rlm-mix-item { display: inline-block; white-space: nowrap; margin-right: 9pt; }
+    .rlm-big { font-weight: 700; }
+    .rlm-total td { font-weight: 700; background: {{ colors.rail_log_total_row_bg }}; }
+    .rlm-act { background: {{ colors.perf_act_bg }}; color: {{ colors.perf_act_text }}; }
+    .rlm-current td { font-weight: 700; }
+    .rlm-group-first td { border-top: 1px solid {{ colors.rail_log_plant_rule }}; }
+    .rlm-group-cell { font-weight: 700; vertical-align: middle; }
+    .rlm-pos { color: {{ colors.rail_log_pos_text }}; }
+    .rlm-neg { color: {{ colors.rail_log_neg_text }}; }
+    .rlm-note { font-size: 7.5pt; font-style: italic; color: {{ colors.text_secondary }}; margin-top: 4pt; }
+    .rlm-placeholder { text-align: center; font-size: 11pt; color: {{ colors.text_secondary }}; margin-top: 60mm; }
+</style>
+
+<div class="coal-title">{{ page.title }}</div>
+<div class="rlm-subtitle">{{ page.subtitle }}</div>
+
+{% if not page.available %}
+<div class="rlm-placeholder">{{ page.placeholder }}</div>
+{% else %}
+{% if page.key_points %}
+<div class="rlm-sec">Key points <span class="rlm-sub">— iron ore rakes loaded at the mines, all destinations</span></div>
+<ul class="rlm-points">
+{% for p in page.key_points %}<li>{{ p }}</li>{% endfor %}
+</ul>
+{% endif %}
+
+<div class="rlm-sec">Seven-year monthly trend <span class="rlm-sub">— iron ore rakes loaded per month, current FY first</span></div>
+<table class="rlm-table">
+    <colgroup><col style="width:7%"/><col style="width:9%"/>{% for _ in page.month_labels %}<col/>{% endfor %}<col style="width:8%"/></colgroup>
+    <thead><tr><th>Mines</th><th>FY</th>{% for m in page.month_labels %}<th>{{ m }}</th>{% endfor %}<th>Total</th></tr></thead>
+    <tbody>
+    {% for r in page.trend %}
+        <tr class="{% if r.first_of_plant %}rlm-group-first rlm-current{% endif %}">
+            {% if r.first_of_plant %}<td class="rlm-group-cell" rowspan="{{ page.trend|selectattr('plant', 'equalto', r.plant)|list|length }}">{{ r.plant }}</td>{% endif %}
+            <td>{{ r.fy }}</td>
+            {% for v in r.months %}<td>{{ v|rl_fmt }}</td>{% endfor %}
+            <td class="rlm-act">{{ r.total|rl_fmt }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+<div class="rlm-sec">Wagon-type mix <span class="rlm-sub">— each wagon type's share of the group's FY-to-date rakes; in brackets, how many percentage points that share moved ({{ page.mix.label }}), the group's biggest move in bold</span></div>
+<table class="rlm-table rlm-mix-table">
+    <colgroup><col style="width:8%"/><col style="width:10%"/><col/></colgroup>
+    <thead><tr><th>Mines</th><th class="rlm-act">FYTD rakes</th><th>Mix (share, shift in points)</th></tr></thead>
+    <tbody>
+    {% for r in page.mix.rows %}
+        <tr{% if r.plant == 'Total' %} class="rlm-total"{% endif %}>
+            <td class="rlm-l">{{ r.plant }}</td>
+            <td class="rlm-act">{{ r.fytd_total|rl_fmt }}</td>
+            <td class="rlm-mix-cell">{% for t in r.types %}<span class="rlm-mix-item"><b>{{ t.type }}</b> {{ t.share|rl_fmt(1) }}%{% if t.shift is not none %} <span class="{{ 'rlm-pos' if t.shift >= 0 else 'rlm-neg' }}{% if t.biggest %} rlm-big{% endif %}">({{ '+' if t.shift >= 0 else '' }}{{ t.shift|rl_fmt(1) }})</span>{% endif %}</span>{% endfor %}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+<div class="rlm-sec">Rakes by wagon type, FY {{ page.fy }} <span class="rlm-sub">— mines group-wise, month by month</span></div>
+<table class="rlm-table">
+    <colgroup><col style="width:7%"/><col style="width:17%"/>{% for _ in page.month_labels %}<col/>{% endfor %}<col style="width:8%"/></colgroup>
+    <thead><tr><th>Mines</th><th>Wagon type</th>{% for m in page.month_labels %}<th>{{ m }}</th>{% endfor %}<th class="rlm-act">FYTD</th></tr></thead>
+    <tbody>
+    {% for b in page.blocks %}
+        {% for r in b.rows %}
+        <tr{% if loop.first %} class="rlm-group-first"{% endif %}>
+            {% if loop.first %}<td class="rlm-group-cell" rowspan="{{ b.rows|length + 1 }}">{{ b.plant }}</td>{% endif %}
+            <td class="rlm-l">{{ r.type }}</td>
+            {% for v in r.months %}<td>{{ v|rl_fmt }}</td>{% endfor %}
+            <td class="rlm-act">{{ r.fytd|rl_fmt }}</td>
+        </tr>
+        {% endfor %}
+        <tr class="rlm-total">
+            <td class="rlm-l">Total</td>
+            {% for v in b.total.months %}<td>{{ v|rl_fmt }}</td>{% endfor %}
+            <td>{{ b.total.fytd|rl_fmt }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+<div class="rlm-note">From the mines' rake record, one rake per entry, whatever the destination (plants, sale, pellet fines to conversion agents). EGOM = OGOM + JGOM. BOXN includes BOXNEL.{% if page.coverage_note %} {{ page.coverage_note }}{% endif %}</div>
+{% endif %}

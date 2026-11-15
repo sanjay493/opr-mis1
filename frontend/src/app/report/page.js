@@ -72,6 +72,7 @@ const PAGE_LABELS = {
   39: 'Capital Repair – BSL',
   40: 'Capital Repair – ISP',
   40.05: 'Rail Logistics – Monthly Rail Loading',
+  40.07: 'Rail Logistics – Iron Ore Rake Loading from Mines',
   40.1: 'Rail Logistics – Steel Rake Despatch from Plant: Summary',
   40.2: 'Rail Logistics – Steel Rake Despatch from Plant: Performance History',
   40.3: 'Rail Logistics – Steel Rake Despatch from Plant: Wagon Types',
@@ -258,7 +259,7 @@ function replaceTimeStrings(text, newMonth, newYear, oldMonth, oldYear) {
 const SERVER_DATED_TYPES = new Set([
   'power_data', 'steel_sales_performance', 'mines_performance', 'special_steel_donut',
   'special_steel_trend', 'rake_detention_detail', 'rake_detention_summary', 'rake_detention_trend',
-  'rail_logistics_loading', 'rail_logistics_summary', 'rail_logistics_history', 'rail_logistics_wagon',
+  'rail_logistics_loading', 'rail_logistics_mines', 'rail_logistics_summary', 'rail_logistics_history', 'rail_logistics_wagon',
 ]);
 
 function getFormattedPagesData(pages, newMonth, newYear, oldMonth, oldYear) {
