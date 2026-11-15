@@ -488,11 +488,33 @@ def iron_ore_rake_totals_outside(first_date: str, last_date: str) -> Dict[str, i
         (first_date[:7], last_date[:7], first_date, last_date))}
 
 
+def iron_ore_rake_last_date() -> Optional[str]:
+    """The date of the latest stored rake ('YYYY-MM-DD'), or None when there is none."""
+    rows = _read("SELECT MAX(rpt_date) AS last_date FROM iron_ore_rake")
+    return str(rows[0]["last_date"]) if rows and rows[0]["last_date"] else None
+
+
+def iron_ore_rakes_stored_elsewhere(ids: List[int], first_date: str, last_date: str) -> Dict[str, int]:
+    """{report_month: rakes} for the stored rakes that carry one of `ids`
+    but are dated outside first_date..last_date: rakes an upload of that
+    date range moves (their date was corrected at the source)."""
+    out: Dict[str, int] = {}
+    ids = list(ids)
+    for i in range(0, len(ids), _IRON_ORE_BATCH):
+        batch = ids[i:i + _IRON_ORE_BATCH]
+        for r in _read("SELECT report_month, COUNT(*) AS rakes FROM iron_ore_rake"
+                       " WHERE rpt_date NOT BETWEEN %s AND %s AND id IN (" + ", ".join(["%s"] * len(batch)) + ")"
+                       " GROUP BY report_month", (first_date, last_date, *batch)):
+            out[r["report_month"]] = out.get(r["report_month"], 0) + r["rakes"]
+    return dict(sorted(out.items()))
+
+
 def save_iron_ore_rakes(rows: List[dict], user: Optional[str]) -> dict:
     """Store an uploaded file's rakes ([{id, rpt_date, report_month,
     mine_code, rake_no, dest, wagon_code, l_wg, f_wg}]) in one transaction:
     every rake stored between the file's first and last date is replaced by
-    the file's; rakes outside those dates stay.
+    the file's; rakes outside those dates stay, except one that carries an
+    id of the file (its date was corrected at the source: it moves).
     -> {rakes, deleted, first_date, last_date}."""
     if not rows:
         raise ValueError("no iron ore rakes to save")
@@ -512,6 +534,11 @@ def save_iron_ore_rakes(rows: List[dict], user: Optional[str]) -> dict:
             _keys.ensure_month(cur, month, bump=False)
         cur.execute("DELETE FROM iron_ore_rake WHERE rpt_date BETWEEN %s AND %s", (first, last))
         deleted = cur.rowcount
+        ids = [r["id"] for r in rows]
+        for i in range(0, len(ids), _IRON_ORE_BATCH):
+            batch = ids[i:i + _IRON_ORE_BATCH]
+            cur.execute("DELETE FROM iron_ore_rake WHERE id IN (" + ", ".join(["%s"] * len(batch)) + ")", batch)
+            deleted += cur.rowcount
         params = [(r["id"], r["report_month"], r["rpt_date"], r["mine_code"], r["rake_no"], r["dest"],
                    r["wagon_code"], r["l_wg"], r["f_wg"], user) for r in rows]
         for i in range(0, len(params), _IRON_ORE_BATCH):

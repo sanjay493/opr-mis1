@@ -13,6 +13,7 @@ counted that way the file agrees with the reported iron ore totals.
 This module holds the mine groups and wagon-type names (not in the
 database, as rail_loading.py's items), reads the file, and builds the page.
 """
+import calendar
 import csv
 import datetime
 import io
@@ -124,6 +125,28 @@ def parse_csv(text: str, today: str = None) -> list:
 
 # ── counts -> groups, wagon names, report ────────────────────────────────────
 
+def complete_through(last_date: str) -> str:
+    """The last month the record holds whole, given the date of its latest
+    rake: that date's month when it is the month's last day, else the month
+    before. An export taken on 4 November holds four days of November; they
+    are not November's loading."""
+    y, m, d = int(last_date[:4]), int(last_date[5:7]), int(last_date[8:10])
+    if d < calendar.monthrange(y, m)[1]:
+        y, m = (y, m - 1) if m > 1 else (y - 1, 12)
+    return f"{y:04d}-{m:02d}"
+
+
+def stored_counts(first_month: str, last_month: str) -> list:
+    """repo.rake.iron_ore_rake_counts for first_month..last_month, leaving
+    out a last month the record does not yet hold whole (complete_through).
+    Every figure printed from the rakes comes through here."""
+    last_date = rrake.iron_ore_rake_last_date()
+    if not last_date:
+        return []
+    last_month = min(last_month, complete_through(last_date))
+    return rrake.iron_ore_rake_counts(first_month, last_month) if first_month <= last_month else []
+
+
 def _page_group(mine_code: str) -> str:
     group = MINE_GROUP[mine_code]
     return "CGOM" if group == "CGOM" else "EGOM"
@@ -210,14 +233,15 @@ def build_report(month: str) -> dict:
     types, coverage_note}. trend and wagon_mix are rake_despatch_report's own shapes with
     the mines groups (and Total) where it has plants (and SAIL); types is
     {group: {wagon name: {month: rakes}}} for the report month's FY.
-    Months after the report month are never shown; a report month with no
-    rakes yet (file not uploaded) prints blank and the mix and FY-to-date
-    stop at the last month that has rakes."""
+    Months after the report month are never shown; a report month the record
+    does not hold whole yet (file not uploaded, or uploaded part-way through
+    the month) prints blank and the mix and FY-to-date stop at the last
+    month that has rakes."""
     start = fy_start_year(month)
     months = fy_months(start)
     out = {"available": False, "fy": fy_label(start), "fy_months": months, "month_label": mlabel(month)}
     first_month = fy_months(start - rdr.HISTORY_FYS + 1)[0]
-    counts = rrake.iron_ore_rake_counts(first_month, month)
+    counts = stored_counts(first_month, month)
     totals = group_totals(counts)
     with_rakes = [m for m in months if m <= month and m in totals]
     if not with_rakes:

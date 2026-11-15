@@ -81,7 +81,7 @@ def test_repo_round_trip(mysql_db):
             return cur.fetchone()[0]
 
     rows = ior.parse_csv(ior.read_file(FIXTURE.read_bytes()))
-    assert rrake.iron_ore_rake_month_totals("2026-04", "2027-03") == {}
+    assert rrake.iron_ore_rake_month_totals("2026-04", "2027-03") == {} and rrake.iron_ore_rake_last_date() is None
     n0 = n()
     out = rrake.save_iron_ore_rakes(rows, "x@sail.in")
     assert out == {"rakes": 10, "deleted": 0, "first_date": "2026-09-28", "last_date": "2026-10-04"}
@@ -100,6 +100,13 @@ def test_repo_round_trip(mysql_db):
     out = rrake.save_iron_ore_rakes(narrow, None)
     assert out == {"rakes": 1, "deleted": 2, "first_date": "2026-10-02", "last_date": "2026-10-02"}
     assert rrake.iron_ore_rake_month_totals("2026-09", "2026-10") == {"2026-09": 4, "2026-10": 5}
+    assert rrake.iron_ore_rake_last_date() == "2026-10-04"
+    # a rake stored on 28 September comes back dated 3 October in a one-day file: it moves, it is not doubled
+    moved = [dict(r, rpt_date="2026-10-03", report_month="2026-10") for r in rows if r["id"] == 101]
+    assert rrake.iron_ore_rakes_stored_elsewhere([101, 107, 999], "2026-10-03", "2026-10-03") == {"2026-09": 1}
+    out = rrake.save_iron_ore_rakes(moved, None)
+    assert out == {"rakes": 1, "deleted": 3, "first_date": "2026-10-03", "last_date": "2026-10-03"}   # 107, 108 and old 101
+    assert rrake.iron_ore_rake_month_totals("2026-09", "2026-10") == {"2026-09": 3, "2026-10": 4}
     with pytest.raises(ValueError):
         rrake.save_iron_ore_rakes([], None)
     assert sum(rrake.iron_ore_rake_month_totals("2026-09", "2026-10").values()) > 0       # nothing cleared
@@ -121,7 +128,8 @@ def store(monkeypatch):
 
     def save(rows, user):
         first, last = min(r["rpt_date"] for r in rows), max(r["rpt_date"] for r in rows)
-        kept = [r for r in rakes if not first <= r["rpt_date"] <= last]
+        ids = {r["id"] for r in rows}
+        kept = [r for r in rakes if not first <= r["rpt_date"] <= last and r["id"] not in ids]
         deleted = len(rakes) - len(kept)
         rakes[:] = kept + list(rows)
         users.append(user)
@@ -131,6 +139,8 @@ def store(monkeypatch):
                         lambda a, b: totals(r for r in rakes if a <= r["report_month"] <= b))
     monkeypatch.setattr(api.rrake, "iron_ore_rake_totals_outside", lambda a, b: totals(
         r for r in rakes if a[:7] <= r["report_month"] <= b[:7] and not a <= r["rpt_date"] <= b))
+    monkeypatch.setattr(api.rrake, "iron_ore_rakes_stored_elsewhere", lambda ids, a, b: totals(
+        r for r in rakes if r["id"] in set(ids) and not a <= r["rpt_date"] <= b))
     monkeypatch.setattr(api.rrake, "save_iron_ore_rakes", save)
     return rakes, users
 
@@ -202,6 +212,21 @@ def test_a_narrow_file_leaves_other_dates_alone(store):
     assert _upload(client, "insert", text=one_day).status_code == 200 and len(store[0]) == 10
 
 
+def test_a_rake_whose_date_was_corrected_moves_and_is_shown(store):
+    """Rake 101 is stored on 28 September; a file for 3 October only carries it with that date."""
+    client = _client()
+    _upload(client, "insert")
+    one_day = "\n".join(ln for ln in _text().splitlines() if ln.startswith(("id,", "107,", "108,"))) \
+        + "\n101,BOL,2026-10-03,503,DSP,BX,25.00,33.00\n"
+    d = _upload(client, "preview", text=one_day).json()
+    assert d["months"] == [{"report_month": "2026-09", "stored": 4, "in_file": 0, "after": 3},
+                           {"report_month": "2026-10", "stored": 6, "in_file": 3, "after": 7}]
+    assert d["reduces"] == ["2026-09"]
+    assert _upload(client, "insert", text=one_day).status_code == 409 and len(store[0]) == 10
+    assert _upload(client, "insert", text=one_day, confirm_replace="true").status_code == 200
+    assert len(store[0]) == 10 and sum(1 for r in store[0] if r["id"] == 101) == 1
+
+
 @pytest.mark.parametrize("text, message", [
     (None, "XYZ"), ("id,unit,rpt_date,rake_no,dest,type,l_wg,f_wg\n", "no rakes")])
 def test_bad_file_is_422_and_saves_nothing(store, text, message):
@@ -237,6 +262,7 @@ def counts(monkeypatch):
     stored = _counts()
     monkeypatch.setattr(ior.rrake, "iron_ore_rake_counts",
                         lambda a, b: [c for c in stored if a <= c["report_month"] <= b])
+    monkeypatch.setattr(ior.rrake, "iron_ore_rake_last_date", lambda: "2026-10-31")
     return stored
 
 
@@ -321,3 +347,31 @@ def test_coverage_note_names_mines_that_enter_the_record_late(counts):
 def test_no_coverage_note_when_every_mine_is_there_from_the_start(counts):
     counts[:] = _counts([("2020-04", "BOL", "BS", 1), ("2026-10", "BOL", "BS", 1)])
     assert ior.build_report("2026-10")["coverage_note"] is None
+
+
+# ── a month the record only partly covers ────────────────────────────────────
+
+@pytest.mark.parametrize("last_date, through", [
+    ("2026-10-31", "2026-10"), ("2026-11-04", "2026-10"), ("2026-10-30", "2026-09"), ("2026-11-30", "2026-11"),
+    ("2026-01-15", "2025-12"), ("2024-02-29", "2024-02"), ("2024-02-28", "2024-01")])
+def test_complete_through(last_date, through):
+    assert ior.complete_through(last_date) == through
+
+
+def test_a_partly_uploaded_month_is_not_yet_in_the_record(counts, monkeypatch):
+    """The export was taken on 4 November: its four days of November are not November."""
+    counts += _counts([("2026-11", "BOL", "BS", 40), ("2026-11", "DAL", "BS", 9)])
+    monkeypatch.setattr(ior.rrake, "iron_ore_rake_last_date", lambda: "2026-11-04")
+    assert {c["report_month"] for c in ior.stored_counts("2026-04", "2026-11")} == {"2026-04", "2026-10"}
+    r = ior.build_report("2026-11")
+    assert r["trend"]["EGOM"][0]["months"][6:8] == [10, None]
+    assert not any(k.startswith("Iron ore loading from mines in Nov") for k in r["key_points"])
+    assert r["key_points"][0].startswith("FY to date (to Oct'26) the mines loaded 21 iron ore rakes")
+    # once the record reaches the month's end it counts
+    monkeypatch.setattr(ior.rrake, "iron_ore_rake_last_date", lambda: "2026-11-30")
+    assert ior.build_report("2026-11")["trend"]["EGOM"][0]["months"][7] == 40
+
+
+def test_nothing_stored(counts, monkeypatch):
+    monkeypatch.setattr(ior.rrake, "iron_ore_rake_last_date", lambda: None)
+    assert ior.stored_counts("2020-04", "2026-10") == [] and ior.build_report("2026-10")["available"] is False

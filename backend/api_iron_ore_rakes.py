@@ -10,7 +10,8 @@ tens of thousands of rakes are not worth passing back and forth as JSON):
      and `months`: every month whose stored rake count the file changes.
      Nothing is saved.
   2. POST /insert  — save. The file replaces every rake stored between its
-     first and last date. 409 when a month's count would fall unless
+     first and last date (and moves a stored rake whose id it carries with
+     another date). 409 when a month's count would fall unless
      confirm_replace=true.
 """
 import traceback
@@ -37,11 +38,15 @@ def _summary(rows: list) -> dict:
     in_file = {}
     for r in rows:
         in_file[r["report_month"]] = in_file.get(r["report_month"], 0) + 1
-    stored = rrake.iron_ore_rake_month_totals(first[:7], last[:7])
-    kept = rrake.iron_ore_rake_totals_outside(first, last)       # stored rakes the file does not cover
+    # stored rakes dated outside the file's dates that carry one of its ids: they move to the file's date
+    moved = rrake.iron_ore_rakes_stored_elsewhere([r["id"] for r in rows], first, last)
+    lo, hi = min([first[:7], *moved]), max([last[:7], *moved])
+    stored = rrake.iron_ore_rake_month_totals(lo, hi)
+    kept = rrake.iron_ore_rake_totals_outside(first, last)       # of the file's own months: rakes it does not cover
     months = []
     for m in sorted(set(stored) | set(in_file)):
-        after = kept.get(m, 0) + in_file.get(m, 0)
+        left = kept.get(m, 0) if first[:7] <= m <= last[:7] else stored.get(m, 0)
+        after = left - moved.get(m, 0) + in_file.get(m, 0)
         if after != stored.get(m, 0):
             months.append({"report_month": m, "stored": stored.get(m, 0), "in_file": in_file.get(m, 0), "after": after})
     return {"rakes": len(rows), "first_date": first, "last_date": last, "months": months,

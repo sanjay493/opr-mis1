@@ -156,8 +156,9 @@ def loading_table(rows: list, month: str) -> dict:
 
 def mines_overlay(first_month: str, last_month: str) -> dict:
     """{month: {"ore_ogom": rakes, "ore_jgom": rakes}} for the months of
-    first_month..last_month the mines' rake record covers (iron_ore_rakes.py)."""
-    totals = iron_ore_rakes.group_totals(rrake.iron_ore_rake_counts(first_month, last_month))
+    first_month..last_month the mines' rake record holds whole
+    (iron_ore_rakes.stored_counts); a month uploaded part-way stays typed."""
+    totals = iron_ore_rakes.group_totals(iron_ore_rakes.stored_counts(first_month, last_month))
     return {m: {"ore_ogom": t["OGOM"], "ore_jgom": t["JGOM"]} for m, t in totals.items()}
 
 
