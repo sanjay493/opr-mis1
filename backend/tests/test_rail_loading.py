@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+import rail_loading as rl
 import rail_loading_highlights as rlh
 
 
@@ -82,3 +83,62 @@ def test_inward_cross_check_is_reported_but_loads():
 
 def test_no_blocks():
     assert rlh.parse("nothing here") == ({}, [])
+
+
+# ── item registry and page table ─────────────────────────────────────────────
+
+def _rows(d):
+    return [{"report_month": m, "item_code": c, "rakes": v} for m, cv in d.items() for c, v in cv.items()]
+
+
+def test_registry_matches_the_parser():
+    assert len(rl.CODES) == 25 and len(set(rl.CODES)) == 25
+    assert set(rl.CODES) == set(APR)
+    assert [k for k, _c, _l in rl.ITEMS].count("group") == 3
+    assert rl.CODES[0] == "ore_ogom_jgom" and rl.CODES[-1] == "export_total"
+
+
+def test_fmt_rakes():
+    assert [rl.fmt_rakes(v) for v in (None, 0, 2239.0, 46.3, 96.80000000000001)] == ["–", "0", "2239", "46.3", "96.8"]
+
+
+def test_fytd_and_per_day():
+    t = rl.loading_table(_rows({"2026-04": {"grand_total": 2239, "coal_coking": 46.3, "bogus": 9},
+                                "2026-05": {"grand_total": 2302, "coal_coking": 50.5}}), "2026-05")
+    by = {r["code"]: r for r in t["rows"]}
+    assert t["fy"] == "2026-27" and t["has_data"] and t["month_labels"][0] == "Apr" and len(t["month_labels"]) == 12
+    assert by["grand_total"]["months"][:3] == [2239, 2302, None] and by["grand_total"]["fytd"] == 4541
+    assert by["grand_total"]["fytd_per_day"] == round(4541 / 61, 2)
+    assert by["coal_coking"]["fytd"] == 96.8 and by["coal_coking"]["fytd_per_day"] is None
+    assert by["per_day"]["months"][:3] == [74.63, 74.26, None] and by["per_day"]["fytd_per_day"] == round(4541 / 61, 2)
+    assert by["ore_total"]["months"] == [None] * 12 and by["ore_total"]["fytd"] is None
+    assert "bogus" not in by and [r["code"] for r in t["rows"] if r["kind"] != "group"][:1] == ["ore_ogom_jgom"]
+
+
+def test_gap_month():
+    t = rl.loading_table(_rows({"2026-04": {"grand_total": 2239}, "2026-06": {"grand_total": 2332}}), "2026-06")
+    g = next(r for r in t["rows"] if r["code"] == "grand_total")
+    assert g["months"][:3] == [2239, None, 2332] and g["fytd"] == 4571 and g["fytd_per_day"] == round(4571 / 60, 2)
+
+
+def test_jan_mar_fy_and_future_months_blank():
+    t = rl.loading_table(_rows({"2026-04": {"grand_total": 1}, "2027-02": {"grand_total": 5},
+                                "2027-03": {"grand_total": 7}, "2027-04": {"grand_total": 9}}), "2027-02")
+    g = next(r for r in t["rows"] if r["code"] == "grand_total")
+    assert t["fy"] == "2026-27" and g["months"][0] == 1 and g["months"][10] == 5 and g["months"][11] is None
+    assert g["fytd"] == 6
+
+
+def test_no_rows_has_no_data():
+    assert rl.loading_table([], "2026-10")["has_data"] is False
+    assert rl.loading_table(_rows({"2027-04": {"grand_total": 9}}), "2026-10")["has_data"] is False
+
+
+def test_placeholder(monkeypatch):
+    import page_rail_logistics as prl
+    monkeypatch.setattr(rl.rrake, "rail_loading_rows", lambda a, b: [])
+    p = prl.generate_rail_logistics("2026-10", "loading")
+    assert (p["type"], p["title"], p["available"]) == (
+        "rail_logistics_loading", "Rail Logistics – Monthly Rail Loading", False)
+    assert p["placeholder"] == "Monthly rail loading for FY 2026-27 not yet entered"
+    assert list(prl.PAGE_IDS) == [40.05, 40.1, 40.2, 40.3]

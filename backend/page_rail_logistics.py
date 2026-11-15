@@ -1,7 +1,12 @@
 """
-"Rail Logistics – Rake Despatch" — three portrait MIS PDF pages, right after
-Capital Repair (pages 36-40), right before Details of Rakes Detention.
-A selection of the web report (Reports > Rail Logistics > Rake Despatch):
+"Rail Logistics" — four portrait MIS PDF pages, right after Capital Repair
+(pages 36-40), right before Details of Rakes Detention.
+
+  40.05 Monthly rail loading — SAIL's rail loading by commodity, month by
+                              month (rail_loading.py; its own table, not the
+                              Despatch Summary Report)
+
+then a selection of the web report (Reports > Rail Logistics > Rake Despatch):
 
   40.1 Summary              — headline cards, slag/coke/sinter/slab by plant,
                               key points, plan attainment (no Status column;
@@ -10,17 +15,19 @@ A selection of the web report (Reports > Rail Logistics > Rake Despatch):
                               export programme vs actual
   40.3 Wagon types          — wagon-type mix per plant, FY rakes by wagon type
 
-Every figure comes from rake_despatch_report.build_report(month); this module
+Every 40.1-40.3 figure comes from rake_despatch_report.build_report(month); this module
 only regroups it for the page layout, so the PDF and the web report always
 agree. No upload for the month -> each page prints its title and a
 "not uploaded" line.
 """
+import rail_loading
 import rake_despatch_report as rdr
 from rake_despatch_report import ALL, PLANTS, mlabel, status_of
 
-PAGE_IDS = {40.1: "summary", 40.2: "history", 40.3: "wagon"}
+PAGE_IDS = {40.05: "loading", 40.1: "summary", 40.2: "history", 40.3: "wagon"}   # print order
 
 _TITLES = {
+    "loading": "Rail Logistics – Monthly Rail Loading",
     "summary": "Rail Logistics – Rake Despatch: Summary",
     "history": "Rail Logistics – Rake Despatch: Performance History",
     "wagon": "Rail Logistics – Rake Despatch: Wagon Types",
@@ -137,6 +144,8 @@ def export_rows(export: list) -> list:
 
 
 def generate_rail_logistics(month: str, part: str) -> dict:
+    if part == "loading":
+        return {"type": "rail_logistics_loading", "title": _TITLES[part], **rail_loading.build_page(month)}
     d = rdr.build_report(month)
     page = {"type": f"rail_logistics_{part}", "title": _TITLES[part], "available": bool(d.get("available"))}
     if not page["available"]:

@@ -92,7 +92,7 @@ def test_ranking_tint(monkeypatch):
 
 
 def test_page_ids():
-    assert rl.PAGE_IDS == {40.1: "summary", 40.2: "history", 40.3: "wagon"}
+    assert rl.PAGE_IDS == {40.05: "loading", 40.1: "summary", 40.2: "history", 40.3: "wagon"}
 
 
 def test_fmt():
