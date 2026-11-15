@@ -14,7 +14,12 @@ import calendar
 import re
 from typing import Dict, List, Tuple
 
-_HEADING = re.compile(r"Rail Transportation Performance of SAIL during\s+([A-Za-z]+)\s+(\d{4})", re.I)
+# A block starts at every heading, whatever follows it; the month and year
+# must then read as "during <MONTH> <YEAR>". A heading typed any other way
+# still ends the block before it and is reported, so its figures can never
+# be read into the previous month.
+_BLOCK_START = re.compile(r"Rail Transportation Performance of SAIL", re.I)
+_HEADING = re.compile(r"\s+during\s+([A-Za-z]+)\s+(\d{4})(?!\d)", re.I)
 _MONTHS = {name.upper(): i for i, name in enumerate(calendar.month_name) if name}
 _NUM = r"(\d+(?:\.\d+)?)"
 
@@ -90,14 +95,16 @@ def parse(text: str) -> Tuple[Dict[str, Dict[str, float]], List[str]]:
     block lacks any figure is listed in problems and left out whole; a
     cross-check mismatch is listed too, but that month is still returned."""
     months, problems = {}, []
-    heads = list(_HEADING.finditer(text))
-    for i, h in enumerate(heads):
-        number = _MONTHS.get(h.group(1).upper())
+    starts = list(_BLOCK_START.finditer(text))
+    for i, s in enumerate(starts):
+        end = starts[i + 1].start() if i + 1 < len(starts) else len(text)
+        h = _HEADING.match(text, s.end())
+        number = h and _MONTHS.get(h.group(1).upper())
         if not number:
-            problems.append(f"unknown month in heading: {h.group(1)} {h.group(2)}")
+            line = text[s.start():end].splitlines()[0].strip()
+            problems.append(f"month heading not understood: {line[:90]}")
             continue
         month = f"{h.group(2)}-{number:02d}"
-        end = heads[i + 1].start() if i + 1 < len(heads) else len(text)
         values, missing, notes = _parse_block(_normalise(text[h.end():end]))
         if missing:
             problems.append(f"{month}: not found: {', '.join(missing)}")

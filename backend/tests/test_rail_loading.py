@@ -142,3 +142,14 @@ def test_placeholder(monkeypatch):
         "rail_logistics_loading", "Rail Logistics – Monthly Rail Loading", False)
     assert p["placeholder"] == "Monthly rail loading for FY 2026-27 not yet entered"
     assert list(prl.PAGE_IDS) == [40.05, 40.1, 40.2, 40.3]
+
+
+def test_drifted_heading_is_reported_and_never_merged_into_the_month_before():
+    text = _text().replace("during MAY 2026", "during the month of MAY'26")
+    # April's own export total gone: May's must not be picked up in its place
+    text = text.replace("Total export rakes : 4.0 rakes.", "", 1)
+    months, problems = rlh.parse(text)
+    assert "2026-05" not in months and "2026-04" not in months and len(months) == 5
+    assert len(problems) == 2
+    assert problems[0] == "2026-04: not found: export_total"
+    assert problems[1].startswith("month heading not understood:") and "MAY'26" in problems[1]
