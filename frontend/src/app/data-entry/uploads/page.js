@@ -1197,6 +1197,165 @@ function MouPlanExtractRow({ apiBase, onSuccess }) {
   );
 }
 
+// The mines' iron ore rake record (u_rakes_rmg.csv, one line per rake) — see
+// backend/api_iron_ore_rakes.py and iron_ore_rakes.py. The file is sent again
+// on save (it is too large to pass back as JSON). Feeds MIS PDF page 40.07
+// and the OGOM / JGOM rows of page 40.05.
+function IronOreRakesExtractRow({ apiBase, onSuccess }) {
+  const [file, setFile] = React.useState(null);
+  const [busy, setBusy] = React.useState(false);
+  const [status, setStatus] = React.useState(null);
+  const [preview, setPreview] = React.useState(null);
+  const inputRef = React.useRef();
+
+  const send = async (path, confirmReplace) => {
+    const form = new FormData();
+    form.append('file', file);
+    if (confirmReplace) form.append('confirm_replace', 'true');
+    const res = await fetch(`${apiBase}/api/iron-ore-rakes/${path}`, { method: 'POST', body: form });
+    return { res, json: await parseJsonResponse(res) };
+  };
+
+  const handlePreview = async () => {
+    if (!file) return;
+    setBusy(true);
+    setStatus(null);
+    setPreview(null);
+    try {
+      const { res, json } = await send('preview', false);
+      if (!res.ok) throw new Error(json.detail || 'Preview failed');
+      setPreview(json);
+    } catch (err) {
+      setStatus({ type: 'error', text: err.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!preview) return;
+    setBusy(true);
+    setStatus(null);
+    try {
+      const { res, json } = await send('insert', preview.reduces.length > 0);
+      if (!res.ok) throw new Error(json.detail || 'Save failed');
+      setStatus({
+        type: 'success',
+        text: `✓ Saved ${json.rakes} rake(s), ${json.first_date} to ${json.last_date}`
+          + (json.deleted ? ` (replacing ${json.deleted} stored).` : '.'),
+      });
+      setPreview(null);
+      setFile(null);
+      if (inputRef.current) inputRef.current.value = '';
+      onSuccess();
+    } catch (err) {
+      setStatus({ type: 'error', text: err.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleCancel = () => { setPreview(null); setStatus(null); };
+
+  const cellStyle = { padding: '4px 8px', fontSize: 12.5, textAlign: 'right', borderBottom: '1px solid #f1f3f4' };
+  const labelCellStyle = { padding: '4px 8px', fontSize: 12.5, borderBottom: '1px solid #f1f3f4', color: '#374151' };
+  const btn = (primary) => ({
+    padding: primary ? '7px 18px' : '7px 14px', background: primary ? (busy ? '#5f6368' : '#1a73e8') : '#fff',
+    color: primary ? '#fff' : '#5f6368', border: primary ? 'none' : '1px solid #dadce0', borderRadius: 6, fontSize: 13,
+    cursor: busy ? 'not-allowed' : 'pointer', fontWeight: 600, whiteSpace: 'nowrap',
+  });
+  const reduces = preview ? preview.reduces : [];
+
+  return (
+    <div style={{
+      marginBottom: 16, padding: '12px 14px',
+      background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8,
+    }}>
+      <div style={{ fontSize: 14, fontWeight: 700, color: '#1e40af', marginBottom: 4 }}>
+        Iron ore rakes from mines (CSV) — one line per rake
+      </div>
+      <div style={{ fontSize: 12, color: '#5f6368', marginBottom: 10 }}>
+        The mines&apos; rake record (u_rakes_rmg.csv: id, unit, rpt_date, rake_no, dest, type, l_wg, f_wg). Upload the
+        latest export each month; it may hold the whole history again or only recent months. The dates come from
+        the file, not the selector above. Shown on the report&apos;s Rail Logistics pages (Iron Ore Rake Loading from
+        Mines, and the OGOM / JGOM rows of Monthly Rail Loading).
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <input ref={inputRef} type="file" accept=".csv"
+          onChange={e => { setFile(e.target.files[0]); setStatus(null); setPreview(null); }}
+          style={{ fontSize: 13, flex: 1, minWidth: 200 }}
+          suppressHydrationWarning
+        />
+        {!preview && (
+          <button onClick={handlePreview} disabled={!file || busy} style={{ ...btn(true), cursor: file && !busy ? 'pointer' : 'not-allowed' }}>
+            {busy ? 'Reading…' : 'Preview'}
+          </button>
+        )}
+        {preview && (
+          <>
+            <button onClick={handleSave} disabled={busy} style={btn(true)}>
+              {busy ? 'Saving…' : reduces.length > 0 ? 'Replace and save' : 'Confirm & Save'}
+            </button>
+            <button onClick={handleCancel} disabled={busy} style={btn(false)}>Cancel</button>
+          </>
+        )}
+      </div>
+
+      <div style={{ marginTop: 10 }}><StatusMsg status={status} /></div>
+
+      {preview && (
+        <div style={{ marginTop: 6 }}>
+          <div style={{ fontSize: 12.5, color: '#374151', marginBottom: 8 }}>
+            <b>{preview.rakes}</b> rake(s) in the file, <b>{preview.first_date}</b> to <b>{preview.last_date}</b>.
+            This file replaces every rake stored between those two dates; rakes outside them stay.
+          </div>
+          {reduces.length > 0 && (
+            <div style={{
+              marginBottom: 8, padding: '6px 12px', borderRadius: 6, fontSize: 12,
+              background: '#fffbeb', color: '#92400e', border: '1px solid #fde68a',
+            }}>
+              ⚠ The file has fewer rakes than are saved for: {reduces.join(', ')}. Save only if the file is right.
+            </div>
+          )}
+          {preview.months.length === 0 ? (
+            <div style={{ fontSize: 12.5, color: '#374151' }}>
+              Nothing changes: the stored rake count of every month the file covers already matches.
+            </div>
+          ) : (
+            <>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: '#374151', marginBottom: 4 }}>
+                Months whose rake count changes ({preview.months.length})
+              </div>
+              <div style={{ overflow: 'auto', maxHeight: 320 }}>
+                <table style={{ borderCollapse: 'collapse', background: '#fff', borderRadius: 6 }}>
+                  <thead>
+                    <tr style={{ background: '#f8f9fa' }}>
+                      <th style={{ ...labelCellStyle, fontWeight: 700, textAlign: 'left' }}>Month</th>
+                      <th style={{ ...cellStyle, fontWeight: 700 }}>Stored now</th>
+                      <th style={{ ...cellStyle, fontWeight: 700 }}>In the file</th>
+                      <th style={{ ...cellStyle, fontWeight: 700 }}>After saving</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {preview.months.map(m => (
+                      <tr key={m.report_month}>
+                        <td style={labelCellStyle}>{m.report_month}</td>
+                        <td style={cellStyle}>{m.stored}</td>
+                        <td style={cellStyle}>{m.in_file}</td>
+                        <td style={{ ...cellStyle, fontWeight: 700, color: m.after < m.stored ? '#92400e' : undefined }}>{m.after}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Rail Movement Cell's month-end Despatch Summary Report (rake loading) —
 // see backend/api_rake_despatch.py and
 // excel_extractors/pdf_extractor_rake_despatch.py. The month comes from the
@@ -1445,6 +1604,8 @@ function UploadsExtractionInner() {
         <MouPlanExtractRow apiBase={API_BASE_URL} onSuccess={() => {}} />
 
         <RakeDespatchExtractRow apiBase={API_BASE_URL} onSuccess={() => {}} />
+
+        <IronOreRakesExtractRow apiBase={API_BASE_URL} onSuccess={() => {}} />
       </div>
     </div>
   );
