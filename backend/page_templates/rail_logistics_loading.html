@@ -2,14 +2,15 @@
 <style>
     .rll-subtitle { text-align: right; font-size: 9pt; font-style: italic; color: {{ colors.text_secondary }}; margin-bottom: 2pt; }
     .rll-table { border-collapse: collapse; width: 100%; table-layout: fixed; font-size: 8pt; line-height: 1.15; }
-    .rll-table th, .rll-table td { border: 1px solid {{ colors.border_dark }}; padding: 2.4pt 2pt; text-align: center; font-variant-numeric: tabular-nums; }
+    .rll-table th, .rll-table td { border: 1px solid {{ colors.border_dark }}; padding: 2.4pt 1pt; text-align: center; font-variant-numeric: tabular-nums; }
     .rll-table th { font-weight: 700; }
     .rll-table td.rll-l { text-align: left; padding-left: 9pt; white-space: nowrap; }
     .rll-act { background: {{ colors.perf_act_bg }}; color: {{ colors.perf_act_text }}; }
-    .rll-group td { text-align: left; font-weight: 700; color: {{ colors.rail_log_section_title }}; background: {{ colors.rail_log_card_bg }}; }
+    .rll-group td { text-align: left; padding-left: 3pt; font-weight: 700; color: {{ colors.rail_log_section_title }}; background: {{ colors.rail_log_card_bg }}; }
     .rll-total td { font-weight: 700; background: {{ colors.rail_log_total_row_bg }}; }
     .rll-total td.rll-l, .rll-grand td.rll-l { padding-left: 3pt; }
-    .rll-grand td { font-weight: 700; font-size: 8.5pt; background: {{ colors.perf_app_bg }}; color: {{ colors.perf_app_text }}; }
+    .rll-grand td { font-weight: 700; background: {{ colors.perf_app_bg }}; color: {{ colors.perf_app_text }}; }
+    .rll-perday td.rll-n { font-size: 7.5pt; }
     .rll-note { font-size: 7.5pt; font-style: italic; color: {{ colors.text_secondary }}; margin-top: 4pt; }
     .rll-placeholder { text-align: center; font-size: 11pt; color: {{ colors.text_secondary }}; margin-top: 60mm; }
 </style>
@@ -21,16 +22,16 @@
 <div class="rll-placeholder">{{ page.placeholder }}</div>
 {% else %}
 <table class="rll-table">
-    <colgroup><col style="width:26%"/>{% for _ in page.month_labels %}<col style="width:4.8%"/>{% endfor %}<col style="width:8.2%"/><col style="width:8.2%"/></colgroup>
+    <colgroup><col style="width:26%"/>{% for _ in page.month_labels %}<col style="width:4.9%"/>{% endfor %}<col style="width:7.6%"/><col style="width:7.6%"/></colgroup>
     <thead><tr><th>Rakes loaded</th>{% for m in page.month_labels %}<th>{{ m }}</th>{% endfor %}<th class="rll-act">FYTD</th><th>FYTD rakes / day</th></tr></thead>
     <tbody>
     {% for r in page.rows %}
         {% if r.kind == 'group' %}
         <tr class="rll-group"><td colspan="{{ page.month_labels|length + 3 }}">{{ r.label }}</td></tr>
         {% elif r.kind == 'per_day' %}
-        <tr class="rll-grand">
+        <tr class="rll-grand rll-perday">
             <td class="rll-l">{{ r.label }}</td>
-            {% for v in r.months %}<td>{{ v|rl_fmt(2) }}</td>{% endfor %}
+            {% for v in r.months %}<td class="rll-n">{{ v|rl_fmt(2) }}</td>{% endfor %}
             <td></td>
             <td>{{ r.fytd_per_day|rl_fmt(2) }}</td>
         </tr>

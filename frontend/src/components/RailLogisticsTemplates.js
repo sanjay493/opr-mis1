@@ -330,17 +330,17 @@ const fmtRakes = (v) => (v === null || v === undefined ? '–' : String(Math.rou
 // Page 40.05 — backend/page_templates/rail_logistics_loading.html (rail_loading.py).
 export function RailLogisticsLoadingTemplate({ data }) {
   if (!data?.available) return <div><Head data={data || {}} /><Placeholder data={data || {}} /></div>;
-  const c = cell('2.4pt 2pt');
+  const c = cell('2.4pt 1pt');
   const { rows, month_labels: months } = data;
-  const grand = { fontWeight: 700, fontSize: '8.5pt', ...plan };
+  const grand = { fontWeight: 700, ...plan };
   const label = (kind) => ({ ...c, textAlign: 'left', whiteSpace: 'nowrap', paddingLeft: kind === 'item' ? '9pt' : '3pt' });
   return (
     <div>
       <Head data={data} />
       <table style={{ ...table('8pt'), lineHeight: 1.15 }}>
         <colgroup>
-          <col style={{ width: '26%' }} />{months.map((m) => <col key={m} style={{ width: '4.8%' }} />)}
-          <col style={{ width: '8.2%' }} /><col style={{ width: '8.2%' }} />
+          <col style={{ width: '26%' }} />{months.map((m) => <col key={m} style={{ width: '4.9%' }} />)}
+          <col style={{ width: '7.6%' }} /><col style={{ width: '7.6%' }} />
         </colgroup>
         <thead>
           <tr>
@@ -353,7 +353,7 @@ export function RailLogisticsLoadingTemplate({ data }) {
             if (r.kind === 'group') {
               return (
                 <tr key={r.code}>
-                  <td colSpan={months.length + 3} style={{ ...c, textAlign: 'left', fontWeight: 700, color: C.section, background: C.cardBg }}>{r.label}</td>
+                  <td colSpan={months.length + 3} style={{ ...c, textAlign: 'left', paddingLeft: '3pt', fontWeight: 700, color: C.section, background: C.cardBg }}>{r.label}</td>
                 </tr>
               );
             }
@@ -362,7 +362,7 @@ export function RailLogisticsLoadingTemplate({ data }) {
             return (
               <tr key={r.code} style={row}>
                 <td style={label(r.kind)}>{r.label}</td>
-                {r.months.map((v, k) => <td key={k} style={c}>{perDay ? fmt(v, 2) : fmtRakes(v)}</td>)}
+                {r.months.map((v, k) => <td key={k} style={perDay ? { ...c, fontSize: '7.5pt' } : c}>{perDay ? fmt(v, 2) : fmtRakes(v)}</td>)}
                 <td style={r.kind === 'item' ? { ...c, ...act } : c}>{perDay ? '' : fmtRakes(r.fytd)}</td>
                 <td style={c}>{r.kind === 'item' ? '' : fmt(r.fytd_per_day, 2)}</td>
               </tr>
