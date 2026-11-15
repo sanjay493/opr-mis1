@@ -30,13 +30,14 @@ function RailLoadingEntryInner() {
   const [reportMonth, setReportMonth] = useState(thisMonth());
   const [rows, setRows] = useState([]);
   const [values, setValues] = useState({});
-  const [egom, setEgom] = useState({ code: '', parts: [] });
+  const [egom, setEgom] = useState({ code: '', file: null });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [status, setStatus] = useState(null);
 
   const fill = (d) => {
+    setEgom({ code: d.egom, file: d.egom_file });
     setRows(d.rows);
     setValues(Object.fromEntries(d.rows.map((r) => [r.code, s(r.value)])));
     setDirty(false);
@@ -48,9 +49,7 @@ function RailLoadingEntryInner() {
     try {
       const res = await fetch(`${API}/api/rail-loading?month=${encodeURIComponent(month)}`);
       if (!res.ok) throw new Error(await res.text());
-      const d = await res.json();
-      setEgom({ code: d.egom, parts: d.egom_parts });
-      fill(d);
+      fill(await res.json());
     } catch (err) {
       setStatus({ type: 'error', text: `Load failed: ${err.message}` });
     } finally {
@@ -60,13 +59,12 @@ function RailLoadingEntryInner() {
 
   useEffect(() => { load(reportMonth); }, [reportMonth, load]);
 
-  // EGOM is OGOM + JGOM once both are entered; until then it can be typed
-  // (months from before the two were reported apart).
-  const egomParts = egom.parts.map((c) => numOrNull(values[c]));
-  const egomSum = egomParts.length && egomParts.every((v) => v !== null) ? round1(egomParts.reduce((a, b) => a + b, 0)) : null;
+  // EGOM is typed as reported; where the mines' rake file covers the month,
+  // its OGOM + JGOM is shown beside it when the two differ.
+  const egomTyped = numOrNull(values[egom.code]);
+  const egomDiffers = egom.file !== null && egomTyped !== null && egomTyped !== egom.file;
 
   const derived = (code) => {
-    if (code === egom.code) return egomSum;
     const rule = OTHERS[code];
     if (!rule) return null;
     const total = numOrNull(values[rule[0]]);
@@ -90,8 +88,8 @@ function RailLoadingEntryInner() {
     try {
       const body = {};
       rows.forEach((r) => {
-        if (r.kind === 'group' || r.kind === 'sub' || r.derived) return;
-        body[r.code] = r.code === egom.code && egomSum !== null ? egomSum : numOrNull(values[r.code]);
+        if (r.kind === 'group' || r.kind === 'sub' || r.derived || r.from_file) return;
+        body[r.code] = numOrNull(values[r.code]);
       });
       const res = await fetch(`${API}/api/rail-loading`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -117,8 +115,9 @@ function RailLoadingEntryInner() {
       title="Monthly Rail Loading (Rail Logistics, page 40.05)"
       description={<>
         Rakes loaded in one month, as in the Rail Movement Cell&rsquo;s monthly highlights. Totals are entered as
-        reported, not added up here. EGOM is OGOM + JGOM once both are entered; each &ldquo;Others&rdquo; row is its
-        total less the rows named above it. A blank cell prints as &ldquo;–&rdquo;.
+        reported, not added up here. OGOM and JGOM come from the mines&rsquo; rake file (Data Entry › Uploads) for
+        every month it covers; each &ldquo;Others&rdquo; row is its total less the rows named above it. A blank cell
+        prints as &ldquo;–&rdquo;.
       </>}
     >
       <ContextBar actions={<SaveButton dirty={dirty && !loading} saving={saving} onClick={save}>Save</SaveButton>}>
@@ -148,14 +147,19 @@ function RailLoadingEntryInner() {
                 if (r.kind === 'sub') {
                   return <tr key={r.code}><td colSpan={2} style={{ paddingLeft: INDENT.item, fontWeight: 700 }}>{r.label}</td></tr>;
                 }
-                const auto = r.derived || (r.code === egom.code && egomSum !== null);
-                const shown = auto ? s(derived(r.code)) : values[r.code] ?? '';
+                const auto = r.derived || r.from_file;
+                const shown = r.derived ? s(derived(r.code)) : values[r.code] ?? '';
                 const strong = r.kind === 'total' || r.kind === 'grand';
                 return (
                   <tr key={r.code}>
                     <td className={es.itemCell} style={{ paddingLeft: INDENT[r.kind] || 6, fontWeight: strong ? 700 : undefined }}>
                       {r.label}
-                      {auto && <span style={{ fontStyle: 'italic', fontWeight: 400, color: 'var(--ui-text-secondary)', fontSize: 12 }}> (worked out)</span>}
+                      {auto && <span style={{ fontStyle: 'italic', fontWeight: 400, color: 'var(--ui-text-secondary)', fontSize: 12 }}> {r.from_file ? '(from the mines file)' : '(worked out)'}</span>}
+                      {r.code === egom.code && egomDiffers && (
+                        <div style={{ fontWeight: 400, color: 'var(--ui-text-secondary)', fontSize: 12 }}>
+                          The mines file has {egom.file} rakes for OGOM + JGOM.
+                        </div>
+                      )}
                     </td>
                     <td className={es.r}>
                       <input value={shown} onChange={(e) => set(r.code, e.target.value)} aria-label={r.label}

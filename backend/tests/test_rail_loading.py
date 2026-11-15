@@ -131,7 +131,7 @@ def test_with_derived():
     d = rl.with_derived({"ore_ogom": 400, "ore_jgom": 241.5, "ore_ogom_jgom": 1,
                          "flux_limestone": 120, "flux_ls_kuteswar": 50, "flux_ls_wonder": 20.5,
                          "flux_dolomite": 79, "flux_dol_hirri": 79, "misc_total": 108, "misc_pellets": 95})
-    assert d["ore_ogom_jgom"] == 641.5                                  # both parts given: the sum wins
+    assert d["ore_ogom_jgom"] == 1                                      # EGOM is typed as reported, never summed
     assert d["flux_ls_other"] == 49.5 and d["flux_dol_other"] == 0 and d["misc_other"] == 13
 
 
@@ -151,6 +151,10 @@ def test_with_derived_refuses_rows_above_their_total():
 
 # ── entry API ────────────────────────────────────────────────────────────────
 
+# uploaded mines rakes: October 2026 only (381 OGOM, 281 JGOM, CGOM ignored here)
+RAKES = [{"report_month": "2026-10", "mine_code": mine, "wagon_code": "BS", "rakes": n}
+         for mine, n in (("BOL", 300), ("KAL", 81), ("KRB", 281), ("DAL", 211))]
+
 @pytest.fixture
 def api(monkeypatch):
     import api_rail_loading as api
@@ -159,6 +163,8 @@ def api(monkeypatch):
         {"report_month": a, "item_code": c, "rakes": v} for c, v in store.get(a, {}).items()])
     monkeypatch.setattr(api.rail_loading.rrake, "save_rail_loading",
                         lambda m, v, u: store.__setitem__(m, dict(v, _user=u)) or len(v))
+    monkeypatch.setattr(api.rail_loading.rrake, "iron_ore_rake_counts", lambda a, b: [
+        c for c in RAKES if a <= c["report_month"] <= b])
     return api, store
 
 
@@ -167,9 +173,9 @@ def test_api_save_fills_derived_rows_and_skips_blanks(api):
     out = api.rail_loading_save({"report_month": "2026-11", "values": {
         "ore_ogom": 400, "ore_jgom": 250, "ore_bhilai": 200, "ore_total": 850, "out_sinter": None, "out_coke": "",
         "flux_limestone": 120, "flux_ls_kuteswar": 50, "flux_ls_other": 999}}, {"email": "e@sail.in"})
-    assert out["status"] == "ok" and out["saved"] == 8
+    assert out["status"] == "ok" and out["saved"] == 7
     assert store["2026-11"] == {"ore_ogom": 400, "ore_jgom": 250, "ore_bhilai": 200, "ore_total": 850,
-                                "flux_limestone": 120, "flux_ls_kuteswar": 50, "ore_ogom_jgom": 650,
+                                "flux_limestone": 120, "flux_ls_kuteswar": 50,
                                 "flux_ls_other": 70, "_user": "e@sail.in"}
 
 
@@ -182,6 +188,46 @@ def test_api_get_lists_every_row_in_print_order(api):
     assert by["ore_ogom"]["value"] == 400.0 and by["ore_jgom"]["value"] is None
     assert [c for c, r in by.items() if r["derived"]] == ["flux_ls_other", "flux_dol_other", "misc_other"]
     assert d["egom"] == "ore_ogom_jgom" and d["egom_parts"] == ["ore_ogom", "ore_jgom"]
+    assert d["egom_file"] is None and not any(r["from_file"] for r in d["rows"])     # no rakes uploaded for November
+
+
+def test_api_marks_rows_from_the_file(api):
+    api, store = api
+    store["2026-10"] = {"ore_ogom": 1.0, "ore_ogom_jgom": 660.0}
+    d = api.rail_loading_month("2026-10")
+    by = {r["code"]: r for r in d["rows"]}
+    assert (by["ore_ogom"]["value"], by["ore_ogom"]["from_file"]) == (381, True)       # the file, not the typed 1
+    assert (by["ore_jgom"]["value"], by["ore_jgom"]["from_file"]) == (281, True)
+    assert by["ore_ogom_jgom"]["value"] == 660.0 and by["ore_ogom_jgom"]["from_file"] is False
+    assert d["egom_file"] == 662
+
+
+def test_api_save_drops_typed_ogom_when_the_month_has_rakes(api):
+    api, store = api
+    out = api.rail_loading_save({"report_month": "2026-10", "values": {
+        "ore_ogom": 5, "ore_jgom": 6, "ore_ogom_jgom": 662, "ore_bhilai": 209}}, {"email": "e@sail.in"})
+    assert out["saved"] == 2 and store["2026-10"] == {"ore_ogom_jgom": 662, "ore_bhilai": 209, "_user": "e@sail.in"}
+    by = {r["code"]: r for r in out["rows"]}
+    assert by["ore_ogom"]["value"] == 381 and by["ore_ogom"]["from_file"]
+
+
+def test_overlay_wins_on_the_page(monkeypatch):
+    stored = _rows({"2026-09": {"ore_ogom": 290, "ore_ogom_jgom": 529, "grand_total": 2115},
+                    "2026-10": {"ore_ogom": 1, "ore_ogom_jgom": 662, "grand_total": 2293}})
+    monkeypatch.setattr(rl.rrake, "rail_loading_rows", lambda a, b: stored)
+    monkeypatch.setattr(rl.rrake, "iron_ore_rake_counts", lambda a, b: [c for c in RAKES if a <= c["report_month"] <= b])
+    assert rl.mines_overlay("2026-04", "2026-10") == {"2026-10": {"ore_ogom": 381, "ore_jgom": 281}}
+    by = {r["code"]: r for r in rl.build_page("2026-10")["rows"]}
+    assert by["ore_ogom"]["months"][5:7] == [290, 381]      # September typed (no rakes uploaded), October from the file
+    assert by["ore_jgom"]["months"][5:7] == [None, 281]
+    assert by["ore_ogom_jgom"]["months"][6] == 662 and by["grand_total"]["months"][6] == 2293
+
+
+def test_page_shows_ogom_jgom_from_the_file_even_with_nothing_typed(monkeypatch):
+    monkeypatch.setattr(rl.rrake, "rail_loading_rows", lambda a, b: [])
+    monkeypatch.setattr(rl.rrake, "iron_ore_rake_counts", lambda a, b: [c for c in RAKES if a <= c["report_month"] <= b])
+    p = rl.build_page("2026-10")
+    assert p["available"] and {r["code"]: r for r in p["rows"]}["ore_ogom"]["fytd"] == 381
 
 
 @pytest.mark.parametrize("values, status", [
@@ -246,6 +292,7 @@ def test_no_rows_has_no_data():
 def test_placeholder(monkeypatch):
     import page_rail_logistics as prl
     monkeypatch.setattr(rl.rrake, "rail_loading_rows", lambda a, b: [])
+    monkeypatch.setattr(rl.rrake, "iron_ore_rake_counts", lambda a, b: [])
     p = prl.generate_rail_logistics("2026-10", "loading")
     assert (p["type"], p["title"], p["available"]) == (
         "rail_logistics_loading", "Rail Logistics – Monthly Rail Loading", False)

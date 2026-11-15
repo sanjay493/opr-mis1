@@ -13,6 +13,7 @@ the page table. Totals print as the note reports them and are never summed
 here: imported limestone is counted under both Flux and Ports, so the
 sections add up to more than the reported inward total.
 """
+import iron_ore_rakes
 from repo import rake as rrake
 from rake_despatch_report import days_in, fy_label, fy_months, fy_start_year, mlabel
 
@@ -67,11 +68,12 @@ _HEADINGS = ("group", "sub")
 # The stored item codes, in print order.
 CODES = tuple(code for kind, code, _label in ITEMS if kind not in _HEADINGS + ("per_day",))
 
-# Rows worked out from other rows when a month is entered by hand
-# (with_derived). EGOM is OGOM + JGOM once both are entered; before the mines
-# were reported apart only the combined EGOM figure exists, and it stays as
-# entered. Each "Others" row is its total less the named rows entered.
+# OGOM and JGOM come from the mines' rake record for every month it covers
+# (mines_overlay); for such a month nothing typed is kept for them. EGOM is
+# always the figure typed from the note, as every total on this page.
 EGOM, EGOM_PARTS = "ore_ogom_jgom", ("ore_ogom", "ore_jgom")
+# Rows worked out from other rows when a month is entered by hand
+# (with_derived): each "Others" row is its total less the named rows entered.
 OTHERS = {  # others code: (total code, named codes)
     "flux_ls_other": ("flux_limestone", ("flux_ls_kuteswar", "flux_ls_nandini", "flux_ls_rsmml", "flux_ls_wonder")),
     "flux_dol_other": ("flux_dolomite", ("flux_dol_hirri",)),
@@ -81,14 +83,11 @@ LABELS = {code: label for _kind, code, label in ITEMS}
 
 
 def with_derived(values: dict) -> dict:
-    """{item_code: rakes} with the derived rows filled in (see OTHERS): EGOM
-    = OGOM + JGOM when both are given; an "Others" row = its total less the
-    named rows given (None when the total or every named row is missing).
-    Named rows adding up to more than their total -> ValueError."""
+    """{item_code: rakes} with the derived rows filled in (see OTHERS): an
+    "Others" row = its total less the named rows given (None when the total
+    or every named row is missing). Named rows adding up to more than their
+    total -> ValueError."""
     out = dict(values)
-    parts = [out.get(c) for c in EGOM_PARTS]
-    if all(v is not None for v in parts):
-        out[EGOM] = round(sum(parts), 1)
     for other, (total, named) in OTHERS.items():
         given = [out[c] for c in named if out.get(c) is not None]
         if out.get(total) is None or not given:
@@ -155,9 +154,22 @@ def loading_table(rows: list, month: str) -> dict:
             "has_data": any(c in CODES for _m, c in known), "rows": out}
 
 
+def mines_overlay(first_month: str, last_month: str) -> dict:
+    """{month: {"ore_ogom": rakes, "ore_jgom": rakes}} for the months of
+    first_month..last_month the mines' rake record covers (iron_ore_rakes.py)."""
+    totals = iron_ore_rakes.group_totals(rrake.iron_ore_rake_counts(first_month, last_month))
+    return {m: {"ore_ogom": t["OGOM"], "ore_jgom": t["JGOM"]} for m, t in totals.items()}
+
+
 def build_page(month: str) -> dict:
-    """Page 40.05's data (page_rail_logistics adds type and title)."""
-    t = loading_table(rrake.rail_loading_rows(fy_months(fy_start_year(month))[0], month), month)
+    """Page 40.05's data (page_rail_logistics adds type and title). OGOM and
+    JGOM are the rake record's counts wherever it covers the month."""
+    first = fy_months(fy_start_year(month))[0]
+    overlay = mines_overlay(first, month)
+    rows = [r for r in rrake.rail_loading_rows(first, month)
+            if not (r["report_month"] in overlay and r["item_code"] in EGOM_PARTS)]
+    rows += [{"report_month": m, "item_code": code, "rakes": n} for m, by in overlay.items() for code, n in by.items()]
+    t = loading_table(rows, month)
     return {"available": t["has_data"], "subtitle": f"{mlabel(month)} · FY {t['fy']}",
             "placeholder": None if t["has_data"] else f"Monthly rail loading for FY {t['fy']} not yet entered",
             "fy": t["fy"], "month_labels": t["month_labels"], "rows": t["rows"]}

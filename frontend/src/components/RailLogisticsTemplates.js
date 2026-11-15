@@ -336,7 +336,7 @@ export function RailLogisticsLoadingTemplate({ data }) {
         </tbody>
       </table>
       <div style={{ fontSize: '7.5pt', fontStyle: 'italic', color: C.secondary, marginTop: '4pt' }}>
-        Rakes, as reported in the Rail Movement Cell&apos;s monthly highlights. Totals are as reported, not the sum of the rows above them: imported limestone is counted under both Flux and Ports. EGOM = OGOM + JGOM; each &ldquo;Others&rdquo; is its total less the rows named above it.
+        Rakes, as reported in the Rail Movement Cell&apos;s monthly highlights. Totals are as reported, not the sum of the rows above them: imported limestone is counted under both Flux and Ports. OGOM and JGOM are counted from the mines&apos; rake record; each &ldquo;Others&rdquo; is its total less the rows named above it.
       </div>
     </div>
   );
