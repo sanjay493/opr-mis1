@@ -829,29 +829,29 @@ CREATE TABLE rail_loading_monthly (
     CONSTRAINT fk_rail_loading_month FOREIGN KEY (report_month) REFERENCES cal_month (report_month)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
--- Iron ore rakes loaded at the mines, one row per rake, from the mines'
--- rake-by-rake record (u_rakes_rmg.csv, uploaded on Data Entry > Uploads;
--- api_iron_ore_rakes.py). id is the source's own id. mine_code and wagon_code
--- are the source's codes; the mines groups (OGOM / JGOM / CGOM) and the
--- printed wagon names are in iron_ore_rakes.py. dest, l_wg and f_wg are kept
--- as given and not used by any page yet.
+-- Iron ore rakes loaded at the mines per month, mine, wagon code and
+-- destination, as lump rakes and fines rakes, summed from the mines' rake
+-- record (u_rakes_rmg.csv, uploaded on Data Entry > Uploads;
+-- api_iron_ore_rakes.py). A rake counts 1, split between lump and fines by
+-- its wagons, so the two columns are fractional. Up to 2024-04-30 CGOM is
+-- one row per month under mine_code BGM (not a mine: the source's CGOM day
+-- totals, already in lump and fines rakes); its mines appear from 2024-05
+-- (iron_ore_rakes.monthly_rows). Only whole months are stored. mine_code,
+-- wagon_code and dest are the source's codes (dest '' when blank); the mines
+-- groups (OGOM / JGOM / CGOM) and the printed wagon names are in
+-- iron_ore_rakes.py. No page prints dest or the lump / fines split yet.
 CREATE TABLE iron_ore_rake (
-    id           INT         NOT NULL,
     report_month CHAR(7)     NOT NULL,
-    rpt_date     DATE        NOT NULL,
     mine_code    VARCHAR(8)  NOT NULL,
-    rake_no      VARCHAR(24) NULL,
-    dest         VARCHAR(8)  NULL,
     wagon_code   VARCHAR(4)  NOT NULL,
-    l_wg         DOUBLE      NULL,
-    f_wg         DOUBLE      NULL,
+    dest         VARCHAR(8)  NOT NULL,
+    lump_rakes   DOUBLE      NOT NULL,
+    fines_rakes  DOUBLE      NOT NULL,
     updated_at   DATETIME    NOT NULL,
     updated_by   VARCHAR(64) NULL,
-    PRIMARY KEY (id),
-    -- repo.rake.iron_ore_rake_counts, iron_ore_rake_month_totals (WHERE report_month BETWEEN ...)
-    KEY idx_iron_ore_rake_month (report_month, mine_code, wagon_code),
-    -- repo.rake.save_iron_ore_rakes, iron_ore_rake_totals_outside (rpt_date BETWEEN ...)
-    KEY idx_iron_ore_rake_date (rpt_date),
+    -- repo.rake.iron_ore_rake_counts, iron_ore_rake_month_totals (WHERE report_month BETWEEN ...),
+    -- save_iron_ore_rakes (DELETE WHERE report_month IN ...)
+    PRIMARY KEY (report_month, mine_code, wagon_code, dest),
     CONSTRAINT fk_iron_ore_rake_month FOREIGN KEY (report_month) REFERENCES cal_month (report_month)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 

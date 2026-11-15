@@ -103,7 +103,6 @@ def _mines_report(month):
 def test_mines_page(monkeypatch):
     counts, ior = _mines_report("2026-10")
     monkeypatch.setattr(ior.rrake, "iron_ore_rake_counts", lambda a, b: [c for c in counts if a <= c["report_month"] <= b])
-    monkeypatch.setattr(ior.rrake, "iron_ore_rake_last_date", lambda: "2026-10-31")
     p = rl.generate_rail_logistics("2026-10", "mines")
     assert (p["type"], p["title"]) == ("rail_logistics_mines", "Rail Logistics – Iron Ore Rake Loading from Mines")
     assert p["available"] and p["placeholder"] is None and p["subtitle"] == "Oct'26 · FY 2026-27"
@@ -121,7 +120,6 @@ def test_mines_page(monkeypatch):
 def test_mines_page_placeholder(monkeypatch):
     _counts, ior = _mines_report("2026-10")
     monkeypatch.setattr(ior.rrake, "iron_ore_rake_counts", lambda a, b: [])
-    monkeypatch.setattr(ior.rrake, "iron_ore_rake_last_date", lambda: None)
     p = rl.generate_rail_logistics("2026-10", "mines")
     assert p["available"] is False and p["subtitle"] == "Oct'26"
     assert p["placeholder"] == "Iron ore rake file not uploaded for FY 2026-27"

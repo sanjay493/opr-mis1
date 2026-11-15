@@ -3,12 +3,20 @@ Iron ore rakes loaded at the mines — the Rail Logistics page "Iron Ore Rake
 Loading from Mines" (40.07, page_rail_logistics.py) and the OGOM / JGOM rows
 of Monthly Rail Loading (40.05, rail_loading.py).
 
-The source is the mines' rake-by-rake record (u_rakes_rmg.csv: one line per
-rake — id, unit, rpt_date, rake_no, dest, type, l_wg, f_wg), uploaded on
-Data Entry > Uploads (api_iron_ore_rakes.py) and kept one row per rake in
-iron_ore_rake (repo.rake). One line is one rake whatever its destination
-(plants, OTH, and the P-prefixed pellet-fines rakes to conversion agents):
-counted that way the file agrees with the reported iron ore totals.
+The source is the mines' rake record (u_rakes_rmg.csv: id, unit, rpt_date,
+rake_no, dest, type, l_wg, f_wg), uploaded on Data Entry > Uploads
+(api_iron_ore_rakes.py). It is kept summed by month, mine, wagon type and
+destination as lump rakes and fines rakes in iron_ore_rake (repo.rake); only
+months the file holds whole are stored (monthly_rows).
+
+One line is one rake whatever its destination (plants, OTH, and the
+P-prefixed pellet-fines rakes to conversion agents), split between lump and
+fines by its wagons: l_wg / (l_wg + f_wg) lump, the rest fines. A line with
+no wagons at all is left out. CGOM up to CGOM_IN_RAKES_UPTO is different:
+the record is one line a day under the mine code CGOM_TOTAL_MINE, with l_wg
+and f_wg already the number of lump and fines rakes CGOM loaded that day.
+The CGOM mines' own rake-by-rake lines start a month before that date; up to
+it they are the same rakes again and are left out.
 
 This module holds the mine groups and wagon-type names (not in the
 database, as rail_loading.py's items), reads the file, and builds the page.
@@ -33,6 +41,8 @@ WAGON_NAME = {
     "BS": "BOBSNM1", "BY": "BOYEL", "BX": "BOXN", "EL": "BOXN", "PR": "Private GPWIS",
     "GP": "SAIL BOXN GPWIS", "GS": "SAIL BOBSNM1 GPWIS",
 }
+CGOM_TOTAL_MINE = "BGM"             # not a mine: CGOM's day total, l_wg and f_wg in rakes
+CGOM_IN_RAKES_UPTO = "2024-04-30"   # to this date CGOM is counted from CGOM_TOTAL_MINE's lines
 GROUPS = ["EGOM", "CGOM"]       # the page's blocks
 TOTAL = "Total"
 ALL = GROUPS + [TOTAL]
@@ -55,12 +65,12 @@ def _num(text):
 
 
 def parse_csv(text: str, today: str = None) -> list:
-    """The file's rakes: [{id, rpt_date, report_month, mine_code, rake_no,
+    """The file's lines: [{id, rpt_date, report_month, mine_code, rake_no,
     dest, wagon_code, l_wg, f_wg}], codes upper-cased. The file is taken
     whole or not at all: any line that cannot be read, an id that repeats,
-    a date after today or a mine / wagon code this module does not know
-    raises ValueError naming the lines (a rake must never drop out of its
-    group unnoticed)."""
+    a date after today, a negative count or a mine / wagon code this module
+    does not know raises ValueError naming the lines (a rake must never
+    drop out of its group unnoticed)."""
     today = today or datetime.date.today().isoformat()
     reader = csv.reader(io.StringIO(text.lstrip("﻿")))
     header = next(reader, None)
@@ -110,6 +120,8 @@ def parse_csv(text: str, today: str = None) -> list:
         except ValueError:
             problem("wagon count is not a number", f"line {line_no}")
             continue
+        if (l_wg or 0) < 0 or (f_wg or 0) < 0:
+            problem("wagon count is negative", f"line {line_no}")
         rows.append({"id": rake_id, "rpt_date": date, "report_month": date[:7], "mine_code": mine,
                      "rake_no": v["rake_no"] or None, "dest": v["dest"].upper() or None, "wagon_code": wagon,
                      "l_wg": l_wg, "f_wg": f_wg})
@@ -123,11 +135,11 @@ def parse_csv(text: str, today: str = None) -> list:
     return rows
 
 
-# ── counts -> groups, wagon names, report ────────────────────────────────────
+# ── lines -> monthly rows ────────────────────────────────────────────────────
 
 def complete_through(last_date: str) -> str:
-    """The last month the record holds whole, given the date of its latest
-    rake: that date's month when it is the month's last day, else the month
+    """The last month a file holds whole, given the date of its latest
+    line: that date's month when it is the month's last day, else the month
     before. An export taken on 4 November holds four days of November; they
     are not November's loading."""
     y, m, d = int(last_date[:4]), int(last_date[5:7]), int(last_date[8:10])
@@ -136,15 +148,59 @@ def complete_through(last_date: str) -> str:
     return f"{y:04d}-{m:02d}"
 
 
+def monthly_rows(lines: list) -> dict:
+    """parse_csv's lines summed to what iron_ore_rake stores: {rows:
+    [{report_month, mine_code, wagon_code, dest, lump_rakes, fines_rakes}],
+    months (the whole months the file has rakes for; a save replaces
+    exactly these), not_stored (months the file holds only part of: it
+    starts after their 1st or ends before their last day), skipped (rakes
+    left out for having no wagons), first_date, last_date}. See the module
+    docstring for the lump / fines split and the old CGOM lines. ValueError
+    when the file holds no whole month."""
+    first, last = min(r["rpt_date"] for r in lines), max(r["rpt_date"] for r in lines)
+    lo, hi = first[:7], complete_through(last)
+    if first[8:] != "01":
+        y, m = int(lo[:4]), int(lo[5:])
+        lo = f"{y + m // 12:04d}-{m % 12 + 1:02d}"
+    sums, not_stored, skipped = {}, set(), 0
+    for r in lines:
+        if not lo <= r["report_month"] <= hi:
+            not_stored.add(r["report_month"])
+            continue
+        lump, fines = r["l_wg"] or 0, r["f_wg"] or 0
+        in_rakes = r["mine_code"] == CGOM_TOTAL_MINE
+        if not in_rakes and MINE_GROUP[r["mine_code"]] == "CGOM" and r["rpt_date"] <= CGOM_IN_RAKES_UPTO:
+            continue        # already in CGOM_TOTAL_MINE's total for the day
+        if lump + fines <= 0:
+            skipped += not in_rakes
+            continue
+        if not in_rakes:
+            lump, fines = lump / (lump + fines), fines / (lump + fines)
+        s = sums.setdefault((r["report_month"], r["mine_code"], r["wagon_code"], r["dest"] or ""), [0.0, 0.0])
+        s[0] += lump
+        s[1] += fines
+    if not sums:
+        raise ValueError(f"The file was not loaded. It holds no whole month ({first} to {last}): a month is saved"
+                         " only when the file runs from its 1st to its last day.")
+    return {"rows": [{"report_month": m, "mine_code": mine, "wagon_code": w, "dest": d, "lump_rakes": s[0],
+                      "fines_rakes": s[1]} for (m, mine, w, d), s in sorted(sums.items())],
+            "months": sorted({k[0] for k in sums}), "not_stored": sorted(not_stored), "skipped": skipped,
+            "first_date": first, "last_date": last}
+
+
+# ── counts -> groups, wagon names, report ────────────────────────────────────
+
+def whole(rakes):
+    """A stored rake total as printed: 2 decimals, an int when it is whole
+    (every rake adds exactly 1, as lump + fines)."""
+    n = round(rakes, 2)
+    return int(n) if n == int(n) else n
+
+
 def stored_counts(first_month: str, last_month: str) -> list:
-    """repo.rake.iron_ore_rake_counts for first_month..last_month, leaving
-    out a last month the record does not yet hold whole (complete_through).
-    Every figure printed from the rakes comes through here."""
-    last_date = rrake.iron_ore_rake_last_date()
-    if not last_date:
-        return []
-    last_month = min(last_month, complete_through(last_date))
-    return rrake.iron_ore_rake_counts(first_month, last_month) if first_month <= last_month else []
+    """repo.rake.iron_ore_rake_counts for first_month..last_month. Every
+    figure printed from the rakes comes through here."""
+    return [dict(c, rakes=whole(c["rakes"])) for c in rrake.iron_ore_rake_counts(first_month, last_month)]
 
 
 def _page_group(mine_code: str) -> str:
@@ -218,8 +274,10 @@ def coverage_note(counts: list, first_month: str):
     leave those mines out."""
     first = {}
     for c in counts:
-        if c["mine_code"] not in first or c["report_month"] < first[c["mine_code"]]:
-            first[c["mine_code"]] = c["report_month"]
+        # CGOM as one: its early months are a group total (CGOM_TOTAL_MINE), not mine by mine
+        name = "CGOM" if MINE_GROUP[c["mine_code"]] == "CGOM" else c["mine_code"]
+        if name not in first or c["report_month"] < first[name]:
+            first[name] = c["report_month"]
     late = sorted((m, mine) for mine, m in first.items() if m > first_month)
     if not late:
         return None
@@ -234,9 +292,9 @@ def build_report(month: str) -> dict:
     the mines groups (and Total) where it has plants (and SAIL); types is
     {group: {wagon name: {month: rakes}}} for the report month's FY.
     Months after the report month are never shown; a report month the record
-    does not hold whole yet (file not uploaded, or uploaded part-way through
-    the month) prints blank and the mix and FY-to-date stop at the last
-    month that has rakes."""
+    does not hold yet (file not uploaded, or uploaded part-way through the
+    month: only whole months are stored) prints blank and the mix and
+    FY-to-date stop at the last month that has rakes."""
     start = fy_start_year(month)
     months = fy_months(start)
     out = {"available": False, "fy": fy_label(start), "fy_months": months, "month_label": mlabel(month)}

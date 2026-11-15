@@ -1197,7 +1197,7 @@ function MouPlanExtractRow({ apiBase, onSuccess }) {
   );
 }
 
-// The mines' iron ore rake record (u_rakes_rmg.csv, one line per rake) — see
+// The mines' iron ore rake record (u_rakes_rmg.csv; stored as monthly lump / fines rakes) — see
 // backend/api_iron_ore_rakes.py and iron_ore_rakes.py. The file is sent again
 // on save (it is too large to pass back as JSON). Feeds MIS PDF page 40.07
 // and the OGOM / JGOM rows of page 40.05.
@@ -1241,8 +1241,7 @@ function IronOreRakesExtractRow({ apiBase, onSuccess }) {
       if (!res.ok) throw new Error(json.detail || 'Save failed');
       setStatus({
         type: 'success',
-        text: `✓ Saved ${json.rakes} rake(s), ${json.first_date} to ${json.last_date}`
-          + (json.deleted ? ` (replacing ${json.deleted} stored).` : '.'),
+        text: `✓ Saved ${json.rakes} rake(s) for ${json.months.length} month(s), ${json.months[0]} to ${json.months[json.months.length - 1]}.`,
       });
       setPreview(null);
       setFile(null);
@@ -1306,8 +1305,10 @@ function IronOreRakesExtractRow({ apiBase, onSuccess }) {
       {preview && (
         <div style={{ marginTop: 6 }}>
           <div style={{ fontSize: 12.5, color: '#374151', marginBottom: 8 }}>
-            <b>{preview.rakes}</b> rake(s) in the file, <b>{preview.first_date}</b> to <b>{preview.last_date}</b>.
-            This file replaces every rake stored between those two dates; rakes outside them stay.
+            The file runs <b>{preview.first_date}</b> to <b>{preview.last_date}</b>: <b>{preview.rakes}</b> rake(s) in
+            its whole months. Each whole month replaces what is stored for that month; other months stay.
+            {preview.not_stored.length > 0 && ` Not saved (the file has only part of the month): ${preview.not_stored.join(', ')}.`}
+            {preview.skipped > 0 && ` ${preview.skipped} rake(s) with no lump or fines wagons are left out.`}
           </div>
           {reduces.length > 0 && (
             <div style={{

@@ -165,7 +165,6 @@ def api(monkeypatch):
                         lambda m, v, u: store.__setitem__(m, dict(v, _user=u)) or len(v))
     monkeypatch.setattr(api.rail_loading.rrake, "iron_ore_rake_counts", lambda a, b: [
         c for c in RAKES if a <= c["report_month"] <= b])
-    monkeypatch.setattr(api.rail_loading.rrake, "iron_ore_rake_last_date", lambda: "2026-10-31")
     return api, store
 
 
@@ -217,7 +216,6 @@ def test_overlay_wins_on_the_page(monkeypatch):
                     "2026-10": {"ore_ogom": 1, "ore_ogom_jgom": 662, "grand_total": 2293}})
     monkeypatch.setattr(rl.rrake, "rail_loading_rows", lambda a, b: stored)
     monkeypatch.setattr(rl.rrake, "iron_ore_rake_counts", lambda a, b: [c for c in RAKES if a <= c["report_month"] <= b])
-    monkeypatch.setattr(rl.rrake, "iron_ore_rake_last_date", lambda: "2026-10-31")
     assert rl.mines_overlay("2026-04", "2026-10") == {"2026-10": {"ore_ogom": 381, "ore_jgom": 281}}
     by = {r["code"]: r for r in rl.build_page("2026-10")["rows"]}
     assert by["ore_ogom"]["months"][5:7] == [290, 381]      # September typed (no rakes uploaded), October from the file
@@ -228,7 +226,6 @@ def test_overlay_wins_on_the_page(monkeypatch):
 def test_page_shows_ogom_jgom_from_the_file_even_with_nothing_typed(monkeypatch):
     monkeypatch.setattr(rl.rrake, "rail_loading_rows", lambda a, b: [])
     monkeypatch.setattr(rl.rrake, "iron_ore_rake_counts", lambda a, b: [c for c in RAKES if a <= c["report_month"] <= b])
-    monkeypatch.setattr(rl.rrake, "iron_ore_rake_last_date", lambda: "2026-10-31")
     p = rl.build_page("2026-10")
     assert p["available"] and {r["code"]: r for r in p["rows"]}["ore_ogom"]["fytd"] == 381
 
@@ -296,7 +293,6 @@ def test_placeholder(monkeypatch):
     import page_rail_logistics as prl
     monkeypatch.setattr(rl.rrake, "rail_loading_rows", lambda a, b: [])
     monkeypatch.setattr(rl.rrake, "iron_ore_rake_counts", lambda a, b: [])
-    monkeypatch.setattr(rl.rrake, "iron_ore_rake_last_date", lambda: None)
     p = prl.generate_rail_logistics("2026-10", "loading")
     assert (p["type"], p["title"], p["available"]) == (
         "rail_logistics_loading", "Rail Logistics – Monthly Rail Loading", False)
@@ -410,9 +406,9 @@ def test_export_gets_each_missing_rail_logistics_page_in_its_place():
 
 
 def test_a_partly_uploaded_month_keeps_the_typed_ogom_and_jgom(monkeypatch, api):
-    """The rake record ends on 20 October: October is typed, as before any upload."""
+    """The file ended on 20 October, so October was not stored: it is typed, as before any upload."""
     api, store = api
-    monkeypatch.setattr(rl.rrake, "iron_ore_rake_last_date", lambda: "2026-10-20")
+    monkeypatch.setattr(rl.rrake, "iron_ore_rake_counts", lambda a, b: [])
     stored = _rows({"2026-10": {"ore_ogom": 380, "ore_jgom": 282, "ore_ogom_jgom": 662}})
     monkeypatch.setattr(rl.rrake, "rail_loading_rows", lambda a, b: stored)
     assert rl.mines_overlay("2026-04", "2026-10") == {}
