@@ -5,25 +5,6 @@ import page_rail_logistics as rl
 FY_MONTHS = [f"2026-{m:02d}" for m in range(4, 13)] + [f"2027-{m:02d}" for m in (1, 2, 3)]
 
 
-def test_commodity_rows_missing_metrics():
-    rows = rl.commodity_rows({"BSP": {"slag_cumm": 40.0, "slag_on_date": 1.0}}, [], "2026-10")
-    bsp = next(r for r in rows if r["plant"] == "BSP")
-    assert bsp["slag"] == {"plan_avg_day": None, "avg_day": None, "cumm": 40.0}
-    assert [r["plant"] for r in rows] == ["BSP", "DSP", "RSP", "BSL", "ISP", "SAIL"]
-    assert next(r for r in rows if r["plant"] == "DSP")["coke"]["cumm"] is None
-
-
-def test_commodity_rows_slab_from_despatch_rows():
-    slab = [{"from_plant_code": "BSL", "to_plant_code": "RSP", "rakes": 3, "qty_mt": 7548.6},
-            {"from_plant_code": "BSL", "to_plant_code": "ISP", "rakes": 1, "qty_mt": 2500.0},
-            {"from_plant_code": "BSP", "to_plant_code": "RSP", "rakes": 0, "qty_mt": 0.0}]
-    rows = {r["plant"]: r for r in rl.commodity_rows({}, slab, "2026-10")}
-    assert rows["BSL"]["slab"] == {"plan_avg_day": None, "avg_day": round(4 / 31, 2), "cumm": 4}
-    assert rows["BSP"]["slab"] == {"plan_avg_day": None, "avg_day": 0.0, "cumm": 0}
-    assert rows["DSP"]["slab"] == {"plan_avg_day": None, "avg_day": None, "cumm": None}
-    assert rows["SAIL"]["slab"]["cumm"] == 4
-
-
 def test_mix_rows_per_plant():
     boxn = {"type": "BOXN", "fytd_share": 45.0, "shift_pp": 2.0, "fytd_rakes": 9}
     mix = {"label": "Oct'26 vs H1", "plants": [
@@ -67,8 +48,18 @@ def test_export_rows_empty():
     zero = [{"destination": "GRAND TOTAL", "prog": 0, "actual": 0, "is_total": True}]
     assert rl.export_rows(zero) == []
     assert rl.export_rows([]) == []
-    rows = [{"destination": "X", "prog": 2, "actual": 1}]
-    assert rl.export_rows(rows) == rows
+
+
+def test_export_rows_nepal_port_total_only():
+    rows = rl.rdr.export_watch([
+        {"destination": "BIRGUNJ", "dest_group": "NEPAL", "plant_code": "BSP", "prog": 3, "actual": 2},
+        {"destination": "JOGBANI", "dest_group": "NEPAL", "plant_code": "DSP", "prog": 1, "actual": 2},
+        {"destination": "VIZAG", "dest_group": "PORT", "plant_code": "BSP", "prog": 4, "actual": 0}])
+    out = rl.export_rows(rows)
+    assert [(r["destination"], r["prog"], r["actual"], r["is_total"]) for r in out] == [
+        ("Nepal", 4, 4, False), ("Port", 4, 0, False), ("Total", 8, 4, True)]
+    assert out[0]["plants"] == {"BSP": {"prog": 3, "actual": 2}, "DSP": {"prog": 1, "actual": 2}}
+    assert out[2]["fulfilment"] == 50.0
 
 
 def test_unavailable_placeholder(monkeypatch):
@@ -77,7 +68,7 @@ def test_unavailable_placeholder(monkeypatch):
         p = rl.generate_rail_logistics("2026-10", part)
         assert p["type"] == f"rail_logistics_{part}" and p["available"] is False
         assert p["placeholder"] == "Despatch Summary Report for Oct'26 not uploaded"
-        assert p["title"].startswith("Rail Logistics – Rake Despatch")
+        assert p["title"].startswith("Rail Logistics – Steel Rake Despatch from Plant: ")
 
 
 def test_ranking_tint(monkeypatch):
@@ -88,6 +79,7 @@ def test_ranking_tint(monkeypatch):
     monkeypatch.setattr(rl.rdr, "build_report", lambda m: report)
     p = rl.generate_rail_logistics("2026-10", "summary")
     assert [r["tint"] for r in p["ranking"]] == ["watch", "na"]
+    assert "commodity" not in p and p["title"] == "Rail Logistics – Steel Rake Despatch from Plant: Summary"
     assert p["subtitle"] == "Oct'26 · FY 2026-27" and p["placeholder"] is None
 
 
@@ -97,20 +89,3 @@ def test_page_ids():
 
 def test_fmt():
     assert rl.fmt(None) == "–" and rl.fmt(12.345, 2) == "12.35" and rl.fmt(7) == "7"
-
-
-def test_records_rows_labels():
-    rec = [{"plant": "BSP", "actual": 120, "same_month_rank": 2, "same_month_count": 7,
-            "same_month_best": ("2025-10", 130), "same_month_worst": ["2020-10", 90],
-            "best_month": {"month": "2024-03", "rakes": 150}, "is_best_month_ever": False,
-            "best_fy": {"fy": "2024-25", "rakes": 1500}},
-           {"plant": "DSP", "actual": None, "same_month_rank": None, "same_month_count": 0,
-            "same_month_best": (None, None), "same_month_worst": (None, None),
-            "best_month": {"month": None, "rakes": None}, "is_best_month_ever": False,
-            "best_fy": {"fy": None, "rakes": None}}]
-    rows = rl.records_rows(rec)
-    assert rows[0]["rank"] == "2 of 7"
-    assert rows[0]["same_best"] == "130 (Oct'25)" and rows[0]["same_worst"] == "90 (Oct'20)"
-    assert rows[0]["best_month"] == "150 (Mar'24)" and rows[0]["best_fy"] == "1500 (2024-25)"
-    assert rows[1] == {"plant": "DSP", "actual": None, "rank": "–", "same_best": "–", "same_worst": "–",
-                       "best_month": "–", "best_fy": "–", "is_best_month_ever": False}

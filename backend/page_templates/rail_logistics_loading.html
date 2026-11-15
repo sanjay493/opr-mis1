@@ -6,6 +6,8 @@
     .rll-table th { font-weight: 700; }
     .rll-table td.rll-l { text-align: left; padding-left: 9pt; white-space: nowrap; }
     .rll-act { background: {{ colors.perf_act_bg }}; color: {{ colors.perf_act_text }}; }
+    .rll-table td.rll-l2 { padding-left: 18pt; }
+    .rll-sub td { text-align: left; padding-left: 9pt; font-weight: 700; }
     .rll-group td { text-align: left; padding-left: 3pt; font-weight: 700; color: {{ colors.rail_log_section_title }}; background: {{ colors.rail_log_card_bg }}; }
     .rll-total td { font-weight: 700; background: {{ colors.rail_log_total_row_bg }}; }
     .rll-total td.rll-l, .rll-grand td.rll-l { padding-left: 3pt; }
@@ -28,6 +30,8 @@
     {% for r in page.rows %}
         {% if r.kind == 'group' %}
         <tr class="rll-group"><td colspan="{{ page.month_labels|length + 3 }}">{{ r.label }}</td></tr>
+        {% elif r.kind == 'sub' %}
+        <tr class="rll-sub"><td colspan="{{ page.month_labels|length + 3 }}">{{ r.label }}</td></tr>
         {% elif r.kind == 'per_day' %}
         <tr class="rll-grand rll-perday">
             <td class="rll-l">{{ r.label }}</td>
@@ -37,14 +41,15 @@
         </tr>
         {% else %}
         <tr{% if r.kind == 'total' %} class="rll-total"{% elif r.kind == 'grand' %} class="rll-grand"{% endif %}>
-            <td class="rll-l">{{ r.label }}</td>
+            {% set plain = r.kind in ('item', 'subitem') %}
+            <td class="rll-l{% if r.kind == 'subitem' %} rll-l2{% endif %}">{{ r.label }}</td>
             {% for v in r.months %}<td>{{ v|rl_rakes }}</td>{% endfor %}
-            <td{% if r.kind == 'item' %} class="rll-act"{% endif %}>{{ r.fytd|rl_rakes }}</td>
-            <td>{% if r.kind != 'item' %}{{ r.fytd_per_day|rl_fmt(2) }}{% endif %}</td>
+            <td{% if plain %} class="rll-act"{% endif %}>{{ r.fytd|rl_rakes }}</td>
+            <td>{% if not plain %}{{ r.fytd_per_day|rl_fmt(2) }}{% endif %}</td>
         </tr>
         {% endif %}
     {% endfor %}
     </tbody>
 </table>
-<div class="rll-note">Rakes, as reported in the Rail Movement Cell's monthly highlights. Totals are as reported, not the sum of the rows above them: imported limestone is counted under both Flux and Ports.</div>
+<div class="rll-note">Rakes, as reported in the Rail Movement Cell's monthly highlights. Totals are as reported, not the sum of the rows above them: imported limestone is counted under both Flux and Ports. EGOM = OGOM + JGOM; each "Others" is its total less the rows named above it.</div>
 {% endif %}

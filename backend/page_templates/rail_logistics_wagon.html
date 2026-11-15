@@ -1,4 +1,4 @@
-{# Rail Logistics – Rake Despatch: Wagon Types (page 40.3, page_rail_logistics.py) #}
+{# Rail Logistics – Steel Rake Despatch from Plant: Wagon Types (page 40.3, page_rail_logistics.py) #}
 <style>
     .rlw-sec { font-weight: 700; font-size: 9.5pt; color: {{ colors.rail_log_section_title }}; margin: 6pt 0 3pt; }
     .rlw-sub { font-weight: 400; font-style: italic; font-size: 7.5pt; color: {{ colors.text_secondary }}; }
@@ -27,7 +27,7 @@
 {% if not page.available %}
 <div class="rlw-placeholder">{{ page.placeholder }}</div>
 {% else %}
-<div class="rlw-sec">Wagon-type mix <span class="rlw-sub">— share of FY-to-date rakes by wagon type, with the shift in points ({{ page.mix.label }}); the plant's biggest shift in bold</span></div>
+<div class="rlw-sec">Wagon-type mix <span class="rlw-sub">— each wagon type's share of the plant's FY-to-date rakes; in brackets, how many percentage points that share moved ({{ page.mix.label }}), the plant's biggest move in bold</span></div>
 {% if not page.mix.rows %}
 <div class="rlw-none">No wagon-type data for this FY.</div>
 {% else %}

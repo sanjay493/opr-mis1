@@ -92,10 +92,119 @@ def _rows(d):
 
 
 def test_registry_matches_the_parser():
-    assert len(rl.CODES) == 25 and len(set(rl.CODES)) == 25
-    assert set(rl.CODES) == set(APR)
-    assert [k for k, _c, _l in rl.ITEMS].count("group") == 3
-    assert rl.CODES[0] == "ore_ogom_jgom" and rl.CODES[-1] == "export_total"
+    assert len(rl.CODES) == 34 and len(set(rl.CODES)) == 34
+    # the note has no OGOM / JGOM split and no mine-wise flux: those are entered by hand
+    assert set(rl.CODES) - set(APR) == {
+        "ore_ogom", "ore_jgom", "flux_ls_kuteswar", "flux_ls_nandini", "flux_ls_rsmml", "flux_ls_wonder",
+        "flux_ls_other", "flux_dol_hirri", "flux_dol_other"}
+    assert set(APR) <= set(rl.CODES)
+    kinds = [k for k, _c, _l in rl.ITEMS]
+    assert kinds.count("group") == 3 and kinds.count("sub") == 3
+    assert rl.CODES[0] == "ore_ogom" and rl.CODES[-1] == "export_total"
+    assert all(len(c) <= 32 for c in rl.CODES)
+
+
+def test_iron_ore_and_flux_blocks_in_print_order():
+    rows = [(k, c) for k, c, _l in rl.ITEMS]
+    i = rows.index(("sub", "ore"))
+    assert rows[i:i + 19] == [
+        ("sub", "ore"), ("subitem", "ore_ogom"), ("subitem", "ore_jgom"), ("subitem", "ore_ogom_jgom"),
+        ("subitem", "ore_bhilai"), ("total", "ore_total"),
+        ("sub", "limestone"), ("subitem", "flux_ls_kuteswar"), ("subitem", "flux_ls_nandini"),
+        ("subitem", "flux_ls_rsmml"), ("subitem", "flux_ls_wonder"), ("subitem", "flux_ls_other"),
+        ("total", "flux_limestone"),
+        ("sub", "dolomite"), ("subitem", "flux_dol_hirri"), ("subitem", "flux_dol_other"), ("total", "flux_dolomite"),
+        ("total", "flux_total"), ("item", "port_coal")]
+    assert rl.LABELS["ore_ogom_jgom"] == "EGOM (OGOM + JGOM)" and rl.LABELS["ore_bhilai"] == "CGOM"
+
+
+def test_sub_heading_rows_carry_no_figures():
+    t = rl.loading_table(_rows({"2026-04": {"ore_ogom": 400, "ore_jgom": 241, "flux_limestone": 120}}), "2026-04")
+    by = {r["code"]: r for r in t["rows"]}
+    assert by["ore"]["months"] == [None] * 12 and by["ore"]["fytd"] is None and by["ore"]["fytd_per_day"] is None
+    assert by["ore_ogom"]["kind"] == "subitem" and by["ore_ogom"]["fytd"] == 400
+    assert by["ore_ogom"]["fytd_per_day"] is None                      # per day on total rows only
+    assert by["flux_limestone"]["kind"] == "total" and by["flux_limestone"]["fytd_per_day"] == 4.0
+
+
+def test_with_derived():
+    d = rl.with_derived({"ore_ogom": 400, "ore_jgom": 241.5, "ore_ogom_jgom": 1,
+                         "flux_limestone": 120, "flux_ls_kuteswar": 50, "flux_ls_wonder": 20.5,
+                         "flux_dolomite": 79, "flux_dol_hirri": 79, "misc_total": 108, "misc_pellets": 95})
+    assert d["ore_ogom_jgom"] == 641.5                                  # both parts given: the sum wins
+    assert d["flux_ls_other"] == 49.5 and d["flux_dol_other"] == 0 and d["misc_other"] == 13
+
+
+def test_with_derived_leaves_what_it_cannot_work_out():
+    # a month from before the mines were reported apart: EGOM stays as entered
+    d = rl.with_derived({"ore_ogom_jgom": 641, "ore_ogom": 400, "flux_limestone": 120, "flux_ls_other": 7,
+                         "flux_dol_hirri": 5})
+    assert d["ore_ogom_jgom"] == 641
+    assert d["flux_ls_other"] is None                                   # no named mine entered
+    assert d["flux_dol_other"] is None and d["misc_other"] is None      # no total entered
+
+
+def test_with_derived_refuses_rows_above_their_total():
+    with pytest.raises(ValueError, match="Total limestone"):
+        rl.with_derived({"flux_limestone": 100, "flux_ls_kuteswar": 60, "flux_ls_nandini": 41})
+
+
+# ── entry API ────────────────────────────────────────────────────────────────
+
+@pytest.fixture
+def api(monkeypatch):
+    import api_rail_loading as api
+    store = {}
+    monkeypatch.setattr(api.rrake, "rail_loading_rows", lambda a, b: [
+        {"report_month": a, "item_code": c, "rakes": v} for c, v in store.get(a, {}).items()])
+    monkeypatch.setattr(api.rail_loading.rrake, "save_rail_loading",
+                        lambda m, v, u: store.__setitem__(m, dict(v, _user=u)) or len(v))
+    return api, store
+
+
+def test_api_save_fills_derived_rows_and_skips_blanks(api):
+    api, store = api
+    out = api.rail_loading_save({"report_month": "2026-11", "values": {
+        "ore_ogom": 400, "ore_jgom": 250, "ore_bhilai": 200, "ore_total": 850, "out_sinter": None, "out_coke": "",
+        "flux_limestone": 120, "flux_ls_kuteswar": 50, "flux_ls_other": 999}}, {"email": "e@sail.in"})
+    assert out["status"] == "ok" and out["saved"] == 8
+    assert store["2026-11"] == {"ore_ogom": 400, "ore_jgom": 250, "ore_bhilai": 200, "ore_total": 850,
+                                "flux_limestone": 120, "flux_ls_kuteswar": 50, "ore_ogom_jgom": 650,
+                                "flux_ls_other": 70, "_user": "e@sail.in"}
+
+
+def test_api_get_lists_every_row_in_print_order(api):
+    api, store = api
+    store["2026-11"] = {"ore_ogom": 400.0}
+    d = api.rail_loading_month("2026-11")
+    assert [r["code"] for r in d["rows"]] == [c for k, c, _l in rl.ITEMS if k != "per_day"]
+    by = {r["code"]: r for r in d["rows"]}
+    assert by["ore_ogom"]["value"] == 400.0 and by["ore_jgom"]["value"] is None
+    assert [c for c, r in by.items() if r["derived"]] == ["flux_ls_other", "flux_dol_other", "misc_other"]
+    assert d["egom"] == "ore_ogom_jgom" and d["egom_parts"] == ["ore_ogom", "ore_jgom"]
+
+
+@pytest.mark.parametrize("values, status", [
+    ({"bogus": 1}, 422), ({"ore_ogom": "12"}, 422), ({"ore_ogom": -1}, 422), ({"ore_ogom": True}, 422),
+    ({"flux_dolomite": 10, "flux_dol_hirri": 11}, 422)])
+def test_api_refuses_bad_input_and_saves_nothing(api, values, status):
+    from fastapi import HTTPException
+    api, store = api
+    with pytest.raises(HTTPException) as e:
+        api.rail_loading_save({"report_month": "2026-11", "values": values}, {"email": None})
+    assert e.value.status_code == status and store == {}
+    with pytest.raises(HTTPException):
+        api.rail_loading_save({"report_month": "Nov 2026", "values": {}}, {"email": None})
+
+
+def test_api_save_needs_an_editor_login():
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    import api_rail_loading as api
+    app = FastAPI()
+    app.include_router(api.router)
+    r = TestClient(app).post("/api/rail-loading", json={"report_month": "2026-11", "values": {}})
+    assert r.status_code == 401
 
 
 def test_fmt_rakes():
@@ -112,7 +221,7 @@ def test_fytd_and_per_day():
     assert by["coal_coking"]["fytd"] == 96.8 and by["coal_coking"]["fytd_per_day"] is None
     assert by["per_day"]["months"][:3] == [74.63, 74.26, None] and by["per_day"]["fytd_per_day"] == round(4541 / 61, 2)
     assert by["ore_total"]["months"] == [None] * 12 and by["ore_total"]["fytd"] is None
-    assert "bogus" not in by and [r["code"] for r in t["rows"] if r["kind"] != "group"][:1] == ["ore_ogom_jgom"]
+    assert "bogus" not in by and [r["code"] for r in t["rows"] if r["kind"] not in ("group", "sub")][:1] == ["ore_ogom"]
 
 
 def test_gap_month():

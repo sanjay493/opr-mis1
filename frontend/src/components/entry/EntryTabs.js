@@ -35,6 +35,7 @@ const FORMS = {
   'market-intel': dynamic(() => import('./market-intel/Form'), { loading }),
   'bf-benchmark': dynamic(() => import('./bf-benchmark/Form'), { loading }),
   'rail-report': dynamic(() => import('./rail-report/Form'), { loading }),
+  'rail-loading': dynamic(() => import('./rail-loading/Form'), { loading }),
   'ready-reckoner': dynamic(() => import('./ready-reckoner/Form'), { loading }),
   'major-unit-daily': dynamic(() => import('./major-unit-daily/Form'), { loading }),
   'cover-photos': dynamic(() => import('./cover-photos/Form'), { loading }),

@@ -1,4 +1,4 @@
-{# Rail Logistics – Rake Despatch: Performance History (page 40.2, page_rail_logistics.py) #}
+{# Rail Logistics – Steel Rake Despatch from Plant: Performance History (page 40.2, page_rail_logistics.py) #}
 <style>
     .rlh-sec { font-weight: 700; font-size: 9.5pt; color: {{ colors.rail_log_section_title }}; margin: 6pt 0 3pt; }
     .rlh-sub { font-weight: 400; font-style: italic; font-size: 7.5pt; color: {{ colors.text_secondary }}; }
@@ -7,7 +7,6 @@
     .rlh-table th, .rlh-table td { border: 1px solid {{ colors.border_dark }}; padding: 0.6pt 2pt; text-align: center; font-variant-numeric: tabular-nums; }
     .rlh-table th { font-weight: 700; }
     .rlh-table td.rlh-l { text-align: left; font-weight: 700; }
-    .rlh-sail td { font-weight: 700; background: {{ colors.rail_log_total_row_bg }}; }
     .rlh-total td { font-weight: 700; background: {{ colors.rail_log_total_row_bg }}; }
     .rlh-act { background: {{ colors.perf_act_bg }}; color: {{ colors.perf_act_text }}; }
     .rlh-plan { background: {{ colors.perf_app_bg }}; color: {{ colors.perf_app_text }}; }
@@ -26,26 +25,7 @@
 {% if not page.available %}
 <div class="rlh-placeholder">{{ page.placeholder }}</div>
 {% else %}
-{% set mon = page.month_label[:3] %}
-<div class="rlh-sec">Records &amp; seasonality <span class="rlh-sub">— how {{ page.month_label }} ranks against every stored {{ mon }}, and the best month and FY on record</span></div>
-<table class="rlh-table">
-    <colgroup><col style="width:9%"/><col style="width:10%"/><col style="width:11%"/><col/><col/><col/><col/></colgroup>
-    <thead><tr>
-        <th>Plant</th><th class="rlh-act">{{ page.month_label }}</th><th>Rank among {{ mon }}s</th>
-        <th>Best {{ mon }}</th><th>Lowest {{ mon }}</th><th>Best month ever</th><th>Best FY</th>
-    </tr></thead>
-    <tbody>
-    {% for r in page.records %}
-        <tr{% if r.plant == 'SAIL' %} class="rlh-sail"{% endif %}>
-            <td class="rlh-l">{{ r.plant }}</td><td class="rlh-act">{{ r.actual|rl_fmt }}</td><td>{{ r.rank }}</td>
-            <td>{{ r.same_best }}</td><td>{{ r.same_worst }}</td>
-            <td>{{ r.best_month }}{% if r.is_best_month_ever %} ★{% endif %}</td><td>{{ r.best_fy }}</td>
-        </tr>
-    {% endfor %}
-    </tbody>
-</table>
-
-<div class="rlh-sec">Seven-year monthly trend <span class="rlh-sub">— rakes per month, current FY first</span></div>
+<div class="rlh-sec">Seven-year monthly trend <span class="rlh-sub">— steel rakes despatched per month, current FY first</span></div>
 <table class="rlh-table">
     <colgroup><col style="width:7%"/><col style="width:9%"/>{% for _ in page.month_labels %}<col/>{% endfor %}<col style="width:8%"/></colgroup>
     <thead><tr><th>Plant</th><th>FY</th>{% for m in page.month_labels %}<th>{{ m }}</th>{% endfor %}<th>Total</th></tr></thead>
@@ -61,7 +41,7 @@
     </tbody>
 </table>
 
-<div class="rlh-sec">Export <span class="rlh-sub">— export rakes, programme / actual by destination</span></div>
+<div class="rlh-sec">Export <span class="rlh-sub">— export rakes in {{ page.month_label }}, programme / actual, to Nepal and through ports</span></div>
 {% if not page.export %}
 <div class="rlh-none">No export programme for {{ page.month_label }}.</div>
 {% else %}

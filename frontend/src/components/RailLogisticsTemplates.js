@@ -81,7 +81,7 @@ export function RailLogisticsSummaryTemplate({ data }) {
     <div>
       <Head data={data} />
       <div style={{ display: 'flex', gap: '5pt' }}>
-        <Card title={`SAIL rakes, ${data.month_label}`} value={fmt(h.month_actual)}
+        <Card title={`Steel rakes despatched, ${data.month_label}`} value={fmt(h.month_actual)}
               sub={`Plan ${fmt(h.month_plan)} · ${fmt(h.month_attainment, 1)}% · ${fmt(h.month_avg_day, 2)}/day vs ${fmt(h.month_plan_avg_day, 2)}`} />
         <Card title="vs same month last year" value={<Signed v={h.vs_ly_month_pct} />} sub={`Last year ${fmt(h.ly_month_actual)} rakes`} />
         <Card title="FY to date" value={fmt(h.fytd_actual)}
@@ -90,32 +90,7 @@ export function RailLogisticsSummaryTemplate({ data }) {
               sub={<>Last FY {fmt(h.ly_fy_total)} (<Signed v={h.projection_vs_ly_pct} />)</>} />
       </div>
 
-      <Sec title="Commodity-wise rakes loaded"
-           sub={`${data.month_label}; slab = slab rakes despatched from the plant to other plants, avg/day over the month (no slab plan in the source)`} />
-      <table style={table('8pt')}>
-        <colgroup><col style={{ width: '9%' }} />{Array.from({ length: 12 }, (_, i) => <col key={i} />)}</colgroup>
-        <thead>
-          <tr><th style={c} rowSpan={2}>Plant</th>{['Slag', 'Coke', 'Sinter', 'Slab'].map((t) => <th key={t} style={c} colSpan={3}>{t}</th>)}</tr>
-          <tr>{[0, 1, 2, 3].map((i) => (
-            <React.Fragment key={i}><th style={{ ...c, ...plan }}>Plan/day</th><th style={{ ...c, ...act }}>Avg/day</th><th style={c}>Cumm.</th></React.Fragment>
-          ))}</tr>
-        </thead>
-        <tbody>
-          {data.commodity.map((r) => (
-            <tr key={r.plant} style={rowStyle(r.plant)}>
-              <td style={l}>{r.plant}</td>
-              {['slag', 'coke', 'sinter', 'slab'].map((k) => (
-                <React.Fragment key={k}>
-                  <td style={{ ...c, ...plan }}>{fmt(r[k].plan_avg_day, 2)}</td><td style={{ ...c, ...act }}>{fmt(r[k].avg_day, 2)}</td>
-                  <td style={c}>{fmt(r[k].cumm)}</td>
-                </React.Fragment>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      <Sec title="Key points" />
+      <Sec title="Key points" sub="plant outward loading (steel rakes despatched from the plants)" />
       <ul style={{ margin: 0, paddingLeft: '14pt', fontSize: '8.5pt', lineHeight: 1.35 }}>
         {data.key_points.map((p, i) => <li key={i} style={{ marginBottom: '1.5pt' }}>{p}</li>)}
       </ul>
@@ -173,31 +148,12 @@ export function RailLogisticsHistoryTemplate({ data }) {
   if (!data?.available) return <div><Head data={data || {}} /><Placeholder data={data || {}} /></div>;
   const c = cell('0.6pt 2pt');
   const l = { ...c, textAlign: 'left', fontWeight: 700 };
-  const mon = data.month_label.slice(0, 3);
   const span = (plant) => data.trend.filter((r) => r.plant === plant).length;
   const plants = data.export_plants;
   return (
     <div>
       <Head data={data} />
-      <Sec title="Records & seasonality" sub={`how ${data.month_label} ranks against every stored ${mon}, and the best month and FY on record`} />
-      <table style={table('7.5pt')}>
-        <colgroup><col style={{ width: '9%' }} /><col style={{ width: '10%' }} /><col style={{ width: '11%' }} /><col /><col /><col /><col /></colgroup>
-        <thead><tr>
-          <th style={c}>Plant</th><th style={{ ...c, ...act }}>{data.month_label}</th><th style={c}>Rank among {mon}s</th>
-          <th style={c}>Best {mon}</th><th style={c}>Lowest {mon}</th><th style={c}>Best month ever</th><th style={c}>Best FY</th>
-        </tr></thead>
-        <tbody>
-          {data.records.map((r) => (
-            <tr key={r.plant} style={r.plant === 'SAIL' ? total : undefined}>
-              <td style={l}>{r.plant}</td><td style={{ ...c, ...act }}>{fmt(r.actual)}</td><td style={c}>{r.rank}</td>
-              <td style={c}>{r.same_best}</td><td style={c}>{r.same_worst}</td>
-              <td style={c}>{r.best_month}{r.is_best_month_ever ? ' ★' : ''}</td><td style={c}>{r.best_fy}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      <Sec title="Seven-year monthly trend" sub="rakes per month, current FY first" />
+      <Sec title="Seven-year monthly trend" sub="steel rakes despatched per month, current FY first" />
       <table style={table('7.5pt')}>
         <colgroup><col style={{ width: '7%' }} /><col style={{ width: '9%' }} />{data.month_labels.map((m) => <col key={m} />)}<col style={{ width: '8%' }} /></colgroup>
         <thead><tr><th style={c}>Plant</th><th style={c}>FY</th>{data.month_labels.map((m) => <th key={m} style={c}>{m}</th>)}<th style={c}>Total</th></tr></thead>
@@ -216,7 +172,7 @@ export function RailLogisticsHistoryTemplate({ data }) {
         </tbody>
       </table>
 
-      <Sec title="Export" sub="export rakes, programme / actual by destination" />
+      <Sec title="Export" sub={`export rakes in ${data.month_label}, programme / actual, to Nepal and through ports`} />
       {data.export.length === 0 ? (
         <div style={{ fontSize: '8pt', fontStyle: 'italic', color: C.secondary }}>No export programme for {data.month_label}.</div>
       ) : (
@@ -260,7 +216,7 @@ export function RailLogisticsWagonTemplate({ data }) {
     <div>
       <Head data={data} />
       <Sec title="Wagon-type mix"
-           sub={`share of FY-to-date rakes by wagon type, with the shift in points (${mix.label}); the plant's biggest shift in bold`} />
+           sub={`each wagon type's share of the plant's FY-to-date rakes; in brackets, how many percentage points that share moved (${mix.label}), the plant's biggest move in bold`} />
       {mix.rows.length === 0 ? (
         <div style={{ fontSize: '8pt', fontStyle: 'italic', color: C.secondary }}>No wagon-type data for this FY.</div>
       ) : (
@@ -333,7 +289,8 @@ export function RailLogisticsLoadingTemplate({ data }) {
   const c = cell('2.4pt 1pt');
   const { rows, month_labels: months } = data;
   const grand = { fontWeight: 700, ...plan };
-  const label = (kind) => ({ ...c, textAlign: 'left', whiteSpace: 'nowrap', paddingLeft: kind === 'item' ? '9pt' : '3pt' });
+  const INDENT = { item: '9pt', subitem: '18pt' };
+  const label = (kind) => ({ ...c, textAlign: 'left', whiteSpace: 'nowrap', paddingLeft: INDENT[kind] || '3pt' });
   return (
     <div>
       <Head data={data} />
@@ -357,21 +314,29 @@ export function RailLogisticsLoadingTemplate({ data }) {
                 </tr>
               );
             }
+            if (r.kind === 'sub') {
+              return (
+                <tr key={r.code}>
+                  <td colSpan={months.length + 3} style={{ ...c, textAlign: 'left', paddingLeft: '9pt', fontWeight: 700 }}>{r.label}</td>
+                </tr>
+              );
+            }
             const perDay = r.kind === 'per_day';
+            const plain = r.kind === 'item' || r.kind === 'subitem';
             const row = r.kind === 'total' ? total : (r.kind === 'grand' || perDay) ? grand : undefined;
             return (
               <tr key={r.code} style={row}>
                 <td style={label(r.kind)}>{r.label}</td>
                 {r.months.map((v, k) => <td key={k} style={perDay ? { ...c, fontSize: '7.5pt' } : c}>{perDay ? fmt(v, 2) : fmtRakes(v)}</td>)}
-                <td style={r.kind === 'item' ? { ...c, ...act } : c}>{perDay ? '' : fmtRakes(r.fytd)}</td>
-                <td style={c}>{r.kind === 'item' ? '' : fmt(r.fytd_per_day, 2)}</td>
+                <td style={plain ? { ...c, ...act } : c}>{perDay ? '' : fmtRakes(r.fytd)}</td>
+                <td style={c}>{plain ? '' : fmt(r.fytd_per_day, 2)}</td>
               </tr>
             );
           })}
         </tbody>
       </table>
       <div style={{ fontSize: '7.5pt', fontStyle: 'italic', color: C.secondary, marginTop: '4pt' }}>
-        Rakes, as reported in the Rail Movement Cell&apos;s monthly highlights. Totals are as reported, not the sum of the rows above them: imported limestone is counted under both Flux and Ports.
+        Rakes, as reported in the Rail Movement Cell&apos;s monthly highlights. Totals are as reported, not the sum of the rows above them: imported limestone is counted under both Flux and Ports. EGOM = OGOM + JGOM; each &ldquo;Others&rdquo; is its total less the rows named above it.
       </div>
     </div>
   );

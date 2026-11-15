@@ -354,10 +354,12 @@ def _sum_plants(rows):
 
 
 def key_points(month, head, rank, mix, rec, rate, exports):
-    """3-6 plain sentences for a management note."""
+    """3-6 plain sentences for a management note. They speak of the plants'
+    outward steel rake despatch only (inward raw-material loading is on the
+    Monthly Rail Loading page)."""
     pts, mon = [], mlabel(month)
     if head["month_actual"] is not None:
-        s = f"SAIL loaded {head['month_actual']} rakes in {mon}"
+        s = f"Plant outward loading: SAIL plants despatched {head['month_actual']} steel rakes in {mon}"
         if head["month_avg_day"] is not None and head["month_plan_avg_day"]:
             s += (f" ({head['month_avg_day']:.2f}/day against a plan of {head['month_plan_avg_day']:.2f}/day,"
                   f" {head['month_attainment']:.1f}% of plan)")
@@ -365,39 +367,39 @@ def key_points(month, head, rank, mix, rec, rate, exports):
             s += f", {abs(head['vs_ly_month_pct']):.1f}% {'above' if head['vs_ly_month_pct'] >= 0 else 'below'} {mlabel(shift_year(month, -1))}"
         pts.append(s + ".")
     if head["fytd_actual"] is not None and head["vs_ly_fytd_pct"] is not None:
-        pts.append(f"FY to date SAIL has {head['fytd_actual']} rakes, "
+        pts.append(f"FY to date the plants have despatched {head['fytd_actual']} steel rakes, "
                    f"{abs(head['vs_ly_fytd_pct']):.1f}% {'ahead of' if head['vs_ly_fytd_pct'] >= 0 else 'behind'} "
                    f"the same period last year ({head['ly_fytd_actual']}).")
     behind = [r for r in rank if r["plant"] != "SAIL" and r["status"] == "behind"]
     if behind:
-        pts.append("Below 95% of plan this month: " + ", ".join(
+        pts.append("Below 95% of the despatch plan this month: " + ", ".join(
             f"{r['plant']} ({r['attainment']:.1f}%, {r['gap_per_day']:+.2f} rakes/day)" for r in behind) + ".")
     elif any(r["attainment"] is not None for r in rank):
-        pts.append("Every plant loaded at least 95% of its plan this month.")
+        pts.append("Every plant despatched at least 95% of its plan this month.")
     sail_rate = next((r for r in rate if r["plant"] == "SAIL"), None)
     if sail_rate and sail_rate["required_avg_day_ly"] is not None and sail_rate["fytd_avg_day"]:
         need, pace = sail_rate["required_avg_day_ly"], sail_rate["fytd_avg_day"]
         if need > pace:
-            pts.append(f"To match last FY's {sail_rate['ly_total']} rakes SAIL needs {need:.2f} rakes/day for the rest of "
-                       f"the year, {need - pace:.2f}/day above its FY-to-date pace of {pace:.2f}.")
+            pts.append(f"To match last FY's {sail_rate['ly_total']} steel rakes the plants need {need:.2f} rakes/day for the rest of "
+                       f"the year, {need - pace:.2f}/day above their FY-to-date pace of {pace:.2f}.")
         else:
-            pts.append(f"At its FY-to-date pace of {pace:.2f} rakes/day SAIL is on course to beat last FY's "
-                       f"{sail_rate['ly_total']} rakes (needs {need:.2f}/day).")
+            pts.append(f"At their FY-to-date pace of {pace:.2f} rakes/day the plants are on course to beat last FY's "
+                       f"{sail_rate['ly_total']} steel rakes (needs {need:.2f}/day).")
     highs = [r["plant"] for r in rec if r["plant"] != "SAIL" and r["is_best_month_ever"]]
     tops = [r["plant"] for r in rec if r["plant"] != "SAIL" and r["same_month_rank"] == 1 and r["same_month_count"] > 1
             and not r["is_best_month_ever"]]
     if highs:
-        pts.append(f"Best month ever: {', '.join(highs)}.")
+        pts.append(f"Best month ever for steel rake despatch: {', '.join(highs)}.")
     if tops:
         pts.append(f"Best {calendar.month_name[int(month[5:7])]} on record: {', '.join(tops)}.")
     sail_mix = next((m for m in mix["plants"] if m["plant"] == "SAIL"), None)
     if sail_mix and sail_mix["biggest_shift"] and abs(sail_mix["biggest_shift"]["shift_pp"]) >= 2:
         b = sail_mix["biggest_shift"]
-        pts.append(f"Wagon mix ({mix['label']}): {b['type']} share {'up' if b['shift_pp'] > 0 else 'down'} "
+        pts.append(f"Wagon mix of plant despatch ({mix['label']}): {b['type']} share {'up' if b['shift_pp'] > 0 else 'down'} "
                    f"{abs(b['shift_pp']):.1f} points to {b['share_now']:.1f}%.")
     grand = next((r for r in exports if r["destination"] == "GRAND TOTAL"), None)
     if grand and (grand["prog"] or grand["actual"]):
-        pts.append(f"Export: {grand['actual']:g} rakes against a programme of {grand['prog']:g}"
+        pts.append(f"Export from plants: {grand['actual']:g} rakes against a programme of {grand['prog']:g}"
                    + (f" ({grand['fulfilment']:.0f}%)." if grand["fulfilment"] is not None else "."))
     return pts
 

@@ -6,14 +6,17 @@
                               month (rail_loading.py; its own table, not the
                               Despatch Summary Report)
 
-then a selection of the web report (Reports > Rail Logistics > Rake Despatch):
+then a selection of the web report (Reports > Rail Logistics > Rake Despatch),
+the steel rakes despatched from the plants:
 
-  40.1 Summary              — headline cards, slag/coke/sinter/slab by plant,
-                              key points, plan attainment (no Status column;
-                              the attainment cell is tinted instead), run-rate
-  40.2 Performance history  — records & seasonality, seven-year monthly trend,
-                              export programme vs actual
+  40.1 Summary              — headline cards, key points, plan attainment (no
+                              Status column; the attainment cell is tinted
+                              instead), run-rate
+  40.2 Performance history  — seven-year monthly trend, export programme vs
+                              actual (Nepal / Port / Total)
   40.3 Wagon types          — wagon-type mix per plant, FY rakes by wagon type
+
+Slag, coke and sinter are on 40.05 only; nothing is printed twice.
 
 Every 40.1-40.3 figure comes from rake_despatch_report.build_report(month); this module
 only regroups it for the page layout, so the PDF and the web report always
@@ -28,12 +31,10 @@ PAGE_IDS = {40.05: "loading", 40.1: "summary", 40.2: "history", 40.3: "wagon"}  
 
 _TITLES = {
     "loading": "Rail Logistics – Monthly Rail Loading",
-    "summary": "Rail Logistics – Rake Despatch: Summary",
-    "history": "Rail Logistics – Rake Despatch: Performance History",
-    "wagon": "Rail Logistics – Rake Despatch: Wagon Types",
+    "summary": "Rail Logistics – Steel Rake Despatch from Plant: Summary",
+    "history": "Rail Logistics – Steel Rake Despatch from Plant: Performance History",
+    "wagon": "Rail Logistics – Steel Rake Despatch from Plant: Wagon Types",
 }
-_COMMODITIES = ("slag", "coke", "sinter")
-_FIELDS = ("plan_avg_day", "avg_day", "cumm")
 
 
 def fmt(v, nd=0) -> str:
@@ -43,26 +44,6 @@ def fmt(v, nd=0) -> str:
 
 def month_labels(fy_months: list) -> list:
     return [mlabel(m)[:3] for m in fy_months]
-
-
-def commodity_rows(position: dict, slab: list, month: str) -> list:
-    """Plan/day, avg/day and cumulative per plant + SAIL for slag, coke and
-    sinter (page-1 position), and slab: rakes despatched from the plant this
-    month (the slab rows summed), avg/day = those rakes / days in the month.
-    The source has no slab plan, so its plan/day is always None."""
-    sent = {}
-    for r in slab:
-        sent[r["from_plant_code"]] = sent.get(r["from_plant_code"], 0) + r["rakes"]
-    if sent:
-        sent["SAIL"] = sum(sent.values())
-    days = rdr.days_in(month)
-    rows = []
-    for p in ALL:
-        row = {"plant": p, **{c: {f: position.get(p, {}).get(f"{c}_{f}") for f in _FIELDS} for c in _COMMODITIES}}
-        cumm = sent.get(p)
-        row["slab"] = {"plan_avg_day": None, "avg_day": None if cumm is None else round(cumm / days, 2), "cumm": cumm}
-        rows.append(row)
-    return rows
 
 
 def mix_rows(wagon_mix: dict) -> dict:
@@ -110,37 +91,23 @@ def wagon_type_blocks(types: dict, fy_months: list) -> list:
     return blocks
 
 
-def _with(value, label) -> str:
-    return "–" if value is None else f"{value:g} ({label})"
-
-
-def records_rows(records: list) -> list:
-    """Records & seasonality with the (month, rakes) pairs written out as text."""
-    out = []
-    for r in records:
-        best, worst = r["same_month_best"], r["same_month_worst"]
-        out.append({
-            "plant": r["plant"],
-            "actual": r["actual"],
-            "rank": f"{r['same_month_rank']} of {r['same_month_count']}" if r["same_month_rank"] else "–",
-            "same_best": _with(best[1], best[0] and mlabel(best[0])),
-            "same_worst": _with(worst[1], worst[0] and mlabel(worst[0])),
-            "best_month": _with(r["best_month"]["rakes"], r["best_month"]["month"] and mlabel(r["best_month"]["month"])),
-            "best_fy": _with(r["best_fy"]["rakes"], r["best_fy"]["fy"]),
-            "is_best_month_ever": r["is_best_month_ever"],
-        })
-    return out
-
-
 def trend_rows(trend: dict) -> list:
     """Plant x FY rows (newest FY first), flagging each plant's first row."""
     return [{"plant": p, "fy": s["fy"], "months": s["months"], "total": s["total"], "first_of_plant": i == 0}
             for p in ALL for i, s in enumerate(trend.get(p, []))]
 
 
+_EXPORT_LABELS = {"TOTAL NEPAL": "Nepal", "TOTAL PORT": "Port", "GRAND TOTAL": "Total"}
+
+
 def export_rows(export: list) -> list:
-    """The export table, or [] when the month has no programme or actual at all."""
-    return export if any(r.get("prog") or r.get("actual") for r in export) else []
+    """The export table cut down to Nepal, Port and Total (the report's group
+    totals; the single destinations are left to the web report), or [] when
+    the month has no programme or actual at all."""
+    if not any(r.get("prog") or r.get("actual") for r in export):
+        return []
+    return [{**r, "destination": _EXPORT_LABELS[r["destination"]], "is_total": r["destination"] == "GRAND TOTAL"}
+            for r in export if r.get("is_total") and r["destination"] in _EXPORT_LABELS]
 
 
 def generate_rail_logistics(month: str, part: str) -> dict:
@@ -156,14 +123,12 @@ def generate_rail_logistics(month: str, part: str) -> dict:
     if part == "summary":
         page.update(
             headline=d["headline"],
-            commodity=commodity_rows(src["position"], src["slab"], month),
             key_points=d["key_points"],
             ranking=[{**r, "tint": status_of(r["attainment"])} for r in d["ranking"]],
             run_rate=d["run_rate"],
         )
     elif part == "history":
         page.update(
-            records=records_rows(d["records"]),
             trend=trend_rows(d["trend"]),
             month_labels=month_labels(d["fy_months"]),
             export=export_rows(d["export"]),
