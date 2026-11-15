@@ -215,3 +215,86 @@ def test_bad_file_is_422_and_saves_nothing(store, text, message):
 def test_ansi_file_uploads(store):
     r = _upload(_client(), "preview", data=_text().encode("cp1252"))
     assert r.status_code == 200 and r.json()["rakes"] == 10
+
+
+# ── counts, mix, trend and the page ──────────────────────────────────────────
+
+COUNTS = [  # (month, mine, wagon, rakes)
+    ("2026-10", "BOL", "BX", 5), ("2026-10", "BOL", "EL", 2), ("2026-10", "KRB", "BS", 3), ("2026-10", "DAL", "BS", 4),
+    ("2026-04", "KAL", "BS", 6), ("2026-04", "RAJ", "PR", 1),
+    ("2025-10", "BOL", "BX", 10), ("2025-10", "DAL", "PR", 2), ("2025-04", "GUA", "BS", 6), ("2025-04", "ROW", "BS", 1),
+    # every month of last FY to date has rakes, as the real record does
+    *[(f"2025-{m:02d}", "ROW", "BS", 1) for m in range(5, 10)]]
+
+
+def _counts(rows=COUNTS):
+    return [{"report_month": m, "mine_code": mine, "wagon_code": w, "rakes": n} for m, mine, w, n in rows]
+
+
+@pytest.fixture
+def counts(monkeypatch):
+    """repo.rake.iron_ore_rake_counts answering from COUNTS."""
+    stored = _counts()
+    monkeypatch.setattr(ior.rrake, "iron_ore_rake_counts",
+                        lambda a, b: [c for c in stored if a <= c["report_month"] <= b])
+    return stored
+
+
+def test_type_rows_merge_groups_and_wagons():
+    rows = {(r["report_month"], r["plant_code"], r["wagon_type"]): r["rakes"] for r in ior.type_rows(_counts())}
+    assert rows[("2026-10", "EGOM", "BOXN")] == 7                     # BX + EL
+    assert rows[("2026-10", "EGOM", "BOBSNM1")] == 3 and rows[("2026-10", "CGOM", "BOBSNM1")] == 4
+    assert rows[("2025-04", "EGOM", "BOBSNM1")] == 6                  # JGOM counts as EGOM
+    assert {g for _m, g, _t in rows} == {"EGOM", "CGOM"}
+
+
+def test_group_totals():
+    t = ior.group_totals(_counts())
+    assert t["2026-10"] == {"OGOM": 7, "JGOM": 3, "EGOM": 10, "CGOM": 4, "Total": 14}
+    assert t["2026-04"] == {"OGOM": 6, "JGOM": 0, "EGOM": 6, "CGOM": 1, "Total": 7}
+    assert "2026-05" not in t
+
+
+def test_report(counts):
+    r = ior.build_report("2026-10")
+    assert r["available"] and r["fy"] == "2026-27" and len(r["fy_months"]) == 12 and r["month_label"] == "Oct'26"
+    assert list(r["trend"]) == ["EGOM", "CGOM", "Total"] and len(r["trend"]["EGOM"]) == 7
+    assert r["trend"]["EGOM"][0]["fy"] == "2026-27" and r["trend"]["EGOM"][0]["months"][6] == 10
+    assert r["trend"]["Total"][0]["total"] == 21 and r["trend"]["Total"][1]["months"][0] == 7
+    assert [p["plant"] for p in r["wagon_mix"]["plants"]] == ["EGOM", "CGOM", "Total"]
+    assert r["wagon_mix"]["basis"] == "last_fy"
+    egom = r["wagon_mix"]["plants"][0]
+    assert egom["fytd_total"] == 16 and {t["type"]: t["fytd_rakes"] for t in egom["types"]} == {"BOBSNM1": 9, "BOXN": 7}
+    assert r["types"]["CGOM"] == {"BOBSNM1": {"2026-10": 4}, "Private GPWIS": {"2026-04": 1}}
+    assert set(r["types"]) == {"EGOM", "CGOM"}
+
+
+def test_key_points(counts):
+    pts = ior.build_report("2026-10")["key_points"]
+    assert pts[0] == "Iron ore loading from mines in Oct'26: EGOM 10 rakes (+0.0% vs Oct'25), CGOM 4 rakes (+100.0%)."
+    assert pts[1] == ("FY to date the mines loaded 21 iron ore rakes, 12.5% behind the same period last year (24).")
+    assert pts[2].startswith("Wagon mix (2026-27 vs same months of 2025-26): ") and " points to " in pts[2]
+    assert len(pts) == 3
+
+
+def test_month_without_rakes_yet(counts):
+    """The report month is later than the last uploaded rake."""
+    r = ior.build_report("2026-11")
+    assert r["available"] and r["trend"]["EGOM"][0]["months"][6:8] == [10, None]
+    assert not any(k.startswith("Iron ore loading from mines in") for k in r["key_points"])
+    assert r["key_points"][0].startswith("FY to date (to Oct'26) the mines loaded 21 iron ore rakes, 12.5% behind")
+    # the mix compares the months that have rakes, not November of last year too
+    assert r["wagon_mix"]["plants"] == ior.build_report("2026-10")["wagon_mix"]["plants"]
+
+
+def test_no_rakes_for_the_fy(counts):
+    r = ior.build_report("2027-05")
+    assert r["available"] is False and r["fy"] == "2027-28"
+    assert ior.build_report("2019-05")["available"] is False
+
+
+def test_plant_report_helpers_keep_their_defaults():
+    import rake_despatch_report as rdr
+    rows = [{"report_month": "2026-10", "plant_code": "BSP", "wagon_type": "BOXN", "rakes": 4}]
+    assert [p["plant"] for p in rdr.wagon_mix("2026-10", rows)["plants"]] == ["BSP", "SAIL"]
+    assert list(rdr.trend("2026-10", {"2026-10": {"BSP": 4, "SAIL": 4}})) == rdr.ALL

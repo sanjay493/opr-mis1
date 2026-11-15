@@ -177,11 +177,13 @@ def ranking(month, totals, position):
     return plants + [r for r in rows if r["plant"] == "SAIL"]
 
 
-def wagon_mix(month, type_rows):
+def wagon_mix(month, type_rows, groups=PLANTS, total_row="SAIL"):
     """Share of each wagon type in FYTD rakes per plant (and SAIL), with the
     shift against a comparison period: the same months of last FY when their
     wagon-type rows exist, else H1 vs the months since (from October), else
-    the earlier months of the FY vs the latest month."""
+    the earlier months of the FY vs the latest month. `groups` / `total_row`
+    name the rows when they are not the plants (iron_ore_rakes.py: mines
+    groups and their total)."""
     start = fy_start_year(month)
     fytd = [m for m in fy_months(start) if m <= month]
     by = {}  # month -> plant -> type -> rakes
@@ -205,14 +207,14 @@ def wagon_mix(month, type_rows):
         counts = {}
         for m in months:
             src = by.get(m, {})
-            plants = PLANTS if plant == "SAIL" else [plant]
+            plants = groups if plant == total_row else [plant]
             for p in plants:
                 for t, v in src.get(p, {}).items():
                     counts[t] = counts.get(t, 0) + v
         return counts
 
     out = []
-    for p in ALL:
+    for p in list(groups) + [total_row]:
         fy_counts, cur, prev = mix(fytd, p), mix(current, p), mix(base, p)
         total, cur_total, prev_total = sum(fy_counts.values()), sum(cur.values()), sum(prev.values())
         if not total:
@@ -234,11 +236,11 @@ def wagon_mix(month, type_rows):
     return {"basis": basis, "label": label, "plants": out}
 
 
-def trend(month, totals):
+def trend(month, totals, rows=ALL):
     """{plant: [{fy, months: [12 values or None]}]}, newest FY first, HISTORY_FYS FYs."""
     start = fy_start_year(month)
     out = {}
-    for p in ALL:
+    for p in rows:
         series = []
         for s in range(start, start - HISTORY_FYS, -1):
             vals = [totals.get(m, {}).get(p) if m <= month else None for m in fy_months(s)]

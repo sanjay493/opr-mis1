@@ -17,6 +17,10 @@ import csv
 import datetime
 import io
 
+import rake_despatch_report as rdr
+from rake_despatch_report import fy_label, fy_months, fy_start_year, mlabel, shift_year
+from repo import rake as rrake
+
 # Mine (the file's `unit`) -> mines group. EGOM = OGOM + JGOM.
 MINE_GROUP = {
     "BOL": "OGOM", "BAR": "OGOM", "KAL": "OGOM", "TAL": "OGOM",
@@ -116,3 +120,98 @@ def parse_csv(text: str, today: str = None) -> list:
     if not rows:
         raise ValueError("There are no rakes in the file.")
     return rows
+
+
+# ── counts -> groups, wagon names, report ────────────────────────────────────
+
+def _page_group(mine_code: str) -> str:
+    group = MINE_GROUP[mine_code]
+    return "CGOM" if group == "CGOM" else "EGOM"
+
+
+def type_rows(counts: list) -> list:
+    """repo counts ([{report_month, mine_code, wagon_code, rakes}]) summed to
+    the page's groups and printed wagon names, in the row shape
+    rake_despatch_report.wagon_mix takes: [{report_month, plant_code: group,
+    wagon_type: name, rakes}]."""
+    out = {}
+    for c in counts:
+        key = (c["report_month"], _page_group(c["mine_code"]), WAGON_NAME[c["wagon_code"]])
+        out[key] = out.get(key, 0) + c["rakes"]
+    return [{"report_month": m, "plant_code": g, "wagon_type": t, "rakes": n} for (m, g, t), n in sorted(out.items())]
+
+
+def group_totals(counts: list) -> dict:
+    """{month: {OGOM, JGOM, EGOM, CGOM, Total}} for the months that have rakes."""
+    out = {}
+    for c in counts:
+        row = out.setdefault(c["report_month"], {"OGOM": 0, "JGOM": 0, "EGOM": 0, "CGOM": 0, TOTAL: 0})
+        group = MINE_GROUP[c["mine_code"]]
+        row[group] += c["rakes"]
+        row[TOTAL] += c["rakes"]
+        if group != "CGOM":
+            row["EGOM"] += c["rakes"]
+    return out
+
+
+def _vs(now, before) -> str:
+    return "" if not before else f" ({(now - before) / before * 100:+.1f}%"
+
+
+def key_points(month: str, upto: str, totals: dict, mix: dict) -> list:
+    """Up to three plain sentences: the report month against the same month
+    last year (only when the month itself has rakes), the FY to date (the
+    months up to `upto`, the last one that has rakes) against the same
+    months of last FY, and the biggest wagon-mix move of 2 points or more."""
+    pts = []
+    now = totals.get(month)
+    if now:
+        ly_month = shift_year(month, -1)
+        ly = totals.get(ly_month, {})
+        egom, cgom = _vs(now["EGOM"], ly.get("EGOM")), _vs(now["CGOM"], ly.get("CGOM"))
+        pts.append(f"Iron ore loading from mines in {mlabel(month)}: EGOM {now['EGOM']} rakes"
+                   + (f"{egom} vs {mlabel(ly_month)})" if egom else "")
+                   + f", CGOM {now['CGOM']} rakes" + (f"{cgom})" if cgom else "") + ".")
+    fytd = [m for m in fy_months(fy_start_year(month)) if m <= upto]
+    loaded = sum(totals.get(m, {}).get(TOTAL, 0) for m in fytd)
+    before = sum(totals.get(shift_year(m, -1), {}).get(TOTAL, 0) for m in fytd)
+    if loaded and before:
+        change = (loaded - before) / before * 100
+        pts.append(f"FY to date{'' if upto == month else f' (to {mlabel(upto)})'} the mines loaded {loaded} iron ore"
+                   f" rakes, {abs(change):.1f}% {'ahead of' if change >= 0 else 'behind'} the same period last year"
+                   f" ({before}).")
+    whole = next((p for p in mix["plants"] if p["plant"] == TOTAL), None)
+    shift = whole and whole["biggest_shift"]
+    if shift and abs(shift["shift_pp"]) >= 2:
+        pts.append(f"Wagon mix ({mix['label']}): {shift['type']} share {'up' if shift['shift_pp'] > 0 else 'down'} "
+                   f"{abs(shift['shift_pp']):.1f} points to {shift['share_now']:.1f}%.")
+    return pts
+
+
+def build_report(month: str) -> dict:
+    """Everything page 40.07 prints for `month`, from the stored rakes:
+    {available, fy, fy_months, month_label, key_points, trend, wagon_mix,
+    types}. trend and wagon_mix are rake_despatch_report's own shapes with
+    the mines groups (and Total) where it has plants (and SAIL); types is
+    {group: {wagon name: {month: rakes}}} for the report month's FY.
+    Months after the report month are never shown; a report month with no
+    rakes yet (file not uploaded) prints blank and the mix and FY-to-date
+    stop at the last month that has rakes."""
+    start = fy_start_year(month)
+    months = fy_months(start)
+    out = {"available": False, "fy": fy_label(start), "fy_months": months, "month_label": mlabel(month)}
+    counts = rrake.iron_ore_rake_counts(fy_months(start - rdr.HISTORY_FYS + 1)[0], month)
+    totals = group_totals(counts)
+    with_rakes = [m for m in months if m <= month and m in totals]
+    if not with_rakes:
+        return out
+    upto = with_rakes[-1]
+    rows = type_rows(counts)
+    mix = rdr.wagon_mix(upto, rows, groups=GROUPS, total_row=TOTAL)
+    types = {}
+    for r in rows:
+        if r["report_month"] in months:
+            types.setdefault(r["plant_code"], {}).setdefault(r["wagon_type"], {})[r["report_month"]] = r["rakes"]
+    out.update(available=True, key_points=key_points(month, upto, totals, mix),
+               trend=rdr.trend(month, totals, rows=ALL), wagon_mix=mix, types=types)
+    return out
