@@ -43,7 +43,7 @@
   "page_templates/key_highlights.html": "1b6c33c6e34ee58b35a9388f07f9e3aed6d740064459ee4cbb562bdc4d79dc95",
   "page_templates/key_parameters.html": "35f98784d4a78fb2b42ef6ef753ceddcda84f2d839092649f2ecb32e2acb49c7",
   "page_templates/macro_indicators.html": "998a7b1793ec49028c28c95eb36525747bae6534b982132ca66b9302ce8f31ca",
-  "page_templates/main.html": "16f19bebac23c443516ac34c2e0408273b38101ec831d842e1255458b0dcd9d8",
+  "page_templates/main.html": "837c6fd9ebce1e1260317b6448d2bdf433cc2c28a5d9eec84c910e26c0538ccc",
   "page_templates/major_unit_records_plant.html": "ab317baf0ce1269724623b4027f24af1338ce399648e12bd586450e61f4bef0d",
   "page_templates/major_unit_records_separator.html": "4db377b8e3eee801a001f36680654547b457fde357afc197b5b2b26110ea429b",
   "page_templates/market_prices.html": "c04c059254fbb0667ed701c0b940dd292d4585192bc878711faf204046646539",
@@ -54,7 +54,8 @@
   "page_templates/power_data.html": "0a3c9b9228328bd604b58b3831b3c812a7a894e1a2466d125983d2f42ae9ac1e",
   "page_templates/prod_by_process.html": "7d9c45794287b024f5916be2a2155b566472f5dacf6d7cb1d019072739be202e",
   "page_templates/rail_logistics_history.html": "45e981651db5d2a85609fb6f3414e17c94bd6003a4a252ce9d296a20d2eb95a0",
-  "page_templates/rail_logistics_loading.html": "a7e0177d378acee3b1037337b92f8f5181df7bc49f85a8127f822d81871e2b4d",
+  "page_templates/rail_logistics_loading.html": "5b713bc8a28d0a009ea40a854ae48a526cd28aa58fe98519bf42a8f922c1915d",
+  "page_templates/rail_logistics_mines.html": "9236e7c94ced1b736b083b3d03403d93b8f51ca919736cf9466ef044db7dccb4",
   "page_templates/rail_logistics_summary.html": "6d05d3566481d38e0687dc5668925c68f26a443b60bacb147cf99f0221b09649",
   "page_templates/rail_logistics_wagon.html": "d4576139d1acc36c81e8c02c9ee7bdcb96de8cb66210e163d64c4d8f202ffcca",
   "page_templates/rail_report.html": "20a57198f0707b00751aa1fdbe62c7fe1419e9046700e84fa0d6be35d9da6012",
@@ -169,6 +170,7 @@
    "4.5": 1,
    "40": 1,
    "40.05": 1,
+   "40.07": 1,
    "40.1": 1,
    "40.2": 1,
    "40.3": 1,
@@ -177,6 +179,6 @@
    "6.1": 7,
    "7": 12
   },
-  "total_pages": 113
+  "total_pages": 114
  }
 }
