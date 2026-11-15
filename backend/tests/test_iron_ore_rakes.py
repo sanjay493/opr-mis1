@@ -67,3 +67,39 @@ def test_refuses_repeated_id_future_date_and_empty():
         ior.parse_csv(_text().splitlines()[0] + "\n\n")
     with pytest.raises(ValueError, match="no rakes"):
         ior.parse_csv("")
+
+
+# ── repo ─────────────────────────────────────────────────────────────────────
+
+def test_repo_round_trip(mysql_db):
+    from repo import conn as rc
+    from repo import rake as rrake
+
+    def n():
+        with rc.cursor() as cur:
+            cur.execute("SELECT n FROM data_version WHERE id = 1")
+            return cur.fetchone()[0]
+
+    rows = ior.parse_csv(ior.read_file(FIXTURE.read_bytes()))
+    assert rrake.iron_ore_rake_month_totals("2026-04", "2027-03") == {}
+    n0 = n()
+    out = rrake.save_iron_ore_rakes(rows, "x@sail.in")
+    assert out == {"rakes": 10, "deleted": 0, "first_date": "2026-09-28", "last_date": "2026-10-04"}
+    assert n() > n0
+    assert rrake.iron_ore_rake_month_totals("2026-04", "2027-03") == {"2026-09": 4, "2026-10": 6}
+    counts = rrake.iron_ore_rake_counts("2026-09", "2026-10")
+    assert {(c["report_month"], c["mine_code"], c["wagon_code"]): c["rakes"] for c in counts}[
+        ("2026-09", "BOL", "BX")] == 2
+    assert sum(c["rakes"] for c in counts) == 10 and len(rrake.iron_ore_rake_counts("2026-10", "2026-10")) == 6
+    # stored rakes dated outside a date range, per month (what an upload of that range leaves alone)
+    assert rrake.iron_ore_rake_totals_outside("2026-10-02", "2026-10-03") == {"2026-10": 2}
+    assert rrake.iron_ore_rake_totals_outside("2026-09-29", "2026-10-03") == {"2026-09": 2, "2026-10": 1}
+
+    # a narrower re-upload replaces only its own dates: 2 October (2 rakes) -> 1 rake
+    narrow = [dict(r, id=900) for r in rows if r["id"] == 105]
+    out = rrake.save_iron_ore_rakes(narrow, None)
+    assert out == {"rakes": 1, "deleted": 2, "first_date": "2026-10-02", "last_date": "2026-10-02"}
+    assert rrake.iron_ore_rake_month_totals("2026-09", "2026-10") == {"2026-09": 4, "2026-10": 5}
+    with pytest.raises(ValueError):
+        rrake.save_iron_ore_rakes([], None)
+    assert sum(rrake.iron_ore_rake_month_totals("2026-09", "2026-10").values()) > 0       # nothing cleared

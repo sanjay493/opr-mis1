@@ -26,7 +26,7 @@ NEW_DIMENSIONS = {"plant", "cal_month", "unique_activity", "unique_activity_tag"
                   "rmt_month", "rmt_plan_note", "rmt_ipt_row", "rmt_stock_row",
                   "rake_despatch_upload", "rake_despatch_type", "rake_despatch_history",
                   "rake_despatch_position", "rake_slab_despatch", "rake_export_despatch",
-                  "rail_loading_monthly"}
+                  "rail_loading_monthly", "iron_ore_rake"}
 JSON_ARCHIVES = {"production_data_json", "production_plan_json", "stock_data_json",
                  "ipt_data_json", "special_steel_json"}
 

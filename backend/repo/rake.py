@@ -454,3 +454,74 @@ def save_rail_loading(report_month: str, values: Dict[str, Optional[float]], use
         conn.close()
     activity_context.record(f"rail_loading/{month}", None, {"items": len(values)})
     return len(values)
+
+
+# ── Iron ore rakes from mines (Rail Logistics page 40.07; iron_ore_rakes.py) ─
+# v2-only table iron_ore_rake: one row per rake, keyed by the source's id.
+
+_IRON_ORE_BATCH = 1000
+
+
+def iron_ore_rake_counts(first_month: str, last_month: str) -> List[dict]:
+    """[{report_month, mine_code, wagon_code, rakes}] for first_month..last_month."""
+    return _read("SELECT report_month, mine_code, wagon_code, COUNT(*) AS rakes FROM iron_ore_rake"
+                 " WHERE report_month BETWEEN %s AND %s"
+                 " GROUP BY report_month, mine_code, wagon_code"
+                 " ORDER BY report_month, mine_code, wagon_code", (first_month, last_month))
+
+
+def iron_ore_rake_month_totals(first_month: str, last_month: str) -> Dict[str, int]:
+    """{report_month: rakes stored} for first_month..last_month (months with rakes only)."""
+    return {r["report_month"]: r["rakes"] for r in _read(
+        "SELECT report_month, COUNT(*) AS rakes FROM iron_ore_rake WHERE report_month BETWEEN %s AND %s"
+        " GROUP BY report_month ORDER BY report_month", (first_month, last_month))}
+
+
+def iron_ore_rake_totals_outside(first_date: str, last_date: str) -> Dict[str, int]:
+    """{report_month: rakes stored} counting only the rakes dated outside
+    first_date..last_date, for the months those two dates fall in: what an
+    upload covering that date range leaves in place."""
+    return {r["report_month"]: r["rakes"] for r in _read(
+        "SELECT report_month, COUNT(*) AS rakes FROM iron_ore_rake"
+        " WHERE report_month BETWEEN %s AND %s AND rpt_date NOT BETWEEN %s AND %s"
+        " GROUP BY report_month ORDER BY report_month",
+        (first_date[:7], last_date[:7], first_date, last_date))}
+
+
+def save_iron_ore_rakes(rows: List[dict], user: Optional[str]) -> dict:
+    """Store an uploaded file's rakes ([{id, rpt_date, report_month,
+    mine_code, rake_no, dest, wagon_code, l_wg, f_wg}]) in one transaction:
+    every rake stored between the file's first and last date is replaced by
+    the file's; rakes outside those dates stay.
+    -> {rakes, deleted, first_date, last_date}."""
+    if not rows:
+        raise ValueError("no iron ore rakes to save")
+    _keys.fits("updated_by", user, 64)
+    for r in rows:
+        _keys.fits("mine_code", r["mine_code"], 8, nullable=False)
+        _keys.fits("wagon_code", r["wagon_code"], 4, nullable=False)
+        _keys.fits("rake_no", r["rake_no"], 24)
+        _keys.fits("dest", r["dest"], 8)
+    first, last = min(r["rpt_date"] for r in rows), max(r["rpt_date"] for r in rows)
+    conn = connect()
+    try:
+        cur = conn.cursor()
+        _ver.bump(cur)
+        for month in sorted({r["report_month"] for r in rows}):
+            _keys.check_month(month)
+            _keys.ensure_month(cur, month, bump=False)
+        cur.execute("DELETE FROM iron_ore_rake WHERE rpt_date BETWEEN %s AND %s", (first, last))
+        deleted = cur.rowcount
+        params = [(r["id"], r["report_month"], r["rpt_date"], r["mine_code"], r["rake_no"], r["dest"],
+                   r["wagon_code"], r["l_wg"], r["f_wg"], user) for r in rows]
+        for i in range(0, len(params), _IRON_ORE_BATCH):
+            cur.executemany("INSERT INTO iron_ore_rake (id, report_month, rpt_date, mine_code, rake_no, dest,"
+                            " wagon_code, l_wg, f_wg, updated_at, updated_by)"
+                            " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), %s)",
+                            params[i:i + _IRON_ORE_BATCH])
+        conn.commit()
+    finally:
+        conn.close()
+    activity_context.record("iron_ore_rakes", None, {"rakes": len(rows), "deleted": deleted,
+                                                     "first_date": first, "last_date": last})
+    return {"rakes": len(rows), "deleted": deleted, "first_date": first, "last_date": last}

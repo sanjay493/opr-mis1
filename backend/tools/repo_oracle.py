@@ -161,7 +161,7 @@ WRITE_FUNCTIONS = {
                    "upsert_bsl_furnace_production", "upsert_row"),
     "rake": ("deactivate_rake_detention_master_row", "save_rake_despatch", "save_rake_detention_annual",
              "save_rake_detention_master_row", "save_rake_detention_monthly", "save_rake_detention_summary",
-             "save_rail_loading"),
+             "save_rail_loading", "save_iron_ore_rakes"),
     "special_steel": ("clear_special_steel_orders", "delete_club", "delete_grade_club",
                       "delete_ss_ipt_requirement", "save_special_steel_entry", "save_ss_ipt_requirement",
                       "save_ss_phys_meta", "save_ss_phys_perf", "upsert_abp", "upsert_grade_club"),

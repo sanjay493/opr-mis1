@@ -829,6 +829,32 @@ CREATE TABLE rail_loading_monthly (
     CONSTRAINT fk_rail_loading_month FOREIGN KEY (report_month) REFERENCES cal_month (report_month)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+-- Iron ore rakes loaded at the mines, one row per rake, from the mines'
+-- rake-by-rake record (u_rakes_rmg.csv, uploaded on Data Entry > Uploads;
+-- api_iron_ore_rakes.py). id is the source's own id. mine_code and wagon_code
+-- are the source's codes; the mines groups (OGOM / JGOM / CGOM) and the
+-- printed wagon names are in iron_ore_rakes.py. dest, l_wg and f_wg are kept
+-- as given and not used by any page yet.
+CREATE TABLE iron_ore_rake (
+    id           INT         NOT NULL,
+    report_month CHAR(7)     NOT NULL,
+    rpt_date     DATE        NOT NULL,
+    mine_code    VARCHAR(8)  NOT NULL,
+    rake_no      VARCHAR(24) NULL,
+    dest         VARCHAR(8)  NULL,
+    wagon_code   VARCHAR(4)  NOT NULL,
+    l_wg         DOUBLE      NULL,
+    f_wg         DOUBLE      NULL,
+    updated_at   DATETIME    NOT NULL,
+    updated_by   VARCHAR(64) NULL,
+    PRIMARY KEY (id),
+    -- repo.rake.iron_ore_rake_counts, iron_ore_rake_month_totals (WHERE report_month BETWEEN ...)
+    KEY idx_iron_ore_rake_month (report_month, mine_code, wagon_code),
+    -- repo.rake.save_iron_ore_rakes, iron_ore_rake_totals_outside (rpt_date BETWEEN ...)
+    KEY idx_iron_ore_rake_date (rpt_date),
+    CONSTRAINT fk_iron_ore_rake_month FOREIGN KEY (report_month) REFERENCES cal_month (report_month)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 -- v1 macro_indicators_monthly.
 CREATE TABLE macro_indicator_monthly (
     report_month CHAR(7)     NOT NULL,
