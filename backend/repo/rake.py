@@ -417,3 +417,38 @@ def save_rake_despatch(data: Dict[str, Any], source_file: Optional[str], user: O
                             {"source_file": source_file, "type_months": len(type_months),
                              "history_months": len(history_months)})
     return {"report_month": month, "type_months": type_months, "history_months": history_months}
+
+
+# ── Monthly rail loading (Rail Logistics page 40.05; rail_loading.py) ───────
+# v2-only table rail_loading_monthly: one row per month and item code.
+
+def rail_loading_rows(first_month: str, last_month: str) -> List[dict]:
+    """[{report_month, item_code, rakes}] for first_month..last_month."""
+    return _read("SELECT report_month, item_code, rakes FROM rail_loading_monthly"
+                 " WHERE report_month BETWEEN %s AND %s ORDER BY report_month, item_code",
+                 (first_month, last_month))
+
+
+def save_rail_loading(report_month: str, values: Dict[str, Optional[float]], user: Optional[str]) -> int:
+    """Replace the month's rail loading rows with {item_code: rakes} in one
+    transaction (an empty dict clears the month). -> rows saved."""
+    month = _keys.fit_month(report_month)
+    _keys.check_month(month)
+    _keys.fits("updated_by", user, 64)
+    for code in values:
+        _keys.fits("item_code", code, 32, nullable=False)
+    conn = connect()
+    try:
+        cur = conn.cursor()
+        _ver.bump(cur)
+        _keys.ensure_month(cur, month, bump=False)
+        cur.execute("DELETE FROM rail_loading_monthly WHERE report_month = %s", (month,))
+        if values:
+            cur.executemany("INSERT INTO rail_loading_monthly (report_month, item_code, rakes, updated_at,"
+                            " updated_by) VALUES (%s, %s, %s, NOW(), %s)",
+                            [(month, code, rakes, user) for code, rakes in values.items()])
+        conn.commit()
+    finally:
+        conn.close()
+    activity_context.record(f"rail_loading/{month}", None, {"items": len(values)})
+    return len(values)

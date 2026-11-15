@@ -814,6 +814,21 @@ CREATE TABLE rake_export_despatch (
     CONSTRAINT fk_rake_export_plant FOREIGN KEY (plant_code) REFERENCES plant (plant_code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+-- SAIL's monthly rail loading by commodity (inward raw materials, outward
+-- plant despatch, export memo), from the Rail Movement Cell's monthly
+-- highlights note: one row per item code. The codes, labels and print order
+-- are in rail_loading.py; totals are stored as reported, never summed.
+CREATE TABLE rail_loading_monthly (
+    report_month CHAR(7)     NOT NULL,
+    item_code    VARCHAR(32) NOT NULL,
+    rakes        DOUBLE      NULL,
+    updated_at   DATETIME    NOT NULL,
+    updated_by   VARCHAR(64) NULL,
+    -- repo.rake.rail_loading_rows (WHERE report_month BETWEEN ...), save_rail_loading
+    PRIMARY KEY (report_month, item_code),
+    CONSTRAINT fk_rail_loading_month FOREIGN KEY (report_month) REFERENCES cal_month (report_month)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 -- v1 macro_indicators_monthly.
 CREATE TABLE macro_indicator_monthly (
     report_month CHAR(7)     NOT NULL,

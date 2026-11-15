@@ -25,7 +25,8 @@ PLANT_COLUMNS = ("plant_code", "from_plant_code", "to_plant_code")
 NEW_DIMENSIONS = {"plant", "cal_month", "unique_activity", "unique_activity_tag", "production_op_monthly",
                   "rmt_month", "rmt_plan_note", "rmt_ipt_row", "rmt_stock_row",
                   "rake_despatch_upload", "rake_despatch_type", "rake_despatch_history",
-                  "rake_despatch_position", "rake_slab_despatch", "rake_export_despatch"}
+                  "rake_despatch_position", "rake_slab_despatch", "rake_export_despatch",
+                  "rail_loading_monthly"}
 JSON_ARCHIVES = {"production_data_json", "production_plan_json", "stock_data_json",
                  "ipt_data_json", "special_steel_json"}
 
