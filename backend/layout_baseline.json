@@ -43,7 +43,7 @@
   "page_templates/key_highlights.html": "1b6c33c6e34ee58b35a9388f07f9e3aed6d740064459ee4cbb562bdc4d79dc95",
   "page_templates/key_parameters.html": "35f98784d4a78fb2b42ef6ef753ceddcda84f2d839092649f2ecb32e2acb49c7",
   "page_templates/macro_indicators.html": "998a7b1793ec49028c28c95eb36525747bae6534b982132ca66b9302ce8f31ca",
-  "page_templates/main.html": "6713cd7c934fb981e80b905986c1e19d27fc82ff5568f85a3eb519d43c6b0fcb",
+  "page_templates/main.html": "16f19bebac23c443516ac34c2e0408273b38101ec831d842e1255458b0dcd9d8",
   "page_templates/major_unit_records_plant.html": "ab317baf0ce1269724623b4027f24af1338ce399648e12bd586450e61f4bef0d",
   "page_templates/major_unit_records_separator.html": "4db377b8e3eee801a001f36680654547b457fde357afc197b5b2b26110ea429b",
   "page_templates/market_prices.html": "c04c059254fbb0667ed701c0b940dd292d4585192bc878711faf204046646539",
@@ -52,7 +52,11 @@
   "page_templates/page4_table.html": "f97d47ebdd1a9554fdd504e0ca6abea10baf5934651b7fae7e34abbd544405f0",
   "page_templates/performance_summary_table.html": "32580bfab0749c87c8ab55256e53e2f70c7ffaf640e947a56c5e412aeb5ec4e9",
   "page_templates/power_data.html": "0a3c9b9228328bd604b58b3831b3c812a7a894e1a2466d125983d2f42ae9ac1e",
-  "page_templates/prod_by_process.html": "e415affedea4981feef809e3955173d970cd52609e15624a2526660d0cf7b2c9",
+  "page_templates/prod_by_process.html": "7d9c45794287b024f5916be2a2155b566472f5dacf6d7cb1d019072739be202e",
+  "page_templates/rail_logistics_history.html": "4d282b91041b4c55755d57bf6f7f47faaa339669918a876fa5d2d97a98f54d28",
+  "page_templates/rail_logistics_loading.html": "26daa7cae527465c42c8c91f6a2d62a1fca0aa992d2722fe3a7aee52625d3e04",
+  "page_templates/rail_logistics_summary.html": "461b33e8b81f74a584db792f8dd641a78fcf1463a73cb1e212043049ad0d6142",
+  "page_templates/rail_logistics_wagon.html": "f650d58b7eaa3e0369b255f27db59e507561524fc35881b2afc338405c6ed45d",
   "page_templates/rail_report.html": "20a57198f0707b00751aa1fdbe62c7fe1419e9046700e84fa0d6be35d9da6012",
   "page_templates/rake_detention_detail.html": "7d4c7b199a0ddcbf80d1a838189cf1fe7ea448d9bd46f0312a9e7410f641e1ec",
   "page_templates/rake_detention_summary.html": "c04779f655c05e3691d135b78a76bd64f12a154f63b470f15ddedce0e43f6be8",
@@ -72,7 +76,7 @@
   "page_templates/summary.html": "a8923670bc21cb6c01d9e2759bb1efcc6c73c62010763addcefa898e12c30115",
   "page_templates/techno_params.html": "4bd1d5e9d3130ed582bd5b1fa002beb0f7a3aa78c0b06f13a831a73627adf59f",
   "page_templates/trend_section.html": "d2bc90a92888823a7eeb43dc36b6549928fca0a0d49eaeb5a041b28798450bad",
-  "pdf.py": "ac8c017b8664821e70e1b21d98706400b75fc80c51e55936d9eaeff838d51644"
+  "pdf.py": "38d80e05464558a08d31715a29095e9fe8c57474db0a008443669f98e51c18e0"
  },
  "reference_render": {
   "month": "2026-08",
@@ -164,11 +168,15 @@
    "4": 1,
    "4.5": 1,
    "40": 1,
+   "40.05": 1,
+   "40.1": 1,
+   "40.2": 1,
+   "40.3": 1,
    "5": 1,
    "6": 1,
    "6.1": 7,
    "7": 12
   },
-  "total_pages": 109
+  "total_pages": 113
  }
 }
