@@ -395,10 +395,11 @@ _INDEX_SECTIONS = [
     ("Details of Coking Coal Consumption, Blend and Stocks", 2),
     ("Plant Wise Power Data", 1),
     ("Status of Capital/Major Repairs Planned in ABP - Plant Wise", 5),
-    # Rake Despatch (SAIL Rail Movement Cell's Despatch Summary Report) —
-    # 3 portrait pages, RAIL_LOGISTICS_PAGES (40.1-40.3), right after
-    # Capital Repair. See page_rail_logistics.py.
-    ("Rail Logistics – Rake Despatch", 3),
+    # Rail Logistics — 4 portrait pages, RAIL_LOGISTICS_PAGES, right after
+    # Capital Repair: monthly rail loading by commodity (40.05), then Rake
+    # Despatch (SAIL Rail Movement Cell's Despatch Summary Report, 40.1-40.3).
+    # See page_rail_logistics.py.
+    ("Rail Logistics – Rake Despatch", 4),
     # SAIL Rail Movement Cell's "Average Plant Detention Report" — 7 pages:
     # 5 portrait commodity/wagon-type detail pages, one per plant
     # (RAKE_DETENTION_DETAIL_PAGES — split from the source PDF's own

@@ -79,7 +79,8 @@ _DEPT_BADGE_GROUPS = [
 #     aren't contiguous: 1038-1040 were added later, once 1026/1027 (the
 #     original 3-plant/2-plant page split) got broken out to one plant per
 #     page for legibility, and by then 1028-1037 were already claimed.
-#   40.1, 40.2, 40.3 — "Rail Logistics – Rake Despatch" (page_rail_logistics.py),
+#   40.05, 40.1, 40.2, 40.3 — "Rail Logistics" (page_rail_logistics.py:
+#     monthly rail loading, then the three Rake Despatch pages),
 #     right after Capital Repair (40), ahead of Rake Detention — same group
 #     (10) as Rake Detention: the same Rail Movement Cell subject, and no
 #     new group so every later section keeps its badge colour.
@@ -102,7 +103,7 @@ _DEPT_BADGE_EXPLICIT_GROUP = {
     1024: 5, 1025: 5,
     29.5: 7,
     35.4: 8, 35.5: 8, 35.6: 8, 35.7: 8,
-    40.1: 10, 40.2: 10, 40.3: 10,
+    40.05: 10, 40.1: 10, 40.2: 10, 40.3: 10,
     1026: 10, 1027: 10, 1038: 10, 1039: 10, 1040: 10, 1028: 10, 1029: 10,
     **{pg: 11 for pg in range(1041, 1067)},
 }
@@ -163,7 +164,7 @@ _CANONICAL_PAGE_ORDER = [
     27, 28, 29, 29.5, 30,
     31, 32, 33, 34, 35, 35.4, 35.5, 35.6, 35.7,
     *range(36, 41),
-    40.1, 40.2, 40.3,
+    40.05, 40.1, 40.2, 40.3,
     1026, 1027, 1038, 1039, 1040, 1028, 1029,
     *range(1041, 1067),
 ]

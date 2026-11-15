@@ -1,0 +1,49 @@
+{# Rail Logistics – Monthly Rail Loading (page 40.05, rail_loading.py via page_rail_logistics.py) #}
+<style>
+    .rll-subtitle { text-align: right; font-size: 9pt; font-style: italic; color: {{ colors.text_secondary }}; margin-bottom: 2pt; }
+    .rll-table { border-collapse: collapse; width: 100%; table-layout: fixed; font-size: 8pt; line-height: 1.15; }
+    .rll-table th, .rll-table td { border: 1px solid {{ colors.border_dark }}; padding: 2.4pt 2pt; text-align: center; font-variant-numeric: tabular-nums; }
+    .rll-table th { font-weight: 700; }
+    .rll-table td.rll-l { text-align: left; padding-left: 9pt; white-space: nowrap; }
+    .rll-act { background: {{ colors.perf_act_bg }}; color: {{ colors.perf_act_text }}; }
+    .rll-group td { text-align: left; font-weight: 700; color: {{ colors.rail_log_section_title }}; background: {{ colors.rail_log_card_bg }}; }
+    .rll-total td { font-weight: 700; background: {{ colors.rail_log_total_row_bg }}; }
+    .rll-total td.rll-l, .rll-grand td.rll-l { padding-left: 3pt; }
+    .rll-grand td { font-weight: 700; font-size: 8.5pt; background: {{ colors.perf_app_bg }}; color: {{ colors.perf_app_text }}; }
+    .rll-note { font-size: 7.5pt; font-style: italic; color: {{ colors.text_secondary }}; margin-top: 4pt; }
+    .rll-placeholder { text-align: center; font-size: 11pt; color: {{ colors.text_secondary }}; margin-top: 60mm; }
+</style>
+
+<div class="coal-title">{{ page.title }}</div>
+<div class="rll-subtitle">{{ page.subtitle }}</div>
+
+{% if not page.available %}
+<div class="rll-placeholder">{{ page.placeholder }}</div>
+{% else %}
+<table class="rll-table">
+    <colgroup><col style="width:26%"/>{% for _ in page.month_labels %}<col style="width:4.8%"/>{% endfor %}<col style="width:8.2%"/><col style="width:8.2%"/></colgroup>
+    <thead><tr><th>Rakes loaded</th>{% for m in page.month_labels %}<th>{{ m }}</th>{% endfor %}<th class="rll-act">FYTD</th><th>FYTD rakes / day</th></tr></thead>
+    <tbody>
+    {% for r in page.rows %}
+        {% if r.kind == 'group' %}
+        <tr class="rll-group"><td colspan="{{ page.month_labels|length + 3 }}">{{ r.label }}</td></tr>
+        {% elif r.kind == 'per_day' %}
+        <tr class="rll-grand">
+            <td class="rll-l">{{ r.label }}</td>
+            {% for v in r.months %}<td>{{ v|rl_fmt(2) }}</td>{% endfor %}
+            <td></td>
+            <td>{{ r.fytd_per_day|rl_fmt(2) }}</td>
+        </tr>
+        {% else %}
+        <tr{% if r.kind == 'total' %} class="rll-total"{% elif r.kind == 'grand' %} class="rll-grand"{% endif %}>
+            <td class="rll-l">{{ r.label }}</td>
+            {% for v in r.months %}<td>{{ v|rl_rakes }}</td>{% endfor %}
+            <td{% if r.kind == 'item' %} class="rll-act"{% endif %}>{{ r.fytd|rl_rakes }}</td>
+            <td>{% if r.kind != 'item' %}{{ r.fytd_per_day|rl_fmt(2) }}{% endif %}</td>
+        </tr>
+        {% endif %}
+    {% endfor %}
+    </tbody>
+</table>
+<div class="rll-note">Rakes, as reported in the Rail Movement Cell's monthly highlights. Totals are as reported, not the sum of the rows above them: imported limestone is counted under both Flux and Ports.</div>
+{% endif %}

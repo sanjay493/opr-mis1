@@ -20,6 +20,7 @@ from jinja2 import Environment, FileSystemLoader
 from models import PDFRequest
 from report_utils import dept_badge_group
 import page_rail_logistics
+import rail_loading
 
 _TMPL_DIR = os.path.join(os.path.dirname(__file__), 'page_templates')
 _jinja_env = Environment(loader=FileSystemLoader(_TMPL_DIR), autoescape=False)
@@ -387,6 +388,7 @@ def _pgclass(page_num) -> str:
 
 _jinja_env.filters['pgclass'] = _pgclass
 _jinja_env.filters['rl_fmt'] = page_rail_logistics.fmt
+_jinja_env.filters['rl_rakes'] = rail_loading.fmt_rakes
 
 
 # Self-hosted from Google Fonts (each family embeds both its "latin" and
@@ -611,7 +613,7 @@ _BADGE_COLORS = {
     7: ("#4a3aa7", "#ffffff"),  # violet  — Techno Params (27-30)
     8: ("#e34948", "#0b0b0b"),  # red     — Mill Techno (31-35)
     9: ("#0a9698", "#0b0b0b"),  # teal    — Capital Repair (36-40)
-    10: ("#8b5e34", "#ffffff"), # brown   — Rail Logistics (40.1-40.3) + Rakes Detention (1026,1027,1038-1040,1028,1029)
+    10: ("#8b5e34", "#ffffff"), # brown   — Rail Logistics (40.05-40.3) + Rakes Detention (1026,1027,1038-1040,1028,1029)
     11: ("#701a75", "#ffffff"), # dark purple — Ready Reckoner (1041-1058, +1059-1066 overflow)
 }
 
