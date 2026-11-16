@@ -715,3 +715,53 @@ def sail_rows(cur, months):
                 f"FROM sail_mines_monthly WHERE report_month IN ({ph}) "
                 f"ORDER BY report_month, section, item", months)
     return cur.fetchall()
+
+
+# ── Details of SAIL Mining Leases (PDF Annexure-1; mining_leases.py) ────────
+# v2-only table mining_leases: one row per lease in print order. The span
+# columns say how many rows a cell covers (1 own row, N merged down, 0
+# covered by the cell above); mining_leases.validate checks them before a save.
+
+_LEASE_TEXT = (("s_no", 8), ("mine", 160), ("state", 160), ("lease", 160), ("mineral", 160),
+               ("area", 160), ("reserves", 160), ("status", 255))
+_LEASE_SPANS = ("mine_span", "state_span", "mineral_span", "reserves_span", "status_span")
+_LEASE_COLS = ("id", "sort_order") + tuple(c for c, _n in _LEASE_TEXT) + _LEASE_SPANS
+
+
+def mining_leases_rows() -> List[Dict[str, Any]]:
+    """The leases in print order: [{id, sort_order, s_no, mine, ..., status_span}]."""
+    conn = connect()
+    try:
+        cur = conn.cursor()
+        cur.execute(f"SELECT {', '.join(_LEASE_COLS)} FROM mining_leases ORDER BY sort_order, id")
+        return [dict(zip(_LEASE_COLS, r)) for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+
+def save_mining_leases(rows: List[Dict[str, Any]], user) -> int:
+    """Replace the whole table with `rows` (print order = list order) in one
+    transaction; an empty list clears it. -> rows saved."""
+    import activity_context
+    _keys.fits("updated_by", user, 64)
+    values = []
+    for i, r in enumerate(rows, start=1):
+        for col, limit in _LEASE_TEXT:
+            _keys.fits(col, r.get(col) or "", limit)
+        values.append((i,) + tuple(r.get(c) or "" for c, _n in _LEASE_TEXT)
+                      + tuple(int(r.get(c, 1)) for c in _LEASE_SPANS) + (user,))
+    conn = connect()
+    try:
+        cur = conn.cursor()
+        _ver.bump(cur)
+        cur.execute("DELETE FROM mining_leases")
+        if values:
+            cur.executemany(
+                f"INSERT INTO mining_leases (sort_order, {', '.join(c for c, _n in _LEASE_TEXT)},"
+                f" {', '.join(_LEASE_SPANS)}, updated_at, updated_by)"
+                f" VALUES ({', '.join(['%s'] * (1 + len(_LEASE_TEXT) + len(_LEASE_SPANS)))}, NOW(), %s)", values)
+        conn.commit()
+    finally:
+        conn.close()
+    activity_context.record("mining_leases", None, {"rows": len(values)})
+    return len(values)

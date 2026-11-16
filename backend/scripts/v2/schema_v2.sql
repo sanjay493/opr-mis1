@@ -829,6 +829,34 @@ CREATE TABLE rail_loading_monthly (
     CONSTRAINT fk_rail_loading_month FOREIGN KEY (report_month) REFERENCES cal_month (report_month)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+-- Details of SAIL Mining Leases (PDF Annexure-1 "SAIL Mining at a Glance"):
+-- one row per lease, in print order. *_span = how many rows the cell covers
+-- (1 = its own row, N = merged down over N rows, 0 = covered by the cell above
+-- and stored blank), as the source sheet's merged cells. area and reserves are
+-- text: the source has "208( Broken area- 11MT)", "Un-Explored", "Exhausted".
+CREATE TABLE mining_leases (
+    id            INT          NOT NULL AUTO_INCREMENT,
+    sort_order    INT          NOT NULL,
+    s_no          VARCHAR(8)   NOT NULL DEFAULT '',
+    mine          VARCHAR(160) NOT NULL DEFAULT '',
+    state         VARCHAR(160) NOT NULL DEFAULT '',
+    lease         VARCHAR(160) NOT NULL DEFAULT '',
+    mineral       VARCHAR(160) NOT NULL DEFAULT '',
+    area          VARCHAR(160) NOT NULL DEFAULT '',
+    reserves      VARCHAR(160) NOT NULL DEFAULT '',
+    status        VARCHAR(255) NOT NULL DEFAULT '',
+    mine_span     TINYINT      NOT NULL DEFAULT 1,
+    state_span    TINYINT      NOT NULL DEFAULT 1,
+    mineral_span  TINYINT      NOT NULL DEFAULT 1,
+    reserves_span TINYINT      NOT NULL DEFAULT 1,
+    status_span   TINYINT      NOT NULL DEFAULT 1,
+    updated_at    DATETIME     NOT NULL,
+    updated_by    VARCHAR(64)  NULL,
+    -- repo.mining_leases.list_rows, replace_rows
+    PRIMARY KEY (id),
+    KEY idx_mining_leases_order (sort_order)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 -- Iron ore rakes loaded at the mines per month, mine, wagon code and
 -- destination, as lump rakes and fines rakes, summed from the mines' rake
 -- record (u_rakes_rmg.csv, uploaded on Data Entry > Uploads;
