@@ -135,13 +135,15 @@ def image_path_for(plant_code: str, filename: str) -> str:
 
 
 _SEPARATOR_LABELS = {
-    "ISP": ("Annexure-1", "5 ISPs Ready Reckoner"),
-    "SSP": ("Annexure-2", "3 SSPs Ready Reckoner"),
+    "MINING": ("Annexure-1", "SAIL Mining at a Glance"),
+    "ISP": ("Annexure-2", "5 ISPs & 3 SSPs Ready Reckoner"),
 }
 
 
 def generate_ready_reckoner_separator(group: str) -> dict:
-    """group: "ISP" or "SSP" — see ISP_SEPARATOR_PAGE_ID/SSP_SEPARATOR_PAGE_ID.
+    """group: "MINING" (Annexure-1, page_mining_leases.py) or "ISP" (Annexure-2,
+    which now opens the 5 ISPs and the 3 SSPs together; SSP_SEPARATOR_PAGE_ID
+    is no longer printed) — see ISP_SEPARATOR_PAGE_ID.
     A blank page (no header content beyond a centered title) printed right
     before that group's first plant page, per direct instruction,
     2026-09-21: "Annexure-1"/"Annexure-2" in black, "5 ISPs Ready

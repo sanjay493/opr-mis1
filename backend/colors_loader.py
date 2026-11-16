@@ -153,6 +153,8 @@ _DEFAULTS: Dict[str, str] = {
     "parl_cap_bg":                "#E3FFAB",
     "parl_actual_bg":             "#FFFF99",
     "parl_deviation_bg":          "#F8CBAD",
+    "mining_head_bg":            "#EAE1F5",
+    "mining_head_text":          "#060177",
     "rail_log_card_bg":          "#F1F5F9",
     "rail_log_card_border":      "#94A3B8",
     "rail_log_card_value":       "#060177",

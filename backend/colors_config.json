@@ -183,5 +183,8 @@
   "rail_log_total_row_bg":   "#EAE1F5",
   "rail_log_plant_rule":     "#1E293B",
   "rail_log_pos_text":       "#006100",
-  "rail_log_neg_text":       "#9C0006"
+  "rail_log_neg_text":       "#9C0006",
+  "_doc_mining": "Annexure-1 SAIL Mining at a Glance (mining_leases.html): the table header row.",
+  "mining_head_bg":          "#EAE1F5",
+  "mining_head_text":        "#060177"
 }

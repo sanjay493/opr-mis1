@@ -1,0 +1,37 @@
+{# Annexure-1 SAIL Mining at a Glance: Details of SAIL Mining Leases (page_mining_leases.py, mining_leases.py) #}
+<style>
+    .ml-table { border-collapse: collapse; width: 100%; table-layout: fixed; font-size: 6.6pt; line-height: 1.1; }
+    .ml-table th, .ml-table td { border: 1px solid {{ colors.border_light }}; padding: 0.8pt 2pt; text-align: center; vertical-align: middle; font-variant-numeric: tabular-nums; }
+    .ml-table th { font-weight: 700; background: {{ colors.mining_head_bg }}; color: {{ colors.mining_head_text }}; border-color: {{ colors.border_dark }}; }
+    .ml-table td.ml-l { text-align: left; }
+    .ml-table td.ml-b { font-weight: 700; }
+    .ml-table td.ml-pre { white-space: pre-line; }
+    .ml-subtitle { text-align: right; font-size: 9pt; font-style: italic; color: {{ colors.text_secondary }}; margin-bottom: 3pt; }
+    .ml-placeholder { text-align: center; font-size: 11pt; color: {{ colors.text_secondary }}; margin-top: 60mm; }
+</style>
+
+<div class="coal-title">{{ page.title }}</div>
+<div class="ml-subtitle">Details of SAIL Mining Leases</div>
+
+{% if not page.available %}
+<div class="ml-placeholder">Mining lease details not yet entered</div>
+{% else %}
+<table class="ml-table">
+    <colgroup><col style="width:3.6%"/><col style="width:15%"/><col style="width:8%"/><col style="width:16%"/><col style="width:8.5%"/><col style="width:10%"/><col style="width:9.9%"/><col style="width:29%"/></colgroup>
+    <thead><tr><th>S.No.</th><th>Name of Mines</th><th>State</th><th>Name of Lease</th><th>Mineral</th><th>Area in Ha</th><th>Reserves &amp; Resource as on 01.04.2026 (MT)</th><th>Current Status (Operational / Non-Operational)</th></tr></thead>
+    <tbody>
+    {% for r in page.rows %}
+        <tr>
+            <td>{{ r.s_no }}</td>
+            {% if r.mine.span %}<td class="ml-l ml-b"{% if r.mine.span > 1 %} rowspan="{{ r.mine.span }}"{% endif %}>{{ r.mine.text }}</td>{% endif %}
+            {% if r.state.span %}<td{% if r.state.span > 1 %} rowspan="{{ r.state.span }}"{% endif %}>{{ r.state.text }}</td>{% endif %}
+            {% if r.lease.span %}<td class="ml-l"{% if r.lease.span > 1 %} rowspan="{{ r.lease.span }}"{% endif %}>{{ r.lease.text }}</td>{% endif %}
+            {% if r.mineral.span %}<td{% if r.mineral.span > 1 %} rowspan="{{ r.mineral.span }}"{% endif %}>{{ r.mineral.text }}</td>{% endif %}
+            {% if r.area.span %}<td{% if r.area.span > 1 %} rowspan="{{ r.area.span }}"{% endif %}>{{ r.area.text }}</td>{% endif %}
+            {% if r.reserves.span %}<td class="ml-pre"{% if r.reserves.span > 1 %} rowspan="{{ r.reserves.span }}"{% endif %}>{{ r.reserves.text }}</td>{% endif %}
+            {% if r.status.span %}<td class="ml-l"{% if r.status.span > 1 %} rowspan="{{ r.status.span }}"{% endif %}>{{ r.status.text }}</td>{% endif %}
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endif %}

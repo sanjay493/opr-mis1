@@ -95,6 +95,7 @@ from page_ready_reckoner import (
     SSP_PAGES as READY_RECKONER_SSP_PAGES,
     generate_ready_reckoner_page, generate_ready_reckoner_separator,
 )
+from page_mining_leases import MINING_SEPARATOR_PAGE_ID, MINING_PAGE_ID, generate_mining_leases
 import page_major_unit_records
 from page_major_unit_records import (
     MAJOR_UNIT_SEPARATOR_PAGE_ID, MAJOR_UNIT_PAGES, MAJOR_UNIT_ACTIVE_PAGES,
@@ -423,8 +424,8 @@ _INDEX_SECTIONS = [
     # whenever a Ready Reckoner data-entry edit changes which plants split.
     # Currently (2026-09-22): BSP, RSP, and BSL split (3 extra pages); DSP,
     # ISP, and all 3 SSPs (ASP/SSP/VISL) stay merged.
-    ("Annexure-1 : 5 ISPs Ready Reckoner", 14),
-    ("Annexure-2 : 3 SSPs Ready Reckoner", 7),
+    ("Annexure-1 : SAIL Mining at a Glance", 2),
+    ("Annexure-2 : 5 ISPs & 3 SSPs Ready Reckoner", 20),
     # "Annexure-3 : 5 ISPs Major Units Records" — a blank Annexure
     # separator page, then one page per plant with a filled-in registry
     # (all 5 ISPs, incl. DSP — see page_major_unit_records.py's module
@@ -813,8 +814,8 @@ _INDEX_SECTION_ANCHORS = [
     36,                                # Status of Capital/Major Repairs Planned in ABP - Plant Wise
     min(RAIL_LOGISTICS_PAGES),         # Rail Logistics – Rail Loading, Mines Loading & Rake Despatch
     min(RAKE_DETENTION_DETAIL_PAGES),  # Details of Rakes Detention Plant Wise
-    READY_RECKONER_ISP_SEPARATOR_PAGE_ID,  # Annexure-1 : 5 ISPs Ready Reckoner
-    READY_RECKONER_SSP_SEPARATOR_PAGE_ID,  # Annexure-2 : 3 SSPs Ready Reckoner
+    MINING_SEPARATOR_PAGE_ID,              # Annexure-1 : SAIL Mining at a Glance
+    READY_RECKONER_ISP_SEPARATOR_PAGE_ID,  # Annexure-2 : 5 ISPs & 3 SSPs Ready Reckoner
     MAJOR_UNIT_SEPARATOR_PAGE_ID,          # Annexure-3 : 5 ISPs Major Units Records
     SAIL8_TREND_SEPARATOR_PAGE_ID,         # Annexure-4 : SAIL (8 Plants) Production Trend
 ]
@@ -1146,6 +1147,7 @@ def _get_data(month: str, page_number: Optional[float]):
                                 MARKET_PRICES_PAGE_ID, MACRO_INDICATORS_PAGE_ID,
                                 IRON_MAKING_PAGE_2_ID, EPI_PAGE_ID, COAL_RECEIPTS_PAGE_ID, COAL_RECEIPTS_PAGE_2_ID,
                                 POWER_DATA_PAGE_ID, RAKE_DETENTION_SUMMARY_PAGE_ID, RAKE_DETENTION_TREND_PAGE_ID,
+                                MINING_SEPARATOR_PAGE_ID, MINING_PAGE_ID,
                                 READY_RECKONER_ISP_SEPARATOR_PAGE_ID, READY_RECKONER_SSP_SEPARATOR_PAGE_ID,
                                 MAJOR_UNIT_SEPARATOR_PAGE_ID,
                                 SAIL8_TREND_SEPARATOR_PAGE_ID, SAIL8_TREND_PAGE_ID) \
@@ -1291,6 +1293,7 @@ def _get_data(month: str, page_number: Optional[float]):
                                                       MARKET_PRICES_PAGE_ID, MACRO_INDICATORS_PAGE_ID,
                                                       IRON_MAKING_PAGE_2_ID, EPI_PAGE_ID, COAL_RECEIPTS_PAGE_ID, COAL_RECEIPTS_PAGE_2_ID,
                                                       POWER_DATA_PAGE_ID, RAKE_DETENTION_SUMMARY_PAGE_ID, RAKE_DETENTION_TREND_PAGE_ID,
+                                                      MINING_SEPARATOR_PAGE_ID, MINING_PAGE_ID,
                                                       READY_RECKONER_ISP_SEPARATOR_PAGE_ID, READY_RECKONER_SSP_SEPARATOR_PAGE_ID,
                                                       MAJOR_UNIT_SEPARATOR_PAGE_ID,
                                                       SAIL8_TREND_SEPARATOR_PAGE_ID, SAIL8_TREND_PAGE_ID)
@@ -1386,10 +1389,13 @@ def _get_data(month: str, page_number: Optional[float]):
             # "Ready Reckoner" — appended right after Rake Detention, now
             # the true end of the report (nothing follows it). Each group
             # opens with its own blank separator/title page.
+            # Annexure-1: SAIL Mining at a Glance (separator + the leases page),
+            # then Annexure-2: one separator for the 5 ISPs and the 3 SSPs.
+            pages_config.append({"page": MINING_SEPARATOR_PAGE_ID})
+            pages_config.append({"page": MINING_PAGE_ID})
             pages_config.append({"page": READY_RECKONER_ISP_SEPARATOR_PAGE_ID})
             for _pg in READY_RECKONER_ISP_PAGES:
                 pages_config.append({"page": _pg})
-            pages_config.append({"page": READY_RECKONER_SSP_SEPARATOR_PAGE_ID})
             for _pg in READY_RECKONER_SSP_PAGES:
                 pages_config.append({"page": _pg})
             # "Annexure-3 : 5 ISPs Major Units Records" — appended right
@@ -1486,10 +1492,12 @@ def _get_data(month: str, page_number: Optional[float]):
                 page.update(_pc(month, pg, generate_rake_detention_summary, month))
             if pg == RAKE_DETENTION_TREND_PAGE_ID:
                 page.update(_pc(month, pg, generate_rake_detention_trend, month))
+            if pg == MINING_SEPARATOR_PAGE_ID:
+                page.update(generate_ready_reckoner_separator("MINING"))
+            if pg == MINING_PAGE_ID:
+                page.update(_pc(month, pg, generate_mining_leases))
             if pg == READY_RECKONER_ISP_SEPARATOR_PAGE_ID:
                 page.update(generate_ready_reckoner_separator("ISP"))
-            if pg == READY_RECKONER_SSP_SEPARATOR_PAGE_ID:
-                page.update(generate_ready_reckoner_separator("SSP"))
             if pg in READY_RECKONER_ISP_PAGES:
                 page.update(generate_ready_reckoner_page(*READY_RECKONER_ISP_PAGES[pg]))
             if pg in READY_RECKONER_SSP_PAGES:
@@ -1789,13 +1797,15 @@ def _enrich_pdf_pages_impl(request: PDFRequest) -> tuple[list, dict]:
     # "Ready Reckoner" sentinel pages: appended right after Rake Detention,
     # now the true end of the report — same unconditional-insert-if-missing
     # pattern as above. Each group opens with its own blank separator page.
+    if _is_full_export and not any(p.get("page") == MINING_SEPARATOR_PAGE_ID for p in _pages_list):
+        _pages_list.append({"page": MINING_SEPARATOR_PAGE_ID})
+    if _is_full_export and not any(p.get("page") == MINING_PAGE_ID for p in _pages_list):
+        _pages_list.append({"page": MINING_PAGE_ID})
     if _is_full_export and not any(p.get("page") == READY_RECKONER_ISP_SEPARATOR_PAGE_ID for p in _pages_list):
         _pages_list.append({"page": READY_RECKONER_ISP_SEPARATOR_PAGE_ID})
     if _is_full_export and not any(p.get("page") in READY_RECKONER_ISP_PAGES for p in _pages_list):
         for _pg in READY_RECKONER_ISP_PAGES:
             _pages_list.append({"page": _pg})
-    if _is_full_export and not any(p.get("page") == READY_RECKONER_SSP_SEPARATOR_PAGE_ID for p in _pages_list):
-        _pages_list.append({"page": READY_RECKONER_SSP_SEPARATOR_PAGE_ID})
     if _is_full_export and not any(p.get("page") in READY_RECKONER_SSP_PAGES for p in _pages_list):
         for _pg in READY_RECKONER_SSP_PAGES:
             _pages_list.append({"page": _pg})
@@ -1931,10 +1941,12 @@ def _enrich_pdf_pages_impl(request: PDFRequest) -> tuple[list, dict]:
             p.update(_pc(request.month, pg, generate_rake_detention_summary, request.month))
         if pg == RAKE_DETENTION_TREND_PAGE_ID:
             p.update(_pc(request.month, pg, generate_rake_detention_trend, request.month))
+        if pg == MINING_SEPARATOR_PAGE_ID:
+            p.update(generate_ready_reckoner_separator("MINING"))
+        if pg == MINING_PAGE_ID:
+            p.update(_pc(request.month, pg, generate_mining_leases))
         if pg == READY_RECKONER_ISP_SEPARATOR_PAGE_ID:
             p.update(generate_ready_reckoner_separator("ISP"))
-        if pg == READY_RECKONER_SSP_SEPARATOR_PAGE_ID:
-            p.update(generate_ready_reckoner_separator("SSP"))
         if pg in READY_RECKONER_ISP_PAGES:
             p.update(generate_ready_reckoner_page(*READY_RECKONER_ISP_PAGES[pg]))
         if pg in READY_RECKONER_SSP_PAGES:
