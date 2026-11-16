@@ -57,7 +57,7 @@ const KPI_ICONS = {
       <path d="M9.3 19 12 12.5 14.7 19" fill="none" stroke="currentColor" strokeWidth="1.3" />
     </>
   ),
-  'IRON ORE SALES DESPATCH': (
+  'IRON ORE DESPATCH FOR SALES': (
     <>
       <path d="M3 6h10v9H3z" fill="none" stroke="currentColor" strokeWidth="1.6" />
       <path d="M13 9h4l3 3.4V15h-7z" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
