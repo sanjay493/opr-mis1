@@ -92,7 +92,8 @@ TOTAL_RAKES_CODES = EXPORT_CODES + ("grand_total",)
 # its own blocks, so this key is never shown there).
 NOTE_KEY = "rail_loading_note"
 NOTE_TITLE = "Inward and Outward Rakes wrt Steel Plants"
-NOTE_LINES, NOTE_LINE_MAX = 3, 120     # what fits under the table on the printed page: 3 bullets of one line
+FOOTNOTE = "Inward and Outward Rake wrt Steel Plants"     # fixed, printed under the table
+NOTE_LINES, NOTE_LINE_MAX = 2, 120     # what fits under the table and the footnote on the printed page: 2 bullets of one line
 NOTE_MAX = NOTE_LINES * NOTE_LINE_MAX  # characters
 
 
@@ -216,4 +217,4 @@ def build_page(month: str) -> dict:
     return {"available": t["has_data"], "subtitle": f"{mlabel(month)} · FY {t['fy']}",
             "placeholder": None if t["has_data"] else f"Monthly rail loading for FY {t['fy']} not yet entered",
             "fy": t["fy"], "month_labels": t["month_labels"], "rows": t["rows"],
-            "note_title": NOTE_TITLE, "note": [ln for ln in get_note(month).split("\n") if ln]}
+            "footnote": FOOTNOTE, "note_title": NOTE_TITLE, "note": [ln for ln in get_note(month).split("\n") if ln]}

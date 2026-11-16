@@ -23,6 +23,7 @@
     .rll-note-title { font-weight: 700; font-size: 9.5pt; color: {{ colors.rail_log_section_title }}; margin: 6pt 0 3pt; }
     .rll-note { margin: 0; padding-left: 14pt; font-size: 8.5pt; line-height: 1.35; }
     .rll-note li { margin-bottom: 1.5pt; }
+    .rll-foot { font-size: 7pt; font-style: italic; color: {{ colors.text_secondary }}; margin-top: 3pt; }
     .rll-placeholder { text-align: center; font-size: 11pt; color: {{ colors.text_secondary }}; margin-top: 60mm; }
 </style>
 
@@ -61,6 +62,7 @@
     {% endfor %}
     </tbody>
 </table>
+<div class="rll-foot">{{ page.footnote }}</div>
 {% if page.note %}
 <div class="rll-note-title">{{ page.note_title }}</div>
 <ul class="rll-note">

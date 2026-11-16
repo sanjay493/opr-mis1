@@ -303,6 +303,7 @@ export function RailLogisticsLoadingTemplate({ data }) {
           })}
         </tbody>
       </table>
+      <div style={{ fontSize: '7pt', fontStyle: 'italic', color: C.secondary, marginTop: '3pt' }}>{data.footnote}</div>
       {data.note?.length > 0 && (
         <>
           <Sec title={data.note_title} />

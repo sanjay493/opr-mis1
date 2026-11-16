@@ -481,8 +481,8 @@ def test_api_too_long_note_saves_nothing(api):
     assert e.value.status_code == 422 and store == {}
 
 
-def test_note_over_three_lines_is_refused(notes):
-    with pytest.raises(ValueError, match="4 lines"):
-        rl.save_note("2026-10", "a\nb\nc\nd")
-    rl.save_note("2026-10", "a\nb\nc")
-    assert notes["2026-10"][rl.NOTE_KEY] == "a\nb\nc"
+def test_note_over_two_lines_is_refused(notes):
+    with pytest.raises(ValueError, match="3 lines"):
+        rl.save_note("2026-10", "a\nb\nc")
+    rl.save_note("2026-10", "a\nb")
+    assert notes["2026-10"][rl.NOTE_KEY] == "a\nb"
