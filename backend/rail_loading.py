@@ -57,7 +57,7 @@ ITEMS = (
     ("item", "out_coke", "Coke & coke fraction"),
     ("item", "out_sinter", "Sinter"),
     ("total", "outward_total", "TOTAL OUTWARD"),
-    ("grand", "grand_total", "GRAND TOTAL (inward + outward)"),
+    ("grand", "grand_total", "Total (inward+outward)"),
     ("per_day", "per_day", "Rakes per day"),
     ("group", "export", "EXPORT (memo, included in iron & steel)"),
     ("item", "export_port", "Export – through ports"),
@@ -123,8 +123,8 @@ def save_month(month: str, values: dict, user) -> int:
 def loading_table(rows: list, month: str) -> dict:
     """The page table from rail_loading_monthly rows ([{report_month,
     item_code, rakes}]): Apr..Mar of the report month's FY, months after the
-    report month blank, FYTD = the months present. FYTD rakes/day (total rows
-    only) divides by the days of the months that row has."""
+    report month blank, FYTD = the months present. FYTD rakes/day divides by
+    the days of the months that row has."""
     start = fy_start_year(month)
     months = fy_months(start)
     known = {(r["report_month"], r["item_code"]): r["rakes"] for r in rows
@@ -147,8 +147,7 @@ def loading_table(rows: list, month: str) -> dict:
             total = round(sum(v for _m, v in present), 1)
             if kind != "per_day":
                 row["fytd"] = total
-            if kind in ("total", "grand", "per_day"):
-                row["fytd_per_day"] = round(total / sum(days_in(m) for m, _v in present), 2)
+            row["fytd_per_day"] = round(total / sum(days_in(m) for m, _v in present), 2)
         out.append(row)
     return {"fy": fy_label(start), "month_labels": [mlabel(m)[:3] for m in months],
             "has_data": any(c in CODES for _m, c in known), "rows": out}

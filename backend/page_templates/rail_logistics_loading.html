@@ -2,8 +2,15 @@
 <style>
     .rll-subtitle { text-align: right; font-size: 9pt; font-style: italic; color: {{ colors.text_secondary }}; margin-bottom: 2pt; }
     .rll-table { border-collapse: collapse; width: 100%; table-layout: fixed; font-size: 8pt; line-height: 1.15; }
-    .rll-table th, .rll-table td { border: 1px solid {{ colors.border_dark }}; padding: 2.4pt 1pt; text-align: center; font-variant-numeric: tabular-nums; }
+    .rll-table th, .rll-table td { border: 1px solid {{ colors.border_light }}; padding: 2.4pt 1pt; text-align: center; font-variant-numeric: tabular-nums; }
     .rll-table th { font-weight: 700; }
+    {# Dark lines: the outer box, under the header, above and below each total row. In a collapsed
+       table the upper cell's border wins, so the row above a total carries the total's top line. #}
+    .rll-table th, .rll-total td, .rll-grand td, .rll-table tr:has(+ .rll-total) td, .rll-table tr:has(+ .rll-grand) td,
+    .rll-table tbody tr:last-child td { border-bottom-color: {{ colors.border_dark }}; }
+    .rll-table th, .rll-total td, .rll-grand td { border-top-color: {{ colors.border_dark }}; }
+    .rll-table tr > :first-child { border-left-color: {{ colors.border_dark }}; }
+    .rll-table tr > :last-child { border-right-color: {{ colors.border_dark }}; }
     .rll-table td.rll-l { text-align: left; padding-left: 9pt; white-space: nowrap; }
     .rll-act { background: {{ colors.perf_act_bg }}; color: {{ colors.perf_act_text }}; }
     .rll-table td.rll-l2 { padding-left: 18pt; }
@@ -13,7 +20,6 @@
     .rll-total td.rll-l, .rll-grand td.rll-l { padding-left: 3pt; }
     .rll-grand td { font-weight: 700; background: {{ colors.perf_app_bg }}; color: {{ colors.perf_app_text }}; }
     .rll-perday td.rll-n { font-size: 7.5pt; }
-    .rll-note { font-size: 7.5pt; font-style: italic; color: {{ colors.text_secondary }}; margin-top: 4pt; }
     .rll-placeholder { text-align: center; font-size: 11pt; color: {{ colors.text_secondary }}; margin-top: 60mm; }
 </style>
 
@@ -36,7 +42,7 @@
         <tr class="rll-grand rll-perday">
             <td class="rll-l">{{ r.label }}</td>
             {% for v in r.months %}<td class="rll-n">{{ v|rl_fmt(2) }}</td>{% endfor %}
-            <td>ss</td>
+            <td></td>
             <td>{{ r.fytd_per_day|rl_fmt(2) }}</td>
         </tr>
         {% else %}
@@ -45,11 +51,10 @@
             <td class="rll-l{% if r.kind == 'subitem' %} rll-l2{% endif %}">{{ r.label }}</td>
             {% for v in r.months %}<td>{{ v|rl_rakes }}</td>{% endfor %}
             <td{% if plain %} class="rll-act"{% endif %}>{{ r.fytd|rl_rakes }}</td>
-            <td>{% if not plain %}{{ r.fytd_per_day|rl_fmt(2) }}{% endif %}</td>
+            <td>{{ r.fytd_per_day|rl_fmt(2) }}</td>
         </tr>
         {% endif %}
     {% endfor %}
     </tbody>
 </table>
-<!-- <div class="rll-note">Rakes, as reported in the Rail Movement Cell's monthly highlights. Totals are as reported, not the sum of the rows above them: imported limestone is counted under both Flux and Ports. OGOM and JGOM are counted from the mines' rake record; each "Others" is its total less the rows named above it.</div> -->
 {% endif %}

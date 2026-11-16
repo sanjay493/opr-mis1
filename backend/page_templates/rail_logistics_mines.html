@@ -20,7 +20,6 @@
     .rlm-group-cell { font-weight: 700; vertical-align: middle; }
     .rlm-pos { color: {{ colors.rail_log_pos_text }}; }
     .rlm-neg { color: {{ colors.rail_log_neg_text }}; }
-    .rlm-note { font-size: 7.5pt; font-style: italic; color: {{ colors.text_secondary }}; margin-top: 4pt; }
     .rlm-placeholder { text-align: center; font-size: 11pt; color: {{ colors.text_secondary }}; margin-top: 60mm; }
 </style>
 
@@ -90,5 +89,4 @@
     {% endfor %}
     </tbody>
 </table>
-<div class="rlm-note">From the mines' rake record, one rake per entry, whatever the destination (plants, sale, pellet fines to conversion agents). EGOM = OGOM + JGOM. BOXN includes BOXNEL.{% if page.coverage_note %} {{ page.coverage_note }}{% endif %}</div>
 {% endif %}

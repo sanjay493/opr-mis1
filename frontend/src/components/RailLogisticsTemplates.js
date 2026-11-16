@@ -147,9 +147,7 @@ export function RailLogisticsSummaryTemplate({ data }) {
 export function RailLogisticsHistoryTemplate({ data }) {
   if (!data?.available) return <div><Head data={data || {}} /><Placeholder data={data || {}} /></div>;
   const c = cell('0.6pt 2pt');
-  const l = { ...c, textAlign: 'left', fontWeight: 700 };
   const span = (plant) => data.trend.filter((r) => r.plant === plant).length;
-  const plants = data.export_plants;
   return (
     <div>
       <Head data={data} />
@@ -171,38 +169,6 @@ export function RailLogisticsHistoryTemplate({ data }) {
           })}
         </tbody>
       </table>
-
-      <Sec title="Export" sub={`export rakes in ${data.month_label}, programme / actual, to Nepal and through ports`} />
-      {data.export.length === 0 ? (
-        <div style={{ fontSize: '8pt', fontStyle: 'italic', color: C.secondary }}>No export programme for {data.month_label}.</div>
-      ) : (
-        <table style={table('7.5pt')}>
-          <colgroup><col style={{ width: '19%' }} />{Array.from({ length: plants.length * 2 + 3 }, (_, i) => <col key={i} />)}</colgroup>
-          <thead>
-            <tr><th style={c} rowSpan={2}>Destination</th>{plants.map((p) => <th key={p} style={c} colSpan={2}>{p}</th>)}<th style={c} colSpan={3}>SAIL</th></tr>
-            <tr>{plants.map((p) => (
-              <React.Fragment key={p}><th style={{ ...c, ...plan }}>Prog</th><th style={{ ...c, ...act }}>Act</th></React.Fragment>
-            ))}<th style={{ ...c, ...plan }}>Prog</th><th style={{ ...c, ...act }}>Act</th><th style={c}>%</th></tr>
-          </thead>
-          <tbody>
-            {data.export.map((r) => (
-              <tr key={r.destination} style={r.is_total ? total : undefined}>
-                <td style={l}>{r.destination}</td>
-                {plants.map((p) => {
-                  const v = r.plants[p];
-                  return (
-                    <React.Fragment key={p}>
-                      <td style={{ ...c, ...plan }}>{v ? fmt(v.prog) : '–'}</td><td style={{ ...c, ...act }}>{v ? fmt(v.actual) : '–'}</td>
-                    </React.Fragment>
-                  );
-                })}
-                <td style={{ ...c, ...plan }}>{fmt(r.prog)}</td><td style={{ ...c, ...act }}>{fmt(r.actual)}</td>
-                <td style={c}>{r.fulfilment == null ? '–' : <span style={{ color: r.actual >= r.prog ? C.pos : C.neg }}>{fmt(r.fulfilment)}%</span>}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
     </div>
   );
 }
@@ -329,15 +295,12 @@ export function RailLogisticsLoadingTemplate({ data }) {
                 <td style={label(r.kind)}>{r.label}</td>
                 {r.months.map((v, k) => <td key={k} style={perDay ? { ...c, fontSize: '7.5pt' } : c}>{perDay ? fmt(v, 2) : fmtRakes(v)}</td>)}
                 <td style={plain ? { ...c, ...act } : c}>{perDay ? '' : fmtRakes(r.fytd)}</td>
-                <td style={c}>{plain ? '' : fmt(r.fytd_per_day, 2)}</td>
+                <td style={c}>{fmt(r.fytd_per_day, 2)}</td>
               </tr>
             );
           })}
         </tbody>
       </table>
-      <div style={{ fontSize: '7.5pt', fontStyle: 'italic', color: C.secondary, marginTop: '4pt' }}>
-        Rakes, as reported in the Rail Movement Cell&apos;s monthly highlights. Totals are as reported, not the sum of the rows above them: imported limestone is counted under both Flux and Ports. OGOM and JGOM are counted from the mines&apos; rake record; each &ldquo;Others&rdquo; is its total less the rows named above it.
-      </div>
     </div>
   );
 }
@@ -432,9 +395,6 @@ export function RailLogisticsMinesTemplate({ data }) {
           ))}
         </tbody>
       </table>
-      <div style={{ fontSize: '7.5pt', fontStyle: 'italic', color: C.secondary, marginTop: '4pt' }}>
-        From the mines&apos; rake record, one rake per entry, whatever the destination (plants, sale, pellet fines to conversion agents). EGOM = OGOM + JGOM. BOXN includes BOXNEL.{data.coverage_note ? ` ${data.coverage_note}` : ''}
-      </div>
     </div>
   );
 }

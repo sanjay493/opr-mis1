@@ -44,24 +44,6 @@ def test_trend_rows_flatten():
     assert rows[1]["fy"] == "2025-26" and rows[1]["total"] == 24
 
 
-def test_export_rows_empty():
-    zero = [{"destination": "GRAND TOTAL", "prog": 0, "actual": 0, "is_total": True}]
-    assert rl.export_rows(zero) == []
-    assert rl.export_rows([]) == []
-
-
-def test_export_rows_nepal_port_total_only():
-    rows = rl.rdr.export_watch([
-        {"destination": "BIRGUNJ", "dest_group": "NEPAL", "plant_code": "BSP", "prog": 3, "actual": 2},
-        {"destination": "JOGBANI", "dest_group": "NEPAL", "plant_code": "DSP", "prog": 1, "actual": 2},
-        {"destination": "VIZAG", "dest_group": "PORT", "plant_code": "BSP", "prog": 4, "actual": 0}])
-    out = rl.export_rows(rows)
-    assert [(r["destination"], r["prog"], r["actual"], r["is_total"]) for r in out] == [
-        ("Nepal", 4, 4, False), ("Port", 4, 0, False), ("Total", 8, 4, True)]
-    assert out[0]["plants"] == {"BSP": {"prog": 3, "actual": 2}, "DSP": {"prog": 1, "actual": 2}}
-    assert out[2]["fulfilment"] == 50.0
-
-
 def test_unavailable_placeholder(monkeypatch):
     monkeypatch.setattr(rl.rdr, "build_report", lambda m: {"report_month": m, "available": False, "months": []})
     for part in ("summary", "history", "wagon"):

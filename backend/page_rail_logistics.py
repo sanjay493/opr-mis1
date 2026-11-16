@@ -16,8 +16,7 @@ the steel rakes despatched from the plants:
   40.1 Summary              — headline cards, key points, plan attainment (no
                               Status column; the attainment cell is tinted
                               instead), run-rate
-  40.2 Performance history  — seven-year monthly trend, export programme vs
-                              actual (Nepal / Port / Total)
+  40.2 Performance history  — seven-year monthly trend
   40.3 Wagon types          — wagon-type mix per plant, FY rakes by wagon type
 
 Slag, coke and sinter are on 40.05 only; nothing is printed twice.
@@ -119,19 +118,6 @@ def mines_page(month: str) -> dict:
             "blocks": wagon_type_blocks(r["types"], r["fy_months"], iron_ore_rakes.GROUPS, iron_ore_rakes.TOTAL)}
 
 
-_EXPORT_LABELS = {"TOTAL NEPAL": "Nepal", "TOTAL PORT": "Port", "GRAND TOTAL": "Total"}
-
-
-def export_rows(export: list) -> list:
-    """The export table cut down to Nepal, Port and Total (the report's group
-    totals; the single destinations are left to the web report), or [] when
-    the month has no programme or actual at all."""
-    if not any(r.get("prog") or r.get("actual") for r in export):
-        return []
-    return [{**r, "destination": _EXPORT_LABELS[r["destination"]], "is_total": r["destination"] == "GRAND TOTAL"}
-            for r in export if r.get("is_total") and r["destination"] in _EXPORT_LABELS]
-
-
 def generate_rail_logistics(month: str, part: str) -> dict:
     if part == "loading":
         return {"type": "rail_logistics_loading", "title": _TITLES[part], **rail_loading.build_page(month)}
@@ -155,8 +141,6 @@ def generate_rail_logistics(month: str, part: str) -> dict:
         page.update(
             trend=trend_rows(d["trend"]),
             month_labels=month_labels(d["fy_months"]),
-            export=export_rows(d["export"]),
-            export_plants=PLANTS,
         )
     else:
         page.update(

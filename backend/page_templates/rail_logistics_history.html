@@ -6,16 +6,10 @@
     .rlh-table { border-collapse: collapse; width: 100%; table-layout: fixed; font-size: 7.5pt; line-height: 1.1; }
     .rlh-table th, .rlh-table td { border: 1px solid {{ colors.border_dark }}; padding: 0.6pt 2pt; text-align: center; font-variant-numeric: tabular-nums; }
     .rlh-table th { font-weight: 700; }
-    .rlh-table td.rlh-l { text-align: left; font-weight: 700; }
-    .rlh-total td { font-weight: 700; background: {{ colors.rail_log_total_row_bg }}; }
     .rlh-act { background: {{ colors.perf_act_bg }}; color: {{ colors.perf_act_text }}; }
-    .rlh-plan { background: {{ colors.perf_app_bg }}; color: {{ colors.perf_app_text }}; }
     .rlh-current td { font-weight: 700; }
     .rlh-plant-first td { border-top: 1px solid {{ colors.rail_log_plant_rule }}; }
     .rlh-plant-cell { font-weight: 700; vertical-align: middle; }
-    .rlh-pos { color: {{ colors.rail_log_pos_text }}; }
-    .rlh-neg { color: {{ colors.rail_log_neg_text }}; }
-    .rlh-none { font-size: 8pt; font-style: italic; color: {{ colors.text_secondary }}; }
     .rlh-placeholder { text-align: center; font-size: 11pt; color: {{ colors.text_secondary }}; margin-top: 60mm; }
 </style>
 
@@ -40,29 +34,4 @@
     {% endfor %}
     </tbody>
 </table>
-
-<div class="rlh-sec">Export <span class="rlh-sub">— export rakes in {{ page.month_label }}, programme / actual, to Nepal and through ports</span></div>
-{% if not page.export %}
-<div class="rlh-none">No export programme for {{ page.month_label }}.</div>
-{% else %}
-<table class="rlh-table">
-    <colgroup><col style="width:19%"/>{% for _ in range(page.export_plants|length * 2 + 3) %}<col/>{% endfor %}</colgroup>
-    <thead>
-        <tr><th rowspan="2">Destination</th>{% for p in page.export_plants %}<th colspan="2">{{ p }}</th>{% endfor %}<th colspan="3">SAIL</th></tr>
-        <tr>{% for p in page.export_plants %}<th class="rlh-plan">Prog</th><th class="rlh-act">Act</th>{% endfor %}<th class="rlh-plan">Prog</th><th class="rlh-act">Act</th><th>%</th></tr>
-    </thead>
-    <tbody>
-    {% for r in page.export %}
-        <tr{% if r.is_total %} class="rlh-total"{% endif %}>
-            <td class="rlh-l">{{ r.destination }}</td>
-            {% for p in page.export_plants %}{% set v = r.plants.get(p) %}
-            <td class="rlh-plan">{{ v.prog|rl_fmt if v else '–' }}</td><td class="rlh-act">{{ v.actual|rl_fmt if v else '–' }}</td>
-            {% endfor %}
-            <td class="rlh-plan">{{ r.prog|rl_fmt }}</td><td class="rlh-act">{{ r.actual|rl_fmt }}</td>
-            <td>{% if r.fulfilment is not none %}<span class="{{ 'rlh-pos' if r.actual >= r.prog else 'rlh-neg' }}">{{ r.fulfilment|rl_fmt }}%</span>{% else %}–{% endif %}</td>
-        </tr>
-    {% endfor %}
-    </tbody>
-</table>
-{% endif %}
 {% endif %}

@@ -123,7 +123,7 @@ def test_sub_heading_rows_carry_no_figures():
     by = {r["code"]: r for r in t["rows"]}
     assert by["ore"]["months"] == [None] * 12 and by["ore"]["fytd"] is None and by["ore"]["fytd_per_day"] is None
     assert by["ore_ogom"]["kind"] == "subitem" and by["ore_ogom"]["fytd"] == 400
-    assert by["ore_ogom"]["fytd_per_day"] is None                      # per day on total rows only
+    assert by["ore_ogom"]["fytd_per_day"] == round(400 / 30, 2)       # per day on every row with figures
     assert by["flux_limestone"]["kind"] == "total" and by["flux_limestone"]["fytd_per_day"] == 4.0
 
 
@@ -264,7 +264,7 @@ def test_fytd_and_per_day():
     assert t["fy"] == "2026-27" and t["has_data"] and t["month_labels"][0] == "Apr" and len(t["month_labels"]) == 12
     assert by["grand_total"]["months"][:3] == [2239, 2302, None] and by["grand_total"]["fytd"] == 4541
     assert by["grand_total"]["fytd_per_day"] == round(4541 / 61, 2)
-    assert by["coal_coking"]["fytd"] == 96.8 and by["coal_coking"]["fytd_per_day"] is None
+    assert by["coal_coking"]["fytd"] == 96.8 and by["coal_coking"]["fytd_per_day"] == round(96.8 / 61, 2)
     assert by["per_day"]["months"][:3] == [74.63, 74.26, None] and by["per_day"]["fytd_per_day"] == round(4541 / 61, 2)
     assert by["ore_total"]["months"] == [None] * 12 and by["ore_total"]["fytd"] is None
     assert "bogus" not in by and [r["code"] for r in t["rows"] if r["kind"] not in ("group", "sub")][:1] == ["ore_ogom"]
