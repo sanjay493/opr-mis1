@@ -88,7 +88,11 @@ const PAGE_LABELS = {
   // separate pages per plant with no separator until 2026-09-21). Ids
   // 1041-1058, clear of Rake Detention's own 1026-1029/1038-1040 — see
   // backend/page_ready_reckoner.py.
-  1041: 'Annexure-1 : 5 ISPs Ready Reckoner',
+  // Annexure-1 is SAIL Mining at a Glance (1075 separator, 1076 the leases
+  // page; backend/page_mining_leases.py), printed right before 1041.
+  1075: 'Annexure-1 : SAIL Mining at a Glance',
+  1076: 'SAIL Mining at a Glance – Details of SAIL Mining Leases',
+  1041: 'Annexure-2 : 5 ISPs & 3 SSPs Ready Reckoner',
   1042: 'Ready Reckoner – Bhilai Steel Plant – Process Flow',
   1043: 'Ready Reckoner – Bhilai Steel Plant – Unit-wise Capacity & Product Mix',
   1044: 'Ready Reckoner – Durgapur Steel Plant – Process Flow',
@@ -99,7 +103,6 @@ const PAGE_LABELS = {
   1049: 'Ready Reckoner – Bokaro Steel Plant – Unit-wise Capacity & Product Mix',
   1050: 'Ready Reckoner – IISCO Steel Plant – Process Flow',
   1051: 'Ready Reckoner – IISCO Steel Plant – Unit-wise Capacity & Product Mix',
-  1052: 'Annexure-2 : 3 SSPs Ready Reckoner',
   1053: 'Ready Reckoner – Alloy Steels Plant – Process Flow',
   1054: 'Ready Reckoner – Alloy Steels Plant – Unit-wise Capacity & Product Mix',
   1055: 'Ready Reckoner – Salem Steel Plant – Process Flow',
@@ -152,7 +155,7 @@ const PAGE_LABELS = {
 // print right after 1027 (DSP's detail page) and before 1028 (summary),
 // matching main.py's DETAIL_PAGES iteration order — see
 // page_rake_detention.py.
-const _PAGE_SORT_POS = { 1024: 24.5, 18.5: 24.55, 1025: 24.6, 1038: 1027.1, 1039: 1027.2, 1040: 1027.3 };
+const _PAGE_SORT_POS = { 1024: 24.5, 18.5: 24.55, 1025: 24.6, 1038: 1027.1, 1039: 1027.2, 1040: 1027.3, 1075: 1040.9, 1076: 1040.95 };
 const _pageSortPos = (n) => _PAGE_SORT_POS[n] ?? n;
 const ALL_PAGE_NUMBERS = Object.keys(PAGE_LABELS).map(Number).sort((a, b) => _pageSortPos(a) - _pageSortPos(b));
 

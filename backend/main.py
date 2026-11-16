@@ -1648,6 +1648,8 @@ def _enrich_pdf_pages_impl(request: PDFRequest) -> tuple[list, dict]:
     # signal from the caller (the report page sets it only when every page
     # is selected — see PDFRequest.full_export) instead of being inferred.
     _is_full_export = bool(request.full_export)
+    if _is_full_export:     # Annexure-2 has one separator now; a page list from before it still names the SSP one
+        _pages_list = [p for p in _pages_list if p.get("page") != READY_RECKONER_SSP_SEPARATOR_PAGE_ID]
     # Page 24 (SAIL) and the trend/performance-analysis sentinel page: ensure
     # both are present even for requests built from a page list saved before
     # either existed in its current form.

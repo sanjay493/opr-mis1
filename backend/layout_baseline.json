@@ -43,11 +43,12 @@
   "page_templates/key_highlights.html": "1b6c33c6e34ee58b35a9388f07f9e3aed6d740064459ee4cbb562bdc4d79dc95",
   "page_templates/key_parameters.html": "35f98784d4a78fb2b42ef6ef753ceddcda84f2d839092649f2ecb32e2acb49c7",
   "page_templates/macro_indicators.html": "998a7b1793ec49028c28c95eb36525747bae6534b982132ca66b9302ce8f31ca",
-  "page_templates/main.html": "837c6fd9ebce1e1260317b6448d2bdf433cc2c28a5d9eec84c910e26c0538ccc",
+  "page_templates/main.html": "2b4700650a9774a986bb21ae1af4f38915e206e18b52abda36af26fe1bd9836f",
   "page_templates/major_unit_records_plant.html": "ab317baf0ce1269724623b4027f24af1338ce399648e12bd586450e61f4bef0d",
   "page_templates/major_unit_records_separator.html": "4db377b8e3eee801a001f36680654547b457fde357afc197b5b2b26110ea429b",
   "page_templates/market_prices.html": "c04c059254fbb0667ed701c0b940dd292d4585192bc878711faf204046646539",
   "page_templates/mines_performance.html": "eaac51e8a74f1ee225b1ca227b9c95a1c90dc13cceaff183675f3743d9d257cf",
+  "page_templates/mining_leases.html": "d4e001c4209c2dca19e92e6bb58c8de118896e63316a9da63bb085adce8d36ff",
   "page_templates/opening_stock.html": "59433a55ffeda2f3a23880787a21c8d94af9af387e55c4f0dfcf4b87310871b7",
   "page_templates/page4_table.html": "f97d47ebdd1a9554fdd504e0ca6abea10baf5934651b7fae7e34abbd544405f0",
   "page_templates/performance_summary_table.html": "32580bfab0749c87c8ab55256e53e2f70c7ffaf640e947a56c5e412aeb5ec4e9",
@@ -80,7 +81,7 @@
   "pdf.py": "38d80e05464558a08d31715a29095e9fe8c57474db0a008443669f98e51c18e0"
  },
  "reference_render": {
-  "month": "2026-10",
+  "month": "2026-08",
   "section_pages": {
    "1024": 1,
    "1025": 1,
@@ -102,7 +103,6 @@
    "1049": 1,
    "1050": 1,
    "1051": 1,
-   "1052": 1,
    "1053": 1,
    "1054": 1,
    "1055": 1,
@@ -120,6 +120,8 @@
    "1072": 1,
    "1073": 1,
    "1074": 1,
+   "1075": 1,
+   "1076": 1,
    "13": 1,
    "14": 1,
    "15": 1,
@@ -179,6 +181,6 @@
    "6.1": 7,
    "7": 12
   },
-  "total_pages": 114
+  "total_pages": 115
  }
 }

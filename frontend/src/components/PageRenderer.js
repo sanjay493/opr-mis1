@@ -43,6 +43,7 @@ import MinesPerformanceTemplate from './MinesPerformanceTemplate';
 import SpecialSteelDonutTemplate from './SpecialSteelDonutTemplate';
 import SpecialSteelTrendTemplate from './SpecialSteelTrendTemplate';
 import { RakeDetentionDetailTemplate, RakeDetentionSummaryTemplate, RakeDetentionTrendTemplate } from './RakeDetentionTemplates';
+import MiningLeasesTemplate from './MiningLeasesTemplate';
 import { RailLogisticsLoadingTemplate, RailLogisticsMinesTemplate, RailLogisticsSummaryTemplate, RailLogisticsHistoryTemplate, RailLogisticsWagonTemplate } from './RailLogisticsTemplates';
 
 // Page types whose template draws its own title, so the generic
@@ -59,6 +60,7 @@ const SELF_TITLED_TYPES = new Set([
   'steel_sales_performance', 'mines_performance', 'special_steel_donut', 'special_steel_trend',
   'rake_detention_detail', 'rake_detention_summary', 'rake_detention_trend',
   'rail_logistics_loading', 'rail_logistics_mines', 'rail_logistics_summary', 'rail_logistics_history', 'rail_logistics_wagon',
+  'mining_leases',
 ]);
 
 function IndexTemplate({ data, onCellChange }) {
@@ -212,6 +214,8 @@ export default function PageRenderer({ pageData, onCellChange, selectedMonth, to
         return <MarketPricesTemplate data={pageData} />;
       case 'macro_indicators':
         return <MacroIndicatorsTemplate data={pageData} />;
+      case 'mining_leases':
+        return <MiningLeasesTemplate data={pageData} />;
       case 'ready_reckoner':
         return <ReadyReckonerTemplate data={pageData} />;
       case 'ready_reckoner_separator':
