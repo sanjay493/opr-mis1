@@ -724,7 +724,7 @@ def sail_rows(cur, months):
 
 _LEASE_TEXT = (("s_no", 8), ("mine", 160), ("state", 160), ("lease", 160), ("mineral", 160),
                ("area", 160), ("reserves", 160), ("status", 255))
-_LEASE_SPANS = ("mine_span", "state_span", "mineral_span", "reserves_span", "status_span")
+_LEASE_SPANS = ("mine_span", "state_span", "lease_span", "mineral_span", "area_span", "reserves_span", "status_span")
 _LEASE_COLS = ("id", "sort_order") + tuple(c for c, _n in _LEASE_TEXT) + _LEASE_SPANS
 
 

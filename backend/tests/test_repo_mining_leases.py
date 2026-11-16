@@ -11,7 +11,8 @@ def _n():
 def _row(**kw):
     base = {"s_no": "1", "mine": "Kiriburu Iron Ore Mine", "state": "Jharkhand", "lease": "Amalgamated lease- I, II & III",
             "mineral": "Iron Ore", "area": "2897.499", "reserves": "112", "status": "Operational",
-            "mine_span": 1, "state_span": 1, "mineral_span": 1, "reserves_span": 1, "status_span": 1}
+            "mine_span": 1, "state_span": 1, "lease_span": 1, "mineral_span": 1, "area_span": 1,
+            "reserves_span": 1, "status_span": 1}
     base.update(kw)
     return base
 
