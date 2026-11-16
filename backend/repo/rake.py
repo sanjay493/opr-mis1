@@ -516,3 +516,37 @@ def save_iron_ore_rakes(rows: List[dict], months: List[str], user: Optional[str]
         conn.close()
     activity_context.record("iron_ore_rakes", None, {"rows": len(rows), "deleted": deleted, "months": months})
     return {"rows": len(rows), "deleted": deleted, "months": months}
+
+
+def upsert_iron_ore_rakes(rows: List[dict], user: Optional[str]) -> dict:
+    """Insert or update just these monthly rows ([{report_month, mine_code,
+    wagon_code, dest, lump_rakes, fines_rakes}], keyed by month / mine / wagon /
+    dest). Unlike save_iron_ore_rakes the rest of each month is left as it is:
+    for a hand-loaded history (CGOM before the rake record starts). -> {rows}."""
+    if not rows:
+        raise ValueError("no iron ore rakes to save")
+    _keys.fits("updated_by", user, 64)
+    for r in rows:
+        _keys.fits("mine_code", r["mine_code"], 8, nullable=False)
+        _keys.fits("wagon_code", r["wagon_code"], 4, nullable=False)
+        _keys.fits("dest", r["dest"], 8, nullable=False)
+    months = sorted({r["report_month"] for r in rows})
+    conn = connect()
+    try:
+        cur = conn.cursor()
+        _ver.bump(cur)
+        for month in months:
+            _keys.check_month(month)
+            _keys.ensure_month(cur, month, bump=False)
+        cur.executemany(
+            "INSERT INTO iron_ore_rake (report_month, mine_code, wagon_code, dest, lump_rakes, fines_rakes,"
+            " updated_at, updated_by) VALUES (%s, %s, %s, %s, %s, %s, NOW(), %s)"
+            " ON DUPLICATE KEY UPDATE lump_rakes = VALUES(lump_rakes), fines_rakes = VALUES(fines_rakes),"
+            " updated_at = NOW(), updated_by = VALUES(updated_by)",
+            [(r["report_month"], r["mine_code"], r["wagon_code"], r["dest"], r["lump_rakes"], r["fines_rakes"], user)
+             for r in rows])
+        conn.commit()
+    finally:
+        conn.close()
+    activity_context.record("iron_ore_rakes", None, {"rows": len(rows), "months": months})
+    return {"rows": len(rows)}
