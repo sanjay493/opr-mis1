@@ -151,10 +151,10 @@ export function RailLogisticsHistoryTemplate({ data }) {
   return (
     <div>
       <Head data={data} />
-      <Sec title="Seven-year monthly trend" sub="steel rakes despatched per month, current FY first" />
+      <Sec title="Seven-year monthly trend" sub="steel rakes despatched per day, current FY first" />
       <table style={table('7.5pt')}>
         <colgroup><col style={{ width: '7%' }} /><col style={{ width: '9%' }} />{data.month_labels.map((m) => <col key={m} />)}<col style={{ width: '8%' }} /></colgroup>
-        <thead><tr><th style={c}>Plant</th><th style={c}>FY</th>{data.month_labels.map((m) => <th key={m} style={c}>{m}</th>)}<th style={c}>Total</th></tr></thead>
+        <thead><tr><th style={c}>Plant</th><th style={c}>FY</th>{data.month_labels.map((m) => <th key={m} style={c}>{m}</th>)}<th style={c}>FY rakes / day</th></tr></thead>
         <tbody>
           {data.trend.map((r) => {
             const td = r.first_of_plant ? { ...c, borderTop: `1px solid ${C.plantRule}`, fontWeight: 700 } : c;
@@ -162,8 +162,8 @@ export function RailLogisticsHistoryTemplate({ data }) {
               <tr key={`${r.plant}-${r.fy}`}>
                 {r.first_of_plant && <td style={{ ...td, verticalAlign: 'middle' }} rowSpan={span(r.plant)}>{r.plant}</td>}
                 <td style={td}>{r.fy}</td>
-                {r.months.map((v, i) => <td key={i} style={td}>{fmt(v)}</td>)}
-                <td style={{ ...td, ...act }}>{fmt(r.total)}</td>
+                {r.months.map((v, i) => <td key={i} style={td}>{fmt(v, 2)}</td>)}
+                <td style={{ ...td, ...act }}>{fmt(r.total, 2)}</td>
               </tr>
             );
           })}
@@ -267,8 +267,8 @@ export function RailLogisticsLoadingTemplate({ data }) {
         </colgroup>
         <thead>
           <tr>
-            <th style={c}>Rakes loaded</th>{months.map((m) => <th key={m} style={c}>{m}</th>)}
-            <th style={{ ...c, ...act }}>FYTD</th><th style={c}>FYTD rakes / day</th>
+            <th style={c}>Rakes loaded per day</th>{months.map((m) => <th key={m} style={c}>{m}</th>)}
+            <th style={{ ...c, ...act }}>FYTD rakes / day</th><th style={c}>Cum. total rakes</th>
           </tr>
         </thead>
         <tbody>
@@ -288,14 +288,16 @@ export function RailLogisticsLoadingTemplate({ data }) {
               );
             }
             const perDay = r.kind === 'per_day';
+            const exportRow = r.code.startsWith('export_');   // memo rows stay in total rakes
+            const pd = (v) => (perDay || !exportRow ? fmt(v, 2) : fmtRakes(v));
             const plain = r.kind === 'item' || r.kind === 'subitem';
             const row = r.kind === 'total' ? total : (r.kind === 'grand' || perDay) ? grand : undefined;
             return (
               <tr key={r.code} style={row}>
                 <td style={label(r.kind)}>{r.label}</td>
-                {r.months.map((v, k) => <td key={k} style={perDay ? { ...c, fontSize: '7.5pt' } : c}>{perDay ? fmt(v, 2) : fmtRakes(v)}</td>)}
-                <td style={plain ? { ...c, ...act } : c}>{perDay ? '' : fmtRakes(r.fytd)}</td>
-                <td style={c}>{fmt(r.fytd_per_day, 2)}</td>
+                {r.pd_months.map((v, k) => <td key={k} style={perDay ? { ...c, fontSize: '7.5pt' } : c}>{pd(v)}</td>)}
+                <td style={plain ? { ...c, ...act } : c}>{pd(r.pd_fytd)}</td>
+                <td style={c}>{perDay ? '' : fmtRakes(r.cum_total)}</td>
               </tr>
             );
           })}
@@ -324,10 +326,10 @@ export function RailLogisticsMinesTemplate({ data }) {
         </>
       )}
 
-      <Sec title="Seven-year monthly trend" sub="iron ore rakes loaded per month, current FY first" />
+      <Sec title="Seven-year monthly trend" sub="iron ore rakes loaded per day, current FY first" />
       <table style={table('7.5pt')}>
         <colgroup><col style={{ width: '7%' }} /><col style={{ width: '9%' }} />{months.map((m) => <col key={m} />)}<col style={{ width: '8%' }} /></colgroup>
-        <thead><tr><th style={c}>Mines</th><th style={c}>FY</th>{months.map((m) => <th key={m} style={c}>{m}</th>)}<th style={c}>Total</th></tr></thead>
+        <thead><tr><th style={c}>Mines</th><th style={c}>FY</th>{months.map((m) => <th key={m} style={c}>{m}</th>)}<th style={c}>FY rakes / day</th></tr></thead>
         <tbody>
           {trend.map((r) => {
             const td = r.first_of_plant ? { ...c, borderTop: `1px solid ${C.plantRule}`, fontWeight: 700 } : c;
@@ -335,8 +337,8 @@ export function RailLogisticsMinesTemplate({ data }) {
               <tr key={`${r.plant}-${r.fy}`}>
                 {r.first_of_plant && <td style={{ ...td, verticalAlign: 'middle' }} rowSpan={span(r.plant)}>{r.plant}</td>}
                 <td style={td}>{r.fy}</td>
-                {r.months.map((v, i) => <td key={i} style={td}>{fmt(v)}</td>)}
-                <td style={{ ...td, ...act }}>{fmt(r.total)}</td>
+                {r.months.map((v, i) => <td key={i} style={td}>{fmt(v, 2)}</td>)}
+                <td style={{ ...td, ...act }}>{fmt(r.total, 2)}</td>
               </tr>
             );
           })}
@@ -368,10 +370,10 @@ export function RailLogisticsMinesTemplate({ data }) {
         </tbody>
       </table>
 
-      <Sec title={`Rakes by wagon type, FY ${data.fy}`} sub="mines group-wise, month by month" />
+      <Sec title={`Rakes by wagon type, FY ${data.fy}`} sub="mines group-wise, rakes per day, month by month" />
       <table style={table('7.5pt')}>
         <colgroup><col style={{ width: '7%' }} /><col style={{ width: '17%' }} />{months.map((m) => <col key={m} />)}<col style={{ width: '8%' }} /></colgroup>
-        <thead><tr><th style={c}>Mines</th><th style={c}>Wagon type</th>{months.map((m) => <th key={m} style={c}>{m}</th>)}<th style={{ ...c, ...act }}>FYTD</th></tr></thead>
+        <thead><tr><th style={c}>Mines</th><th style={c}>Wagon type</th>{months.map((m) => <th key={m} style={c}>{m}</th>)}<th style={{ ...c, ...act }}>FYTD / day</th></tr></thead>
         <tbody>
           {blocks.map((b) => (
             <React.Fragment key={b.plant}>
@@ -381,15 +383,15 @@ export function RailLogisticsMinesTemplate({ data }) {
                   <tr key={r.type}>
                     {i === 0 && <td style={{ ...td, fontWeight: 700, verticalAlign: 'middle' }} rowSpan={b.rows.length + 1}>{b.plant}</td>}
                     <td style={{ ...td, textAlign: 'left', fontWeight: 700, whiteSpace: 'nowrap' }}>{r.type}</td>
-                    {r.months.map((v, k) => <td key={k} style={td}>{fmt(v)}</td>)}
-                    <td style={{ ...td, ...act }}>{fmt(r.fytd)}</td>
+                    {r.months.map((v, k) => <td key={k} style={td}>{fmt(v, 2)}</td>)}
+                    <td style={{ ...td, ...act }}>{fmt(r.fytd, 2)}</td>
                   </tr>
                 );
               })}
               <tr style={total}>
                 <td style={l}>Total</td>
-                {b.total.months.map((v, k) => <td key={k} style={c}>{fmt(v)}</td>)}
-                <td style={c}>{fmt(b.total.fytd)}</td>
+                {b.total.months.map((v, k) => <td key={k} style={c}>{fmt(v, 2)}</td>)}
+                <td style={c}>{fmt(b.total.fytd, 2)}</td>
               </tr>
             </React.Fragment>
           ))}

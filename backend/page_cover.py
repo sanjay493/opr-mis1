@@ -45,7 +45,7 @@ _COVER_ASSET_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend", "pu
 _BG_PATH = os.path.join(_COVER_ASSET_DIR, "cover_bg.jpg")
 # Crude Steel's production_table item name differs from its display label;
 # every other honeycomb item matches. Iron Ore hex labels ("IRON ORE
-# PRODUCTION" / "IRON ORE SALES DESPATCH") must match the kpi_icons keys
+# PRODUCTION" / "IRON ORE DESPATCH FOR SALES") must match the kpi_icons keys
 # in cover.html / CoverTemplate.js.
 _DB_ITEM = {"Crude Steel": "Total Crude Steel"}
 
@@ -186,7 +186,7 @@ def _generate_cover(report_month: str, design: str | None = None, photo_id: int 
             _kpi_row(report_month, "Crude Steel"),
             _kpi_row(report_month, "Finished Steel"),
             _kpi_row(report_month, "Saleable Steel"),
-            _mines_kpi_row(report_month, "IRON ORE SALES DESPATCH", "sales_despatch"),
+            _mines_kpi_row(report_month, "IRON ORE DESPATCH FOR SALES", "sales_despatch"),
         ],
     }
     setting = _saved_setting(report_month)

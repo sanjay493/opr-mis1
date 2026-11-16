@@ -40,7 +40,7 @@ def _kpi(label, kind, mt, pct, growth):
 def sample_page(design: str, photo_uri=None, blank: bool = False) -> dict:
     """Fixed Sep-2026 figures (or all '—' when blank) for tests/thumbnails."""
     rows = [("HOT METAL", "steel", "1.723", "98", 4), ("CRUDE STEEL", "steel", "1.602", "97", 3),
-            ("IRON ORE PRODUCTION", "ore", "3.101", "101", 6), ("IRON ORE SALES DESPATCH", "ore", "0.412", "88", -5),
+            ("IRON ORE PRODUCTION", "ore", "3.101", "101", 6), ("IRON ORE DESPATCH FOR SALES", "ore", "0.412", "88", -5),
             ("FINISHED STEEL", "steel", "1.398", "95", 2), ("SALEABLE STEEL", "steel", "1.512", "96", -1)]
     kpis = [_kpi(lbl, kind, "—" if blank else mt, "—" if blank else pct, None if blank else g)
             for lbl, kind, mt, pct, g in rows]

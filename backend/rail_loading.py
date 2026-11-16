@@ -59,7 +59,7 @@ ITEMS = (
     ("total", "outward_total", "TOTAL OUTWARD"),
     ("grand", "grand_total", "Total (inward+outward)"),
     ("per_day", "per_day", "Rakes per day"),
-    ("group", "export", "EXPORT (memo, included in iron & steel)"),
+    ("group", "export", "EXPORT (memo, included in iron & steel; total rakes)"),
     ("item", "export_port", "Export – through ports"),
     ("item", "export_nepal", "Export – to Nepal"),
     ("total", "export_total", "Total export"),
@@ -80,6 +80,8 @@ OTHERS = {  # others code: (total code, named codes)
     "misc_other": ("misc_total", ("misc_pellets",)),
 }
 LABELS = {code: label for _kind, code, label in ITEMS}
+# The export memo rows stay in total rakes on the page; every other row prints rakes per day.
+EXPORT_CODES = ("export_port", "export_nepal", "export_total")
 
 
 def with_derived(values: dict) -> dict:
@@ -124,7 +126,9 @@ def loading_table(rows: list, month: str) -> dict:
     """The page table from rail_loading_monthly rows ([{report_month,
     item_code, rakes}]): Apr..Mar of the report month's FY, months after the
     report month blank, FYTD = the months present. FYTD rakes/day divides by
-    the days of the months that row has."""
+    the days of the months that row has. What the page prints is pd_months /
+    pd_fytd (rakes per day; the export rows stay in total rakes) and
+    cum_total (the FYTD rakes, last column)."""
     start = fy_start_year(month)
     months = fy_months(start)
     known = {(r["report_month"], r["item_code"]): r["rakes"] for r in rows
@@ -136,7 +140,8 @@ def loading_table(rows: list, month: str) -> dict:
     grand = series("grand_total")
     out = []
     for kind, code, label in ITEMS:
-        row = {"kind": kind, "code": code, "label": label, "months": [None] * 12, "fytd": None, "fytd_per_day": None}
+        row = {"kind": kind, "code": code, "label": label, "months": [None] * 12, "fytd": None, "fytd_per_day": None,
+               "pd_months": [None] * 12, "pd_fytd": None, "cum_total": None}
         if kind == "per_day":
             row["months"] = [None if v is None else round(v / days_in(m), 2) for m, v in zip(months, grand)]
         elif kind not in _HEADINGS:
@@ -148,6 +153,15 @@ def loading_table(rows: list, month: str) -> dict:
             if kind != "per_day":
                 row["fytd"] = total
             row["fytd_per_day"] = round(total / sum(days_in(m) for m, _v in present), 2)
+        if kind in _HEADINGS:
+            pass
+        elif kind == "per_day":
+            row["pd_months"], row["pd_fytd"] = row["months"], row["fytd_per_day"]
+        elif code in EXPORT_CODES:
+            row["pd_months"], row["pd_fytd"], row["cum_total"] = row["months"], row["fytd"], row["fytd"]
+        else:
+            row["pd_months"] = [None if v is None else round(v / days_in(m), 2) for m, v in zip(months, row["months"])]
+            row["pd_fytd"], row["cum_total"] = row["fytd_per_day"], row["fytd"]
         out.append(row)
     return {"fy": fy_label(start), "month_labels": [mlabel(m)[:3] for m in months],
             "has_data": any(c in CODES for _m, c in known), "rows": out}

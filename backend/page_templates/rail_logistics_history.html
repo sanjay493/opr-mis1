@@ -19,17 +19,17 @@
 {% if not page.available %}
 <div class="rlh-placeholder">{{ page.placeholder }}</div>
 {% else %}
-<div class="rlh-sec">Seven-year monthly trend <span class="rlh-sub">— steel rakes despatched per month, current FY first</span></div>
+<div class="rlh-sec">Seven-year monthly trend <span class="rlh-sub">— steel rakes despatched per day, current FY first</span></div>
 <table class="rlh-table">
     <colgroup><col style="width:7%"/><col style="width:9%"/>{% for _ in page.month_labels %}<col/>{% endfor %}<col style="width:8%"/></colgroup>
-    <thead><tr><th>Plant</th><th>FY</th>{% for m in page.month_labels %}<th>{{ m }}</th>{% endfor %}<th>Total</th></tr></thead>
+    <thead><tr><th>Plant</th><th>FY</th>{% for m in page.month_labels %}<th>{{ m }}</th>{% endfor %}<th>FY rakes / day</th></tr></thead>
     <tbody>
     {% for r in page.trend %}
         <tr class="{% if r.first_of_plant %}rlh-plant-first rlh-current{% endif %}">
             {% if r.first_of_plant %}<td class="rlh-plant-cell" rowspan="{{ page.trend|selectattr('plant', 'equalto', r.plant)|list|length }}">{{ r.plant }}</td>{% endif %}
             <td>{{ r.fy }}</td>
-            {% for v in r.months %}<td>{{ v|rl_fmt }}</td>{% endfor %}
-            <td class="rlh-act">{{ r.total|rl_fmt }}</td>
+            {% for v in r.months %}<td>{{ v|rl_fmt(2) }}</td>{% endfor %}
+            <td class="rlh-act">{{ r.total|rl_fmt(2) }}</td>
         </tr>
     {% endfor %}
     </tbody>

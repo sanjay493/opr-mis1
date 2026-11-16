@@ -19,8 +19,9 @@
     .cover-diamond-org { font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #12235a; }
     .cover-diamond-title { margin-top: 420px; text-align: center; }
     .cover-diamond-title h1 { margin: 0; font-size: 34px; font-weight: 700; line-height: 1.1; letter-spacing: .02em; text-transform: uppercase; }
-    .cover-diamond-month { margin-top: 8px; font-size: 18px; font-weight: 500; color: #475569; }
-    .cover-diamond-kpis { margin: 50px auto 0; width: 690px; display: grid; grid-template-columns: repeat(3, 1fr); row-gap: 34px; }
+    .cover-diamond-month { margin-top: 6px; font-size: 14px; font-weight: 500; color: #475569; }
+    .cover-diamond-month b { font-size: 34px; font-weight: 800; line-height: 1.1; color: #c8102e; letter-spacing: .01em; }
+    .cover-diamond-kpis { margin: 33px auto 0; width: 690px; display: grid; grid-template-columns: repeat(3, 1fr); row-gap: 34px; }
     .cover-diamond-kpi { position: relative; z-index: 0; height: 196px; display: flex; flex-direction: column; align-items: center;
         justify-content: center; text-align: center; color: #ffffff; }
     .cover-diamond-kpi::before { content: ""; position: absolute; z-index: -1; left: 50%; top: 50%; width: 138px; height: 138px;
@@ -56,7 +57,7 @@
     </div>
     <div class="cover-diamond-title">
         <h1>Operations Monthly Informatics</h1>
-        <div class="cover-diamond-month">{{ page.month_display }} &middot; SAIL Performance at a Glance (Million Tonnes)</div>
+        <div class="cover-diamond-month"><b>{{ page.month_short }}</b> &middot; SAIL Performance at a Glance (Million Tonnes)</div>
     </div>
     <div class="cover-diamond-kpis">{{ kpi_cards(page.kpis, 'cover-diamond') }}</div>
     <div class="cover-diamond-prepared">Prepared By: <b>MIS Group</b></div>

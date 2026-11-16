@@ -31,7 +31,7 @@
 {% else %}
 <table class="rll-table">
     <colgroup><col style="width:26%"/>{% for _ in page.month_labels %}<col style="width:4.9%"/>{% endfor %}<col style="width:7.6%"/><col style="width:7.6%"/></colgroup>
-    <thead><tr><th>Rakes loaded</th>{% for m in page.month_labels %}<th>{{ m }}</th>{% endfor %}<th class="rll-act">FYTD</th><th>FYTD rakes / day</th></tr></thead>
+    <thead><tr><th>Rakes loaded per day</th>{% for m in page.month_labels %}<th>{{ m }}</th>{% endfor %}<th class="rll-act">FYTD rakes / day</th><th>Cum. total rakes</th></tr></thead>
     <tbody>
     {% for r in page.rows %}
         {% if r.kind == 'group' %}
@@ -41,17 +41,18 @@
         {% elif r.kind == 'per_day' %}
         <tr class="rll-grand rll-perday">
             <td class="rll-l">{{ r.label }}</td>
-            {% for v in r.months %}<td class="rll-n">{{ v|rl_fmt(2) }}</td>{% endfor %}
+            {% for v in r.pd_months %}<td class="rll-n">{{ v|rl_fmt(2) }}</td>{% endfor %}
+            <td>{{ r.pd_fytd|rl_fmt(2) }}</td>
             <td></td>
-            <td>{{ r.fytd_per_day|rl_fmt(2) }}</td>
         </tr>
         {% else %}
         <tr{% if r.kind == 'total' %} class="rll-total"{% elif r.kind == 'grand' %} class="rll-grand"{% endif %}>
             {% set plain = r.kind in ('item', 'subitem') %}
             <td class="rll-l{% if r.kind == 'subitem' %} rll-l2{% endif %}">{{ r.label }}</td>
-            {% for v in r.months %}<td>{{ v|rl_rakes }}</td>{% endfor %}
-            <td{% if plain %} class="rll-act"{% endif %}>{{ r.fytd|rl_rakes }}</td>
-            <td>{{ r.fytd_per_day|rl_fmt(2) }}</td>
+            {% set export = r.code.startswith('export_') %}
+            {% for v in r.pd_months %}<td>{{ v|rl_rakes if export else v|rl_fmt(2) }}</td>{% endfor %}
+            <td{% if plain %} class="rll-act"{% endif %}>{{ r.pd_fytd|rl_rakes if export else r.pd_fytd|rl_fmt(2) }}</td>
+            <td>{{ r.cum_total|rl_rakes }}</td>
         </tr>
         {% endif %}
     {% endfor %}

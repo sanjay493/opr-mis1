@@ -107,7 +107,7 @@ def generate_rail_report(report_month: str) -> dict:
         return (cell.get("note") if cell else None) or None
 
     mon, yr = int(report_month[5:7]), int(report_month[:4])
-    till_label = f"Till {_MON[mon]}'{yr % 100:02d}"
+    till_label = f"Apr'{(yr if mon >= 4 else yr - 1) % 100:02d} to {_MON[mon]}'{yr % 100:02d}"
     columns = [{"key": fy, "label": (till_label if fy == cur_fy else fy)} for fy in fys]
 
     bulk = {fy: v(fy, "bulk_indent") for fy in fys}

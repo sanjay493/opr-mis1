@@ -418,3 +418,14 @@ def test_a_partly_uploaded_month_keeps_the_typed_ogom_and_jgom(monkeypatch, api)
     assert d["egom_file"] is None and not any(r["from_file"] for r in d["rows"])
     api.rail_loading_save({"report_month": "2026-10", "values": {"ore_ogom": 380, "ore_jgom": 282}}, {"email": None})
     assert store["2026-10"] == {"ore_ogom": 380, "ore_jgom": 282, "_user": None}        # typed values kept
+
+
+def test_page_prints_rakes_per_day_and_export_in_total_rakes():
+    rows = [{"report_month": m, "item_code": c, "rakes": v}
+            for m, c, v in (("2026-04", "ore_ogom", 300), ("2026-05", "ore_ogom", 310),
+                            ("2026-04", "export_port", 12), ("2026-05", "export_port", 9))]
+    by = {r["code"]: r for r in rl.loading_table(rows, "2026-05")["rows"]}
+    ogom = by["ore_ogom"]
+    assert ogom["pd_months"][:3] == [10.0, 10.0, None] and ogom["pd_fytd"] == round(610 / 61, 2) and ogom["cum_total"] == 610
+    exp = by["export_port"]
+    assert exp["pd_months"][:2] == [12, 9] and exp["pd_fytd"] == 21 and exp["cum_total"] == 21

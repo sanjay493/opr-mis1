@@ -29,7 +29,7 @@ agree. No upload for the month -> each page prints its title and a
 import iron_ore_rakes
 import rail_loading
 import rake_despatch_report as rdr
-from rake_despatch_report import ALL, PLANTS, mlabel, status_of
+from rake_despatch_report import ALL, PLANTS, days_in, fy_months, mlabel, status_of
 
 PAGE_IDS = {40.05: "loading", 40.07: "mines", 40.1: "summary", 40.2: "history", 40.3: "wagon"}   # print order
 
@@ -66,7 +66,15 @@ def mix_rows(wagon_mix: dict) -> dict:
     return {"label": wagon_mix["label"], "rows": rows}
 
 
-def _block(plant: str, by_type: dict, fy_months: list) -> dict:
+def per_day(months: list, values: list):
+    """(values / days of their month, the total / days of the months present),
+    for the 12 months of one FY; None where a month has no figure."""
+    pairs = [(m, v) for m, v in zip(months, values) if v is not None]
+    daily = [None if v is None else round(v / days_in(m), 2) for m, v in zip(months, values)]
+    return daily, (round(sum(v for _m, v in pairs) / sum(days_in(m) for m, _v in pairs), 2) if pairs else None)
+
+
+def _block(plant: str, by_type: dict, fy_months: list, rakes_per_day: bool = False) -> dict:
     rows = []
     for t, by_month in by_type.items():
         months = [by_month.get(m) for m in fy_months]
@@ -78,29 +86,40 @@ def _block(plant: str, by_type: dict, fy_months: list) -> dict:
         vals = [r["months"][i] for r in rows if r["months"][i] is not None]
         totals.append(sum(vals) if vals else None)
     present = [v for v in totals if v is not None]
-    return {"plant": plant, "rows": rows, "total": {"months": totals, "fytd": sum(present) if present else None}}
+    block = {"plant": plant, "rows": rows, "total": {"months": totals, "fytd": sum(present) if present else None}}
+    if rakes_per_day:
+        for r in rows + [block["total"]]:
+            r["months"], r["fytd"] = per_day(fy_months, r["months"])
+    return block
 
 
-def wagon_type_blocks(types: dict, fy_months: list, groups=PLANTS, total="SAIL") -> list:
+def wagon_type_blocks(types: dict, fy_months: list, groups=PLANTS, total="SAIL", rakes_per_day: bool = False) -> list:
     """One block per plant with wagon-type rows, then SAIL (types summed);
-    `groups` / `total` name the blocks when they are not the plants."""
+    `groups` / `total` name the blocks when they are not the plants.
+    rakes_per_day: the months and FYTD in rakes per day, not rakes."""
     blocks, sail = [], {}
     for p in groups:
         if not types.get(p):
             continue
-        blocks.append(_block(p, types[p], fy_months))
+        blocks.append(_block(p, types[p], fy_months, rakes_per_day))
         for t, by_month in types[p].items():
             for m, v in by_month.items():
                 sail.setdefault(t, {})[m] = sail.get(t, {}).get(m, 0) + v
     if blocks:
-        blocks.append(_block(total, sail, fy_months))
+        blocks.append(_block(total, sail, fy_months, rakes_per_day))
     return blocks
 
 
 def trend_rows(trend: dict, rows=ALL) -> list:
-    """Plant x FY rows (newest FY first), flagging each plant's first row."""
-    return [{"plant": p, "fy": s["fy"], "months": s["months"], "total": s["total"], "first_of_plant": i == 0}
-            for p in rows for i, s in enumerate(trend.get(p, []))]
+    """Plant x FY rows (newest FY first), flagging each plant's first row.
+    The months and "total" are rakes per day (the total over the days of the
+    months that FY has figures for)."""
+    out = []
+    for p in rows:
+        for i, s in enumerate(trend.get(p, [])):
+            daily, total = per_day(fy_months(int(s["fy"][:4])), s["months"])
+            out.append({"plant": p, "fy": s["fy"], "months": daily, "total": total, "first_of_plant": i == 0})
+    return out
 
 
 def mines_page(month: str) -> dict:
@@ -115,7 +134,7 @@ def mines_page(month: str) -> dict:
             "key_points": r["key_points"], "coverage_note": r["coverage_note"],
             "trend": trend_rows(r["trend"], iron_ore_rakes.ALL),
             "mix": mix_rows(r["wagon_mix"]),
-            "blocks": wagon_type_blocks(r["types"], r["fy_months"], iron_ore_rakes.GROUPS, iron_ore_rakes.TOTAL)}
+            "blocks": wagon_type_blocks(r["types"], r["fy_months"], iron_ore_rakes.GROUPS, iron_ore_rakes.TOTAL, rakes_per_day=True)}
 
 
 def generate_rail_logistics(month: str, part: str) -> dict:

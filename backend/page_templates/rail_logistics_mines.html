@@ -36,17 +36,17 @@
 </ul>
 {% endif %}
 
-<div class="rlm-sec">Seven-year monthly trend <span class="rlm-sub">— iron ore rakes loaded per month, current FY first</span></div>
+<div class="rlm-sec">Seven-year monthly trend <span class="rlm-sub">— iron ore rakes loaded per day, current FY first</span></div>
 <table class="rlm-table">
     <colgroup><col style="width:7%"/><col style="width:9%"/>{% for _ in page.month_labels %}<col/>{% endfor %}<col style="width:8%"/></colgroup>
-    <thead><tr><th>Mines</th><th>FY</th>{% for m in page.month_labels %}<th>{{ m }}</th>{% endfor %}<th>Total</th></tr></thead>
+    <thead><tr><th>Mines</th><th>FY</th>{% for m in page.month_labels %}<th>{{ m }}</th>{% endfor %}<th>FY rakes / day</th></tr></thead>
     <tbody>
     {% for r in page.trend %}
         <tr class="{% if r.first_of_plant %}rlm-group-first rlm-current{% endif %}">
             {% if r.first_of_plant %}<td class="rlm-group-cell" rowspan="{{ page.trend|selectattr('plant', 'equalto', r.plant)|list|length }}">{{ r.plant }}</td>{% endif %}
             <td>{{ r.fy }}</td>
-            {% for v in r.months %}<td>{{ v|rl_fmt }}</td>{% endfor %}
-            <td class="rlm-act">{{ r.total|rl_fmt }}</td>
+            {% for v in r.months %}<td>{{ v|rl_fmt(2) }}</td>{% endfor %}
+            <td class="rlm-act">{{ r.total|rl_fmt(2) }}</td>
         </tr>
     {% endfor %}
     </tbody>
@@ -67,24 +67,24 @@
     </tbody>
 </table>
 
-<div class="rlm-sec">Rakes by wagon type, FY {{ page.fy }} <span class="rlm-sub">— mines group-wise, month by month</span></div>
+<div class="rlm-sec">Rakes by wagon type, FY {{ page.fy }} <span class="rlm-sub">— mines group-wise, rakes per day, month by month</span></div>
 <table class="rlm-table">
     <colgroup><col style="width:7%"/><col style="width:17%"/>{% for _ in page.month_labels %}<col/>{% endfor %}<col style="width:8%"/></colgroup>
-    <thead><tr><th>Mines</th><th>Wagon type</th>{% for m in page.month_labels %}<th>{{ m }}</th>{% endfor %}<th class="rlm-act">FYTD</th></tr></thead>
+    <thead><tr><th>Mines</th><th>Wagon type</th>{% for m in page.month_labels %}<th>{{ m }}</th>{% endfor %}<th class="rlm-act">FYTD / day</th></tr></thead>
     <tbody>
     {% for b in page.blocks %}
         {% for r in b.rows %}
         <tr{% if loop.first %} class="rlm-group-first"{% endif %}>
             {% if loop.first %}<td class="rlm-group-cell" rowspan="{{ b.rows|length + 1 }}">{{ b.plant }}</td>{% endif %}
             <td class="rlm-l">{{ r.type }}</td>
-            {% for v in r.months %}<td>{{ v|rl_fmt }}</td>{% endfor %}
-            <td class="rlm-act">{{ r.fytd|rl_fmt }}</td>
+            {% for v in r.months %}<td>{{ v|rl_fmt(2) }}</td>{% endfor %}
+            <td class="rlm-act">{{ r.fytd|rl_fmt(2) }}</td>
         </tr>
         {% endfor %}
         <tr class="rlm-total">
             <td class="rlm-l">Total</td>
-            {% for v in b.total.months %}<td>{{ v|rl_fmt }}</td>{% endfor %}
-            <td>{{ b.total.fytd|rl_fmt }}</td>
+            {% for v in b.total.months %}<td>{{ v|rl_fmt(2) }}</td>{% endfor %}
+            <td>{{ b.total.fytd|rl_fmt(2) }}</td>
         </tr>
     {% endfor %}
     </tbody>

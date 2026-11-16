@@ -41,7 +41,9 @@ def test_trend_rows_flatten():
     rows = rl.trend_rows(t)
     assert len(rows) == 12 and rows[0]["first_of_plant"] and not rows[1]["first_of_plant"]
     assert rows[2]["plant"] == "DSP" and rows[2]["first_of_plant"]
-    assert rows[1]["fy"] == "2025-26" and rows[1]["total"] == 24
+    # rakes per day: the month's rakes over its days, the total over the days of the months present
+    assert rows[0]["months"][:2] == [round(1 / 30, 2), None] and rows[0]["total"] == round(1 / 30, 2)
+    assert rows[1]["fy"] == "2025-26" and rows[1]["months"][1] == round(2 / 31, 2) and rows[1]["total"] == round(24 / 365, 2)
 
 
 def test_unavailable_placeholder(monkeypatch):
@@ -92,11 +94,11 @@ def test_mines_page(monkeypatch):
     assert p["key_points"][0].startswith("Iron ore loading from mines in Oct'26: EGOM 8 rakes")
     # trend: EGOM, CGOM, Total x 7 FYs, flat, current FY first
     assert len(p["trend"]) == 21 and [r["plant"] for r in p["trend"][::7]] == ["EGOM", "CGOM", "Total"]
-    assert p["trend"][0]["first_of_plant"] and p["trend"][0]["months"][6] == 8 and p["trend"][15]["months"][6] == 12
+    assert p["trend"][0]["first_of_plant"] and p["trend"][0]["months"][6] == round(8 / 31, 2) and p["trend"][15]["months"][6] == round(12 / 31, 2)
     assert [r["plant"] for r in p["mix"]["rows"]] == ["EGOM", "CGOM", "Total"]
     assert [b["plant"] for b in p["blocks"]] == ["EGOM", "CGOM", "Total"]
     total = p["blocks"][-1]
-    assert {r["type"]: r["fytd"] for r in total["rows"]} == {"BOBSNM1": 7, "BOXN": 5} and total["total"]["fytd"] == 12
+    assert {r["type"]: r["fytd"] for r in total["rows"]} == {"BOBSNM1": round(7 / 31, 2), "BOXN": round(5 / 31, 2)} and total["total"]["fytd"] == round(12 / 31, 2)
 
 
 def test_mines_page_placeholder(monkeypatch):
