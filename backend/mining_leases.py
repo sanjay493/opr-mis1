@@ -2,7 +2,7 @@
 Details of SAIL Mining Leases — PDF Annexure-1 "SAIL Mining at a Glance" and
 its data entry (Data Entry > Reference > Mining Leases, api_mining_leases.py).
 
-One stored row per lease (repo.mines.mining_leases_rows). The mine, state, lease,
+One stored row per lease (repo.mines.mining_leases_rows). The category (grp), mine, state, lease,
 mineral, area, reserves and status cells can be merged down over several leases, as in
 the source sheet: the head row's <col>_span is how many rows it covers, and
 each covered row has span 0 and a blank cell. Area and reserves are free text
@@ -10,8 +10,8 @@ and print as typed ("Un-Explored", "208( Broken area- 11MT)").
 """
 from repo import mines as rmines
 
-SPAN_COLS = ("mine", "state", "lease", "mineral", "area", "reserves", "status")
-TEXT_COLS = ("s_no", "mine", "state", "lease", "mineral", "area", "reserves", "status")
+SPAN_COLS = ("grp", "mine", "state", "lease", "mineral", "area", "reserves", "status")
+TEXT_COLS = ("s_no", "grp", "mine", "state", "lease", "mineral", "area", "reserves", "status")
 
 
 def _stored() -> list:
@@ -59,13 +59,27 @@ def save(rows: list, user) -> int:
 
 
 def build_page() -> dict:
-    """{available, rows}: each row has s_no as text and mine, state, lease,
-    mineral, area, reserves, status as {"text", "span"} (span 0 = print no cell)."""
+    """{available, rows}: each row has s_no as text and grp, mine, state, lease,
+    mineral, area, reserves, status as {"text", "span", "gt", "gb"} (span 0 = print no cell;
+    gt / gb = the cell starts on a category block's first row / ends on its last); first / last
+    mark the block's first and last rows."""
     stored = _stored()
     rows = []
     for r in stored:
-        row = {"s_no": r.get("s_no") or ""}
+        row = {"s_no": r.get("s_no") or "", "first": False, "last": False}
         for c in SPAN_COLS:
             row[c] = {"text": r.get(c) or "", "span": int(r.get(f"{c}_span", 1))}
         rows.append(row)
+    # Each category block is boxed in a dark line: the rows that start / end a
+    # block, and every cell that starts on the first row or ends on the last.
+    for i, row in enumerate(rows):
+        if row["grp"]["span"]:
+            rows[i]["first"] = True
+            rows[min(i + row["grp"]["span"], len(rows)) - 1]["last"] = True
+    for i, row in enumerate(rows):
+        for c in SPAN_COLS:
+            cell = row[c]
+            if cell["span"]:
+                cell["gt"] = row["first"]
+                cell["gb"] = rows[min(i + cell["span"], len(rows)) - 1]["last"]
     return {"available": bool(rows), "rows": rows}

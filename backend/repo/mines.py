@@ -722,9 +722,9 @@ def sail_rows(cur, months):
 # columns say how many rows a cell covers (1 own row, N merged down, 0
 # covered by the cell above); mining_leases.validate checks them before a save.
 
-_LEASE_TEXT = (("s_no", 8), ("mine", 160), ("state", 160), ("lease", 160), ("mineral", 160),
+_LEASE_TEXT = (("s_no", 8), ("grp", 160), ("mine", 160), ("state", 160), ("lease", 160), ("mineral", 160),
                ("area", 160), ("reserves", 160), ("status", 255))
-_LEASE_SPANS = ("mine_span", "state_span", "lease_span", "mineral_span", "area_span", "reserves_span", "status_span")
+_LEASE_SPANS = ("grp_span", "mine_span", "state_span", "lease_span", "mineral_span", "area_span", "reserves_span", "status_span")
 _LEASE_COLS = ("id", "sort_order") + tuple(c for c, _n in _LEASE_TEXT) + _LEASE_SPANS
 
 

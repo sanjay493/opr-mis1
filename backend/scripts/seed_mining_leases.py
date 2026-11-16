@@ -4,7 +4,7 @@
 
 Replaces the whole table (Data Entry > Reference > Mining Leases is the place
 to edit afterwards). Text is kept as the sheet has it (typos and the S.No.
-order included); the sheet's merged ranges become the *_span columns. The
+order included, except as group_rows says); the sheet's merged ranges become the *_span columns. The
 header is rows 5-6, data starts at row 7 and ends at the last row with a
 S.No. or lease name.
 """
@@ -29,6 +29,33 @@ def _text(v) -> str:
     return str(v).strip()
 
 
+# Category column (merged down, printed vertically): the sheet's first 26 leases
+# are iron and manganese ore, then flux (limestone, dolomite, dunite) and coal; the
+# last three (magnesite and dunite) are flux too, so they move up to join it.
+GROUPS = (("Iron Ore & Manganese Ore", 26), ("Flux", 14), ("Coal", 13))
+MOVE_UP = 3             # the last 3 rows go right after the flux rows of the sheet (its S.No. 37)
+FLUX_END_SNO = 37
+
+
+def group_rows(rows: list) -> list:
+    """rows (the sheet's 53 leases, spans set) -> the same rows with the last
+    MOVE_UP rows moved up after S.No. FLUX_END_SNO, those and every later row
+    renumbered in sequence, and the Category column filled and merged per GROUPS."""
+    at = next(i for i, r in enumerate(rows) if r["s_no"] == str(FLUX_END_SNO)) + 1
+    moved = rows[-MOVE_UP:]
+    rows = rows[:at] + moved + rows[at:-MOVE_UP]
+    assert len(rows) == sum(n for _g, n in GROUPS), len(rows)
+    for i in range(at, len(rows)):
+        rows[i]["s_no"] = str(i + 1)
+    pos = 0
+    for name, n in GROUPS:
+        for k in range(n):
+            rows[pos + k]["grp"] = name if k == 0 else ""
+            rows[pos + k]["grp_span"] = n if k == 0 else 0
+        pos += n
+    return rows
+
+
 def read_rows(path: str) -> list:
     ws = openpyxl.load_workbook(path, data_only=True).active
     last = max(r for r in range(FIRST_DATA_ROW, ws.max_row + 1) if ws[f"A{r}"].value is not None or ws[f"D{r}"].value is not None)
@@ -48,5 +75,5 @@ def read_rows(path: str) -> list:
 
 
 if __name__ == "__main__":
-    rows = read_rows(sys.argv[1])
+    rows = group_rows(read_rows(sys.argv[1]))
     print(f"{mining_leases.save(rows, 'seed') } rows saved")

@@ -8,14 +8,14 @@ const API = process.env.NEXT_PUBLIC_API_URL || '';
 
 // Mirrors backend/mining_leases.py SPAN_COLS: these cells can be merged down
 // over several leases, as in the source sheet.
-const SPAN_COLS = ['mine', 'state', 'lease', 'mineral', 'area', 'reserves', 'status'];
-const LABELS = { s_no: 'S.No.', mine: 'Name of Mines', state: 'State', lease: 'Name of Lease', mineral: 'Mineral',
+const SPAN_COLS = ['grp', 'mine', 'state', 'lease', 'mineral', 'area', 'reserves', 'status'];
+const LABELS = { s_no: 'S.No.', grp: 'Category', mine: 'Name of Mines', state: 'State', lease: 'Name of Lease', mineral: 'Mineral',
   area: 'Area in Ha', reserves: 'Reserves & Resource (MT)', status: 'Current Status' };
-const WIDTHS = { s_no: 56, mine: 170, state: 110, lease: 170, mineral: 110, area: 110, reserves: 130, status: 220 };
+const WIDTHS = { s_no: 56, grp: 120, mine: 170, state: 110, lease: 170, mineral: 110, area: 110, reserves: 130, status: 220 };
 
 const s = (v) => (v === null || v === undefined ? '' : String(v));
 const noneCovered = () => Object.fromEntries(SPAN_COLS.map((c) => [c, false]));
-const emptyRow = () => ({ s_no: '', mine: '', state: '', lease: '', mineral: '', area: '', reserves: '', status: '', covered: noneCovered() });
+const emptyRow = () => ({ s_no: '', grp: '', mine: '', state: '', lease: '', mineral: '', area: '', reserves: '', status: '', covered: noneCovered() });
 
 // Stored rows carry <col>_span (1 own row, N merged down, 0 covered by the cell
 // above); the form keeps "covered by the cell above" flags and derives spans.
