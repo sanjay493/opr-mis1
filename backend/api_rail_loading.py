@@ -8,8 +8,10 @@ for the item registry and the derived rows.
        out on save, from_file rows (OGOM / JGOM in a month the mines' rake
        record covers) show the record's count; both are read-only in the
        form. egom_file = the record's OGOM + JGOM, to set beside the typed EGOM.
-  POST /api/rail-loading — {report_month, values: {code: rakes | null}};
-       replaces the month. Editors and admins only.
+  POST /api/rail-loading — {report_month, values: {code: rakes | null}, note?};
+       replaces the month; note is the page's typed "Inward and Outward Rakes
+       wrt Steel Plants" text (one line per bullet, blank clears it). Editors
+       and admins only.
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -32,7 +34,9 @@ def _month(month: str) -> dict:
     rows = [{"kind": kind, "code": code, "label": label, "value": file.get(code, stored.get(code)),
              "derived": code in rail_loading.OTHERS, "from_file": code in file}
             for kind, code, label in rail_loading.ITEMS if kind != "per_day"]
-    return {"report_month": month, "rows": rows, "egom": rail_loading.EGOM,
+    return {"report_month": month, "rows": rows, "note": rail_loading.get_note(month),
+            "note_title": rail_loading.NOTE_TITLE, "note_lines": rail_loading.NOTE_LINES,
+            "note_line_max": rail_loading.NOTE_LINE_MAX, "egom": rail_loading.EGOM,
             "egom_parts": list(rail_loading.EGOM_PARTS), "egom_file": sum(file.values()) if file else None}
 
 
@@ -61,5 +65,13 @@ def rail_loading_save(payload: dict, user: dict = Depends(_auth.require_editor_o
         values = {c: v for c, v in rail_loading.with_derived(values).items() if v is not None}
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
+    note = payload.get("note")
+    if note is not None and not isinstance(note, str):
+        raise HTTPException(status_code=422, detail="The note must be text")
+    if note is not None:                     # before the rakes, so a too long note saves nothing
+        try:
+            rail_loading.save_note(month, note)
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
     saved = rail_loading.save_month(month, values, user.get("email"))
     return {"status": "ok", "saved": saved, **_month(month)}

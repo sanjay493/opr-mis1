@@ -303,6 +303,14 @@ export function RailLogisticsLoadingTemplate({ data }) {
           })}
         </tbody>
       </table>
+      {data.note?.length > 0 && (
+        <>
+          <Sec title={data.note_title} />
+          <ul style={{ margin: 0, paddingLeft: '14pt', fontSize: '8.5pt', lineHeight: 1.35 }}>
+            {data.note.map((p, i) => <li key={i} style={{ marginBottom: '1.5pt' }}>{p}</li>)}
+          </ul>
+        </>
+      )}
     </div>
   );
 }

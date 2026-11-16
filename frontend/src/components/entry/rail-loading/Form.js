@@ -2,7 +2,7 @@
 
 import RequireEditor from '@/components/RequireEditor';
 import React, { useState, useEffect, useCallback } from 'react';
-import { EntryPage, ContextBar, Field, Status, Section, SaveButton, Loading, cellClass, entryStyles as es } from '../EntryUI';
+import { EntryPage, ContextBar, Field, Status, Section, SaveButton, Loading, cellClass, entryStyles as es, wb } from '../EntryUI';
 
 const API = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -31,6 +31,7 @@ function RailLoadingEntryInner() {
   const [rows, setRows] = useState([]);
   const [values, setValues] = useState({});
   const [egom, setEgom] = useState({ code: '', file: null });
+  const [note, setNote] = useState({ text: '', title: '', lines: 3, lineMax: 120 });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -38,6 +39,7 @@ function RailLoadingEntryInner() {
 
   const fill = (d) => {
     setEgom({ code: d.egom, file: d.egom_file });
+    setNote({ text: d.note || '', title: d.note_title, lines: d.note_lines, lineMax: d.note_line_max });
     setRows(d.rows);
     setValues(Object.fromEntries(d.rows.map((r) => [r.code, s(r.value)])));
     setDirty(false);
@@ -64,6 +66,9 @@ function RailLoadingEntryInner() {
   const egomTyped = numOrNull(values[egom.code]);
   const egomDiffers = egom.file !== null && egomTyped !== null && egomTyped !== egom.file;
 
+  const noteLines = note.text.split('\n').map((l) => l.trim()).filter(Boolean);
+  const noteTooBig = noteLines.length > note.lines || noteLines.some((l) => l.length > note.lineMax);
+
   const derived = (code) => {
     const rule = OTHERS[code];
     if (!rule) return null;
@@ -78,6 +83,10 @@ function RailLoadingEntryInner() {
   };
 
   const save = async () => {
+    if (noteTooBig) {
+      setStatus({ type: 'error', text: `The note: up to ${note.lines} lines of ${note.lineMax} characters each.` });
+      return;
+    }
     const bad = rows.find((r) => values[r.code] !== undefined && values[r.code].trim() !== '' && !/^\d+(\.\d+)?$/.test(values[r.code].trim()));
     if (bad) {
       setStatus({ type: 'error', text: `${bad.label}: enter a number of rakes, 0 or more.` });
@@ -93,7 +102,7 @@ function RailLoadingEntryInner() {
       });
       const res = await fetch(`${API}/api/rail-loading`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ report_month: reportMonth, values: body }),
+        body: JSON.stringify({ report_month: reportMonth, values: body, note: note.text }),
       });
       if (!res.ok) {
         let text = await res.text();
@@ -172,6 +181,17 @@ function RailLoadingEntryInner() {
               })}
             </tbody>
           </table>
+        </Section>
+      )}
+
+      {!loading && (
+        <Section title={note.title} sub="printed under the table, one bullet per line">
+          <textarea className={wb.textarea} style={{ minHeight: 80 }} rows={note.lines} value={note.text}
+                    aria-label={note.title}
+                    onChange={(e) => { setNote((n) => ({ ...n, text: e.target.value })); setDirty(true); }} />
+          <div style={{ fontSize: 12, marginTop: 4, color: noteTooBig ? 'var(--ui-danger, #b42318)' : 'var(--ui-text-secondary)' }}>
+            Up to {note.lines} lines of {note.lineMax} characters each; the page has room for no more.
+          </div>
         </Section>
       )}
     </EntryPage>

@@ -20,6 +20,9 @@
     .rll-total td.rll-l, .rll-grand td.rll-l { padding-left: 3pt; }
     .rll-grand td { font-weight: 700; background: {{ colors.perf_app_bg }}; color: {{ colors.perf_app_text }}; }
     .rll-perday td.rll-n { font-size: 7.5pt; }
+    .rll-note-title { font-weight: 700; font-size: 9.5pt; color: {{ colors.rail_log_section_title }}; margin: 6pt 0 3pt; }
+    .rll-note { margin: 0; padding-left: 14pt; font-size: 8.5pt; line-height: 1.35; }
+    .rll-note li { margin-bottom: 1.5pt; }
     .rll-placeholder { text-align: center; font-size: 11pt; color: {{ colors.text_secondary }}; margin-top: 60mm; }
 </style>
 
@@ -58,4 +61,10 @@
     {% endfor %}
     </tbody>
 </table>
+{% if page.note %}
+<div class="rll-note-title">{{ page.note_title }}</div>
+<ul class="rll-note">
+{% for line in page.note %}<li>{{ line }}</li>{% endfor %}
+</ul>
+{% endif %}
 {% endif %}

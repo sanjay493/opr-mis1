@@ -9,6 +9,16 @@ import rail_loading as rl
 import rail_loading_highlights as rlh
 
 
+@pytest.fixture(autouse=True)
+def notes(monkeypatch):
+    """rail_loading's report_text calls on a dict {month: {block: text}}, so no
+    test below reads or writes the real database through them."""
+    store = {}
+    monkeypatch.setattr(rl.rtx, "get_texts", lambda m: dict(store.get(m, {})))
+    monkeypatch.setattr(rl.rtx, "save_texts", lambda m, t: store.setdefault(m, {}).update(t) or len(t))
+    return store
+
+
 # ── repo ─────────────────────────────────────────────────────────────────────
 
 def test_save_and_read_round_trip(mysql_db):
@@ -429,3 +439,50 @@ def test_page_prints_rakes_per_day_and_export_in_total_rakes():
     assert ogom["pd_months"][:3] == [10.0, 10.0, None] and ogom["pd_fytd"] == round(610 / 61, 2) and ogom["cum_total"] == 610
     exp = by["export_port"]
     assert exp["pd_months"][:2] == [12, 9] and exp["pd_fytd"] == 21 and exp["cum_total"] == 21
+
+
+def test_note_round_trip_and_page(monkeypatch, notes):
+    monkeypatch.setattr(rl.rrake, "rail_loading_rows", lambda a, b: [
+        {"report_month": "2026-10", "item_code": "grand_total", "rakes": 2293}])
+    monkeypatch.setattr(rl.rrake, "iron_ore_rake_counts", lambda a, b: [])
+    assert rl.build_page("2026-10")["note"] == []
+    rl.save_note("2026-10", "  Inward 53.3 rakes/day  \r\n\r\n Outward 20.7 rakes/day ")
+    assert notes["2026-10"] == {rl.NOTE_KEY: "Inward 53.3 rakes/day\nOutward 20.7 rakes/day"}
+    page = rl.build_page("2026-10")
+    assert page["note"] == ["Inward 53.3 rakes/day", "Outward 20.7 rakes/day"]
+    assert page["note_title"] == "Inward and Outward Rakes wrt Steel Plants"
+    rl.save_note("2026-10", "  ")
+    assert rl.build_page("2026-10")["note"] == []
+
+
+def test_note_too_long_is_refused(notes):
+    with pytest.raises(ValueError):
+        rl.save_note("2026-10", "x" * (rl.NOTE_LINE_MAX + 1))
+    assert notes == {}
+
+
+def test_api_note_saved_with_the_month_and_read_back(api):
+    api, store = api
+    out = api.rail_loading_save({"report_month": "2026-11", "values": {"ore_bhilai": 200}, "note": "Inward up"},
+                                {"email": "e@sail.in"})
+    assert out["note"] == "Inward up" and out["note_lines"] == rl.NOTE_LINES
+    assert api.rail_loading_month("2026-11")["note"] == "Inward up"
+    # a save without a note key leaves the note alone
+    api.rail_loading_save({"report_month": "2026-11", "values": {"ore_bhilai": 210}}, {"email": "e@sail.in"})
+    assert api.rail_loading_month("2026-11")["note"] == "Inward up"
+
+
+def test_api_too_long_note_saves_nothing(api):
+    from fastapi import HTTPException
+    api, store = api
+    with pytest.raises(HTTPException) as e:
+        api.rail_loading_save({"report_month": "2026-11", "values": {"ore_bhilai": 200},
+                               "note": "x" * (rl.NOTE_LINE_MAX + 1)}, {"email": "e@sail.in"})
+    assert e.value.status_code == 422 and store == {}
+
+
+def test_note_over_three_lines_is_refused(notes):
+    with pytest.raises(ValueError, match="4 lines"):
+        rl.save_note("2026-10", "a\nb\nc\nd")
+    rl.save_note("2026-10", "a\nb\nc")
+    assert notes["2026-10"][rl.NOTE_KEY] == "a\nb\nc"

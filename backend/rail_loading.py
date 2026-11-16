@@ -15,6 +15,7 @@ sections add up to more than the reported inward total.
 """
 import iron_ore_rakes
 from repo import rake as rrake
+from repo import text as rtx
 from rake_despatch_report import days_in, fy_label, fy_months, fy_start_year, mlabel
 
 # (kind, code, label) in print order. kind: "group" heading, "sub" (a
@@ -84,6 +85,32 @@ LABELS = {code: label for _kind, code, label in ITEMS}
 EXPORT_CODES = ("export_port", "export_nepal", "export_total")
 # The grand total prints in total rakes too (the Rakes per day row under it gives the daily figure).
 TOTAL_RAKES_CODES = EXPORT_CODES + ("grand_total",)
+
+
+# The page's typed note, "Inward and Outward Rakes wrt Steel Plants": one text per
+# month, kept in report_text under the secretary_review scope (that page only reads
+# its own blocks, so this key is never shown there).
+NOTE_KEY = "rail_loading_note"
+NOTE_TITLE = "Inward and Outward Rakes wrt Steel Plants"
+NOTE_LINES, NOTE_LINE_MAX = 3, 120     # what fits under the table on the printed page: 3 bullets of one line
+NOTE_MAX = NOTE_LINES * NOTE_LINE_MAX  # characters
+
+
+def get_note(month: str) -> str:
+    return rtx.get_texts(month).get(NOTE_KEY, "")
+
+
+def save_note(month: str, text: str) -> None:
+    """Save the month's note, one line per bullet (blank clears it). ValueError
+    with more than NOTE_LINES lines or a line over NOTE_LINE_MAX characters."""
+    lines = [ln.strip() for ln in (text or "").replace("\r", "").split("\n")]
+    lines = [ln for ln in lines if ln]
+    if len(lines) > NOTE_LINES:
+        raise ValueError(f"The note has {len(lines)} lines; the page has room for {NOTE_LINES}.")
+    for ln in lines:
+        if len(ln) > NOTE_LINE_MAX:
+            raise ValueError(f"A note line has {len(ln)} characters; the page has room for {NOTE_LINE_MAX} on a line.")
+    rtx.save_texts(month, {NOTE_KEY: "\n".join(lines)})
 
 
 def with_derived(values: dict) -> dict:
@@ -188,4 +215,5 @@ def build_page(month: str) -> dict:
     t = loading_table(rows, month)
     return {"available": t["has_data"], "subtitle": f"{mlabel(month)} · FY {t['fy']}",
             "placeholder": None if t["has_data"] else f"Monthly rail loading for FY {t['fy']} not yet entered",
-            "fy": t["fy"], "month_labels": t["month_labels"], "rows": t["rows"]}
+            "fy": t["fy"], "month_labels": t["month_labels"], "rows": t["rows"],
+            "note_title": NOTE_TITLE, "note": [ln for ln in get_note(month).split("\n") if ln]}
