@@ -6,7 +6,7 @@
     .rlm-points { margin: 0; padding-left: 14pt; font-size: 8.5pt; line-height: 1.35; }
     .rlm-points li { margin-bottom: 1.5pt; }
     .rlm-table { border-collapse: collapse; width: 100%; table-layout: fixed; font-size: 7.5pt; line-height: 1.1; }
-    .rlm-table th, .rlm-table td { border: 1px solid {{ colors.border_dark }}; padding: 1pt 2pt; text-align: center; font-variant-numeric: tabular-nums; }
+    .rlm-table th, .rlm-table td { border: 1px solid {{ colors.border_light }}; padding: 1pt 2pt; text-align: center; font-variant-numeric: tabular-nums; }
     .rlm-table th { font-weight: 700; }
     .rlm-table td.rlm-l { text-align: left; font-weight: 700; white-space: nowrap; }
     .rlm-mix-table { font-size: 8pt; line-height: 1.3; }
@@ -16,7 +16,9 @@
     .rlm-total td { font-weight: 700; background: {{ colors.rail_log_total_row_bg }}; }
     .rlm-act { background: {{ colors.perf_act_bg }}; color: {{ colors.perf_act_text }}; }
     .rlm-current td { font-weight: 700; }
-    .rlm-group-first td { border-top: 1px solid {{ colors.rail_log_plant_rule }}; }
+    {# In a collapsed table the upper cell's border wins a tie, so the row above a group carries its top line too. #}
+    .rlm-group-first td, .rlm-table tr:has(+ .rlm-group-first) td { border-top-color: {{ colors.rail_log_plant_rule }}; }
+    .rlm-table tr:has(+ .rlm-group-first) td { border-bottom-color: {{ colors.rail_log_plant_rule }}; }
     .rlm-group-cell { font-weight: 700; vertical-align: middle; }
     .rlm-pos { color: {{ colors.rail_log_pos_text }}; }
     .rlm-neg { color: {{ colors.rail_log_neg_text }}; }

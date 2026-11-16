@@ -4,7 +4,7 @@
     .rlw-sub { font-weight: 400; font-style: italic; font-size: 7.5pt; color: {{ colors.text_secondary }}; }
     .rlw-subtitle { text-align: right; font-size: 9pt; font-style: italic; color: {{ colors.text_secondary }}; margin-bottom: 2pt; }
     .rlw-table { border-collapse: collapse; width: 100%; table-layout: fixed; font-size: 7.5pt; line-height: 1.1; }
-    .rlw-table th, .rlw-table td { border: 1px solid {{ colors.border_dark }}; padding: 0.6pt 2pt; text-align: center; font-variant-numeric: tabular-nums; }
+    .rlw-table th, .rlw-table td { border: 1px solid {{ colors.border_light }}; padding: 0.6pt 2pt; text-align: center; font-variant-numeric: tabular-nums; }
     .rlw-table th { font-weight: 700; }
     .rlw-table td.rlw-l { text-align: left; font-weight: 700; }
     .rlw-mix-table { font-size: 8pt; line-height: 1.3; }
@@ -13,7 +13,9 @@
     .rlw-big { font-weight: 700; }
     .rlw-total td { font-weight: 700; background: {{ colors.rail_log_total_row_bg }}; }
     .rlw-act { background: {{ colors.perf_act_bg }}; color: {{ colors.perf_act_text }}; }
-    .rlw-plant-first td { border-top: 1px solid {{ colors.rail_log_plant_rule }}; }
+    {# In a collapsed table the upper cell's border wins a tie, so the row above a plant carries its top line too. #}
+    .rlw-plant-first td { border-top-color: {{ colors.rail_log_plant_rule }}; }
+    .rlw-table tr:has(+ .rlw-plant-first) td { border-bottom-color: {{ colors.rail_log_plant_rule }}; }
     .rlw-plant-cell { font-weight: 700; vertical-align: middle; }
     .rlw-pos { color: {{ colors.rail_log_pos_text }}; }
     .rlw-neg { color: {{ colors.rail_log_neg_text }}; }

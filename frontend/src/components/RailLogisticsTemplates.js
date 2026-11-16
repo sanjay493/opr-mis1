@@ -288,7 +288,7 @@ export function RailLogisticsLoadingTemplate({ data }) {
               );
             }
             const perDay = r.kind === 'per_day';
-            const exportRow = r.code.startsWith('export_');   // memo rows stay in total rakes
+            const exportRow = r.code.startsWith('export_') || r.kind === 'grand';   // memo rows and the grand total stay in total rakes
             const pd = (v) => (perDay || !exportRow ? fmt(v, 2) : fmtRakes(v));
             const plain = r.kind === 'item' || r.kind === 'subitem';
             const row = r.kind === 'total' ? total : (r.kind === 'grand' || perDay) ? grand : undefined;

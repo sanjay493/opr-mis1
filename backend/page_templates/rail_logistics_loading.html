@@ -49,7 +49,7 @@
         <tr{% if r.kind == 'total' %} class="rll-total"{% elif r.kind == 'grand' %} class="rll-grand"{% endif %}>
             {% set plain = r.kind in ('item', 'subitem') %}
             <td class="rll-l{% if r.kind == 'subitem' %} rll-l2{% endif %}">{{ r.label }}</td>
-            {% set export = r.code.startswith('export_') %}
+            {% set export = r.code.startswith('export_') or r.kind == 'grand' %}
             {% for v in r.pd_months %}<td>{{ v|rl_rakes if export else v|rl_fmt(2) }}</td>{% endfor %}
             <td{% if plain %} class="rll-act"{% endif %}>{{ r.pd_fytd|rl_rakes if export else r.pd_fytd|rl_fmt(2) }}</td>
             <td>{{ r.cum_total|rl_rakes }}</td>

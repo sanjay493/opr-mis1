@@ -34,7 +34,7 @@ ITEMS = (
     ("subitem", "flux_ls_nandini", "Nandini"),
     ("subitem", "flux_ls_rsmml", "RSMML (Sonu)"),
     ("subitem", "flux_ls_wonder", "Wonder"),
-    ("subitem", "flux_ls_other", "Others"),
+    ("subitem", "flux_ls_other", "Imported + Others"),
     ("total", "flux_limestone", "Total limestone"),
     ("sub", "dolomite", "Flux – Dolomite"),
     ("subitem", "flux_dol_hirri", "Hirri"),
@@ -82,6 +82,8 @@ OTHERS = {  # others code: (total code, named codes)
 LABELS = {code: label for _kind, code, label in ITEMS}
 # The export memo rows stay in total rakes on the page; every other row prints rakes per day.
 EXPORT_CODES = ("export_port", "export_nepal", "export_total")
+# The grand total prints in total rakes too (the Rakes per day row under it gives the daily figure).
+TOTAL_RAKES_CODES = EXPORT_CODES + ("grand_total",)
 
 
 def with_derived(values: dict) -> dict:
@@ -157,7 +159,7 @@ def loading_table(rows: list, month: str) -> dict:
             pass
         elif kind == "per_day":
             row["pd_months"], row["pd_fytd"] = row["months"], row["fytd_per_day"]
-        elif code in EXPORT_CODES:
+        elif code in TOTAL_RAKES_CODES:
             row["pd_months"], row["pd_fytd"], row["cum_total"] = row["months"], row["fytd"], row["fytd"]
         else:
             row["pd_months"] = [None if v is None else round(v / days_in(m), 2) for m, v in zip(months, row["months"])]
