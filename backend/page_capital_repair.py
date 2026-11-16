@@ -54,7 +54,7 @@ def _d_m_yy(iso_date: str) -> str:
 def format_cr_actual(actual_start: str | None, actual_end: str | None, actual_ongoing: bool) -> str:
     """Derive the printed 'Actual' text from structured dates, in the same
     free-text convention the source PDF/plants already use
-    ('19.4.26-30.4.26' or '7.6.26-cont..'). Single source of truth going
+    ('19.4.26-30.4.26', '7.6.26-cont..', or just '22.9.26' for a one-day job). Single source of truth going
     forward: the capital_repair_table.actual column is written from this,
     never entered as free text again, so pages 36-40 keep rendering
     unchanged (CapitalRepairTemplate.js reads that column verbatim)."""
@@ -62,6 +62,8 @@ def format_cr_actual(actual_start: str | None, actual_end: str | None, actual_on
         return ""
     if actual_ongoing or not actual_end:
         return f"{_d_m_yy(actual_start)}-cont.."
+    if actual_end == actual_start:          # a one-day job (e.g. a blow-down) prints just its date
+        return _d_m_yy(actual_start)
     return f"{_d_m_yy(actual_start)}-{_d_m_yy(actual_end)}"
 
 
@@ -154,6 +156,8 @@ def _actual_cell(report_month, period, actual_start, actual_end, actual_ongoing,
         if start[:7] <= report_month:
             if end is None or end[:7] > report_month:
                 return f"{_d_m_yy(start)}-cont..", "actual"
+            if end == start:
+                return _d_m_yy(start), "actual"
             return f"{_d_m_yy(start)}-{_d_m_yy(end)}", "actual"
         # started after the report month: not yet an actual as of this report
     elif (actual_text or "").strip():
