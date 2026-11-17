@@ -41,7 +41,7 @@ function tabsOf(link) {
 
 function page(item) {
   const children = tabsOf(item.link);
-  return { label: item.label, icon: item.icon, link: item.link, children };
+  return { label: item.label, icon: item.icon, link: item.link, desc: item.desc, children };
 }
 
 function buildTree() {

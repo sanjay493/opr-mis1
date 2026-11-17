@@ -1567,10 +1567,10 @@ function UploadsExtractionInner() {
         {/* ── Page title ── */}
         <div style={{ marginBottom: 18 }}>
           <h2 style={{ fontSize: '1.6rem', fontWeight: 700, color: '#202124', margin: '0 0 4px' }}>
-            Uploads &amp; Extraction — Coal, CO2/Water/PM &amp; Power
+            Uploads &amp; Extraction — Coal, CO2/Water/PM, Power, MoU &amp; Rail
           </h2>
           <span style={{ fontSize: 13, color: '#5f6368' }}>
-            All-5-plants-at-once report uploads: coal consumption, CO2/Water/PM EPI, and power. Written into
+            All-5-plants-at-once report uploads: coal consumption, CO2/Water/PM EPI, power, MoU plan and the Rail Logistics rake files. Written into
             {' '}<code style={{ fontSize: 12 }}>techno_data</code> (coal/CO2/water/PM) and <code style={{ fontSize: 12 }}>power_data_table</code> (power).
           </span>
         </div>
@@ -1604,12 +1604,20 @@ function UploadsExtractionInner() {
 
         <MouPlanExtractRow apiBase={API_BASE_URL} onSuccess={() => {}} />
 
-        <RakeDespatchExtractRow apiBase={API_BASE_URL} onSuccess={() => {}} />
+        {/* the navbar's Rail Logistics upload link lands here */}
+        <div id="rail-logistics" ref={scrollIfLinked}>
+          <RakeDespatchExtractRow apiBase={API_BASE_URL} onSuccess={() => {}} />
 
-        <IronOreRakesExtractRow apiBase={API_BASE_URL} onSuccess={() => {}} />
+          <IronOreRakesExtractRow apiBase={API_BASE_URL} onSuccess={() => {}} />
+        </div>
       </div>
     </div>
   );
+}
+
+// Module-level so the ref is stable: scrolls once on mount, not on every re-render.
+function scrollIfLinked(el) {
+  if (el && window.location.hash === `#${el.id}`) el.scrollIntoView();
 }
 
 export default function UploadsExtractionPage() {
