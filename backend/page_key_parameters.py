@@ -509,7 +509,13 @@ def generate_key_parameters(report_month: str) -> dict:
     # the label can never claim a more recent month than what's actually
     # displayed.
     demurrage_by_plant = _demurrage_by_plant(ytd_months)
-    demurrage_latest = max((m for _, m in demurrage_by_plant.values()), default=None)
+    # One common cut-off for every plant: the latest month all plants with
+    # any data have reached. A plant already entered for a later month is
+    # re-read as of that month, so the plants stay comparable and the label
+    # and the Rs/TCS production window match.
+    demurrage_latest = min((m for _, m in demurrage_by_plant.values()), default=None)
+    if demurrage_latest and any(m != demurrage_latest for _, m in demurrage_by_plant.values()):
+        demurrage_by_plant = _demurrage_by_plant([m for m in ytd_months if m <= demurrage_latest])
     if demurrage_latest:
         dem_period = _dt.datetime.strptime(ytd_months[0], "%Y-%m").strftime("%b")
         if demurrage_latest != ytd_months[0]:
