@@ -8,6 +8,10 @@ import { useEmbedded } from '@/components/EmbeddedContext';
 import AdminNotifications from '@/components/AdminNotifications';
 import { NAV_ITEMS } from '@/components/navItems';
 
+// A top-level menu item's padding: the sides narrow on a small window (12px
+// from 1440px wide, 4px at 1280px) so the labels fit on one line.
+const ITEM_PAD = '8px clamp(4px, calc((100vw - 1200px) / 20), 12px)';
+
 export default function GlobalNavbar() {
   const [openDropdown, setOpenDropdown] = useState(null);
   const [expandedGroup, setExpandedGroup] = useState(null);
@@ -59,7 +63,7 @@ export default function GlobalNavbar() {
               📊
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              <span style={{ fontSize: '15pt', fontWeight: '900', letterSpacing: '-0.01em', color: '#202124' }}>
+              <span style={{ fontSize: '15pt', fontWeight: '900', letterSpacing: '-0.01em', color: '#202124', whiteSpace: 'nowrap' }}>
                 SAIL MIS
               </span>
               <span style={{ fontSize: '9pt', color: '#5f6368', fontWeight: '600' }}>Portal</span>
@@ -69,14 +73,19 @@ export default function GlobalNavbar() {
           {/* Desktop Navigation Menu */}
           <div style={{
             display: 'flex',
-            gap: '32px',
+            // Labels stay on one line; the spacing gives way instead on a
+            // narrow window (full 24px / 40px from about 1600px wide).
+            whiteSpace: 'nowrap',
+            gap: 'clamp(2px, calc((100vw - 1300px) / 12), 24px)',
             alignItems: 'center',
-            marginLeft: '48px'
+            marginLeft: 'clamp(8px, calc((100vw - 1300px) / 8), 40px)'
           }}>
             {navItems.map((item, idx) => {
               const hasDropdown = !!(item.submenu || item.groups);
               return (
-              <div key={idx} style={{ position: 'relative', paddingBottom: hasDropdown ? '8px' : '0' }}
+              // The bottom padding bridges the gap to the dropdown; every item
+              // gets the same padding so plain links line up with the menus.
+              <div key={idx} style={{ position: 'relative', padding: '8px 0' }}
                 onMouseEnter={() => {
                   if (!hasDropdown) return;
                   setOpenDropdown(idx);
@@ -92,7 +101,7 @@ export default function GlobalNavbar() {
                   <div
                     style={{
                       cursor: 'pointer',
-                      padding: '8px 12px',
+                      padding: ITEM_PAD,
                       borderRadius: '6px',
                       transition: 'all 0.2s ease',
                       display: 'flex',
@@ -123,7 +132,7 @@ export default function GlobalNavbar() {
                   <Link href={item.link} style={{ textDecoration: 'none' }}>
                     <div style={{
                       cursor: 'pointer',
-                      padding: '8px 12px',
+                      padding: ITEM_PAD,
                       borderRadius: '6px',
                       transition: 'all 0.2s ease',
                       display: 'flex',
@@ -350,7 +359,10 @@ export default function GlobalNavbar() {
                   backgroundColor: openDropdown === 'account' ? 'rgba(26, 115, 232, 0.08)' : 'transparent',
                 }}>
                   <span>👤</span>
-                  <span style={{ fontSize: '12pt', fontWeight: '600' }}>{user.name || user.email}</span>
+                  <span title={user.name || user.email} style={{
+                    fontSize: '12pt', fontWeight: '600', whiteSpace: 'nowrap',
+                    overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '170px',
+                  }}>{user.name || user.email}</span>
                   {user.role && (
                     <span style={{
                       fontSize: '8.5pt', fontWeight: 700, textTransform: 'uppercase',
@@ -413,7 +425,7 @@ export default function GlobalNavbar() {
                 )}
               </>
             ) : (
-              <div style={{ display: 'flex', gap: '8px' }}>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', whiteSpace: 'nowrap' }}>
                 <Link href="/login" style={{ textDecoration: 'none' }}>
                   <div style={{ padding: '8px 12px', fontSize: '12pt', fontWeight: 600, color: '#1a73e8', cursor: 'pointer' }}>
                     Log In
@@ -429,7 +441,7 @@ export default function GlobalNavbar() {
           </div>
 
           {/* Status badge */}
-          <div style={{
+          <div className="nav-status" style={{
             padding: '6px 14px',
             backgroundColor: '#f8f9fa',
             border: '1px solid #dadce0',
@@ -454,6 +466,8 @@ export default function GlobalNavbar() {
       </div>
 
       <style>{`
+        /* The badge is decoration; a narrow window needs its width for the menu. */
+        @media (max-width: 1500px) { .nav-status { display: none !important; } }
         @keyframes pulse {
           0%, 100% {
             opacity: 1;
